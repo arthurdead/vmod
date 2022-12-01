@@ -1,0 +1,2 @@
+option('srcds', type: 'string')
+option('binutils_src', type: 'string', yield: true)
