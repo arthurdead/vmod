@@ -57,8 +57,7 @@ namespace vmod
 				return var.m_bool ? "true"sv : "false"sv;
 			}
 			case gsdk::FIELD_HSCRIPT: {
-				temp_buffer = std::to_string(reinterpret_cast<std::uintptr_t>(var.m_hScript));
-				return temp_buffer;
+				return vmod.to_string(var.m_hScript);
 			}
 		}
 
@@ -117,7 +116,7 @@ namespace vmod
 			if(!ret_var) {
 				call<R, C, Args...>(binding_func, obj, args_var);
 			} else {
-				if constexpr(std::is_convertible_v<R, gsdk::ScriptVariant_t>) {
+				if constexpr(std::is_same_v<R, script_variant_t>) {
 					*ret_var = call<R, C, Args...>(binding_func, obj, args_var);
 				} else {
 					R ret_val{call<R, C, Args...>(binding_func, obj, args_var)};

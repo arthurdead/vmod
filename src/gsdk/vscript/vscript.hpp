@@ -104,6 +104,10 @@ namespace gsdk
 		{
 		}
 
+		inline ~CVariantBase() noexcept
+		{
+		}
+
 	public:
 		CVariantBase(const CVariantBase &) = delete;
 		CVariantBase &operator=(const CVariantBase &) = delete;

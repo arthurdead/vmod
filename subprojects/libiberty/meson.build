@@ -26,7 +26,8 @@ if compiler.get_id() == 'gcc'
 	]
 endif
 
-lib = static_library('iberty', [
+lib = static_library('iberty',
+	files(
 		join_paths(libiberty_src,'cp-demangle.c'),
 		join_paths(libiberty_src,'cp-demint.c'),
 		join_paths(libiberty_src,'cplus-dem.c'),
@@ -36,10 +37,12 @@ lib = static_library('iberty', [
 		join_paths(libiberty_src,'xmalloc.c'),
 		join_paths(libiberty_src,'xstrdup.c'),
 		join_paths(libiberty_src,'xexit.c')
-	],
+	),
 	include_directories: [
-		'/usr/include/libiberty',
-		join_paths(binutils_src,'include')
+		include_directories(
+			'/usr/include/libiberty',
+			join_paths(binutils_src,'include')
+		)
 	],
 	c_args: c_args
 )

@@ -18,6 +18,21 @@
 
 namespace vmod
 {
+#if __has_include("vmod_base.nut.h")
+#ifdef __clang__
+	#pragma clang diagnostic push
+	#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+#endif
+	#include "vmod_base.nut.h"
+#ifdef __clang__
+	#pragma clang diagnostic pop
+#endif
+	#define __VMOD_BASE_SCRIPT_HEADER_INCLUDED
+#endif
+}
+
+namespace vmod
+{
 	class vmod vmod;
 
 	gsdk::IScriptVM *vm;
@@ -159,6 +174,9 @@ namespace vmod
 
 		plugins_dir = root_dir;
 		plugins_dir /= "plugins"sv;
+
+		base_script_path = root_dir;
+		base_script_path /= "base/vmod_base.nut"sv;
 
 		std::filesystem::path server_lib_name{gamedir};
 		if(sv_engine->IsDedicatedServer()) {
@@ -504,6 +522,22 @@ namespace vmod
 		return true;
 	}
 
+	std::string_view vmod::to_string(gsdk::HSCRIPT value) noexcept
+	{
+		script_variant_t ret;
+		script_variant_t arg{value};
+
+		if(vm->ExecuteFunction(to_string_func, &arg, 1, &ret, global_scope, true) == gsdk::SCRIPT_ERROR) {
+			return {};
+		}
+
+		if(ret.m_type != gsdk::FIELD_CSTRING) {
+			return {};
+		}
+
+		return ret.m_pszString;
+	}
+
 	bool vmod::load_late() noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -512,24 +546,6 @@ namespace vmod
 		if(!global_scope || global_scope == gsdk::INVALID_HSCRIPT) {
 			error("vmod: failed to create global scope\n"sv);
 			return false;
-		}
-
-		std::filesystem::path base_script_path{root_dir/"base/vmod_base.nut"sv};
-		if(std::filesystem::exists(base_script_path)) {
-			{
-				std::unique_ptr<unsigned char[]> script_data{read_file(base_script_path)};
-
-				base_script = vm->CompileScript(reinterpret_cast<const char *>(script_data.get()), base_script_path.c_str());
-				if(!base_script || base_script == gsdk::INVALID_HSCRIPT) {
-					error("vmod: failed to compile base script '%s'\n"sv, base_script_path.c_str());
-					return false;
-				}
-			}
-
-			if(vm->Run(base_script, global_scope, true) == gsdk::SCRIPT_ERROR) {
-				error("vmod: failed to run base script '%s'\n"sv, base_script_path.c_str());
-				return false;
-			}
 		}
 
 		if(!VScriptServerInit_detour_callback()) {
@@ -549,6 +565,48 @@ namespace vmod
 
 		if(vm->Run(server_init_script, nullptr, true) == gsdk::SCRIPT_ERROR) {
 			error("vmod: failed to run server init script\n"sv);
+			return false;
+		}
+
+		if(std::filesystem::exists(base_script_path)) {
+			{
+				std::unique_ptr<unsigned char[]> script_data{read_file(base_script_path)};
+
+				base_script = vm->CompileScript(reinterpret_cast<const char *>(script_data.get()), base_script_path.c_str());
+				if(!base_script || base_script == gsdk::INVALID_HSCRIPT) {
+				#ifndef __VMOD_BASE_SCRIPT_HEADER_INCLUDED
+					error("vmod: failed to compile base script '%s'\n"sv, base_script_path.c_str());
+					return false;
+				#else
+					base_script = vm->CompileScript(reinterpret_cast<const char *>(__vmod_base_script), "vmod_base.nut");
+					if(!base_script || base_script == gsdk::INVALID_HSCRIPT) {
+						error("vmod: failed to compile base script\n"sv);
+						return false;
+					}
+				#endif
+				}
+			}
+		} else {
+		#ifndef __VMOD_BASE_SCRIPT_HEADER_INCLUDED
+			error("vmod: missing base script '%s'\n"sv, base_script_path.c_str());
+			return false;
+		#else
+			base_script = vm->CompileScript(reinterpret_cast<const char *>(__vmod_base_script), "vmod_base.nut");
+			if(!base_script || base_script == gsdk::INVALID_HSCRIPT) {
+				error("vmod: failed to compile base script\n"sv);
+				return false;
+			}
+		#endif
+		}
+
+		if(vm->Run(base_script, global_scope, true) == gsdk::SCRIPT_ERROR) {
+			error("vmod: failed to run base script '%s'\n"sv, base_script_path.c_str());
+			return false;
+		}
+
+		to_string_func = vm->LookupFunction("__vmod_tostring", global_scope);
+		if(!to_string_func || to_string_func == gsdk::INVALID_HSCRIPT) {
+			error("vmod: base script '%s' missing '__vmod_tostring' function\n"sv, base_script_path.c_str());
 			return false;
 		}
 
@@ -623,6 +681,10 @@ namespace vmod
 		}
 
 		if(vm) {
+			if(to_string_func && to_string_func != gsdk::INVALID_HSCRIPT) {
+				vm->ReleaseFunction(to_string_func);
+			}
+
 			if(base_script && base_script != gsdk::INVALID_HSCRIPT) {
 				vm->ReleaseScript(base_script);
 			}

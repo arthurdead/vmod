@@ -43,6 +43,7 @@ endif
 
 srcds = get_option('srcds')
 addons = join_paths(srcds,'tf','addons')
+vmod_root = join_paths(addons,'vmod')
 
 libiberty = subproject('libiberty',
 	default_options: [
@@ -51,35 +52,67 @@ libiberty = subproject('libiberty',
 	required: true
 )
 
-lib = shared_library('vmod', [
+dependencies = [
+	dependency('threads'),
+	dependency('dl'),
+	dependency('libelf'),
+	libiberty.get_variable('libiberty')
+]
+
+vmod_base_script_src = files('src/vmod_base.nut')
+
+xxd_exe = find_program('xxd')
+if xxd_exe.found()
+	xxd_named = generator(xxd_exe,
+		arguments: ['-n','@EXTRA_ARGS@','-i','@INPUT@','@OUTPUT@'],
+		output: '@PLAINNAME@.h'
+	)
+
+	vmod_base_script = declare_dependency(
+		sources: xxd_named.process(
+			vmod_base_script_src,
+			extra_args: '__vmod_base_script'
+		)
+	)
+
+	dependencies += [vmod_base_script]
+endif
+
+lib = shared_library('vmod',
+	files(
 		'src/vmod.cpp',
 		'src/filesystem.cpp',
 		'src/plugin.cpp',
 		'src/convar.cpp',
 		'src/gsdk.cpp',
+		'src/vscript.cpp',
 		'src/hacking.cpp',
 		'src/symbol_cache.cpp',
 		'src/gsdk/vstdlib/convar.cpp',
 		'src/gsdk/engine/vsp.cpp'
-	],
+	),
+	implicit_include_directories: true,
 	name_prefix: '',
-	dependencies: [
-		dependency('threads'),
-		dependency('dl'),
-		dependency('libelf'),
-		libiberty.get_variable('libiberty')
-	],
+	dependencies: dependencies,
 	install: srcds != '',
 	install_dir: addons,
 	cpp_args: cpp_args
 )
 
 configure_file(
-	input: 'src/vsp.vdf',
-	output: lib.name()+'.vdf',
+	input: files('src/vsp.vdf'),
+	output: (lib.name()+'.vdf'),
 	configuration: {
 		'LIBNAME': lib.name()
 	},
 	install: srcds != '',
 	install_dir: addons
 )
+
+if srcds != ''
+	install_data(
+		vmod_base_script_src,
+		rename: join_paths(vmod_root,'base','vmod_base.nut'),
+		install_dir: addons
+	)
+endif

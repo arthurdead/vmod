@@ -11,6 +11,8 @@ namespace vmod
 	template <typename T>
 	constexpr gsdk::ScriptDataType_t type_to_field() noexcept = delete;
 
+	extern void free_variant_hscript(gsdk::ScriptVariant_t &var) noexcept;
+
 	class alignas(gsdk::ScriptVariant_t) script_variant_t final : public gsdk::ScriptVariant_t
 	{
 	public:
@@ -20,6 +22,23 @@ namespace vmod
 			m_hScript = gsdk::INVALID_HSCRIPT;
 			m_flags = 0;
 			std::memset(unk1, 0, sizeof(unk1));
+		}
+
+		inline ~script_variant_t() noexcept
+		{
+			if(m_flags & gsdk::SV_FREE) {
+				switch(m_type) {
+					case gsdk::FIELD_VECTOR: {
+						delete m_pVector;
+					} break;
+					case gsdk::FIELD_CSTRING: {
+						free(const_cast<char *>(m_pszString));
+					} break;
+					case gsdk::FIELD_HSCRIPT: {
+						free_variant_hscript(*this);
+					} break;
+				}
+			}
 		}
 
 		inline script_variant_t(script_variant_t &&other) noexcept
@@ -166,7 +185,7 @@ namespace vmod
 		bool ToString(void *ptr, char *buff, int siz) noexcept override
 		{
 			const std::string &name{demangle<T>()};
-			std::snprintf(buff, static_cast<std::size_t>(siz), "(%s)%p", name.c_str(), ptr);
+			std::snprintf(buff, static_cast<std::size_t>(siz), "(%s : %p)", name.c_str(), ptr);
 			return true;
 		}
 
@@ -228,6 +247,9 @@ namespace vmod
 			return static_cast<func_desc_t &>(m_FunctionBindings.emplace_back(std::move(temp)));
 		}
 	};
+
+	static_assert(sizeof(class_desc_t<empty_class>) == sizeof(gsdk::ScriptClassDesc_t));
+	static_assert(alignof(class_desc_t<empty_class>) == alignof(gsdk::ScriptClassDesc_t));
 }
 
 #include "vscript.tpp"

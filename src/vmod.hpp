@@ -23,6 +23,8 @@ namespace vmod
 		inline bool map_is_loaded() const noexcept
 		{ return is_map_loaded; }
 
+		std::string_view to_string(gsdk::HSCRIPT value) noexcept;
+
 	private:
 		bool load_late() noexcept;
 		bool load() noexcept;
@@ -57,7 +59,10 @@ namespace vmod
 		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
 
 		gsdk::HSCRIPT server_init_script{gsdk::INVALID_HSCRIPT};
+
+		std::filesystem::path base_script_path;
 		gsdk::HSCRIPT base_script{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT to_string_func{gsdk::INVALID_HSCRIPT};
 
 		std::vector<std::unique_ptr<plugin>> plugins;
 		bool plugins_loaded;
