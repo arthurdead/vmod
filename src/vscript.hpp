@@ -61,7 +61,7 @@ namespace vmod
 	T variant_to_value(const gsdk::ScriptVariant_t &) noexcept = delete;
 
 	template <typename T>
-	void initialize_variant_value(gsdk::ScriptVariant_t &, T) noexcept = delete;
+	void initialize_variant_value(gsdk::ScriptVariant_t &, T &&) noexcept = delete;
 
 	inline void null_variant(gsdk::ScriptVariant_t &var) noexcept
 	{

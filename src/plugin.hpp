@@ -120,6 +120,7 @@ namespace vmod
 		static void unbindings() noexcept;
 
 		gsdk::HSCRIPT script_lookup_function(std::string_view func_name) noexcept;
+		script_variant_t script_lookup_value(std::string_view val_name) noexcept;
 
 		std::filesystem::path path;
 		std::string name;

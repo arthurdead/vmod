@@ -6,6 +6,15 @@ namespace vmod
 {
 	class_desc_t<plugin> plugin_desc;
 
+	script_variant_t plugin::script_lookup_value(std::string_view val_name) noexcept
+	{
+		script_variant_t var;
+		if(!vm->GetValue(scope_, val_name.data(), &var)) {
+			null_variant(var);
+		}
+		return var;
+	}
+
 	gsdk::HSCRIPT plugin::script_lookup_function(std::string_view func_name) noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -44,6 +53,7 @@ namespace vmod
 	bool plugin::bindings() noexcept
 	{
 		plugin_desc.func(&plugin::script_lookup_function, "lookup_function");
+		plugin_desc.func(&plugin::script_lookup_value, "lookup_value");
 
 		return true;
 	}
@@ -151,14 +161,19 @@ namespace vmod
 			instance_ = gsdk::INVALID_HSCRIPT;
 		}
 
-		for(const auto &it : function_cache) {
-			vm->ReleaseFunction(it.second);
+		if(!function_cache.empty()) {
+			for(const auto &it : function_cache) {
+				vm->ReleaseFunction(it.second);
+			}
+			function_cache.clear();
 		}
-		function_cache.clear();
 
+		map_active.unload();
 		map_loaded.unload();
 		map_unloaded.unload();
+		plugin_loaded.unload();
 		plugin_unloaded.unload();
+		all_plugins_loaded.unload();
 
 		if(script && script != gsdk::INVALID_HSCRIPT) {
 			vm->ReleaseScript(script);

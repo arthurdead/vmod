@@ -11,13 +11,16 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<gsdk::HSCRIPT>() noexcept
 	{ return gsdk::FIELD_HSCRIPT; }
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field<script_variant_t>() noexcept
+	{ return gsdk::FIELD_VARIANT; }
 
 	template <>
-	inline void initialize_variant_value<std::string_view>(gsdk::ScriptVariant_t &var, std::string_view value) noexcept
+	inline void initialize_variant_value<std::string_view>(gsdk::ScriptVariant_t &var, std::string_view &&value) noexcept
 	{ var.m_pszString = value.data(); }
 
 	template <>
-	inline void initialize_variant_value<gsdk::HSCRIPT>(gsdk::ScriptVariant_t &var, gsdk::HSCRIPT value) noexcept
+	inline void initialize_variant_value<gsdk::HSCRIPT>(gsdk::ScriptVariant_t &var, gsdk::HSCRIPT &&value) noexcept
 	{ var.m_hScript = value; }
 
 	template <>
@@ -31,10 +34,10 @@ namespace vmod
 			case gsdk::FIELD_FLOAT: {
 				temp_buffer = std::to_string(var.m_float);
 				return temp_buffer;
-			} break;
+			}
 			case gsdk::FIELD_CSTRING: {
 				return var.m_pszString;
-			} break;
+			}
 			case gsdk::FIELD_VECTOR: {
 				temp_buffer.clear();
 				temp_buffer += "(vector : ("sv;
@@ -45,14 +48,18 @@ namespace vmod
 				temp_buffer += std::to_string(var.m_pVector->z);
 				temp_buffer += "))"sv;
 				return temp_buffer;
-			} break;
+			}
 			case gsdk::FIELD_INTEGER: {
 				temp_buffer = std::to_string(var.m_int);
 				return temp_buffer;
-			} break;
+			}
 			case gsdk::FIELD_BOOLEAN: {
 				return var.m_bool ? "true"sv : "false"sv;
-			} break;
+			}
+			case gsdk::FIELD_HSCRIPT: {
+				temp_buffer = std::to_string(reinterpret_cast<std::uintptr_t>(var.m_hScript));
+				return temp_buffer;
+			}
 		}
 
 		return {};
@@ -110,8 +117,12 @@ namespace vmod
 			if(!ret_var) {
 				call<R, C, Args...>(binding_func, obj, args_var);
 			} else {
-				R ret_val{call<R, C, Args...>(binding_func, obj, args_var)};
-				value_to_variant<R>(*ret_var, std::forward<R>(ret_val));
+				if constexpr(std::is_convertible_v<R, gsdk::ScriptVariant_t>) {
+					*ret_var = call<R, C, Args...>(binding_func, obj, args_var);
+				} else {
+					R ret_val{call<R, C, Args...>(binding_func, obj, args_var)};
+					value_to_variant<R>(*ret_var, std::forward<R>(ret_val));
+				}
 			}
 		}
 
