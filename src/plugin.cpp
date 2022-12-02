@@ -1,6 +1,7 @@
 #include "plugin.hpp"
 #include "vmod.hpp"
 #include "filesystem.hpp"
+#include <cctype>
 
 namespace vmod
 {
@@ -70,6 +71,18 @@ namespace vmod
 		filename.replace_extension();
 
 		name = filename;
+
+		for(char &c : name) {
+			if(std::isalnum(c)) {
+				continue;
+			}
+
+			c = '_';
+		}
+
+		if(std::isdigit(name[0])) {
+			name.insert(name.begin(), '_');
+		}
 	}
 
 	plugin &plugin::operator=(plugin &&other) noexcept
