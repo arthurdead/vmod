@@ -20,7 +20,7 @@ namespace vmod
 		{ operator=(std::move(other)); }
 		plugin &operator=(plugin &&other) noexcept;
 
-		plugin(std::filesystem::path path) noexcept;
+		plugin(std::filesystem::path &&path) noexcept;
 		inline ~plugin() noexcept
 		{ unload(); }
 

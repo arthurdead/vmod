@@ -281,9 +281,9 @@ namespace vmod
 				}
 			}
 
-			plugin &pl{*plugins.emplace_back(new plugin{path})};
+			plugin &pl{*plugins.emplace_back(new plugin{std::move(path)})};
 			if(pl) {
-				success("vmod: plugin '%s' loaded\n", path.c_str());
+				success("vmod: plugin '%s' loaded\n", static_cast<std::filesystem::path>(pl).c_str());
 				if(plugins_loaded) {
 					pl.all_plugins_loaded();
 				}
@@ -318,12 +318,12 @@ namespace vmod
 					continue;
 				}
 
-				const std::filesystem::path &path{file.path()};
+				std::filesystem::path path{file.path()};
 				if(path.extension() != ".nut"sv) {
 					continue;
 				}
 
-				plugins.emplace_back(new plugin{path});
+				plugins.emplace_back(new plugin{std::move(path)});
 			}
 
 			for(const auto &pl : plugins) {

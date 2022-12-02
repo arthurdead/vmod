@@ -39,6 +39,9 @@ namespace gsdk
 	constexpr int MAX_EDICT_BITS{11};
 	constexpr int MAX_EDICTS{1 << MAX_EDICT_BITS};
 
+	constexpr int NUM_ENT_ENTRY_BITS{MAX_EDICT_BITS + 2};
+	constexpr int NUM_ENT_ENTRIES{1 << NUM_ENT_ENTRY_BITS};
+
 	constexpr int MAXPRINTMSG{4096};
 
 	#pragma GCC diagnostic push

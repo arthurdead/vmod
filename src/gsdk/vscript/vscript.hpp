@@ -83,15 +83,6 @@ namespace gsdk
 		ScriptVariant_t(ScriptVariant_t &&) = default;
 		ScriptVariant_t &operator=(ScriptVariant_t &&) = default;
 
-	#if 0
-		void Free()
-		{
-			if((m_flags & SV_FREE) && (m_type == FIELD_HSCRIPT || m_type == FIELD_VECTOR || m_type == FIELD_CSTRING)) {
-				delete m_pszString;
-			}
-		}
-	#endif
-
 		union
 		{
 			int m_int;
@@ -103,6 +94,7 @@ namespace gsdk
 			HSCRIPT m_hScript;
 		};
 
+		char unk1[sizeof(int)];
 		short m_type;
 		short m_flags;
 	};
@@ -128,6 +120,7 @@ namespace gsdk
 		ScriptBindingFunc_t m_pfnBinding;
 		ScriptFunctionBindingStorageType_t m_pFunction;
 		unsigned m_flags;
+		char unk1[sizeof(int)];
 	};
 
 	#pragma GCC diagnostic push

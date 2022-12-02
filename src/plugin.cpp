@@ -4,8 +4,8 @@
 
 namespace vmod
 {
-	plugin::plugin(std::filesystem::path path_) noexcept
-		: path{path_}
+	plugin::plugin(std::filesystem::path &&path_) noexcept
+		: path{std::move(path_)}
 	{
 		load();
 	}
