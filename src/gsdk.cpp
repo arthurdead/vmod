@@ -199,6 +199,11 @@ namespace vmod
 			return false;
 		}
 
+		if(!syms.load(path, base())) {
+			err_str = syms.error_string();
+			return false;
+		}
+
 		return true;
 	}
 }

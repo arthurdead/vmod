@@ -55,19 +55,69 @@ namespace vmod
 		return false;
 	}
 
+	static class_desc_t<class vmod> vmod_desc{"vmod"};
+
+	gsdk::HSCRIPT vmod::script_find_plugin(std::string_view name) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		std::filesystem::path path{name};
+		if(!path.is_absolute()) {
+			path = (plugins_dir/path);
+		}
+		path.replace_extension(".nut"sv);
+
+		for(auto it{plugins.begin()}; it != plugins.end(); ++it) {
+			const std::filesystem::path &pl_path{static_cast<std::filesystem::path>(*(*it))};
+
+			if(pl_path == path) {
+				return (*it)->instance();
+			}
+		}
+
+		return nullptr;
+	}
+
 	bool vmod::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
-		
+		vmod_desc.func(&vmod::script_find_plugin, "find_plugin"sv);
+
+		instance = vm->RegisterInstance(&vmod_desc, this);
+		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to register vmod script instance\n"sv);
+			return false;
+		}
+
+		vm->SetInstanceUniqeId(instance, "vmod");
+
+		if(!vm->SetValue(global_scope, "vmod", script_variant_t{instance})) {
+			error("vmod: failed to set vmod script instance value\n"sv);
+			return false;
+		}
+
+		if(!plugin::bindings()) {
+			return false;
+		}
 
 		return true;
 	}
 
 	void vmod::unbindings() noexcept
 	{
-		
+		plugin::unbindings();
+
+		if(instance && instance != gsdk::INVALID_HSCRIPT) {
+			vm->RemoveInstance(instance);
+		}
+
+		if(vm->ValueExists(global_scope, "vmod")) {
+			vm->ClearValue(global_scope, "vmod");
+		}
 	}
+
+	static const unsigned char *g_Script_init;
 
 	static const unsigned char *g_Script_vscript_server;
 	static gsdk::IScriptVM **g_pScriptVM;
@@ -184,12 +234,26 @@ namespace vmod
 			return false;
 		}
 
+		const auto &vscript_symbols{vscript_lib.symbols()};
+		const auto &vscript_global_qual{vscript_symbols.global()};
+
+		auto g_Script_init_it{vscript_global_qual.find("g_Script_init"s)};
+		if(g_Script_init_it == vscript_global_qual.end()) {
+			error("vmod: missing 'g_Script_init' symbol\n"sv);
+			return false;
+		}
+
+		g_Script_init = g_Script_init_it->second.addr<const unsigned char *>();
+
 		RegisterScriptFunctions = RegisterScriptFunctions_it->second.mfp<void, gsdk::CTFGameRules>();
 		VScriptServerInit = VScriptServerInit_it->second.func<bool>();
 		VScriptServerTerm = VScriptServerTerm_it->second.func<void>();
 		VScriptRunScript = VScriptRunScript_it->second.func<bool, const char *, gsdk::HSCRIPT, bool>();
 		g_Script_vscript_server = g_Script_vscript_server_it->second.addr<const unsigned char *>();
 		g_pScriptVM = g_pScriptVM_it->second.addr<gsdk::IScriptVM **>();
+
+		write_file(root_dir/"internal_scripts"sv/"init.nut"sv, g_Script_init, strlen(reinterpret_cast<const char *>(g_Script_init)+1));
+		write_file(root_dir/"internal_scripts"sv/"vscript_server.nut"sv, g_Script_vscript_server, strlen(reinterpret_cast<const char *>(g_Script_vscript_server)+1));
 
 		vm = vsmgr->CreateVM(gsdk::SL_SQUIRREL);
 		if(!vm) {
@@ -282,7 +346,7 @@ namespace vmod
 			}
 
 			plugin &pl{*plugins.emplace_back(new plugin{std::move(path)})};
-			if(pl) {
+			if(pl.load()) {
 				success("vmod: plugin '%s' loaded\n", static_cast<std::filesystem::path>(pl).c_str());
 				if(plugins_loaded) {
 					pl.all_plugins_loaded();
@@ -323,7 +387,7 @@ namespace vmod
 					continue;
 				}
 
-				plugins.emplace_back(new plugin{std::move(path)});
+				plugins.emplace_back(new plugin{std::move(path)})->load();
 			}
 
 			for(const auto &pl : plugins) {
@@ -444,11 +508,7 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
-		if(!bindings()) {
-			return false;
-		}
-
-		global_scope = vm->CreateScope("vmod", nullptr);
+		global_scope = vm->CreateScope("vmod_scope", nullptr);
 		if(!global_scope || global_scope == gsdk::INVALID_HSCRIPT) {
 			error("vmod: failed to create global scope\n"sv);
 			return false;
@@ -489,6 +549,10 @@ namespace vmod
 
 		if(vm->Run(server_init_script, nullptr, true) == gsdk::SCRIPT_ERROR) {
 			error("vmod: failed to run server init script\n"sv);
+			return false;
+		}
+
+		if(!bindings()) {
 			return false;
 		}
 
@@ -559,15 +623,15 @@ namespace vmod
 		}
 
 		if(vm) {
-			if(base_script != gsdk::INVALID_HSCRIPT) {
+			if(base_script && base_script != gsdk::INVALID_HSCRIPT) {
 				vm->ReleaseScript(base_script);
 			}
 
-			if(server_init_script != gsdk::INVALID_HSCRIPT) {
+			if(server_init_script && server_init_script != gsdk::INVALID_HSCRIPT) {
 				vm->ReleaseScript(server_init_script);
 			}
 
-			if(global_scope != gsdk::INVALID_HSCRIPT) {
+			if(global_scope && global_scope != gsdk::INVALID_HSCRIPT) {
 				vm->ReleaseScope(global_scope);
 			}
 

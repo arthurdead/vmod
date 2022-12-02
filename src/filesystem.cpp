@@ -24,4 +24,24 @@ namespace vmod
 
 		return data;
 	}
+
+	void write_file(const std::filesystem::path &path, const unsigned char *data, std::size_t size) noexcept
+	{
+		std::error_code err;
+		std::filesystem::create_directories(path.parent_path(), err);
+
+		mode_t mode{
+			S_IRUSR|S_IWUSR|
+			S_IRGRP|S_IWGRP
+		};
+
+		int fd{open(path.c_str(), O_WRONLY|O_CREAT|O_TRUNC, mode)};
+		if(fd < 0) {
+			return;
+		}
+
+		write(fd, data, size);
+
+		close(fd);
+	}
 }

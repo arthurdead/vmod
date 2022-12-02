@@ -20,17 +20,24 @@ namespace vmod
 		{ operator=(std::move(other)); }
 		plugin &operator=(plugin &&other) noexcept;
 
-		plugin(std::filesystem::path &&path) noexcept;
+		plugin(std::filesystem::path &&path_) noexcept;
 		inline ~plugin() noexcept
 		{ unload(); }
 
-		bool reload() noexcept;
+		bool load() noexcept;
+		inline bool reload() noexcept {
+			unload();
+			return load();
+		}
 		void unload() noexcept;
 
 		inline operator const std::filesystem::path &() const noexcept
 		{ return path; }
-		inline operator gsdk::HSCRIPT() const noexcept
-		{ return scope; }
+
+		gsdk::HSCRIPT scope() noexcept
+		{ return scope_; }
+		gsdk::HSCRIPT instance() noexcept
+		{ return instance_; }
 
 		inline operator bool() const noexcept
 		{ return script != gsdk::INVALID_HSCRIPT; }
@@ -71,7 +78,7 @@ namespace vmod
 			function(const function &) = delete;
 			function &operator=(const function &) = delete;
 
-			function(plugin &pl, std::string_view name) noexcept;
+			function(plugin &pl, std::string_view func_name) noexcept;
 
 			gsdk::ScriptStatus_t execute_internal(script_variant_t &ret, const std::vector<script_variant_t> &args) noexcept;
 			gsdk::ScriptStatus_t execute_internal() noexcept;
@@ -105,15 +112,23 @@ namespace vmod
 			ER execute(EArgs &&...args) = delete;
 		};
 
-		function lookup_function(std::string_view name) noexcept
-		{ return {*this, name}; }
+		inline function lookup_function(std::string_view func_name) noexcept
+		{ return {*this, func_name}; }
 
 	private:
-		bool load() noexcept;
+		static bool bindings() noexcept;
+		static void unbindings() noexcept;
+
+		gsdk::HSCRIPT script_lookup_function(std::string_view func_name) noexcept;
 
 		std::filesystem::path path;
+		std::string name;
+
+		gsdk::HSCRIPT instance_{gsdk::INVALID_HSCRIPT};
 		gsdk::HSCRIPT script{gsdk::INVALID_HSCRIPT};
-		gsdk::HSCRIPT scope{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT scope_{gsdk::INVALID_HSCRIPT};
+
+		std::unordered_map<std::string, gsdk::HSCRIPT> function_cache;
 
 		typed_function<void()> map_active;
 		typed_function<void(std::string_view)> map_loaded;
@@ -122,6 +137,8 @@ namespace vmod
 		typed_function<void()> plugin_unloaded;
 		typed_function<void()> all_plugins_loaded;
 	};
+
+	extern class_desc_t<plugin> plugin_desc;
 }
 
 #include "plugin.tpp"

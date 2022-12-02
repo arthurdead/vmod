@@ -33,6 +33,8 @@ namespace vmod
 		void map_unloaded() noexcept;
 		void map_active() noexcept;
 
+		gsdk::HSCRIPT script_find_plugin(std::string_view name) noexcept;
+
 		bool bindings() noexcept;
 		void unbindings() noexcept;
 
@@ -51,6 +53,8 @@ namespace vmod
 		gsdk_vstdlib_library vstdlib_lib;
 
 		gsdk_vscript_library vscript_lib;
+
+		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
 
 		gsdk::HSCRIPT server_init_script{gsdk::INVALID_HSCRIPT};
 		gsdk::HSCRIPT base_script{gsdk::INVALID_HSCRIPT};

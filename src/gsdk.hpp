@@ -117,6 +117,12 @@ namespace vmod
 	{
 	public:
 		bool load(const std::filesystem::path &path) noexcept override;
+
+		inline const symbol_cache &symbols() const noexcept
+		{ return syms; }
+
+	private:
+		symbol_cache syms;
 	};
 }
 

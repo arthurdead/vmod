@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -51,6 +52,28 @@ namespace vmod
 {
 	inline __attribute__((__always_inline__)) void debugbreak() noexcept
 	{ __asm__ volatile("int $0x03"); }
+
+	template <typename T>
+	const std::string &demangle() noexcept
+	{
+		static std::string buffer;
+
+		if(buffer.empty()) {
+			const char *mangled{typeid(T).name()};
+
+			int status;
+			std::size_t allocated;
+			char *temp_buffer{__cxxabiv1::__cxa_demangle(mangled, nullptr, &allocated, &status)};
+			if(status == 0 && allocated > 0 && temp_buffer) {
+				buffer = temp_buffer;
+			}
+			if(temp_buffer) {
+				free(temp_buffer);
+			}
+		}
+
+		return buffer;
+	}
 
 	class empty_class final
 	{
