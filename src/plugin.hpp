@@ -21,8 +21,7 @@ namespace vmod
 		plugin &operator=(plugin &&other) noexcept;
 
 		plugin(std::filesystem::path &&path_) noexcept;
-		inline ~plugin() noexcept
-		{ unload(); }
+		~plugin() noexcept;
 
 		bool load() noexcept;
 		inline bool reload() noexcept {
@@ -122,12 +121,20 @@ namespace vmod
 		gsdk::HSCRIPT script_lookup_function(std::string_view func_name) noexcept;
 		script_variant_t script_lookup_value(std::string_view val_name) noexcept;
 
+		void game_frame() noexcept;
+
+		void watch() noexcept;
+		void unwatch() noexcept;
+
 		std::filesystem::path path;
+		int inotify_fd;
+		int watch_d;
+
 		std::string name;
 
-		gsdk::HSCRIPT instance_{gsdk::INVALID_HSCRIPT};
-		gsdk::HSCRIPT script{gsdk::INVALID_HSCRIPT};
-		gsdk::HSCRIPT scope_{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT instance_;
+		gsdk::HSCRIPT script;
+		gsdk::HSCRIPT scope_;
 
 		std::unordered_map<std::string, gsdk::HSCRIPT> function_cache;
 

@@ -9,8 +9,12 @@
 namespace vmod
 {
 	template <>
-	inline void initialize_variant_value<yaml_node_type_t>(gsdk::ScriptVariant_t &var, yaml_node_type_t &&value) noexcept
-	{ var.m_int = value; }
+	constexpr inline gsdk::ScriptDataType_t type_to_field<yaml_node_type_t>() noexcept
+	{ return gsdk::FIELD_INTEGER; }
+
+	template <>
+	inline void initialize_variant_value<yaml_node_type_t>(gsdk::ScriptVariant_t &var, yaml_node_type_t value) noexcept
+	{ var.m_int = static_cast<int>(value); }
 
 	class yaml final
 	{
@@ -19,40 +23,6 @@ namespace vmod
 	public:
 		yaml(std::filesystem::path &&path_) noexcept;
 		~yaml() noexcept;
-
-		class document;
-
-		class node_reference final
-		{
-			friend class yaml;
-
-		public:
-			node_reference(const node_reference &) = delete;
-			node_reference &operator=(const node_reference &) = delete;
-			inline node_reference(node_reference &&other) noexcept
-			{ operator=(std::move(other)); }
-			inline node_reference &operator=(node_reference &&other) noexcept
-			{
-				node = other.node;
-				other.node = nullptr;
-				owner = other.owner;
-				other.owner = nullptr;
-				instance = other.instance;
-				other.instance = gsdk::INVALID_HSCRIPT;
-				return *this;
-			}
-			~node_reference() noexcept;
-
-		private:
-			node_reference() noexcept = default;
-
-			inline yaml_node_type_t script_get_type() const noexcept
-			{ return node->type; }
-
-			yaml_node_t *node;
-			gsdk::HSCRIPT instance;
-			document *owner;
-		};
 
 		class document final : public yaml_document_t
 		{
@@ -66,38 +36,28 @@ namespace vmod
 			inline document(document &&other) noexcept
 				: yaml_document_t{std::move(other)}
 			{
-				instance = other.instance;
-				other.instance = gsdk::INVALID_HSCRIPT;
 			}
 
 			inline document(yaml_document_t &&other) noexcept
-				: yaml_document_t{std::move(other)}
+				: yaml_document_t{std::move(other)},
+				mapped{gsdk::INVALID_HSCRIPT}
 			{
-				instance = gsdk::INVALID_HSCRIPT;
 			}
 
 			inline document &operator=(document &&other) noexcept
 			{
 				*static_cast<yaml_document_t *>(this) = std::move(static_cast<yaml_document_t &>(other));
-				instance = other.instance;
-				other.instance = gsdk::INVALID_HSCRIPT;
+				mapped = other.mapped;
+				other.mapped = gsdk::INVALID_HSCRIPT;
 				return *this;
 			}
 
 			~document() noexcept;
 
 		private:
-			inline yaml_node_t *root_node() noexcept
-			{ return yaml_document_get_root_node(this); }
+			bool node_to_variant(yaml_node_t *node, script_variant_t &var) noexcept;
 
-			gsdk::HSCRIPT get_instance_for_node(yaml_node_t *node) noexcept;
-
-			inline gsdk::HSCRIPT script_get_root_node() noexcept
-			{ return get_instance_for_node(root_node()); }
-
-			gsdk::HSCRIPT instance;
-
-			std::unordered_map<yaml_node_t *, std::unique_ptr<node_reference>> node_references;
+			gsdk::HSCRIPT mapped;
 		};
 
 	private:

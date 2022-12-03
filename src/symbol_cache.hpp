@@ -55,7 +55,7 @@ namespace vmod
 
 				template <typename R, typename C, typename ...Args>
 				inline auto mfp() const noexcept -> R(C::*)(Args...)
-				{ return reinterpret_cast<R(C::*)(Args...)>(mfp_); }
+				{ return reinterpret_cast<R(C::*)(Args...)>(mfp_.func); }
 
 				inline std::size_t size() const noexcept
 				{ return size_; }
@@ -70,7 +70,7 @@ namespace vmod
 				union {
 					void *addr_;
 					generic_func_t func_;
-					generic_mfp_t mfp_;
+					mfp_internal_t<void, empty_class> mfp_;
 				};
 			};
 

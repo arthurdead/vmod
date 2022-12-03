@@ -2,6 +2,7 @@
 #include "vmod.hpp"
 #include "filesystem.hpp"
 #include <cctype>
+#include <sys/inotify.h>
 
 namespace vmod
 {
@@ -65,7 +66,12 @@ namespace vmod
 	}
 
 	plugin::plugin(std::filesystem::path &&path_) noexcept
-		: path{std::move(path_)}
+		: path{std::move(path_)},
+		inotify_fd{-1},
+		watch_d{-1},
+		instance_{gsdk::INVALID_HSCRIPT},
+		script{gsdk::INVALID_HSCRIPT},
+		scope_{gsdk::INVALID_HSCRIPT}
 	{
 		std::filesystem::path filename{path.filename()};
 		filename.replace_extension();
@@ -88,18 +94,29 @@ namespace vmod
 	plugin &plugin::operator=(plugin &&other) noexcept
 	{
 		path = std::move(other.path);
+
 		script = other.script;
-		scope_ = other.scope_;
-		instance_ = other.instance_;
 		other.script = gsdk::INVALID_HSCRIPT;
+
+		scope_ = other.scope_;
 		other.scope_ = gsdk::INVALID_HSCRIPT;
+
+		instance_ = other.instance_;
 		other.instance_ = gsdk::INVALID_HSCRIPT;
+
+		inotify_fd = other.inotify_fd;
+		other.inotify_fd = -1;
+
+		watch_d = other.watch_d;
+		other.watch_d = -1;
+
 		map_active = std::move(other.map_active);
 		map_loaded = std::move(other.map_loaded);
 		map_unloaded = std::move(other.map_unloaded);
 		plugin_loaded = std::move(other.plugin_loaded);
 		plugin_unloaded = std::move(other.plugin_unloaded);
 		all_plugins_loaded = std::move(other.all_plugins_loaded);
+
 		return *this;
 	}
 
@@ -160,9 +177,49 @@ namespace vmod
 			if(vmod.map_is_loaded()) {
 				map_loaded(gsdk::STRING(sv_globals->mapname));
 			}
+
+			{
+				script_variant_t temp_var;
+				if(vm->GetValue(scope_, "VMOD_AUTO_RELOAD", &temp_var) && temp_var == true) {
+					watch();
+				} else {
+					unwatch();
+				}
+			}
 		}
 
 		return true;
+	}
+
+	void plugin::watch() noexcept
+	{
+		if(inotify_fd != -1) {
+			return;
+		}
+
+		inotify_fd = inotify_init1(IN_NONBLOCK);
+		if(inotify_fd != -1) {
+			watch_d = inotify_add_watch(inotify_fd, path.c_str(), IN_MODIFY);
+		}
+	}
+
+	void plugin::unwatch() noexcept
+	{
+		if(inotify_fd != -1) {
+			if(watch_d != -1) {
+				inotify_rm_watch(inotify_fd, watch_d);
+				watch_d = -1;
+			}
+
+			close(inotify_fd);
+			inotify_fd = -1;
+		}
+	}
+
+	plugin::~plugin() noexcept
+	{
+		unload();
+		unwatch();
 	}
 
 	void plugin::unload() noexcept
@@ -241,6 +298,16 @@ namespace vmod
 	{
 		if(func && func != gsdk::INVALID_HSCRIPT) {
 			vm->ReleaseFunction(func);
+		}
+	}
+
+	void plugin::game_frame() noexcept
+	{
+		if(inotify_fd != -1) {
+			inotify_event event;
+			if(read(inotify_fd, &event, sizeof(inotify_event)) == sizeof(inotify_event)) {
+				reload();
+			}
 		}
 	}
 }

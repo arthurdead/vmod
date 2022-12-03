@@ -68,7 +68,7 @@ namespace vmod
 				buffer = temp_buffer;
 			}
 			if(temp_buffer) {
-				free(temp_buffer);
+				std::free(temp_buffer);
 			}
 		}
 
@@ -90,6 +90,8 @@ namespace vmod
 	template <typename R, typename C, typename ...Args>
 	union alignas(std::uint64_t) mfp_internal_t
 	{
+		mfp_internal_t() noexcept = default;
+
 		inline mfp_internal_t(R(C::*func_)(Args...)) noexcept
 			: func{func_}
 		{

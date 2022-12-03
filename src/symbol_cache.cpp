@@ -45,7 +45,10 @@ namespace vmod
 	}
 
 	void symbol_cache::qualification_info::name_info::resolve(void *base) noexcept
-	{ addr_ = (static_cast<unsigned char *>(base) + offset); }
+	{
+		mfp_.addr = reinterpret_cast<generic_func_t>(static_cast<unsigned char *>(base) + offset);
+		mfp_.adjustor = 0;
+	}
 
 	void symbol_cache::class_info::ctor_info::resolve(void *base) noexcept
 	{
@@ -169,7 +172,7 @@ namespace vmod
 						: mem{mem_} {}
 					inline ~scope_free() noexcept {
 						if(mem) {
-							free(mem);
+							std::free(mem);
 						}
 					}
 				private:
@@ -207,7 +210,7 @@ namespace vmod
 						}
 
 						std::string name_unmangled{unmangled_buffer};
-						free(unmangled_buffer);
+						std::free(unmangled_buffer);
 
 						qualification_info::name_info info;
 						info.offset = static_cast<std::ptrdiff_t>(sym.st_value);
@@ -227,7 +230,7 @@ namespace vmod
 										}
 
 										std::string qual_name{unmangled_buffer};
-										free(unmangled_buffer);
+										std::free(unmangled_buffer);
 
 										unmangled_buffer = cplus_demangle_print(base_demangle_flags, component->u.s_binary.left->u.s_binary.right, guessed_name_length, &allocated);
 										if(!unmangled_buffer) {
@@ -235,7 +238,7 @@ namespace vmod
 										}
 
 										std::string func_name{unmangled_buffer};
-										free(unmangled_buffer);
+										std::free(unmangled_buffer);
 
 										unmangled_buffer = cplus_demangle_print(base_demangle_flags, component->u.s_binary.right, guessed_name_length, &allocated);
 										if(!unmangled_buffer) {
@@ -243,7 +246,7 @@ namespace vmod
 										}
 
 										func_name += unmangled_buffer;
-										free(unmangled_buffer);
+										std::free(unmangled_buffer);
 
 										auto qual_it{qualifications.find(qual_name)};
 										if(qual_it == qualifications.end()) {
@@ -269,7 +272,7 @@ namespace vmod
 										}
 
 										std::string func_name{unmangled_buffer};
-										free(unmangled_buffer);
+										std::free(unmangled_buffer);
 
 										qualification_info::name_info info;
 										info.offset = static_cast<std::ptrdiff_t>(sym.st_value);

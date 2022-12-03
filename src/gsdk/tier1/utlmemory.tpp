@@ -29,7 +29,7 @@ namespace gsdk
 				m_pMemory[i].~T();
 			}
 
-			free(m_pMemory);
+			std::free(m_pMemory);
 		}
 	}
 }

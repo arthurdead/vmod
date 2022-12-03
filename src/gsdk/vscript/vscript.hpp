@@ -99,6 +99,8 @@ namespace gsdk
 	template <typename T>
 	class CVariantBase
 	{
+		friend class IScriptVM;
+
 	protected:
 		inline CVariantBase() noexcept
 		{
@@ -301,11 +303,44 @@ namespace gsdk
 		virtual bool ValueExists(HSCRIPT, const char *) = 0;
 		virtual bool SetValue(HSCRIPT, const char *, const char *) = 0;
 		virtual bool SetValue(HSCRIPT, const char *, const ScriptVariant_t &) = 0;
-		virtual void CreateTable(ScriptVariant_t &) = 0;
+	private:
+		virtual void CreateTable_impl(ScriptVariant_t &) = 0;
+	public:
+		HSCRIPT CreateArray() noexcept;
+		inline HSCRIPT CreateTable() noexcept
+		{
+			ScriptVariant_t var;
+			CreateTable_impl(var);
+			return var.m_hScript;
+		}
+		inline void ReleaseTable(HSCRIPT table) noexcept
+		{
+			ScriptVariant_t var;
+			var.m_type = FIELD_HSCRIPT;
+			var.m_flags = 0;
+			var.m_hScript = table;
+			ReleaseValue(var);
+		}
+		inline void ReleaseArray(HSCRIPT array) noexcept
+		{
+			ScriptVariant_t var;
+			var.m_type = FIELD_HSCRIPT;
+			var.m_flags = 0;
+			var.m_hScript = array;
+			ReleaseValue(var);
+		}
 		virtual int GetNumTableEntries(HSCRIPT) = 0;
 		virtual int GetKeyValue(HSCRIPT, int, ScriptVariant_t *, ScriptVariant_t *) = 0;
 		virtual bool GetValue(HSCRIPT, const char *, ScriptVariant_t *) = 0;
 		virtual void ReleaseValue(ScriptVariant_t &) = 0;
+		inline void ReleaseValue(HSCRIPT object) noexcept
+		{
+			ScriptVariant_t var;
+			var.m_type = FIELD_HSCRIPT;
+			var.m_flags = 0;
+			var.m_hScript = object;
+			ReleaseValue(var);
+		}
 		virtual bool ClearValue(HSCRIPT, const char *) = 0;
 		virtual void WriteState(CUtlBuffer *) = 0;
 		virtual void ReadState(CUtlBuffer *) = 0;
@@ -316,7 +351,6 @@ namespace gsdk
 		virtual bool RaiseException(const char *) = 0;
 		virtual CSquirrelMetamethodDelegateImpl *MakeSquirrelMetamethod_Get(HSCRIPT &, const char *, ISquirrelMetamethodDelegate *, bool) = 0;
 		virtual void DestroySquirrelMetamethod_Get(CSquirrelMetamethodDelegateImpl *) = 0;
-
 		virtual int GetKeyValue2(HSCRIPT, int, ScriptVariant_t *, ScriptVariant_t *) = 0;
 		virtual SQVM *GetInternalVM() = 0;
 		virtual bool GetScalarValue(HSCRIPT, ScriptVariant_t *) = 0;

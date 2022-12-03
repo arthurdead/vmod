@@ -9,16 +9,39 @@
 namespace vmod
 {
 	template <typename T>
-	constexpr gsdk::ScriptDataType_t type_to_field_impl() noexcept = delete;
+	constexpr gsdk::ScriptDataType_t type_to_field() noexcept = delete;
 
 	template <typename T>
-	constexpr gsdk::ScriptDataType_t type_to_field() noexcept
+	std::remove_reference_t<T> variant_to_value(const gsdk::ScriptVariant_t &) noexcept = delete;
+
+	template <typename T>
+	void initialize_variant_value(gsdk::ScriptVariant_t &, T) noexcept;
+
+	template <typename T>
+	gsdk::ScriptVariant_t value_to_variant(T value) noexcept;
+}
+
+#include "vscript_variant.tpp"
+
+namespace vmod
+{
+	template <typename T>
+	inline void value_to_variant(gsdk::ScriptVariant_t &var, T value) noexcept
 	{
-		if constexpr(std::is_enum_v<T>) {
-			return type_to_field_impl<std::underlying_type_t<T>>();
-		} else {
-			return type_to_field_impl<T>();
-		}
+		var.m_type = static_cast<short>(type_to_field<std::decay_t<T>>());
+		var.m_flags = 0;
+		initialize_variant_value<std::decay_t<T>>(var, std::forward<T>(value));
+	}
+}
+
+namespace vmod
+{
+	inline void null_variant(gsdk::ScriptVariant_t &var) noexcept
+	{
+		std::memset(var.unk1, 0, sizeof(gsdk::ScriptVariant_t::unk1));
+		var.m_type = gsdk::FIELD_VOID;
+		var.m_hScript = nullptr;
+		var.m_flags = 0;
 	}
 
 	extern void free_variant_hscript(gsdk::ScriptVariant_t &var) noexcept;
@@ -35,21 +58,7 @@ namespace vmod
 		}
 
 		inline ~script_variant_t() noexcept
-		{
-			if(m_flags & gsdk::SV_FREE) {
-				switch(m_type) {
-					case gsdk::FIELD_VECTOR: {
-						delete m_pVector;
-					} break;
-					case gsdk::FIELD_CSTRING: {
-						free(const_cast<char *>(m_pszString));
-					} break;
-					case gsdk::FIELD_HSCRIPT: {
-						free_variant_hscript(*this);
-					} break;
-				}
-			}
-		}
+		{ free(); }
 
 		inline script_variant_t(script_variant_t &&other) noexcept
 		{ operator=(std::move(other)); }
@@ -67,52 +76,64 @@ namespace vmod
 		script_variant_t(const script_variant_t &) = delete;
 		script_variant_t &operator=(const script_variant_t &) = delete;
 
-		inline script_variant_t(gsdk::HSCRIPT value) noexcept
-		{
-			m_type = gsdk::FIELD_HSCRIPT;
-			m_hScript = value;
-			m_flags = 0;
-			std::memset(unk1, 0, sizeof(unk1));
-		}
-
 		template <typename T>
-		inline script_variant_t(T &&value) noexcept
+		inline script_variant_t(T value) noexcept
 		{
 			std::memset(unk1, 0, sizeof(unk1));
 			value_to_variant<T>(*this, std::forward<T>(value));
+		}
+
+		template <typename T>
+		inline script_variant_t &operator=(T value) noexcept
+		{
+			free();
+			value_to_variant<T>(*this, std::forward<T>(value));
+			return *this;
+		}
+
+		template <typename T>
+		inline bool operator==(const T &value) const noexcept
+		{ return variant_to_value<T>(*this) == value; }
+		template <typename T>
+		inline bool operator!=(const T &value) const noexcept
+		{ return variant_to_value<T>(*this) != value; }
+
+		template <typename T>
+		explicit inline operator T() const noexcept
+		{ return variant_to_value<T>(*this); }
+
+	private:
+		inline void free() noexcept
+		{
+			if(m_flags & gsdk::SV_FREE) {
+				switch(m_type) {
+					case gsdk::FIELD_VECTOR: {
+						delete m_pVector;
+					} break;
+					case gsdk::FIELD_CSTRING: {
+						std::free(const_cast<char *>(m_pszString));
+					} break;
+					case gsdk::FIELD_HSCRIPT: {
+						free_variant_hscript(*this);
+					} break;
+				}
+				m_flags &= ~gsdk::SV_FREE;
+			}
 		}
 	};
 
 	static_assert(sizeof(script_variant_t) == sizeof(gsdk::ScriptVariant_t));
 	static_assert(alignof(script_variant_t) == alignof(gsdk::ScriptVariant_t));
 
-	template <typename T>
-	T variant_to_value(const gsdk::ScriptVariant_t &) noexcept = delete;
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field<script_variant_t>() noexcept
+	{ return gsdk::FIELD_VARIANT; }
 
 	template <typename T>
-	void initialize_variant_value(gsdk::ScriptVariant_t &, T &&) noexcept = delete;
-
-	inline void null_variant(gsdk::ScriptVariant_t &var) noexcept
-	{
-		std::memset(var.unk1, 0, sizeof(gsdk::ScriptVariant_t::unk1));
-		var.m_type = gsdk::FIELD_VOID;
-		var.m_hScript = nullptr;
-		var.m_flags = 0;
-	}
-
-	template <typename T>
-	inline void value_to_variant(gsdk::ScriptVariant_t &var, T &&value) noexcept
-	{
-		var.m_type = static_cast<short>(type_to_field<T>());
-		var.m_flags = 0;
-		initialize_variant_value(var, std::forward<T>(value));
-	}
-
-	template <typename T>
-	inline gsdk::ScriptVariant_t value_to_variant(T &&value) noexcept
+	inline gsdk::ScriptVariant_t value_to_variant(T value) noexcept
 	{
 		script_variant_t var;
-		value_to_variant(var, std::forward<T>(value));
+		value_to_variant<T>(var, std::forward<T>(value));
 		return var;
 	}
 

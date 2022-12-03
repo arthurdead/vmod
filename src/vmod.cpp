@@ -34,6 +34,21 @@ namespace vmod
 
 namespace vmod
 {
+	static void(gsdk::IScriptVM::*CreateArray)(gsdk::ScriptVariant_t &);
+}
+
+namespace gsdk
+{
+	HSCRIPT IScriptVM::CreateArray() noexcept
+	{
+		ScriptVariant_t var;
+		(this->*vmod::CreateArray)(var);
+		return var.m_hScript;
+	}
+}
+
+namespace vmod
+{
 	class vmod vmod;
 
 	gsdk::IScriptVM *vm;
@@ -279,6 +294,18 @@ namespace vmod
 			return false;
 		}
 
+		auto CSquirrelVM_it{vscript_symbols.find("CSquirrelVM"s)};
+		if(CSquirrelVM_it == vscript_symbols.end()) {
+			error("vmod: missing 'CSquirrelVM' symbols\n"sv);
+			return false;
+		}
+
+		auto CreateArray_it{CSquirrelVM_it->second.find("CreateArray(CVariantBase<CVariantDefaultAllocator>&)"s)};
+		if(CreateArray_it == CSquirrelVM_it->second.end()) {
+			error("vmod: missing 'CSquirrelVM::CreateArray(CVariantBase<CVariantDefaultAllocator>&)' symbol\n"sv);
+			return false;
+		}
+
 		g_Script_init = g_Script_init_it->second.addr<const unsigned char *>();
 
 		RegisterScriptFunctions = RegisterScriptFunctions_it->second.mfp<void, gsdk::CTFGameRules>();
@@ -287,6 +314,8 @@ namespace vmod
 		VScriptRunScript = VScriptRunScript_it->second.func<bool, const char *, gsdk::HSCRIPT, bool>();
 		g_Script_vscript_server = g_Script_vscript_server_it->second.addr<const unsigned char *>();
 		g_pScriptVM = g_pScriptVM_it->second.addr<gsdk::IScriptVM **>();
+
+		CreateArray = CreateArray_it->second.mfp<void, gsdk::IScriptVM, gsdk::ScriptVariant_t &>();
 
 		write_file(root_dir/"internal_scripts"sv/"init.nut"sv, g_Script_init, std::strlen(reinterpret_cast<const char *>(g_Script_init)+1));
 		write_file(root_dir/"internal_scripts"sv/"vscript_server.nut"sv, g_Script_vscript_server, std::strlen(reinterpret_cast<const char *>(g_Script_vscript_server)+1));
@@ -693,6 +722,14 @@ namespace vmod
 	#if 0
 		vm->Frame(sv_globals->frametime);
 	#endif
+
+		for(const auto &pl : plugins) {
+			if(!*pl) {
+				continue;
+			}
+
+			pl->game_frame();
+		}
 	}
 
 	void vmod::unload() noexcept

@@ -1,121 +1,5 @@
-#include "vmod.hpp"
-
 namespace vmod
 {
-	template <>
-	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<void>() noexcept
-	{ return gsdk::FIELD_VOID; }
-	template <>
-	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<std::string_view>() noexcept
-	{ return gsdk::FIELD_CSTRING; }
-	template <>
-	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<gsdk::HSCRIPT>() noexcept
-	{ return gsdk::FIELD_HSCRIPT; }
-	template <>
-	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<script_variant_t>() noexcept
-	{ return gsdk::FIELD_VARIANT; }
-	template <>
-	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<std::size_t>() noexcept
-	{ return gsdk::FIELD_INTEGER; }
-	template <>
-	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<std::filesystem::path>() noexcept
-	{ return gsdk::FIELD_CSTRING; }
-
-	template <>
-	inline void initialize_variant_value<std::string_view>(gsdk::ScriptVariant_t &var, std::string_view &&value) noexcept
-	{ var.m_pszString = value.data(); }
-
-	template <>
-	inline void initialize_variant_value<gsdk::HSCRIPT>(gsdk::ScriptVariant_t &var, gsdk::HSCRIPT &&value) noexcept
-	{ var.m_hScript = value; }
-
-	template <>
-	inline void initialize_variant_value<std::size_t>(gsdk::ScriptVariant_t &var, std::size_t &&value) noexcept
-	{ var.m_int = static_cast<int>(value); }
-
-	template <>
-	inline std::size_t variant_to_value(const gsdk::ScriptVariant_t &var) noexcept
-	{
-		using namespace std::literals::string_view_literals;
-
-		switch(var.m_type) {
-			case gsdk::FIELD_FLOAT: {
-				return static_cast<std::size_t>(var.m_float);
-			}
-			case gsdk::FIELD_CSTRING: {
-				return static_cast<std::size_t>(std::atoll(var.m_pszString));
-			}
-			case gsdk::FIELD_VECTOR: {
-				return {};
-			}
-			case gsdk::FIELD_INTEGER: {
-				return static_cast<std::size_t>(var.m_int);
-			}
-			case gsdk::FIELD_BOOLEAN: {
-				return var.m_bool ? 1 : 0;
-			}
-			case gsdk::FIELD_HSCRIPT: {
-				//return vmod.to_integer(var.m_hScript);
-				return {};
-			}
-		}
-
-		return {};
-	}
-
-	template <>
-	inline std::string_view variant_to_value(const gsdk::ScriptVariant_t &var) noexcept
-	{
-		using namespace std::literals::string_view_literals;
-
-		static std::string temp_buffer;
-
-		switch(var.m_type) {
-			case gsdk::FIELD_FLOAT: {
-				temp_buffer = std::to_string(var.m_float);
-				return temp_buffer;
-			}
-			case gsdk::FIELD_CSTRING: {
-				return var.m_pszString;
-			}
-			case gsdk::FIELD_VECTOR: {
-				temp_buffer.clear();
-				temp_buffer += "(vector : ("sv;
-				temp_buffer += std::to_string(var.m_pVector->x);
-				temp_buffer += ", "sv;
-				temp_buffer += std::to_string(var.m_pVector->y);
-				temp_buffer += ", "sv;
-				temp_buffer += std::to_string(var.m_pVector->z);
-				temp_buffer += "))"sv;
-				return temp_buffer;
-			}
-			case gsdk::FIELD_INTEGER: {
-				temp_buffer = std::to_string(var.m_int);
-				return temp_buffer;
-			}
-			case gsdk::FIELD_BOOLEAN: {
-				return var.m_bool ? "true"sv : "false"sv;
-			}
-			case gsdk::FIELD_HSCRIPT: {
-				return vmod.to_string(var.m_hScript);
-			}
-		}
-
-		return {};
-	}
-
-	template <>
-	inline std::filesystem::path variant_to_value(const gsdk::ScriptVariant_t &var) noexcept
-	{
-		switch(var.m_type) {
-			case gsdk::FIELD_CSTRING: {
-				return var.m_pszString;
-			}
-		}
-
-		return {};
-	}
-
 	template <typename T>
 	class_desc_t<T>::class_desc_t(std::string_view name) noexcept
 	{
@@ -135,7 +19,7 @@ namespace vmod
 		m_desc.m_pszFunction = name.data();
 		m_desc.m_pszScriptName = rename.empty() ? name.data() : rename.data();
 
-		m_desc.m_ReturnType = type_to_field<R>();
+		m_desc.m_ReturnType = type_to_field<std::decay_t<R>>();
 		(m_desc.m_Parameters.emplace_back(type_to_field<std::decay_t<Args>>()), ...);
 	}
 
