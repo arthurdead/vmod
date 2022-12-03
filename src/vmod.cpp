@@ -128,6 +128,11 @@ namespace vmod
 			return false;
 		}
 
+		if(!vm->SetValue(global_scope, "VMOD_GAME_DIR", game_dir.c_str())) {
+			error("vmod: failed to set game dir value\n"sv);
+			return false;
+		}
+
 		if(!plugin::bindings()) {
 			return false;
 		}
@@ -198,10 +203,14 @@ namespace vmod
 			return false;
 		}
 
-		char gamedir[PATH_MAX];
-		sv_engine->GetGameDir(gamedir, sizeof(gamedir));
+		{
+			char gamedir[PATH_MAX];
+			sv_engine->GetGameDir(gamedir, sizeof(gamedir));
 
-		root_dir = gamedir;
+			game_dir = gamedir;
+		}
+
+		root_dir = game_dir;
 		root_dir /= "addons/vmod"sv;
 
 		plugins_dir = root_dir;
@@ -211,7 +220,7 @@ namespace vmod
 		base_script_path /= "base/vmod_base"sv;
 		base_script_path.replace_extension(scripts_extension);
 
-		std::filesystem::path server_lib_name{gamedir};
+		std::filesystem::path server_lib_name{game_dir};
 		if(sv_engine->IsDedicatedServer()) {
 			server_lib_name /= "bin/server_srv.so";
 		} else {

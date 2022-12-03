@@ -44,6 +44,7 @@ namespace vmod
 
 		bool is_map_loaded;
 
+		std::filesystem::path game_dir;
 		std::filesystem::path plugins_dir;
 
 		gsdk_engine_library engine_lib;

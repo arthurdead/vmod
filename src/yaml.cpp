@@ -88,11 +88,6 @@ namespace vmod
 						case sizeof(int):
 						var = *reinterpret_cast<int *>(node->data.scalar.value);
 						return true;
-					#if 0
-						case sizeof(long):
-						var = *reinterpret_cast<long *>(node->data.scalar.value);
-						return true;
-					#endif
 						case sizeof(long long):
 						var = *reinterpret_cast<long long *>(node->data.scalar.value);
 						return true;
@@ -109,7 +104,7 @@ namespace vmod
 						var = *reinterpret_cast<double *>(node->data.scalar.value);
 						return true;
 						case sizeof(long double):
-						var = *reinterpret_cast<double *>(node->data.scalar.value);
+						var = *reinterpret_cast<long double *>(node->data.scalar.value);
 						return true;
 					}
 
