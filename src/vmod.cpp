@@ -14,6 +14,7 @@
 #include <iostream>
 
 #include "convar.hpp"
+#include "yaml.hpp"
 #include <utility>
 
 namespace vmod
@@ -80,7 +81,7 @@ namespace vmod
 		if(!path.is_absolute()) {
 			path = (plugins_dir/path);
 		}
-		path.replace_extension(".nut"sv);
+		path.replace_extension(scripts_extension);
 
 		for(auto it{plugins.begin()}; it != plugins.end(); ++it) {
 			const std::filesystem::path &pl_path{static_cast<std::filesystem::path>(*(*it))};
@@ -116,12 +117,18 @@ namespace vmod
 			return false;
 		}
 
+		if(!yaml::bindings()) {
+			return false;
+		}
+
 		return true;
 	}
 
 	void vmod::unbindings() noexcept
 	{
 		plugin::unbindings();
+
+		yaml::unbindings();
 
 		if(instance && instance != gsdk::INVALID_HSCRIPT) {
 			vm->RemoveInstance(instance);
@@ -145,6 +152,16 @@ namespace vmod
 	{
 		using namespace std::literals::string_literals;
 		using namespace std::literals::string_view_literals;
+
+		gsdk::ScriptLanguage_t script_language{gsdk::SL_SQUIRREL};
+
+		switch(script_language) {
+			case gsdk::SL_NONE: break;
+			case gsdk::SL_GAMEMONKEY: scripts_extension = ".gm"sv; break;
+			case gsdk::SL_SQUIRREL: scripts_extension = ".nut"sv; break;
+			case gsdk::SL_LUA: scripts_extension = ".lua"sv; break;
+			case gsdk::SL_PYTHON: scripts_extension = ".py"sv; break;
+		}
 
 		if(!symbol_cache::initialize()) {
 			std::cout << "\033[0;31m"sv << "vmod: failed to initialize symbol cache\n"sv << "\033[0m"sv;
@@ -176,7 +193,8 @@ namespace vmod
 		plugins_dir /= "plugins"sv;
 
 		base_script_path = root_dir;
-		base_script_path /= "base/vmod_base.nut"sv;
+		base_script_path /= "base/vmod_base"sv;
+		base_script_path.replace_extension(scripts_extension);
 
 		std::filesystem::path server_lib_name{gamedir};
 		if(sv_engine->IsDedicatedServer()) {
@@ -270,10 +288,10 @@ namespace vmod
 		g_Script_vscript_server = g_Script_vscript_server_it->second.addr<const unsigned char *>();
 		g_pScriptVM = g_pScriptVM_it->second.addr<gsdk::IScriptVM **>();
 
-		write_file(root_dir/"internal_scripts"sv/"init.nut"sv, g_Script_init, strlen(reinterpret_cast<const char *>(g_Script_init)+1));
-		write_file(root_dir/"internal_scripts"sv/"vscript_server.nut"sv, g_Script_vscript_server, strlen(reinterpret_cast<const char *>(g_Script_vscript_server)+1));
+		write_file(root_dir/"internal_scripts"sv/"init.nut"sv, g_Script_init, std::strlen(reinterpret_cast<const char *>(g_Script_init)+1));
+		write_file(root_dir/"internal_scripts"sv/"vscript_server.nut"sv, g_Script_vscript_server, std::strlen(reinterpret_cast<const char *>(g_Script_vscript_server)+1));
 
-		vm = vsmgr->CreateVM(gsdk::SL_SQUIRREL);
+		vm = vsmgr->CreateVM(script_language);
 		if(!vm) {
 			error("vmod: failed to create VM\n"sv);
 			return false;
@@ -322,7 +340,7 @@ namespace vmod
 			if(!path.is_absolute()) {
 				path = (plugins_dir/path);
 			}
-			path.replace_extension(".nut"sv);
+			path.replace_extension(scripts_extension);
 
 			for(auto it{plugins.begin()}; it != plugins.end(); ++it) {
 				const std::filesystem::path &pl_path{static_cast<std::filesystem::path>(*(*it))};
@@ -347,7 +365,7 @@ namespace vmod
 			if(!path.is_absolute()) {
 				path = (plugins_dir/path);
 			}
-			path.replace_extension(".nut"sv);
+			path.replace_extension(scripts_extension);
 
 			for(const auto &pl : plugins) {
 				const std::filesystem::path &pl_path{static_cast<std::filesystem::path>(*pl)};
@@ -401,7 +419,7 @@ namespace vmod
 				}
 
 				std::filesystem::path path{file.path()};
-				if(path.extension() != ".nut"sv) {
+				if(path.extension() != scripts_extension) {
 					continue;
 				}
 
@@ -439,7 +457,11 @@ namespace vmod
 	static gsdk::IScriptVM *CreateVM_detour_callback(gsdk::IScriptManager *pthis, gsdk::ScriptLanguage_t lang) noexcept
 	{
 		if(in_vscript_server_init) {
-			return vm;
+			if(lang == vm->GetLanguage()) {
+				return vm;
+			} else {
+				return nullptr;
+			}
 		}
 
 		return (pthis->*CreateVM_original)(lang);
@@ -557,9 +579,14 @@ namespace vmod
 
 		vscript_server_init_called = true;
 
-		server_init_script = vm->CompileScript(reinterpret_cast<const char *>(g_Script_vscript_server), "vscript_server.nut");
-		if(!server_init_script || server_init_script == gsdk::INVALID_HSCRIPT) {
-			error("vmod: failed to compile server init script\n"sv);
+		if(vm->GetLanguage() == gsdk::SL_SQUIRREL) {
+			server_init_script = vm->CompileScript(reinterpret_cast<const char *>(g_Script_vscript_server), "vscript_server.nut");
+			if(!server_init_script || server_init_script == gsdk::INVALID_HSCRIPT) {
+				error("vmod: failed to compile server init script\n"sv);
+				return false;
+			}
+		} else {
+			error("vmod: server init script not supported on this language\n"sv);
 			return false;
 		}
 
@@ -567,6 +594,9 @@ namespace vmod
 			error("vmod: failed to run server init script\n"sv);
 			return false;
 		}
+
+		std::string base_script_name{"vmod_base"sv};
+		base_script_name += scripts_extension;
 
 		if(std::filesystem::exists(base_script_path)) {
 			{
@@ -578,7 +608,7 @@ namespace vmod
 					error("vmod: failed to compile base script '%s'\n"sv, base_script_path.c_str());
 					return false;
 				#else
-					base_script = vm->CompileScript(reinterpret_cast<const char *>(__vmod_base_script), "vmod_base.nut");
+					base_script = vm->CompileScript(reinterpret_cast<const char *>(__vmod_base_script), base_script_name.c_str());
 					if(!base_script || base_script == gsdk::INVALID_HSCRIPT) {
 						error("vmod: failed to compile base script\n"sv);
 						return false;
@@ -591,7 +621,7 @@ namespace vmod
 			error("vmod: missing base script '%s'\n"sv, base_script_path.c_str());
 			return false;
 		#else
-			base_script = vm->CompileScript(reinterpret_cast<const char *>(__vmod_base_script), "vmod_base.nut");
+			base_script = vm->CompileScript(reinterpret_cast<const char *>(__vmod_base_script), base_script_name.c_str());
 			if(!base_script || base_script == gsdk::INVALID_HSCRIPT) {
 				error("vmod: failed to compile base script\n"sv);
 				return false;
@@ -660,7 +690,9 @@ namespace vmod
 
 	void vmod::game_frame([[maybe_unused]] bool) noexcept
 	{
+	#if 0
 		vm->Frame(sv_globals->frametime);
+	#endif
 	}
 
 	void vmod::unload() noexcept
@@ -698,6 +730,10 @@ namespace vmod
 			}
 
 			vsmgr->DestroyVM(vm);
+
+			if(*g_pScriptVM == vm) {
+				*g_pScriptVM = nullptr;
+			}
 		}
 	}
 }

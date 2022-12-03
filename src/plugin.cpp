@@ -5,7 +5,7 @@
 
 namespace vmod
 {
-	class_desc_t<plugin> plugin_desc;
+	static class_desc_t<plugin> plugin_desc{"plugin"};
 
 	script_variant_t plugin::script_lookup_value(std::string_view val_name) noexcept
 	{

@@ -3,6 +3,8 @@ project('vmod', 'cpp',
 		'warning_level=3',
 		'werror=true',
 		'buildtype=debug',
+		'b_sanitize=none',
+		'b_lundef=false',
 		'strip=false',
 		'cpp_std=gnu++20',
 		'cpp_eh=none',
@@ -45,10 +47,28 @@ srcds = get_option('srcds')
 addons = join_paths(srcds,'tf','addons')
 vmod_root = join_paths(addons,'vmod')
 
+thirdparty_default_options_c = [
+	'warning_level=0',
+	'werror=false',
+	'buildtype=release',
+	'b_sanitize=none',
+	'b_ndebug=true',
+	'b_lto=true',
+	'b_lto_mode=thin',
+	'b_thinlto_cache=true',
+	'b_lundef=true',
+	'strip=true',
+	'c_std=c18',
+	'default_library=static'
+]
+
 libiberty = subproject('libiberty',
-	default_options: [
-		'binutils_src=' + get_option('binutils_src')
-	],
+	default_options: thirdparty_default_options_c,
+	required: true
+)
+
+libyaml = subproject('libyaml',
+	default_options: thirdparty_default_options_c,
 	required: true
 )
 
@@ -56,7 +76,8 @@ dependencies = [
 	dependency('threads'),
 	dependency('dl'),
 	dependency('libelf'),
-	libiberty.get_variable('libiberty')
+	libyaml.get_variable('yaml_dep'),
+	libiberty.get_variable('iberty_dep')
 ]
 
 vmod_base_script_src = files('src/vmod_base.nut')
@@ -80,17 +101,19 @@ endif
 
 lib = shared_library('vmod',
 	files(
-		'src/vmod.cpp',
-		'src/filesystem.cpp',
-		'src/plugin.cpp',
-		'src/convar.cpp',
-		'src/gsdk.cpp',
-		'src/vscript.cpp',
-		'src/hacking.cpp',
-		'src/symbol_cache.cpp',
-		'src/gsdk/vstdlib/convar.cpp',
-		'src/gsdk/engine/vsp.cpp'
+		join_paths('src','vmod.cpp'),
+		join_paths('src','filesystem.cpp'),
+		join_paths('src','plugin.cpp'),
+		join_paths('src','convar.cpp'),
+		join_paths('src','gsdk.cpp'),
+		join_paths('src','vscript.cpp'),
+		join_paths('src','yaml.cpp'),
+		join_paths('src','hacking.cpp'),
+		join_paths('src','symbol_cache.cpp'),
+		join_paths('src','gsdk','vstdlib','convar.cpp'),
+		join_paths('src','gsdk','engine','vsp.cpp')
 	),
+	gnu_symbol_visibility: 'inlineshidden',
 	implicit_include_directories: true,
 	name_prefix: '',
 	dependencies: dependencies,
@@ -100,7 +123,7 @@ lib = shared_library('vmod',
 )
 
 configure_file(
-	input: files('src/vsp.vdf'),
+	input: files(join_paths('src','vsp.vdf')),
 	output: (lib.name()+'.vdf'),
 	configuration: {
 		'LIBNAME': lib.name()

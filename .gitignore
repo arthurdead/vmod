@@ -1,1 +1,5 @@
 builddir/
+subprojects/packagecache/
+subprojects/libyaml.wrap
+subprojects/yaml-?.?.?/
+subprojects/binutils-?.??/

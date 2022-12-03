@@ -7,14 +7,21 @@ namespace vmod
 {
 	std::unique_ptr<unsigned char[]> read_file(const std::filesystem::path &path) noexcept
 	{
+		std::size_t size;
+		return read_file(path, size);
+	}
+
+	std::unique_ptr<unsigned char[]> read_file(const std::filesystem::path &path, std::size_t &size) noexcept
+	{
 		int fd{open(path.c_str(), O_RDONLY)};
 		if(fd < 0) {
+			size = 0;
 			return {};
 		}
 
 		struct stat stat;
 		fstat(fd, &stat);
-		std::size_t size{static_cast<std::size_t>(stat.st_size)};
+		size = static_cast<std::size_t>(stat.st_size);
 
 		std::unique_ptr<unsigned char[]> data{new unsigned char[size]};
 		read(fd, data.get(), size);

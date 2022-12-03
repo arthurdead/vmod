@@ -9,7 +9,17 @@
 namespace vmod
 {
 	template <typename T>
-	constexpr gsdk::ScriptDataType_t type_to_field() noexcept = delete;
+	constexpr gsdk::ScriptDataType_t type_to_field_impl() noexcept = delete;
+
+	template <typename T>
+	constexpr gsdk::ScriptDataType_t type_to_field() noexcept
+	{
+		if constexpr(std::is_enum_v<T>) {
+			return type_to_field_impl<std::underlying_type_t<T>>();
+		} else {
+			return type_to_field_impl<T>();
+		}
+	}
 
 	extern void free_variant_hscript(gsdk::ScriptVariant_t &var) noexcept;
 
@@ -111,9 +121,17 @@ namespace vmod
 
 	class alignas(gsdk::ScriptFunctionBinding_t) func_desc_t : public gsdk::ScriptFunctionBinding_t
 	{
-	private:
-		func_desc_t() = delete;
+	public:
+		func_desc_t() noexcept = default;
 
+		template <typename R, typename ...Args>
+		inline void initialize(R(*func)(Args...), std::string_view name, std::string_view rename = {}) noexcept
+		{
+			std::memset(unk1, 0, sizeof(unk1));
+			initialize_static<R, Args...>(func, name, rename);
+		}
+
+	private:
 		func_desc_t(const func_desc_t &) = delete;
 		func_desc_t &operator=(const func_desc_t &) = delete;
 
@@ -146,8 +164,15 @@ namespace vmod
 			initialize_member<R, C, Args...>(func, name, rename);
 		}
 
+		template <typename R, typename ...Args>
+		inline func_desc_t(R(*func)(Args...), std::string_view name, std::string_view rename) noexcept
+		{ initialize(func, name, rename); }
+
 		template <typename R, typename C, typename ...Args>
 		void initialize_member(R(C::*func)(Args...), std::string_view name, std::string_view rename);
+
+		template <typename R, typename ...Args>
+		void initialize_static(R(*func)(Args...), std::string_view name, std::string_view rename);
 
 		template <typename R, typename ...Args>
 		void initialize_shared(std::string_view name, std::string_view rename);
@@ -156,14 +181,7 @@ namespace vmod
 		static bool binding(gsdk::ScriptFunctionBindingStorageType_t binding_func, [[maybe_unused]] char unkarg1[sizeof(int)], void *obj, gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
 
 		template <typename R, typename C, typename ...Args, std::size_t ...I>
-		static inline R call_impl(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *ctx, gsdk::ScriptVariant_t *args_var, std::index_sequence<I...>) noexcept
-		{
-			if constexpr(sizeof...(Args) == 0) {
-				return (static_cast<C *>(ctx)->*mfp_from_func<R, C, Args...>(reinterpret_cast<generic_func_t>(binding_func)))();
-			} else {
-				return (static_cast<C *>(ctx)->*mfp_from_func<R, C, Args...>(reinterpret_cast<generic_func_t>(binding_func)))(variant_to_value<Args>(args_var[I])...);
-			}
-		}
+		static R call_impl(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *ctx, gsdk::ScriptVariant_t *args_var, std::index_sequence<I...>) noexcept;
 
 		template <typename R, typename C, typename ...Args>
 		static inline R call(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *ctx, gsdk::ScriptVariant_t *args_var) noexcept
@@ -174,43 +192,40 @@ namespace vmod
 	static_assert(alignof(func_desc_t) == alignof(gsdk::ScriptFunctionBinding_t));
 
 	template <typename T>
-	class script_instance_helper final : public gsdk::IScriptInstanceHelper
-	{
-	public:
-		virtual ~script_instance_helper() noexcept = default;
-
-		inline void *GetProxied(void *ptr) noexcept override final
-		{ return ptr; }
-
-		bool ToString(void *ptr, char *buff, int siz) noexcept override
-		{
-			const std::string &name{demangle<T>()};
-			std::snprintf(buff, static_cast<std::size_t>(siz), "(%s : %p)", name.c_str(), ptr);
-			return true;
-		}
-
-		void *BindOnRead([[maybe_unused]] gsdk::HSCRIPT instance, void *old_ptr, [[maybe_unused]] const char *id) noexcept override final
-		{ return old_ptr; }
-
-		static inline script_instance_helper &singleton() noexcept
-		{
-			static script_instance_helper singleton_;
-			return singleton_;
-		}
-	};
-
-	template <typename T>
 	class alignas(gsdk::ScriptClassDesc_t) class_desc_t : public gsdk::ScriptClassDesc_t
 	{
 	public:
 		class_desc_t(const class_desc_t &) = delete;
 		class_desc_t &operator=(const class_desc_t &) = delete;
 
+		class instance_helper final : public gsdk::IScriptInstanceHelper
+		{
+		public:
+			virtual ~instance_helper() noexcept = default;
+
+			inline void *GetProxied(void *ptr) noexcept override final
+			{ return ptr; }
+
+			inline bool ToString(void *ptr, char *buff, int siz) noexcept override final
+			{
+				const std::string &name{demangle<T>()};
+				std::snprintf(buff, static_cast<std::size_t>(siz), "(%s : %p)", name.c_str(), ptr);
+				return true;
+			}
+
+			inline void *BindOnRead([[maybe_unused]] gsdk::HSCRIPT instance, void *ptr, [[maybe_unused]] const char *id) noexcept override final
+			{ return ptr; }
+
+			static inline instance_helper &singleton() noexcept
+			{
+				static instance_helper singleton_;
+				return singleton_;
+			}
+		};
+
 		inline class_desc_t(class_desc_t &&other) noexcept
 			: gsdk::ScriptClassDesc_t{}
-		{
-			operator=(std::move(other));
-		}
+		{ operator=(std::move(other)); }
 
 		inline class_desc_t &operator=(class_desc_t &&other) noexcept
 		{
@@ -235,9 +250,11 @@ namespace vmod
 
 		class_desc_t(std::string_view name) noexcept;
 
-		inline class_desc_t() noexcept
-			: class_desc_t{std::string_view{}}
+		template <typename R, typename ...Args>
+		inline func_desc_t &func(R(*func)(Args...), std::string_view name, std::string_view rename = {}) noexcept
 		{
+			func_desc_t temp{func, name, rename};
+			return static_cast<func_desc_t &>(m_FunctionBindings.emplace_back(std::move(temp)));
 		}
 
 		template <typename R, typename ...Args>
@@ -246,6 +263,42 @@ namespace vmod
 			func_desc_t temp{func, name, rename};
 			return static_cast<func_desc_t &>(m_FunctionBindings.emplace_back(std::move(temp)));
 		}
+
+		template <typename R, typename ...Args>
+		inline func_desc_t &func(R(T::*func_)(Args...) const, std::string_view name, std::string_view rename = {}) noexcept
+		{ return func<R, Args...>(reinterpret_cast<R(T::*)(Args...)>(func_), name, rename); }
+
+		inline class_desc_t &dtor(void(*func)(T *)) noexcept
+		{
+			m_pfnDestruct = reinterpret_cast<void(*)(void *)>(func);
+			return *this;
+		}
+
+		inline class_desc_t &dtor() noexcept
+		{
+			static_assert(std::is_destructible_v<T>);
+			m_pfnDestruct = static_cast<void(*)(void *)>(destruct);
+			return *this;
+		}
+
+		inline class_desc_t &ctor(T *(*func)()) noexcept
+		{
+			m_pfnConstruct = reinterpret_cast<void *(*)()>(func);
+			return *this;
+		}
+
+		inline class_desc_t &ctor() noexcept
+		{
+			static_assert(std::is_default_constructible_v<T>);
+			m_pfnConstruct = static_cast<void *(*)()>(construct);
+			return *this;
+		}
+
+	private:
+		static inline void *construct() noexcept
+		{ return new T; }
+		static inline void destruct(void *ptr) noexcept
+		{ delete reinterpret_cast<T *>(ptr); }
 	};
 
 	static_assert(sizeof(class_desc_t<empty_class>) == sizeof(gsdk::ScriptClassDesc_t));

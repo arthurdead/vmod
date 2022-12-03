@@ -138,8 +138,6 @@ namespace vmod
 		typed_function<void()> plugin_unloaded;
 		typed_function<void()> all_plugins_loaded;
 	};
-
-	extern class_desc_t<plugin> plugin_desc;
 }
 
 #include "plugin.tpp"

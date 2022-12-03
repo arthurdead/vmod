@@ -233,6 +233,10 @@ namespace gsdk
 	using ScriptOutputFunc_t = void(*)(const char *);
 	using ScriptErrorFunc_t = bool(*)(ScriptErrorLevel_t, const char *);
 
+	class ISquirrelMetamethodDelegate;
+	class CSquirrelMetamethodDelegateImpl;
+	class SQVM;
+
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 	class IScriptVM
@@ -310,6 +314,17 @@ namespace gsdk
 		virtual void SetOutputCallback(ScriptOutputFunc_t) = 0;
 		virtual void SetErrorCallback(ScriptErrorFunc_t) = 0;
 		virtual bool RaiseException(const char *) = 0;
+		virtual CSquirrelMetamethodDelegateImpl *MakeSquirrelMetamethod_Get(HSCRIPT &, const char *, ISquirrelMetamethodDelegate *, bool) = 0;
+		virtual void DestroySquirrelMetamethod_Get(CSquirrelMetamethodDelegateImpl *) = 0;
+
+		virtual int GetKeyValue2(HSCRIPT, int, ScriptVariant_t *, ScriptVariant_t *) = 0;
+		virtual SQVM *GetInternalVM() = 0;
+		virtual bool GetScalarValue(HSCRIPT, ScriptVariant_t *) = 0;
+		virtual void ArrayAddToTail(HSCRIPT, const ScriptVariant_t &) = 0;
+		virtual HSCRIPT GetRootTable() = 0;
+		virtual HSCRIPT CopyHandle(HSCRIPT) = 0;
+		virtual HSCRIPT GetIdentity(HSCRIPT) = 0;
+		virtual void CollectGarbage(const char *, bool) = 0;
 	};
 	#pragma GCC diagnostic pop
 }

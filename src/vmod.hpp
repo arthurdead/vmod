@@ -56,6 +56,8 @@ namespace vmod
 
 		gsdk_vscript_library vscript_lib;
 
+		std::string_view scripts_extension;
+
 		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
 
 		gsdk::HSCRIPT server_init_script{gsdk::INVALID_HSCRIPT};

@@ -1,0 +1,9 @@
+[wrap-file]
+directory = binutils-2.39
+source_url = https://ftp.gnu.org/gnu/binutils/binutils-2.39.tar.gz
+source_filename = binutils-2.39.tar.gz
+source_hash = d12ea6f239f1ffe3533ea11ad6e224ffcb89eb5d01bbea589e9158780fa11f10
+patch_directory = libiberty
+
+[provide]
+dependency_names = libiberty

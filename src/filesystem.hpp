@@ -6,5 +6,7 @@
 namespace vmod
 {
 	extern std::unique_ptr<unsigned char[]> read_file(const std::filesystem::path &path) noexcept;
+	extern std::unique_ptr<unsigned char[]> read_file(const std::filesystem::path &path, std::size_t &size) noexcept;
+
 	extern void write_file(const std::filesystem::path &path, const unsigned char *data, std::size_t size) noexcept;
 }

@@ -23,7 +23,6 @@ fi
 export CPP=/usr/bin/cpp
 
 srcds='/sv/tf2'
-binutils_src='/home/arthurdead/Downloads/binutils-2.39'
 
 clear
 
@@ -33,8 +32,15 @@ if [[ -d 'builddir' ]]; then
 	fi
 fi
 
+if [[ ! -f 'subprojects/libyaml.wrap' ]]; then
+	meson wrap install libyaml
+	if [[ $? != 0 ]]; then
+		exit 1
+	fi
+fi
+
 if [[ ! -d 'builddir' ]]; then
-	meson setup --fatal-meson-warnings --backend=ninja --cross-file $script_dir'/x86-linux-gnu' -Dbinutils_src=$binutils_src -Dsrcds=$srcds 'builddir'
+	meson setup --fatal-meson-warnings --backend=ninja --cross-file $script_dir'/x86-linux-gnu' -Dsrcds=$srcds 'builddir'
 	if [[ $? != 0 ]]; then
 		exit 1
 	fi
@@ -50,7 +56,7 @@ if [[ $? != 0 ]]; then
 	exit 1
 fi
 
-meson install -C'builddir' --no-rebuild
+meson install -C'builddir' --no-rebuild --skip-subprojects='libyaml'
 if [[ $? != 0 ]]; then
 	exit 1
 fi
