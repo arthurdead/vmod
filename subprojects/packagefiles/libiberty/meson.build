@@ -10,7 +10,7 @@ project('libiberty', 'c',
 		'b_thinlto_cache=true',
 		'b_lundef=true',
 		'strip=true',
-		'c_std=c18'
+		'c_std=gnu18'
 	],
 )
 
@@ -38,12 +38,11 @@ iberty_lib = static_library('iberty',
 		join_paths('libiberty','xexit.c')
 	),
 	gnu_symbol_visibility: 'inlineshidden',
-	include_directories: [
+	include_directories:
 		include_directories(
 			'/usr/include/libiberty',
 			'include'
-		)
-	],
+		),
 	c_args: c_args
 )
 

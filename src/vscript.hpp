@@ -147,10 +147,7 @@ namespace vmod
 
 		template <typename R, typename ...Args>
 		inline void initialize(R(*func)(Args...), std::string_view name, std::string_view rename = {}) noexcept
-		{
-			std::memset(unk1, 0, sizeof(unk1));
-			initialize_static<R, Args...>(func, name, rename);
-		}
+		{ initialize_static<R, Args...>(func, name, rename); }
 
 	private:
 		func_desc_t(const func_desc_t &) = delete;
@@ -166,9 +163,9 @@ namespace vmod
 			other.m_pfnBinding = nullptr;
 			m_pFunction = other.m_pFunction;
 			other.m_pFunction = nullptr;
+			m_adjustor = other.m_adjustor;
+			other.m_adjustor = 0;
 			m_flags = other.m_flags;
-			std::memcpy(unk1, other.unk1, sizeof(unk1));
-			std::memset(other.unk1, 0, sizeof(unk1));
 			return *this;
 		}
 
@@ -180,10 +177,7 @@ namespace vmod
 
 		template <typename R, typename C, typename ...Args>
 		inline func_desc_t(R(C::*func)(Args...), std::string_view name, std::string_view rename) noexcept
-		{
-			std::memset(unk1, 0, sizeof(unk1));
-			initialize_member<R, C, Args...>(func, name, rename);
-		}
+		{ initialize_member<R, C, Args...>(func, name, rename); }
 
 		template <typename R, typename ...Args>
 		inline func_desc_t(R(*func)(Args...), std::string_view name, std::string_view rename) noexcept
@@ -199,14 +193,14 @@ namespace vmod
 		void initialize_shared(std::string_view name, std::string_view rename);
 
 		template <typename R, typename C, typename ...Args>
-		static bool binding(gsdk::ScriptFunctionBindingStorageType_t binding_func, [[maybe_unused]] char unkarg1[sizeof(int)], void *obj, gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
+		static bool binding(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
 
 		template <typename R, typename C, typename ...Args, std::size_t ...I>
-		static R call_impl(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *ctx, gsdk::ScriptVariant_t *args_var, std::index_sequence<I...>) noexcept;
+		static R call_impl(generic_func_t binding_func, std::size_t adjustor, void *obj, gsdk::ScriptVariant_t *args_var, std::index_sequence<I...>) noexcept;
 
 		template <typename R, typename C, typename ...Args>
-		static inline R call(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *ctx, gsdk::ScriptVariant_t *args_var) noexcept
-		{ return call_impl<R, C, Args...>(binding_func, ctx, args_var, std::make_index_sequence<sizeof...(Args)>()); }
+		static inline R call(generic_func_t binding_func, std::size_t adjustor, void *obj, gsdk::ScriptVariant_t *args_var) noexcept
+		{ return call_impl<R, C, Args...>(binding_func, adjustor, obj, args_var, std::make_index_sequence<sizeof...(Args)>()); }
 	};
 
 	static_assert(sizeof(func_desc_t) == sizeof(gsdk::ScriptFunctionBinding_t));

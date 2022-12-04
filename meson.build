@@ -58,7 +58,7 @@ thirdparty_default_options_c = [
 	'b_thinlto_cache=true',
 	'b_lundef=true',
 	'strip=true',
-	'c_std=c18',
+	'c_std=gnu18',
 	'default_library=static'
 ]
 

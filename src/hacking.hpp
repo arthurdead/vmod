@@ -95,13 +95,15 @@ namespace vmod
 		inline mfp_internal_t(R(C::*func_)(Args...)) noexcept
 			: func{func_}
 		{
-			if(adjustor != 0) {
-				debugbreak();
-			}
 		}
 
 		inline mfp_internal_t(generic_func_t addr_) noexcept
 			: addr{addr_}, adjustor{0}
+		{
+		}
+
+		inline mfp_internal_t(generic_func_t addr_, std::size_t adjustor_) noexcept
+			: addr{addr_}, adjustor{adjustor_}
 		{
 		}
 
@@ -118,16 +120,23 @@ namespace vmod
 	using generic_vtable_t = generic_func_t *;
 
 	template <typename R, typename C, typename ...Args>
-	inline generic_func_t mfp_to_func(R (C::*func)(Args...)) noexcept
+	inline std::pair<generic_func_t, std::size_t> mfp_to_func(R (C::*func)(Args...)) noexcept
 	{
 		mfp_internal_t<R, C, Args...> internal{func};
-		return internal.addr;
+		return {internal.addr, internal.adjustor};
 	}
 
 	template <typename R, typename C, typename ...Args>
 	inline auto mfp_from_func(generic_func_t addr) noexcept -> R(C::*)(Args...)
 	{
 		mfp_internal_t<R, C, Args...> internal{addr};
+		return internal.func;
+	}
+
+	template <typename R, typename C, typename ...Args>
+	inline auto mfp_from_func(generic_func_t addr, std::size_t adjustor) noexcept -> R(C::*)(Args...)
+	{
+		mfp_internal_t<R, C, Args...> internal{addr, adjustor};
 		return internal.func;
 	}
 

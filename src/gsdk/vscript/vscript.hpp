@@ -149,7 +149,7 @@ namespace gsdk
 
 	using ScriptFunctionBindingStorageType_t = void *;
 
-	using ScriptBindingFunc_t = bool(*)(ScriptFunctionBindingStorageType_t, char[sizeof(int)], void *, ScriptVariant_t *, int, ScriptVariant_t *);
+	using ScriptBindingFunc_t = bool(*)(ScriptFunctionBindingStorageType_t, int, void *, ScriptVariant_t *, int, ScriptVariant_t *);
 
 	enum ScriptFuncBindingFlags_t : int
 	{
@@ -177,16 +177,16 @@ namespace gsdk
 			other.m_pfnBinding = nullptr;
 			m_pFunction = other.m_pFunction;
 			other.m_pFunction = nullptr;
+			m_adjustor = other.m_adjustor;
+			other.m_adjustor = 0;
 			m_flags = other.m_flags;
-			std::memcpy(unk1, other.unk1, sizeof(unk1));
-			std::memset(other.unk1, 0, sizeof(unk1));
 			return *this;
 		}
 
 		ScriptFuncDescriptor_t m_desc;
 		ScriptBindingFunc_t m_pfnBinding;
 		ScriptFunctionBindingStorageType_t m_pFunction;
-		char unk1[sizeof(int)];
+		int m_adjustor;
 		unsigned m_flags;
 	};
 
