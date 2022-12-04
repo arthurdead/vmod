@@ -2,7 +2,6 @@
 
 #include "gsdk/vstdlib/convar.hpp"
 #include "gsdk.hpp"
-#include "vmod.hpp"
 #include <string_view>
 #include <functional>
 
@@ -11,13 +10,32 @@ namespace vmod
 	class ConCommand final : private gsdk::ConCommand
 	{
 	public:
-		ConCommand(std::string_view name, int flags = gsdk::FCVAR_NONE) noexcept;
+		ConCommand() noexcept = default;
 		inline ~ConCommand() noexcept override
 		{ unregister(); }
 
-		inline void initialize() noexcept
-		{ Init(); }
-		void unregister() noexcept;
+		template <typename T>
+		inline void initialize(std::string_view name, T &&func_) noexcept
+		{ initialize<T>(name, gsdk::FCVAR_NONE, std::move(func_)); }
+
+		template <typename T>
+		inline void initialize(std::string_view name, int flags, T &&func_) noexcept
+		{
+			m_pszName = name.data();
+			m_pszHelpString = "";
+			m_nFlags = flags;
+
+			func = std::move(func_);
+
+			cvar->RegisterConCommand(static_cast<gsdk::ConCommandBase *>(this));
+		}
+
+		inline void unregister() noexcept
+		{
+			if(m_bRegistered) {
+				cvar->UnregisterConCommand(static_cast<gsdk::ConCommandBase *>(this));
+			}
+		}
 
 		template <typename T>
 		inline ConCommand &operator=(T &&fnc) noexcept

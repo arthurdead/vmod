@@ -14,10 +14,10 @@ namespace vmod
 	}
 
 	template <typename R, typename ...Args>
-	void func_desc_t::initialize_shared(std::string_view name, std::string_view rename)
+	void func_desc_t::initialize_shared(std::string_view name, std::string_view script_name)
 	{
 		m_desc.m_pszFunction = name.data();
-		m_desc.m_pszScriptName = rename.empty() ? name.data() : rename.data();
+		m_desc.m_pszScriptName = script_name.data();
 
 		m_desc.m_ReturnType = type_to_field<std::decay_t<R>>();
 		(m_desc.m_Parameters.emplace_back(type_to_field<std::decay_t<Args>>()), ...);
@@ -85,9 +85,9 @@ namespace vmod
 	}
 
 	template <typename R, typename C, typename ...Args>
-	void func_desc_t::initialize_member(R(C::*func)(Args...), std::string_view name, std::string_view rename)
+	void func_desc_t::initialize_member(R(C::*func)(Args...), std::string_view name, std::string_view script_name)
 	{
-		initialize_shared<R, Args...>(name, rename);
+		initialize_shared<R, Args...>(name, script_name);
 		m_desc.m_pszDescription = demangle<R(C::*)(Args...)>().c_str();
 		auto mfp{mfp_to_func<R, C, Args...>(func)};
 		m_pFunction = reinterpret_cast<void *>(mfp.first);
@@ -97,9 +97,9 @@ namespace vmod
 	}
 
 	template <typename R, typename ...Args>
-	void func_desc_t::initialize_static(R(*func)(Args...), std::string_view name, std::string_view rename)
+	void func_desc_t::initialize_static(R(*func)(Args...), std::string_view name, std::string_view script_name)
 	{
-		initialize_shared<R, Args...>(name, rename);
+		initialize_shared<R, Args...>(name, script_name);
 		m_desc.m_pszDescription = demangle<R(*)(Args...)>().c_str();
 		m_pFunction = reinterpret_cast<void *>(func);
 		m_adjustor = 0;

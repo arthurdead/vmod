@@ -137,17 +137,14 @@ namespace vmod
 		return var;
 	}
 
-	template <typename T>
-	class singleton_class_desc_t;
-
 	class alignas(gsdk::ScriptFunctionBinding_t) func_desc_t : public gsdk::ScriptFunctionBinding_t
 	{
 	public:
 		func_desc_t() noexcept = default;
 
 		template <typename R, typename ...Args>
-		inline void initialize(R(*func)(Args...), std::string_view name, std::string_view rename = {}) noexcept
-		{ initialize_static<R, Args...>(func, name, rename); }
+		inline void initialize(R(*func)(Args...), std::string_view name, std::string_view script_name) noexcept
+		{ initialize_static<R, Args...>(func, name, script_name); }
 
 	private:
 		func_desc_t(const func_desc_t &) = delete;
@@ -176,21 +173,21 @@ namespace vmod
 		friend class class_desc_t;
 
 		template <typename R, typename C, typename ...Args>
-		inline func_desc_t(R(C::*func)(Args...), std::string_view name, std::string_view rename) noexcept
-		{ initialize_member<R, C, Args...>(func, name, rename); }
+		inline func_desc_t(R(C::*func)(Args...), std::string_view name, std::string_view script_name) noexcept
+		{ initialize_member<R, C, Args...>(func, name, script_name); }
 
 		template <typename R, typename ...Args>
-		inline func_desc_t(R(*func)(Args...), std::string_view name, std::string_view rename) noexcept
-		{ initialize(func, name, rename); }
+		inline func_desc_t(R(*func)(Args...), std::string_view name, std::string_view script_name) noexcept
+		{ initialize(func, name, script_name); }
 
 		template <typename R, typename C, typename ...Args>
-		void initialize_member(R(C::*func)(Args...), std::string_view name, std::string_view rename);
+		void initialize_member(R(C::*func)(Args...), std::string_view name, std::string_view script_name);
 
 		template <typename R, typename ...Args>
-		void initialize_static(R(*func)(Args...), std::string_view name, std::string_view rename);
+		void initialize_static(R(*func)(Args...), std::string_view name, std::string_view script_name);
 
 		template <typename R, typename ...Args>
-		void initialize_shared(std::string_view name, std::string_view rename);
+		void initialize_shared(std::string_view name, std::string_view script_name);
 
 		template <typename R, typename C, typename ...Args>
 		static bool binding(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
@@ -266,22 +263,22 @@ namespace vmod
 		class_desc_t(std::string_view name) noexcept;
 
 		template <typename R, typename ...Args>
-		inline func_desc_t &func(R(*func)(Args...), std::string_view name, std::string_view rename = {}) noexcept
+		inline func_desc_t &func(R(*func)(Args...), std::string_view name, std::string_view script_name) noexcept
 		{
-			func_desc_t temp{func, name, rename};
+			func_desc_t temp{func, name, script_name};
 			return static_cast<func_desc_t &>(m_FunctionBindings.emplace_back(std::move(temp)));
 		}
 
 		template <typename R, typename ...Args>
-		inline func_desc_t &func(R(T::*func)(Args...), std::string_view name, std::string_view rename = {}) noexcept
+		inline func_desc_t &func(R(T::*func)(Args...), std::string_view name, std::string_view script_name) noexcept
 		{
-			func_desc_t temp{func, name, rename};
+			func_desc_t temp{func, name, script_name};
 			return static_cast<func_desc_t &>(m_FunctionBindings.emplace_back(std::move(temp)));
 		}
 
 		template <typename R, typename ...Args>
-		inline func_desc_t &func(R(T::*func_)(Args...) const, std::string_view name, std::string_view rename = {}) noexcept
-		{ return func<R, Args...>(reinterpret_cast<R(T::*)(Args...)>(func_), name, rename); }
+		inline func_desc_t &func(R(T::*func_)(Args...) const, std::string_view name, std::string_view script_name) noexcept
+		{ return func<R, Args...>(reinterpret_cast<R(T::*)(Args...)>(func_), name, script_name); }
 
 		inline class_desc_t &dtor(void(*func)(T *)) noexcept
 		{

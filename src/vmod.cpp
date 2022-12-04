@@ -1,6 +1,7 @@
 #include "vmod.hpp"
 #include "symbol_cache.hpp"
 #include "gsdk/engine/vsp.hpp"
+#include "gsdk/tier0/dbg.hpp"
 #include <cstring>
 
 #include "plugin.hpp"
@@ -51,18 +52,6 @@ namespace vmod
 {
 	class vmod vmod;
 
-	gsdk::IScriptVM *vm;
-	gsdk::CVarDLLIdentifier_t cvar_dll_id{gsdk::INVALID_CVAR_DLL_IDENTIFIER};
-	gsdk::HSCRIPT global_scope{gsdk::INVALID_HSCRIPT};
-	std::filesystem::path root_dir;
-
-	static ConCommand vmod_reload_plugins{"vmod_reload_plugins"};
-	static ConCommand vmod_unload_plugins{"vmod_unload_plugins"};
-	static ConCommand vmod_unload_plugin{"vmod_unload_plugin"};
-	static ConCommand vmod_load_plugin{"vmod_load_plugin"};
-	static ConCommand vmod_list_plugins{"vmod_list_plugins"};
-	static ConCommand vmod_refresh_plugins{"vmod_refresh_plugins"};
-
 	static void vscript_output(const char *txt)
 	{
 		using namespace std::literals::string_view_literals;
@@ -77,18 +66,16 @@ namespace vmod
 		switch(lvl) {
 			case gsdk::SCRIPT_LEVEL_WARNING: {
 				warning("%s"sv, txt);
-			} break;
+				return false;
+			}
 			case gsdk::SCRIPT_LEVEL_ERROR: {
 				error("%s"sv, txt);
-			} break;
+				return false;
+			}
 		}
-
-		return false;
 	}
 
-	static class_desc_t<class vmod> vmod_desc{"vmod"};
-
-	gsdk::HSCRIPT vmod::script_find_plugin(std::string_view name) noexcept
+	gsdk::HSCRIPT vmod::script_find_plugin_impl(std::string_view name) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -109,26 +96,20 @@ namespace vmod
 		return nullptr;
 	}
 
+	gsdk::HSCRIPT vmod::script_find_plugin(std::string_view name) noexcept
+	{ return ::vmod::vmod.script_find_plugin_impl(name); }
+
+	static func_desc_t find_plugin_desc;
+
 	bool vmod::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
-		vmod_desc.func(&vmod::script_find_plugin, "find_plugin"sv);
+		find_plugin_desc.initialize(script_find_plugin, "script_find_plugin"sv, "find_plugin"sv);
 
-		instance = vm->RegisterInstance(&vmod_desc, this);
-		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
-			error("vmod: failed to register vmod script instance\n"sv);
-			return false;
-		}
+		vm_->RegisterFunction(&find_plugin_desc);
 
-		vm->SetInstanceUniqeId(instance, "vmod");
-
-		if(!vm->SetValue(global_scope, "vmod", script_variant_t{instance})) {
-			error("vmod: failed to set vmod script instance value\n"sv);
-			return false;
-		}
-
-		if(!vm->SetValue(global_scope, "VMOD_GAME_DIR", game_dir.c_str())) {
+		if(!vm_->SetValue(vmod_scope, "game_dir", game_dir.c_str())) {
 			error("vmod: failed to set game dir value\n"sv);
 			return false;
 		}
@@ -150,12 +131,8 @@ namespace vmod
 
 		yaml::unbindings();
 
-		if(instance && instance != gsdk::INVALID_HSCRIPT) {
-			vm->RemoveInstance(instance);
-		}
-
-		if(vm->ValueExists(global_scope, "vmod")) {
-			vm->ClearValue(global_scope, "vmod");
+		if(vm_->ValueExists(vmod_scope, "game_dir")) {
+			vm_->ClearValue(vmod_scope, "game_dir");
 		}
 	}
 
@@ -167,6 +144,30 @@ namespace vmod
 	static void(*VScriptServerTerm)();
 	static bool(*VScriptRunScript)(const char *, gsdk::HSCRIPT, bool);
 	static void(gsdk::CTFGameRules::*RegisterScriptFunctions)();
+	static void(*PrintFunc)(gsdk::HSQUIRRELVM, const gsdk::SQChar *, ...);
+
+	static bool in_vscript_server_init;
+	static bool in_vscript_print;
+
+	static gsdk::SpewOutputFunc_t old_spew;
+	static gsdk::SpewRetval_t new_spew(gsdk::SpewType_t type, const char *str)
+	{
+		switch(type) {
+			case gsdk::SPEW_LOG: {
+				if(in_vscript_server_init || in_vscript_print) {
+					return gsdk::SPEW_CONTINUE;
+				}
+			} break;
+			case gsdk::SPEW_WARNING: {
+				if(in_vscript_print) {
+					return gsdk::SPEW_CONTINUE;
+				}
+			} break;
+			default: break;
+		}
+
+		return old_spew(type, str);
+	}
 
 	bool vmod::load() noexcept
 	{
@@ -315,34 +316,67 @@ namespace vmod
 			return false;
 		}
 
+		auto PrintFunc_it{CSquirrelVM_it->second.find("PrintFunc(SQVM*, char const*, ...)"s)};
+		if(PrintFunc_it == CSquirrelVM_it->second.end()) {
+			error("vmod: missing 'CSquirrelVM::PrintFunc(SQVM*, char const*, ...)' symbol\n"sv);
+			return false;
+		}
+
 		g_Script_init = g_Script_init_it->second.addr<const unsigned char *>();
 
-		RegisterScriptFunctions = RegisterScriptFunctions_it->second.mfp<void, gsdk::CTFGameRules>();
-		VScriptServerInit = VScriptServerInit_it->second.func<bool>();
-		VScriptServerTerm = VScriptServerTerm_it->second.func<void>();
-		VScriptRunScript = VScriptRunScript_it->second.func<bool, const char *, gsdk::HSCRIPT, bool>();
+		RegisterScriptFunctions = RegisterScriptFunctions_it->second.mfp<decltype(RegisterScriptFunctions)>();
+		VScriptServerInit = VScriptServerInit_it->second.func<decltype(VScriptServerInit)>();
+		VScriptServerTerm = VScriptServerTerm_it->second.func<decltype(VScriptServerTerm)>();
+		VScriptRunScript = VScriptRunScript_it->second.func<decltype(VScriptRunScript)>();
 		g_Script_vscript_server = g_Script_vscript_server_it->second.addr<const unsigned char *>();
 		g_pScriptVM = g_pScriptVM_it->second.addr<gsdk::IScriptVM **>();
 
-		CreateArray = CreateArray_it->second.mfp<void, gsdk::IScriptVM, gsdk::ScriptVariant_t &>();
+		CreateArray = CreateArray_it->second.mfp<decltype(CreateArray)>();
+		PrintFunc = PrintFunc_it->second.func_va_args<decltype(PrintFunc)>();
 
 		write_file(root_dir/"internal_scripts"sv/"init.nut"sv, g_Script_init, std::strlen(reinterpret_cast<const char *>(g_Script_init)+1));
 		write_file(root_dir/"internal_scripts"sv/"vscript_server.nut"sv, g_Script_vscript_server, std::strlen(reinterpret_cast<const char *>(g_Script_vscript_server)+1));
 
-		vm = vsmgr->CreateVM(script_language);
-		if(!vm) {
+		old_spew = GetSpewOutputFunc();
+		SpewOutputFunc(new_spew);
+
+		vm_ = vsmgr->CreateVM(script_language);
+		if(!vm_) {
 			error("vmod: failed to create VM\n"sv);
 			return false;
 		}
+
+		vm_->SetOutputCallback(vscript_output);
+		vm_->SetErrorCallback(vscript_error_output);
 
 		if(!detours()) {
 			return false;
 		}
 
-		vm->SetOutputCallback(vscript_output);
-		vm->SetErrorCallback(vscript_error_output);
+		if(!binding_mods()) {
+			return false;
+		}
 
-		vmod_reload_plugins = [this](const gsdk::CCommand &) noexcept -> void {
+		vmod_scope = vm_->CreateScope("vmod", nullptr);
+		if(!vmod_scope || vmod_scope == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create vmod scope\n"sv);
+			return false;
+		}
+
+		plugins_table_ = vm_->CreateTable();
+		if(!plugins_table_ || plugins_table_ == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create plugins table\n"sv);
+			return false;
+		}
+
+		if(!vm_->SetValue(vmod_scope, "plugins", plugins_table_)) {
+			error("vmod: failed to set plugins table value\n"sv);
+			return false;
+		}
+
+		cvar_dll_id_ = cvar->AllocateDLLIdentifier();
+
+		vmod_reload_plugins.initialize("vmod_reload_plugins"sv, [this](const gsdk::CCommand &) noexcept -> void {
 			for(const auto &pl : plugins) {
 				pl->reload();
 			}
@@ -356,9 +390,9 @@ namespace vmod
 					pl->all_plugins_loaded();
 				}
 			}
-		};
+		});
 
-		vmod_unload_plugins = [this](const gsdk::CCommand &) noexcept -> void {
+		vmod_unload_plugins.initialize("vmod_unload_plugins"sv, [this](const gsdk::CCommand &) noexcept -> void {
 			for(const auto &pl : plugins) {
 				pl->unload();
 			}
@@ -366,9 +400,9 @@ namespace vmod
 			plugins.clear();
 
 			plugins_loaded = false;
-		};
+		});
 
-		vmod_unload_plugin = [this](const gsdk::CCommand &args) noexcept -> void {
+		vmod_unload_plugin.initialize("vmod_unload_plugin"sv, [this](const gsdk::CCommand &args) noexcept -> void {
 			if(args.m_nArgc != 2) {
 				error("vmod: usage: vmod_unload_plugin <path>\n");
 				return;
@@ -391,9 +425,9 @@ namespace vmod
 			}
 
 			error("vmod: plugin '%s' not found\n", path.c_str());
-		};
+		});
 
-		vmod_load_plugin = [this](const gsdk::CCommand &args) noexcept -> void {
+		vmod_load_plugin.initialize("vmod_load_plugin"sv, [this](const gsdk::CCommand &args) noexcept -> void {
 			if(args.m_nArgc != 2) {
 				error("vmod: usage: vmod_load_plugin <path>\n");
 				return;
@@ -426,9 +460,9 @@ namespace vmod
 					pl.all_plugins_loaded();
 				}
 			}
-		};
+		});
 
-		vmod_list_plugins = [this](const gsdk::CCommand &args) noexcept -> void {
+		vmod_list_plugins.initialize("vmod_list_plugins"sv, [this](const gsdk::CCommand &args) noexcept -> void {
 			if(args.m_nArgc != 1) {
 				error("vmod: usage: vmod_list_plugins\n");
 				return;
@@ -446,9 +480,9 @@ namespace vmod
 					error("'%s'\n", static_cast<std::filesystem::path>(*pl).c_str());
 				}
 			}
-		};
+		});
 
-		vmod_refresh_plugins = [this](const gsdk::CCommand &) noexcept -> void {
+		vmod_refresh_plugins.initialize("vmod_refresh_plugins"sv, [this](const gsdk::CCommand &) noexcept -> void {
 			plugins.clear();
 
 			for(const auto &file : std::filesystem::directory_iterator{plugins_dir}) {
@@ -473,30 +507,21 @@ namespace vmod
 			}
 
 			plugins_loaded = true;
-		};
-
-		cvar_dll_id = cvar->AllocateDLLIdentifier();
-
-		vmod_reload_plugins.initialize();
-		vmod_unload_plugins.initialize();
-		vmod_unload_plugin.initialize();
-		vmod_load_plugin.initialize();
-		vmod_list_plugins.initialize();
-		vmod_refresh_plugins.initialize();
+		});
 
 		return true;
 	}
 
 	static bool vscript_server_init_called;
 
-	static bool in_vscript_server_init;
 	static bool in_vscript_server_term;
 	static gsdk::IScriptVM *(gsdk::IScriptManager::*CreateVM_original)(gsdk::ScriptLanguage_t);
 	static gsdk::IScriptVM *CreateVM_detour_callback(gsdk::IScriptManager *pthis, gsdk::ScriptLanguage_t lang) noexcept
 	{
 		if(in_vscript_server_init) {
-			if(lang == vm->GetLanguage()) {
-				return vm;
+			gsdk::IScriptVM *vmod_vm{vmod.vm()};
+			if(lang == vmod_vm->GetLanguage()) {
+				return vmod_vm;
 			} else {
 				return nullptr;
 			}
@@ -506,15 +531,15 @@ namespace vmod
 	}
 
 	static void(gsdk::IScriptManager::*DestroyVM_original)(gsdk::IScriptVM *);
-	static void DestroyVM_detour_callback(gsdk::IScriptManager *pthis, gsdk::IScriptVM *vm_) noexcept
+	static void DestroyVM_detour_callback(gsdk::IScriptManager *pthis, gsdk::IScriptVM *vm) noexcept
 	{
 		if(in_vscript_server_term) {
-			if(vm_ == vm) {
+			if(vm == vmod.vm()) {
 				return;
 			}
 		}
 
-		(pthis->*DestroyVM_original)(vm_);
+		(pthis->*DestroyVM_original)(vm);
 	}
 
 	static gsdk::ScriptStatus_t(gsdk::IScriptVM::*Run_original)(const char *, bool);
@@ -538,17 +563,17 @@ namespace vmod
 			}
 		}
 
-		return VScriptRunScript_detour.call<bool>(script, scope, warn);
+		return VScriptRunScript_detour.call<decltype(VScriptRunScript)>(script, scope, warn);
 	}
 
 	static detour VScriptServerInit_detour;
 	static bool VScriptServerInit_detour_callback() noexcept
 	{
 		in_vscript_server_init = true;
-		bool ret{vscript_server_init_called ? true : VScriptServerInit_detour.call<bool>()};
-		*g_pScriptVM = vm;
+		bool ret{vscript_server_init_called ? true : VScriptServerInit_detour.call<decltype(VScriptServerInit)>()};
+		*g_pScriptVM = vmod.vm();
 		if(vscript_server_init_called) {
-			VScriptRunScript_detour.call<bool>("mapspawn", nullptr, false);
+			VScriptRunScript_detour.call<decltype(VScriptRunScript)>("mapspawn", nullptr, false);
 		}
 		in_vscript_server_init = false;
 		return ret;
@@ -558,13 +583,36 @@ namespace vmod
 	static void VScriptServerTerm_detour_callback() noexcept
 	{
 		in_vscript_server_term = true;
-		//VScriptServerTerm_detour.call<void>();
-		*g_pScriptVM = vm;
+		//VScriptServerTerm_detour.call<decltype(VScriptServerTerm)>();
+		*g_pScriptVM = vmod.vm();
 		in_vscript_server_term = false;
+	}
+
+	static char vscript_printfunc_buffer[2048];
+	static detour_va_args PrintFunc_detour;
+	static void PrintFunc_detour_callback(gsdk::HSQUIRRELVM m_hVM, const gsdk::SQChar *s, ...)
+	{
+		va_list varg_list;
+		va_start(varg_list, s);
+	#ifdef __clang__
+		#pragma clang diagnostic push
+		#pragma clang diagnostic ignored "-Wformat-nonliteral"
+	#endif
+		std::vsnprintf(vscript_printfunc_buffer, sizeof(vscript_printfunc_buffer), s, varg_list);
+	#ifdef __clang__
+		#pragma clang diagnostic pop
+	#endif
+		in_vscript_print = true;
+		PrintFunc_detour.call<void, decltype(PrintFunc)>(m_hVM, "%s", vscript_printfunc_buffer);
+		in_vscript_print = false;
+		va_end(varg_list);
 	}
 
 	bool vmod::detours() noexcept
 	{
+		PrintFunc_detour.initialize(PrintFunc, PrintFunc_detour_callback);
+		PrintFunc_detour.enable();
+
 		VScriptServerInit_detour.initialize(VScriptServerInit, VScriptServerInit_detour_callback);
 		VScriptServerInit_detour.enable();
 
@@ -577,7 +625,7 @@ namespace vmod
 		CreateVM_original = swap_vfunc(vsmgr, &gsdk::IScriptManager::CreateVM, CreateVM_detour_callback);
 		DestroyVM_original = swap_vfunc(vsmgr, &gsdk::IScriptManager::DestroyVM, DestroyVM_detour_callback);
 
-		Run_original = swap_vfunc(vm, static_cast<gsdk::ScriptStatus_t(gsdk::IScriptVM::*)(const char *, bool)>(&gsdk::IScriptVM::Run), Run_detour_callback);
+		Run_original = swap_vfunc(vm_, static_cast<decltype(Run_original)>(&gsdk::IScriptVM::Run), Run_detour_callback);
 
 		return true;
 	}
@@ -587,7 +635,7 @@ namespace vmod
 		script_variant_t ret;
 		script_variant_t arg{value};
 
-		if(vm->ExecuteFunction(to_string_func, &arg, 1, &ret, global_scope, true) == gsdk::SCRIPT_ERROR) {
+		if(vm_->ExecuteFunction(to_string_func, &arg, 1, &ret, nullptr, true) == gsdk::SCRIPT_ERROR) {
 			return {};
 		}
 
@@ -598,15 +646,14 @@ namespace vmod
 		return ret.m_pszString;
 	}
 
+	bool vmod::binding_mods() noexcept
+	{
+		return true;
+	}
+
 	bool vmod::load_late() noexcept
 	{
 		using namespace std::literals::string_view_literals;
-
-		global_scope = vm->CreateScope("vmod_scope", nullptr);
-		if(!global_scope || global_scope == gsdk::INVALID_HSCRIPT) {
-			error("vmod: failed to create global scope\n"sv);
-			return false;
-		}
 
 		if(!VScriptServerInit_detour_callback()) {
 			error("vmod: VScriptServerInit failed\n"sv);
@@ -617,8 +664,8 @@ namespace vmod
 
 		vscript_server_init_called = true;
 
-		if(vm->GetLanguage() == gsdk::SL_SQUIRREL) {
-			server_init_script = vm->CompileScript(reinterpret_cast<const char *>(g_Script_vscript_server), "vscript_server.nut");
+		if(vm_->GetLanguage() == gsdk::SL_SQUIRREL) {
+			server_init_script = vm_->CompileScript(reinterpret_cast<const char *>(g_Script_vscript_server), "vscript_server.nut");
 			if(!server_init_script || server_init_script == gsdk::INVALID_HSCRIPT) {
 				error("vmod: failed to compile server init script\n"sv);
 				return false;
@@ -628,7 +675,7 @@ namespace vmod
 			return false;
 		}
 
-		if(vm->Run(server_init_script, nullptr, true) == gsdk::SCRIPT_ERROR) {
+		if(vm_->Run(server_init_script, nullptr, true) == gsdk::SCRIPT_ERROR) {
 			error("vmod: failed to run server init script\n"sv);
 			return false;
 		}
@@ -640,18 +687,20 @@ namespace vmod
 			{
 				std::unique_ptr<unsigned char[]> script_data{read_file(base_script_path)};
 
-				base_script = vm->CompileScript(reinterpret_cast<const char *>(script_data.get()), base_script_path.c_str());
+				base_script = vm_->CompileScript(reinterpret_cast<const char *>(script_data.get()), base_script_path.c_str());
 				if(!base_script || base_script == gsdk::INVALID_HSCRIPT) {
 				#ifndef __VMOD_BASE_SCRIPT_HEADER_INCLUDED
 					error("vmod: failed to compile base script '%s'\n"sv, base_script_path.c_str());
 					return false;
 				#else
-					base_script = vm->CompileScript(reinterpret_cast<const char *>(__vmod_base_script), base_script_name.c_str());
+					base_script = vm_->CompileScript(reinterpret_cast<const char *>(__vmod_base_script), base_script_name.c_str());
 					if(!base_script || base_script == gsdk::INVALID_HSCRIPT) {
 						error("vmod: failed to compile base script\n"sv);
 						return false;
 					}
 				#endif
+				} else {
+					base_script_from_file = true;
 				}
 			}
 		} else {
@@ -659,7 +708,7 @@ namespace vmod
 			error("vmod: missing base script '%s'\n"sv, base_script_path.c_str());
 			return false;
 		#else
-			base_script = vm->CompileScript(reinterpret_cast<const char *>(__vmod_base_script), base_script_name.c_str());
+			base_script = vm_->CompileScript(reinterpret_cast<const char *>(__vmod_base_script), base_script_name.c_str());
 			if(!base_script || base_script == gsdk::INVALID_HSCRIPT) {
 				error("vmod: failed to compile base script\n"sv);
 				return false;
@@ -667,14 +716,28 @@ namespace vmod
 		#endif
 		}
 
-		if(vm->Run(base_script, global_scope, true) == gsdk::SCRIPT_ERROR) {
-			error("vmod: failed to run base script '%s'\n"sv, base_script_path.c_str());
+		base_script_scope = vm_->CreateScope("__vmod_base_script_scope__", nullptr);
+		if(!base_script_scope || base_script_scope == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create base script scope\n"sv);
 			return false;
 		}
 
-		to_string_func = vm->LookupFunction("__vmod_tostring", global_scope);
+		if(vm_->Run(base_script, base_script_scope, true) == gsdk::SCRIPT_ERROR) {
+			if(base_script_from_file) {
+				error("vmod: failed to run base script '%s'\n"sv, base_script_path.c_str());
+			} else {
+				error("vmod: failed to run base script\n"sv);
+			}
+			return false;
+		}
+
+		to_string_func = vm_->LookupFunction("__to_string__", base_script_scope);
 		if(!to_string_func || to_string_func == gsdk::INVALID_HSCRIPT) {
-			error("vmod: base script '%s' missing '__vmod_tostring' function\n"sv, base_script_path.c_str());
+			if(base_script_from_file) {
+				error("vmod: base script '%s' missing '__to_string__' function\n"sv, base_script_path.c_str());
+			} else {
+				error("vmod: base script missing '__to_string__' function\n"sv);
+			}
 			return false;
 		}
 
@@ -729,7 +792,7 @@ namespace vmod
 	void vmod::game_frame([[maybe_unused]] bool) noexcept
 	{
 	#if 0
-		vm->Frame(sv_globals->frametime);
+		vm_->Frame(sv_globals->frametime);
 	#endif
 
 		for(const auto &pl : plugins) {
@@ -754,30 +817,42 @@ namespace vmod
 		vmod_list_plugins.unregister();
 		vmod_refresh_plugins.unregister();
 
-		if(cvar_dll_id != gsdk::INVALID_CVAR_DLL_IDENTIFIER) {
-			cvar->UnregisterConCommands(cvar_dll_id);
+		if(cvar_dll_id_ != gsdk::INVALID_CVAR_DLL_IDENTIFIER) {
+			cvar->UnregisterConCommands(cvar_dll_id_);
 		}
 
-		if(vm) {
+		if(vm_) {
 			if(to_string_func && to_string_func != gsdk::INVALID_HSCRIPT) {
-				vm->ReleaseFunction(to_string_func);
+				vm_->ReleaseFunction(to_string_func);
 			}
 
 			if(base_script && base_script != gsdk::INVALID_HSCRIPT) {
-				vm->ReleaseScript(base_script);
+				vm_->ReleaseScript(base_script);
+			}
+
+			if(base_script_scope && base_script_scope != gsdk::INVALID_HSCRIPT) {
+				vm_->ReleaseScope(base_script_scope);
 			}
 
 			if(server_init_script && server_init_script != gsdk::INVALID_HSCRIPT) {
-				vm->ReleaseScript(server_init_script);
+				vm_->ReleaseScript(server_init_script);
 			}
 
-			if(global_scope && global_scope != gsdk::INVALID_HSCRIPT) {
-				vm->ReleaseScope(global_scope);
+			if(plugins_table_ && plugins_table_ != gsdk::INVALID_HSCRIPT) {
+				vm_->ReleaseTable(plugins_table_);
 			}
 
-			vsmgr->DestroyVM(vm);
+			if(vm_->ValueExists(vmod_scope, "plugins")) {
+				vm_->ClearValue(vmod_scope, "plugins");
+			}
 
-			if(*g_pScriptVM == vm) {
+			if(vmod_scope && vmod_scope != gsdk::INVALID_HSCRIPT) {
+				vm_->ReleaseScope(vmod_scope);
+			}
+
+			vsmgr->DestroyVM(vm_);
+
+			if(*g_pScriptVM == vm_) {
 				*g_pScriptVM = nullptr;
 			}
 		}

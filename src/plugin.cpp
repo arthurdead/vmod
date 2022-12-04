@@ -11,7 +11,7 @@ namespace vmod
 	script_variant_t plugin::script_lookup_value(std::string_view val_name) noexcept
 	{
 		script_variant_t var;
-		if(!vm->GetValue(scope_, val_name.data(), &var)) {
+		if(!vmod.vm()->GetValue(scope_, val_name.data(), &var)) {
 			null_variant(var);
 		}
 		return var;
@@ -42,7 +42,7 @@ namespace vmod
 			return all_plugins_loaded.func;
 		}
 
-		gsdk::HSCRIPT func{vm->LookupFunction(func_name.data(), scope_)};
+		gsdk::HSCRIPT func{vmod.vm()->LookupFunction(func_name.data(), scope_)};
 		if(!func || func == gsdk::INVALID_HSCRIPT) {
 			return nullptr;
 		}
@@ -54,8 +54,15 @@ namespace vmod
 
 	bool plugin::bindings() noexcept
 	{
-		plugin_desc.func(&plugin::script_lookup_function, "lookup_function");
-		plugin_desc.func(&plugin::script_lookup_value, "lookup_value");
+		using namespace std::literals::string_view_literals;
+
+		plugin_desc.func(&plugin::script_lookup_function, "script_lookup_function"sv, "lookup_function"sv);
+		plugin_desc.func(&plugin::script_lookup_value, "script_lookup_value"sv, "lookup_value"sv);
+
+		if(!vmod.vm()->RegisterClass(&plugin_desc)) {
+			error("vmod: failed to register plugin script class\n"sv);
+			return false;
+		}
 
 		return true;
 	}
@@ -128,6 +135,8 @@ namespace vmod
 			return true;
 		}
 
+		gsdk::IScriptVM *vm{vmod.vm()};
+
 		{
 			std::unique_ptr<unsigned char[]> script_data{read_file(path)};
 
@@ -138,10 +147,11 @@ namespace vmod
 			error("vmod: plugin '%s' failed to compile\n"sv, path.c_str());
 			return false;
 		} else {
-			std::string scope_name{name};
-			scope_name += "_scope"sv;
+			std::string scope_name{"__vmod_plugin_"sv};
+			scope_name += name;
+			scope_name += "_scope__"sv;
 
-			scope_ = vm->CreateScope(scope_name.c_str(), global_scope);
+			scope_ = vm->CreateScope(scope_name.c_str(), nullptr);
 			if(!scope_ || scope_ == gsdk::INVALID_HSCRIPT) {
 				error("vmod: plugin '%s' failed to create scope\n"sv, path.c_str());
 				return false;
@@ -155,8 +165,8 @@ namespace vmod
 
 			vm->SetInstanceUniqeId(instance_, path.c_str());
 
-			if(!vm->SetValue(global_scope, name.c_str(), script_variant_t{instance_})) {
-				error("vmod: plugin '%s' failed to set instance value\n"sv, path.c_str());
+			if(!vm->SetValue(vmod.plugins_table(), name.c_str(), instance_)) {
+				error("vmod: plugin '%s' failed to set instance value in plugins table\n"sv, path.c_str());
 				return false;
 			}
 
@@ -226,6 +236,8 @@ namespace vmod
 	{
 		plugin_unloaded();
 
+		gsdk::IScriptVM *vm{vmod.vm()};
+
 		if(instance_ && instance_ != gsdk::INVALID_HSCRIPT) {
 			vm->RemoveInstance(instance_);
 			instance_ = gsdk::INVALID_HSCRIPT;
@@ -255,15 +267,16 @@ namespace vmod
 			scope_ = gsdk::INVALID_HSCRIPT;
 		}
 
-		if(vm->ValueExists(global_scope, name.c_str())) {
-			vm->ClearValue(global_scope, name.c_str());
+		gsdk::HSCRIPT plugins_table{vmod.plugins_table()};
+		if(vm->ValueExists(plugins_table, name.c_str())) {
+			vm->ClearValue(plugins_table, name.c_str());
 		}
 	}
 
 	plugin::function::function(plugin &pl, std::string_view func_name) noexcept
 	{
 		if(pl) {
-			func = vm->LookupFunction(func_name.data(), pl.scope_);
+			func = vmod.vm()->LookupFunction(func_name.data(), pl.scope_);
 			if(!func || func == gsdk::INVALID_HSCRIPT) {
 				scope = gsdk::INVALID_HSCRIPT;
 				func = gsdk::INVALID_HSCRIPT;
@@ -277,18 +290,18 @@ namespace vmod
 	}
 
 	gsdk::ScriptStatus_t plugin::function::execute_internal(script_variant_t &ret, const std::vector<script_variant_t> &args) noexcept
-	{ return valid() ? vm->ExecuteFunction(func, static_cast<const gsdk::ScriptVariant_t *>(args.data()), static_cast<int>(args.size()), static_cast<gsdk::ScriptVariant_t *>(&ret), scope, true) : gsdk::SCRIPT_ERROR; }
+	{ return valid() ? vmod.vm()->ExecuteFunction(func, static_cast<const gsdk::ScriptVariant_t *>(args.data()), static_cast<int>(args.size()), static_cast<gsdk::ScriptVariant_t *>(&ret), scope, true) : gsdk::SCRIPT_ERROR; }
 	gsdk::ScriptStatus_t plugin::function::execute_internal(script_variant_t &ret) noexcept
-	{ return valid() ? vm->ExecuteFunction(func, nullptr, 0, static_cast<gsdk::ScriptVariant_t *>(&ret), scope, true) : gsdk::SCRIPT_ERROR; }
+	{ return valid() ? vmod.vm()->ExecuteFunction(func, nullptr, 0, static_cast<gsdk::ScriptVariant_t *>(&ret), scope, true) : gsdk::SCRIPT_ERROR; }
 	gsdk::ScriptStatus_t plugin::function::execute_internal(const std::vector<script_variant_t> &args) noexcept
-	{ return valid() ? vm->ExecuteFunction(func, static_cast<const gsdk::ScriptVariant_t *>(args.data()), static_cast<int>(args.size()), nullptr, scope, true) : gsdk::SCRIPT_ERROR; }
+	{ return valid() ? vmod.vm()->ExecuteFunction(func, static_cast<const gsdk::ScriptVariant_t *>(args.data()), static_cast<int>(args.size()), nullptr, scope, true) : gsdk::SCRIPT_ERROR; }
 	gsdk::ScriptStatus_t plugin::function::execute_internal() noexcept
-	{ return valid() ? vm->ExecuteFunction(func, nullptr, 0, nullptr, scope, true) : gsdk::SCRIPT_ERROR; }
+	{ return valid() ? vmod.vm()->ExecuteFunction(func, nullptr, 0, nullptr, scope, true) : gsdk::SCRIPT_ERROR; }
 
 	void plugin::function::unload() noexcept
 	{
 		if(func && func != gsdk::INVALID_HSCRIPT) {
-			vm->ReleaseFunction(func);
+			vmod.vm()->ReleaseFunction(func);
 			func = gsdk::INVALID_HSCRIPT;
 			scope = gsdk::INVALID_HSCRIPT;
 		}
@@ -297,7 +310,7 @@ namespace vmod
 	plugin::function::~function() noexcept
 	{
 		if(func && func != gsdk::INVALID_HSCRIPT) {
-			vm->ReleaseFunction(func);
+			vmod.vm()->ReleaseFunction(func);
 		}
 	}
 

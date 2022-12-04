@@ -49,13 +49,17 @@ namespace vmod
 				inline T addr() const noexcept
 				{ return reinterpret_cast<T>(const_cast<void *>(addr_)); }
 
-				template <typename R, typename ...Args>
-				inline auto func() const noexcept -> R(*)(Args...)
-				{ return reinterpret_cast<R(*)(Args...)>(func_); }
+				template <typename T>
+				inline auto func() const noexcept -> function_pointer_t<T>
+				{ return reinterpret_cast<function_pointer_t<T>>(func_); }
 
-				template <typename R, typename C, typename ...Args>
-				inline auto mfp() const noexcept -> R(C::*)(Args...)
-				{ return reinterpret_cast<R(C::*)(Args...)>(mfp_.func); }
+				template <typename T>
+				inline T func_va_args() const noexcept
+				{ return reinterpret_cast<T>(func_); }
+
+				template <typename T>
+				inline auto mfp() const noexcept -> function_pointer_t<T>
+				{ return reinterpret_cast<function_pointer_t<T>>(mfp_.func); }
 
 				inline std::size_t size() const noexcept
 				{ return size_; }

@@ -33,13 +33,14 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
-		yaml_desc.func(&yaml::script_load, "load"sv);
-		yaml_desc.func(&yaml::script_num_documents, "num_documents"sv);
-		yaml_desc.func(&yaml::script_get_document, "get_document"sv);
-		yaml_desc.func(&yaml::script_delete, "free"sv);
+		yaml_desc.func(&yaml::script_load, "script_load"sv, "load"sv);
+		yaml_desc.func(&yaml::script_num_documents, "script_num_documents"sv, "num_documents"sv);
+		yaml_desc.func(&yaml::script_get_document, "script_get_document"sv, "get_document"sv);
+		yaml_desc.func(&yaml::script_delete, "script_delete"sv, "free"sv);
 		yaml_desc.dtor();
 
-		if(!vm->RegisterClass(&yaml_desc)) {
+		if(!vmod.vm()->RegisterClass(&yaml_desc)) {
+			error("vmod: failed to register yaml script class\n"sv);
 			return false;
 		}
 
@@ -54,7 +55,7 @@ namespace vmod
 	yaml::document::~document() noexcept
 	{
 		if(mapped && mapped != gsdk::INVALID_HSCRIPT) {
-			vm->ReleaseValue(mapped);
+			vmod.vm()->ReleaseValue(mapped);
 		}
 
 		yaml_document_delete(this);
@@ -116,6 +117,8 @@ namespace vmod
 				}
 			}
 			case YAML_SEQUENCE_NODE: {
+				gsdk::IScriptVM *vm{vmod.vm()};
+
 				gsdk::HSCRIPT temp_array{vm->CreateArray()};
 
 				for(yaml_node_item_t *item{node->data.sequence.items.start}; item != node->data.sequence.items.top; ++item) {
@@ -135,6 +138,8 @@ namespace vmod
 				return true;
 			}
 			case YAML_MAPPING_NODE: {
+				gsdk::IScriptVM *vm{vmod.vm()};
+
 				gsdk::HSCRIPT temp_table{vm->CreateTable()};
 
 				for(yaml_node_pair_t *pair{node->data.mapping.pairs.start}; pair != node->data.mapping.pairs.top; ++pair) {
@@ -172,7 +177,7 @@ namespace vmod
 
 	yaml::yaml(std::filesystem::path &&path_) noexcept
 	{
-		instance = vm->RegisterInstance(&yaml_desc, this);
+		instance = vmod.vm()->RegisterInstance(&yaml_desc, this);
 
 		yaml_parser_t parser;
 		if(yaml_parser_initialize(&parser) != 1) {
@@ -219,7 +224,7 @@ namespace vmod
 		documents.clear();
 
 		if(instance && instance != gsdk::INVALID_HSCRIPT) {
-			vm->RemoveInstance(instance);
+			vmod.vm()->RemoveInstance(instance);
 		}
 	}
 }

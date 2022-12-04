@@ -54,6 +54,49 @@ namespace vmod
 	{ __asm__ volatile("int $0x03"); }
 
 	template <typename T>
+	struct function_traits;
+
+	template <typename R, typename ...Args>
+	struct function_traits<R(*)(Args...)>
+	{
+		using return_type = R;
+
+		template <std::size_t i>
+		struct arg
+		{
+			using type = std::tuple_element_t<i, std::tuple<Args...>>;
+		};
+
+		using pointer_type = R(*)(Args...);
+	};
+
+	template <typename R, typename C, typename ...Args>
+	struct function_traits<R(C::*)(Args...)>
+	{
+		using return_type = R;
+		using class_type = C;
+
+		template <std::size_t i>
+		struct arg
+		{
+			using type = std::tuple_element_t<i, std::tuple<Args...>>;
+		};
+
+		using pointer_type = R(C::*)(Args...);
+	};
+
+	template <typename R, typename ...Args>
+	struct function_traits<R(Args...)> : function_traits<R(*)(Args...)>
+	{
+	};
+
+	template <typename T>
+	using function_return_t = typename function_traits<T>::return_type;
+
+	template <typename T>
+	using function_pointer_t = typename function_traits<T>::pointer_type;
+
+	template <typename T>
 	const std::string &demangle() noexcept
 	{
 		static std::string buffer;
@@ -197,7 +240,7 @@ namespace vmod
 		return mfp_from_func<R, C, Args...>(old_vfunc);
 	}
 
-	class detour final
+	class detour
 	{
 	public:
 		detour() noexcept = default;
@@ -209,10 +252,62 @@ namespace vmod
 			old_func = reinterpret_cast<generic_func_t>(old_func_);
 			new_func = reinterpret_cast<generic_func_t>(new_func_);
 
-			initialize();
+			backup_bytes();
 		}
 
-		template <typename R, typename ...Args>
+		template <typename T, typename ...Args>
+		inline auto call(Args &&...args) noexcept -> function_return_t<T>
+		{
+			struct scope_enable final {
+				inline scope_enable(detour &det_) noexcept
+					: det{det_} {
+					det.disable();
+				}
+				inline ~scope_enable() noexcept {
+					det.enable();
+				}
+				detour &det;
+			};
+
+			scope_enable se{*this};
+			return reinterpret_cast<function_pointer_t<T>>(old_func)(std::forward<Args>(args)...);
+		}
+
+		void enable() noexcept;
+
+		inline void disable() noexcept
+		{
+			unsigned char *bytes{reinterpret_cast<unsigned char *>(old_func)};
+			std::memcpy(bytes, old_bytes, sizeof(old_bytes));
+		}
+
+	protected:
+		void backup_bytes() noexcept;
+
+		union {
+			generic_func_t old_func;
+			generic_mfp_t old_mfp;
+		};
+
+		generic_func_t new_func;
+
+	private:
+		unsigned char old_bytes[1 + sizeof(std::uintptr_t)];
+	};
+
+	class detour_va_args final : public detour
+	{
+	public:
+		template <typename T>
+		inline void initialize(T old_func_, T new_func_) noexcept
+		{
+			old_func = reinterpret_cast<generic_func_t>(old_func_);
+			new_func = reinterpret_cast<generic_func_t>(new_func_);
+
+			backup_bytes();
+		}
+
+		template <typename R, typename T, typename ...Args>
 		inline R call(Args &&...args) noexcept
 		{
 			struct scope_enable final {
@@ -227,27 +322,7 @@ namespace vmod
 			};
 
 			scope_enable se{*this};
-			return reinterpret_cast<R(*)(Args...)>(old_func)(std::forward<Args>(args)...);
+			return reinterpret_cast<T>(old_func)(std::forward<Args>(args)...);
 		}
-
-		void enable() noexcept;
-
-		inline void disable() noexcept
-		{
-			unsigned char *bytes{reinterpret_cast<unsigned char *>(old_func)};
-			std::memcpy(bytes, old_bytes, sizeof(old_bytes));
-		}
-
-	private:
-		void initialize() noexcept;
-
-		union {
-			generic_func_t old_func;
-			generic_mfp_t old_mfp;
-		};
-
-		generic_func_t new_func;
-
-		unsigned char old_bytes[1 + sizeof(std::uintptr_t)];
 	};
 }

@@ -1,4 +1,4 @@
-function __vmod_tostring(value)
+function __to_string__(value)
 {
 	return value.tostring()
 }

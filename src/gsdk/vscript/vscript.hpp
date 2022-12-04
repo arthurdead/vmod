@@ -235,6 +235,9 @@ namespace gsdk
 	using ScriptOutputFunc_t = void(*)(const char *);
 	using ScriptErrorFunc_t = bool(*)(ScriptErrorLevel_t, const char *);
 
+	using HSQUIRRELVM = void *;
+	using SQChar = char;
+
 	class ISquirrelMetamethodDelegate;
 	class CSquirrelMetamethodDelegateImpl;
 	class SQVM;
@@ -303,6 +306,14 @@ namespace gsdk
 		virtual bool ValueExists(HSCRIPT, const char *) = 0;
 		virtual bool SetValue(HSCRIPT, const char *, const char *) = 0;
 		virtual bool SetValue(HSCRIPT, const char *, const ScriptVariant_t &) = 0;
+		inline bool SetValue(HSCRIPT scope, const char *name, HSCRIPT object) noexcept
+		{
+			ScriptVariant_t var;
+			var.m_type = FIELD_HSCRIPT;
+			var.m_flags = 0;
+			var.m_hScript = object;
+			return SetValue(scope, name, var);
+		}
 	private:
 		virtual void CreateTable_impl(ScriptVariant_t &) = 0;
 	public:

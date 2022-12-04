@@ -32,6 +32,8 @@ if compiler.get_id() == 'clang'
 		'-Wno-exit-time-destructors',
 		'-Wno-switch-enum',
 		'-Wno-error=unused-function',
+		'-Wno-error=unused-private-field',
+		'-Wno-error=unused-local-typedef',
 		'-Wno-reserved-macro-identifier',
 		'-Wno-reserved-identifier'
 	]
@@ -43,9 +45,16 @@ if compiler.get_id() == 'clang'
 	]
 endif
 
-srcds = get_option('srcds')
-addons = join_paths(srcds,'tf','addons')
+dedicated = true
+
+engine_dir = get_option('srcds')
+engine_bin = join_paths(engine_dir,'bin')
+game_dir = join_paths(engine_dir,'tf')
+game_bin = join_paths(game_dir,'bin')
+addons = join_paths(game_dir,'addons')
 vmod_root = join_paths(addons,'vmod')
+
+install = engine_dir != ''
 
 thirdparty_default_options_c = [
 	'warning_level=0',
@@ -99,6 +108,21 @@ if xxd_exe.found()
 	dependencies += [vmod_base_script]
 endif
 
+if engine_dir != ''
+	tier0_lib_name = 'libtier0.so'
+	if dedicated
+		tier0_lib_name = 'libtier0_srv.so'
+	endif
+
+	tier0 = declare_dependency(
+		link_args: [
+			join_paths(engine_bin,tier0_lib_name)
+		]
+	)
+
+	dependencies += [tier0]
+endif
+
 lib = shared_library('vmod',
 	files(
 		join_paths('src','vmod.cpp'),
@@ -117,7 +141,7 @@ lib = shared_library('vmod',
 	implicit_include_directories: true,
 	name_prefix: '',
 	dependencies: dependencies,
-	install: srcds != '',
+	install: install,
 	install_dir: addons,
 	cpp_args: cpp_args
 )
@@ -128,11 +152,11 @@ configure_file(
 	configuration: {
 		'LIBNAME': lib.name()
 	},
-	install: srcds != '',
+	install: install,
 	install_dir: addons
 )
 
-if srcds != ''
+if install
 	install_data(
 		vmod_base_script_src,
 		rename: join_paths(vmod_root,'base','vmod_base.nut'),

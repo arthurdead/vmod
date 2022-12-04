@@ -9,7 +9,7 @@ namespace vmod
 		}
 	}
 
-	void detour::initialize() noexcept
+	void detour::backup_bytes() noexcept
 	{
 		page_info func_page{reinterpret_cast<void *>(old_func), 2};
 		func_page.protect(PROT_READ|PROT_WRITE|PROT_EXEC);
