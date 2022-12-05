@@ -280,6 +280,7 @@ namespace vmod
 	static bool(*VScriptRunScript)(const char *, gsdk::HSCRIPT, bool);
 	static void(gsdk::CTFGameRules::*RegisterScriptFunctions)();
 	static void(*PrintFunc)(gsdk::HSQUIRRELVM, const gsdk::SQChar *, ...);
+	static gsdk::ScriptClassDesc_t **sv_classdesc_pHead;
 
 	static bool in_vscript_server_init;
 	static bool in_vscript_print;
@@ -412,6 +413,24 @@ namespace vmod
 			return false;
 		}
 
+		auto sv_ScriptClassDesc_t_it{sv_symbols.find("ScriptClassDesc_t"s)};
+		if(sv_ScriptClassDesc_t_it == sv_symbols.end()) {
+			error("vmod: missing 'ScriptClassDesc_t' symbol\n"sv);
+			return false;
+		}
+
+		auto sv_GetDescList_it{sv_ScriptClassDesc_t_it->second.find("GetDescList()"s)};
+		if(sv_GetDescList_it == sv_ScriptClassDesc_t_it->second.end()) {
+			error("vmod: missing 'ScriptClassDesc_t::GetDescList()' symbol\n"sv);
+			return false;
+		}
+
+		auto sv_pHead_it{sv_GetDescList_it->second.find("pHead"s)};
+		if(sv_pHead_it == sv_GetDescList_it->second.end()) {
+			error("vmod: missing 'ScriptClassDesc_t::GetDescList()::pHead' symbol\n"sv);
+			return false;
+		}
+
 		std::string_view vstdlib_lib_name{"bin/libvstdlib.so"sv};
 		if(sv_engine->IsDedicatedServer()) {
 			vstdlib_lib_name = "bin/libvstdlib_srv.so"sv;
@@ -468,6 +487,8 @@ namespace vmod
 
 		CreateArray = CreateArray_it->second.mfp<decltype(CreateArray)>();
 		PrintFunc = PrintFunc_it->second.func_va_args<decltype(PrintFunc)>();
+
+		sv_classdesc_pHead = sv_pHead_it->second.addr<gsdk::ScriptClassDesc_t **>();
 
 		write_file(root_dir/"internal_scripts"sv/"init.nut"sv, g_Script_init, std::strlen(reinterpret_cast<const char *>(g_Script_init)+1));
 		write_file(root_dir/"internal_scripts"sv/"vscript_server.nut"sv, g_Script_vscript_server, std::strlen(reinterpret_cast<const char *>(g_Script_vscript_server)+1));
@@ -990,7 +1011,9 @@ namespace vmod
 	{
 		vmod_unload_plugins();
 
-		unbindings();
+		if(vm_) {
+			unbindings();
+		}
 
 		vmod_reload_plugins.unregister();
 		vmod_unload_plugins.unregister();

@@ -4,7 +4,11 @@
 namespace vmod
 {
 	void ConCommand::Dispatch(const gsdk::CCommand &args)
-	{ func(args); }
+	{
+		if(func) {
+			func(args);
+		}
+	}
 
 	gsdk::CVarDLLIdentifier_t ConCommand::GetDLLIdentifier() const
 	{ return vmod.cvar_dll_id(); }

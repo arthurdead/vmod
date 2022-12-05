@@ -37,6 +37,11 @@ namespace vmod
 			}
 		}
 
+		inline operator bool() const noexcept
+		{ return static_cast<bool>(func) && m_bRegistered; }
+		inline bool operator!() const noexcept
+		{ return !static_cast<bool>(func) || !m_bRegistered; }
+
 		template <typename T>
 		inline ConCommand &operator=(T &&fnc) noexcept
 		{
@@ -45,9 +50,17 @@ namespace vmod
 		}
 
 		inline void operator()(const gsdk::CCommand &args) noexcept
-		{ func(args); }
+		{
+			if(func) {
+				func(args);
+			}
+		}
 		inline void operator()() noexcept
-		{ func(gsdk::CCommand{}); }
+		{
+			if(func) {
+				func(gsdk::CCommand{});
+			}
+		}
 
 	private:
 		void Dispatch(const gsdk::CCommand &args) override;

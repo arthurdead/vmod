@@ -58,7 +58,7 @@ namespace vmod
 		std::filesystem::path plugins_dir;
 		std::filesystem::path root_dir;
 
-		gsdk::CVarDLLIdentifier_t cvar_dll_id_;
+		gsdk::CVarDLLIdentifier_t cvar_dll_id_{gsdk::INVALID_CVAR_DLL_IDENTIFIER};
 
 		gsdk_engine_library engine_lib;
 

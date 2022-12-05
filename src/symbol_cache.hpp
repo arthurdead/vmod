@@ -9,6 +9,15 @@
 #include <functional>
 #include "hacking.hpp"
 
+#include <libelf.h>
+#include <gelf.h>
+
+#pragma push_macro("HAVE_DECL_BASENAME")
+#undef HAVE_DECL_BASENAME
+#define HAVE_DECL_BASENAME 1
+#include <libiberty/demangle.h>
+#pragma pop_macro("HAVE_DECL_BASENAME")
+
 namespace vmod
 {
 	class symbol_cache final
@@ -35,6 +44,12 @@ namespace vmod
 			qualification_info(qualification_info &&) noexcept = default;
 			qualification_info &operator=(qualification_info &&) noexcept = default;
 
+			struct name_info;
+
+		private:
+			using names_t = std::unordered_map<std::string, name_info>;
+
+		public:
 			struct name_info
 			{
 				virtual ~name_info() noexcept = default;
@@ -64,6 +79,21 @@ namespace vmod
 				inline std::size_t size() const noexcept
 				{ return size_; }
 
+				using const_iterator = names_t::const_iterator;
+
+				inline const_iterator find(const std::string &name) const noexcept
+				{ return names.find(name); }
+
+				inline const_iterator begin() const noexcept
+				{ return names.cbegin(); }
+				inline const_iterator end() const noexcept
+				{ return names.cend(); }
+
+				inline const_iterator cbegin() const noexcept
+				{ return names.cbegin(); }
+				inline const_iterator cend() const noexcept
+				{ return names.cend(); }
+
 			private:
 				friend class symbol_cache;
 
@@ -76,10 +106,9 @@ namespace vmod
 					generic_func_t func_;
 					mfp_internal_t<void, empty_class> mfp_;
 				};
-			};
 
-		private:
-			using names_t = std::unordered_map<std::string, name_info>;
+				names_t names;
+			};
 
 		public:
 			using const_iterator = names_t::const_iterator;
@@ -169,6 +198,8 @@ namespace vmod
 		std::string err_str;
 
 		bool read_elf(int fd, void *base) noexcept;
+
+		bool handle_component(std::string_view name_mangled, int base_demangle_flags, demangle_component *component, qualifications_t::iterator &qual_it, qualification_info::names_t::iterator &name_it, GElf_Sym &&sym, void *base) noexcept;
 
 		qualifications_t qualifications;
 		qualification_info global_qual;
