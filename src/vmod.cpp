@@ -928,21 +928,34 @@ namespace vmod
 			return false;
 		}
 
-		#define __VMOD_GET_FUNC_FROM_BASE_SCRIPT(varname, funcname) \
-			varname = vm_->LookupFunction(#funcname, base_script_scope); \
-			if(!varname || varname == gsdk::INVALID_HSCRIPT) { \
-				if(base_script_from_file) { \
-					error("vmod: base script '%s' missing '" #funcname "' function\n"sv, base_script_path.c_str()); \
-				} else { \
-					error("vmod: base script missing '" #funcname "' function\n"sv); \
-				} \
-				return false; \
+		auto get_func_from_base_script{[this](gsdk::HSCRIPT &func, std::string_view name) noexcept -> bool {
+			func = vm_->LookupFunction(name.data(), base_script_scope);
+			if(!func || func == gsdk::INVALID_HSCRIPT) {
+				if(base_script_from_file) {
+					error("vmod: base script '%s' missing '%s' function\n"sv, base_script_path.c_str(), name.data());
+				} else {
+					error("vmod: base script missing '%s' function\n"sv, name.data());
+				}
+				return false;
 			}
+			return true;
+		}};
 
-		__VMOD_GET_FUNC_FROM_BASE_SCRIPT(to_string_func, __to_string__)
-		__VMOD_GET_FUNC_FROM_BASE_SCRIPT(to_int_func, __to_int__)
-		__VMOD_GET_FUNC_FROM_BASE_SCRIPT(to_float_func, __to_float__)
-		__VMOD_GET_FUNC_FROM_BASE_SCRIPT(to_bool_func, __to_bool__)
+		if(!get_func_from_base_script(to_string_func, "__to_string__"sv)) {
+			return false;
+		}
+
+		if(!get_func_from_base_script(to_int_func, "__to_int__"sv)) {
+			return false;
+		}
+
+		if(!get_func_from_base_script(to_float_func, "__to_float__"sv)) {
+			return false;
+		}
+
+		if(!get_func_from_base_script(to_bool_func, "__to_bool__"sv)) {
+			return false;
+		}
 
 		if(!bindings()) {
 			return false;
