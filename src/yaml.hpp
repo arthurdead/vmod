@@ -4,6 +4,7 @@
 #include "vscript.hpp"
 #include <filesystem>
 #include <vector>
+#include <stack>
 #include <cstddef>
 
 namespace vmod
@@ -40,15 +41,16 @@ namespace vmod
 
 			inline document(yaml_document_t &&other) noexcept
 				: yaml_document_t{std::move(other)},
-				mapped{gsdk::INVALID_HSCRIPT}
+				root_object{gsdk::INVALID_HSCRIPT}
 			{
 			}
 
 			inline document &operator=(document &&other) noexcept
 			{
 				*static_cast<yaml_document_t *>(this) = std::move(static_cast<yaml_document_t &>(other));
-				mapped = other.mapped;
-				other.mapped = gsdk::INVALID_HSCRIPT;
+				object_stack = std::move(other.object_stack);
+				root_object = other.root_object;
+				other.root_object = gsdk::INVALID_HSCRIPT;
 				return *this;
 			}
 
@@ -57,7 +59,8 @@ namespace vmod
 		private:
 			bool node_to_variant(yaml_node_t *node, script_variant_t &var) noexcept;
 
-			gsdk::HSCRIPT mapped;
+			std::stack<gsdk::HSCRIPT> object_stack;
+			gsdk::HSCRIPT root_object;
 		};
 
 	private:

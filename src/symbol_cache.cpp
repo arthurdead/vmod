@@ -290,6 +290,8 @@ namespace vmod
 					default: continue;
 				}
 			}
+
+			break;
 		}
 
 		elf_end(elf);

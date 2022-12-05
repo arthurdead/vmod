@@ -10,10 +10,15 @@ namespace vmod
 
 	script_variant_t plugin::script_lookup_value(std::string_view val_name) noexcept
 	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
 		script_variant_t var;
-		if(!vmod.vm()->GetValue(scope_, val_name.data(), &var)) {
+		if(!vm->GetValue(private_scope_, val_name.data(), &var)) {
 			null_variant(var);
+		} else {
+			vm->SetValue(values_table, val_name.data(), var);
 		}
+
 		return var;
 	}
 
@@ -42,10 +47,14 @@ namespace vmod
 			return all_plugins_loaded.func;
 		}
 
-		gsdk::HSCRIPT func{vmod.vm()->LookupFunction(func_name.data(), scope_)};
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		gsdk::HSCRIPT func{vm->LookupFunction(func_name.data(), private_scope_)};
 		if(!func || func == gsdk::INVALID_HSCRIPT) {
 			return nullptr;
 		}
+
+		vm->SetValue(functions_table, func_name.data(), func);
 
 		function_cache.emplace(std::move(func_name_str), func);
 
@@ -78,7 +87,10 @@ namespace vmod
 		watch_d{-1},
 		instance_{gsdk::INVALID_HSCRIPT},
 		script{gsdk::INVALID_HSCRIPT},
-		scope_{gsdk::INVALID_HSCRIPT}
+		private_scope_{gsdk::INVALID_HSCRIPT},
+		public_scope_{gsdk::INVALID_HSCRIPT},
+		functions_table{gsdk::INVALID_HSCRIPT},
+		values_table{gsdk::INVALID_HSCRIPT}
 	{
 		std::filesystem::path filename{path.filename()};
 		filename.replace_extension();
@@ -105,8 +117,17 @@ namespace vmod
 		script = other.script;
 		other.script = gsdk::INVALID_HSCRIPT;
 
-		scope_ = other.scope_;
-		other.scope_ = gsdk::INVALID_HSCRIPT;
+		private_scope_ = other.private_scope_;
+		other.private_scope_ = gsdk::INVALID_HSCRIPT;
+
+		public_scope_ = other.public_scope_;
+		other.public_scope_ = gsdk::INVALID_HSCRIPT;
+
+		functions_table = other.functions_table;
+		other.functions_table = gsdk::INVALID_HSCRIPT;
+
+		values_table = other.values_table;
+		other.values_table = gsdk::INVALID_HSCRIPT;
 
 		instance_ = other.instance_;
 		other.instance_ = gsdk::INVALID_HSCRIPT;
@@ -147,14 +168,32 @@ namespace vmod
 			error("vmod: plugin '%s' failed to compile\n"sv, path.c_str());
 			return false;
 		} else {
-			std::string scope_name{"__vmod_plugin_"sv};
-			scope_name += name;
-			scope_name += "_scope__"sv;
+			std::string base_scope_name{"__vmod_plugin_"sv};
+			{
+				std::hash<std::filesystem::path> path_hash{};
+				base_scope_name += std::to_string(path_hash(path));
+			}
 
-			scope_ = vm->CreateScope(scope_name.c_str(), nullptr);
-			if(!scope_ || scope_ == gsdk::INVALID_HSCRIPT) {
-				error("vmod: plugin '%s' failed to create scope\n"sv, path.c_str());
-				return false;
+			{
+				std::string scope_name{base_scope_name};
+				scope_name += "_private_scope__"sv;
+
+				private_scope_ = vm->CreateScope(scope_name.c_str(), nullptr);
+				if(!private_scope_ || private_scope_ == gsdk::INVALID_HSCRIPT) {
+					error("vmod: plugin '%s' failed to create private scope\n"sv, path.c_str());
+					return false;
+				}
+			}
+
+			{
+				std::string scope_name{base_scope_name};
+				scope_name += "_public_scope__"sv;
+
+				public_scope_ = vm->CreateScope(scope_name.c_str(), nullptr);
+				if(!public_scope_ || public_scope_ == gsdk::INVALID_HSCRIPT) {
+					error("vmod: plugin '%s' failed to create public scope\n"sv, path.c_str());
+					return false;
+				}
 			}
 
 			instance_ = vm->RegisterInstance(&plugin_desc, this);
@@ -165,12 +204,39 @@ namespace vmod
 
 			vm->SetInstanceUniqeId(instance_, path.c_str());
 
-			if(!vm->SetValue(vmod.plugins_table(), name.c_str(), instance_)) {
-				error("vmod: plugin '%s' failed to set instance value in plugins table\n"sv, path.c_str());
+			functions_table = vm->CreateTable();
+			if(!functions_table || functions_table == gsdk::INVALID_HSCRIPT) {
+				error("vmod: plugin '%s' failed to create functions table\n"sv, path.c_str());
 				return false;
 			}
 
-			if(vm->Run(script, scope_, false) == gsdk::SCRIPT_ERROR) {
+			if(!vm->SetValue(public_scope_, "functions", functions_table)) {
+				error("vmod: plugin '%s' failed to set functions table value\n"sv, path.c_str());
+				return false;
+			}
+
+			values_table = vm->CreateTable();
+			if(!values_table || values_table == gsdk::INVALID_HSCRIPT) {
+				error("vmod: plugin '%s' failed to create values table\n"sv, path.c_str());
+				return false;
+			}
+
+			if(!vm->SetValue(public_scope_, "values", values_table)) {
+				error("vmod: plugin '%s' failed to set values table value\n"sv, path.c_str());
+				return false;
+			}
+
+			if(!vm->SetValue(public_scope_, "plugin", instance_)) {
+				error("vmod: plugin '%s' failed to set instance value\n"sv, path.c_str());
+				return false;
+			}
+
+			if(!vm->SetValue(vmod.plugins_table(), name.c_str(), public_scope_)) {
+				error("vmod: plugin '%s' failed to set value in plugins table\n"sv, path.c_str());
+				return false;
+			}
+
+			if(vm->Run(script, private_scope_, false) == gsdk::SCRIPT_ERROR) {
 				error("vmod: plugin '%s' failed to run\n"sv, path.c_str());
 				return false;
 			}
@@ -190,7 +256,7 @@ namespace vmod
 
 			{
 				script_variant_t temp_var;
-				if(vm->GetValue(scope_, "VMOD_AUTO_RELOAD", &temp_var) && temp_var == true) {
+				if(vm->GetValue(private_scope_, "VMOD_AUTO_RELOAD", &temp_var) && temp_var == true) {
 					watch();
 				} else {
 					unwatch();
@@ -238,11 +304,6 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		if(instance_ && instance_ != gsdk::INVALID_HSCRIPT) {
-			vm->RemoveInstance(instance_);
-			instance_ = gsdk::INVALID_HSCRIPT;
-		}
-
 		if(!function_cache.empty()) {
 			for(const auto &it : function_cache) {
 				vm->ReleaseFunction(it.second);
@@ -257,14 +318,34 @@ namespace vmod
 		plugin_unloaded.unload();
 		all_plugins_loaded.unload();
 
+		if(functions_table && functions_table != gsdk::INVALID_HSCRIPT) {
+			vm->ReleaseTable(functions_table);
+			functions_table = gsdk::INVALID_HSCRIPT;
+		}
+
+		if(values_table && values_table != gsdk::INVALID_HSCRIPT) {
+			vm->ReleaseTable(values_table);
+			values_table = gsdk::INVALID_HSCRIPT;
+		}
+
+		if(instance_ && instance_ != gsdk::INVALID_HSCRIPT) {
+			vm->RemoveInstance(instance_);
+			instance_ = gsdk::INVALID_HSCRIPT;
+		}
+
 		if(script && script != gsdk::INVALID_HSCRIPT) {
 			vm->ReleaseScript(script);
 			script = gsdk::INVALID_HSCRIPT;
 		}
 
-		if(scope_ && scope_ != gsdk::INVALID_HSCRIPT) {
-			vm->ReleaseScope(scope_);
-			scope_ = gsdk::INVALID_HSCRIPT;
+		if(private_scope_ && private_scope_ != gsdk::INVALID_HSCRIPT) {
+			vm->ReleaseScope(private_scope_);
+			private_scope_ = gsdk::INVALID_HSCRIPT;
+		}
+
+		if(public_scope_ && public_scope_ != gsdk::INVALID_HSCRIPT) {
+			vm->ReleaseScope(public_scope_);
+			public_scope_ = gsdk::INVALID_HSCRIPT;
 		}
 
 		gsdk::HSCRIPT plugins_table{vmod.plugins_table()};
@@ -276,12 +357,12 @@ namespace vmod
 	plugin::function::function(plugin &pl, std::string_view func_name) noexcept
 	{
 		if(pl) {
-			func = vmod.vm()->LookupFunction(func_name.data(), pl.scope_);
+			func = vmod.vm()->LookupFunction(func_name.data(), pl.private_scope_);
 			if(!func || func == gsdk::INVALID_HSCRIPT) {
 				scope = gsdk::INVALID_HSCRIPT;
 				func = gsdk::INVALID_HSCRIPT;
 			} else {
-				scope = pl.scope_;
+				scope = pl.private_scope_;
 			}
 		} else {
 			scope = gsdk::INVALID_HSCRIPT;

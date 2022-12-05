@@ -15,7 +15,7 @@ namespace vmod
 			return nullptr;
 		}
 
-		return documents[i]->mapped;
+		return documents[i]->root_object;
 	}
 
 	gsdk::HSCRIPT yaml::script_load(std::filesystem::path &&path_) noexcept
@@ -54,8 +54,10 @@ namespace vmod
 
 	yaml::document::~document() noexcept
 	{
-		if(mapped && mapped != gsdk::INVALID_HSCRIPT) {
-			vmod.vm()->ReleaseValue(mapped);
+		while(!object_stack.empty()) {
+			gsdk::HSCRIPT obj{object_stack.top()};
+			vmod.vm()->ReleaseValue(obj);
+			object_stack.pop();
 		}
 
 		yaml_document_delete(this);
@@ -134,6 +136,7 @@ namespace vmod
 					vm->ArrayAddToTail(temp_array, value_var);
 				}
 
+				object_stack.emplace(temp_array);
 				var = temp_array;
 				return true;
 			}
@@ -166,6 +169,7 @@ namespace vmod
 					}
 				}
 
+				object_stack.emplace(temp_table);
 				var = temp_table;
 				return true;
 			}
@@ -211,7 +215,7 @@ namespace vmod
 					break;
 				}
 
-				doc->mapped = root_var.m_hScript;
+				doc->root_object = root_var.m_hScript;
 				documents.emplace_back(doc);
 			}
 		}

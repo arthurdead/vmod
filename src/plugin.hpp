@@ -33,9 +33,7 @@ namespace vmod
 		inline operator const std::filesystem::path &() const noexcept
 		{ return path; }
 
-		gsdk::HSCRIPT scope() noexcept
-		{ return scope_; }
-		gsdk::HSCRIPT instance() noexcept
+		inline gsdk::HSCRIPT instance() noexcept
 		{ return instance_; }
 
 		inline operator bool() const noexcept
@@ -134,7 +132,10 @@ namespace vmod
 
 		gsdk::HSCRIPT instance_;
 		gsdk::HSCRIPT script;
-		gsdk::HSCRIPT scope_;
+		gsdk::HSCRIPT private_scope_;
+		gsdk::HSCRIPT public_scope_;
+		gsdk::HSCRIPT functions_table;
+		gsdk::HSCRIPT values_table;
 
 		std::unordered_map<std::string, gsdk::HSCRIPT> function_cache;
 
