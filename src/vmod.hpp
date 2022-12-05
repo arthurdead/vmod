@@ -19,7 +19,10 @@ namespace vmod
 		inline bool map_is_loaded() const noexcept
 		{ return is_map_loaded; }
 
-		std::string_view to_string(gsdk::HSCRIPT value) noexcept;
+		std::string_view to_string(gsdk::HSCRIPT value) const noexcept;
+		int to_int(gsdk::HSCRIPT value) const noexcept;
+		float to_float(gsdk::HSCRIPT value) const noexcept;
+		bool to_bool(gsdk::HSCRIPT value) const noexcept;
 
 		inline gsdk::CVarDLLIdentifier_t cvar_dll_id() const noexcept
 		{ return cvar_dll_id_; }
@@ -82,6 +85,9 @@ namespace vmod
 		bool base_script_from_file;
 
 		gsdk::HSCRIPT to_string_func{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT to_int_func{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT to_float_func{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT to_bool_func{gsdk::INVALID_HSCRIPT};
 
 		std::vector<std::unique_ptr<plugin>> plugins;
 		bool plugins_loaded;

@@ -101,6 +101,126 @@ namespace vmod
 
 	static func_desc_t find_plugin_desc;
 
+	struct memory_block final
+	{
+		friend class vmod;
+
+	public:
+		memory_block() = delete;
+		memory_block(const memory_block &) = delete;
+		memory_block &operator=(const memory_block &) = delete;
+		memory_block(memory_block &&) = delete;
+		memory_block &operator=(memory_block &&) = delete;
+
+		inline ~memory_block() noexcept
+		{
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			if(ptr) {
+				if(dtor_func && dtor_func != gsdk::INVALID_HSCRIPT) {
+					script_variant_t args{instance};
+					vm->ExecuteFunction(dtor_func, &args, 1, nullptr, nullptr, true);
+				}
+			}
+
+			if(instance && instance != gsdk::INVALID_HSCRIPT) {
+				vm->RemoveInstance(instance);
+			}
+
+			if(ptr) {
+				free(ptr);
+			}
+		}
+
+	private:
+		bool register_instance() noexcept;
+
+		inline memory_block(std::size_t size_) noexcept
+			: ptr{static_cast<unsigned char *>(std::malloc(size_))}, size{size_}
+		{
+		}
+
+		inline memory_block(std::align_val_t align, std::size_t size_) noexcept
+			: ptr{static_cast<unsigned char *>(std::aligned_alloc(static_cast<std::size_t>(align), size_))}, size{size_}
+		{
+		}
+
+		inline memory_block(std::size_t num, std::size_t size_) noexcept
+			: ptr{static_cast<unsigned char *>(std::calloc(num, size_))}, size{num * size_}
+		{
+		}
+
+		static gsdk::HSCRIPT script_allocate(std::size_t size) noexcept
+		{
+			memory_block *block{new memory_block{size}};
+
+			if(!block->register_instance()) {
+				return nullptr;
+			}
+
+			return block->instance;
+		}
+
+		static gsdk::HSCRIPT script_allocate_aligned(std::size_t align, std::size_t size) noexcept
+		{
+			memory_block *block{new memory_block{static_cast<std::align_val_t>(align), size}};
+
+			if(!block->register_instance()) {
+				return nullptr;
+			}
+
+			return block->instance;
+		}
+
+		static gsdk::HSCRIPT script_allocate_zero(std::size_t num, std::size_t size) noexcept
+		{
+			memory_block *block{new memory_block{num, size}};
+
+			if(!block->register_instance()) {
+				return nullptr;
+			}
+
+			return block->instance;
+		}
+
+		inline void script_set_dtor_func(gsdk::HSCRIPT func) noexcept
+		{
+			dtor_func = func;
+		}
+
+		inline void script_disown() noexcept
+		{ ptr = nullptr; }
+
+		inline void script_delete() noexcept
+		{ delete this; }
+
+		inline std::uintptr_t script_ptr_as_int() noexcept
+		{ return reinterpret_cast<std::uintptr_t>(ptr); }
+
+		inline std::size_t script_get_size() const noexcept
+		{ return size; }
+
+		unsigned char *ptr;
+		std::size_t size;
+		gsdk::HSCRIPT dtor_func{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+	};
+
+	static class_desc_t<memory_block> mem_block_desc{"memory_block"};
+
+	bool memory_block::register_instance() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		instance = vmod.vm()->RegisterInstance(&mem_block_desc, this);
+		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to register memory block instance\n"sv);
+			return false;
+		}
+
+		return true;
+	}
+
 	bool vmod::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -108,6 +228,21 @@ namespace vmod
 		find_plugin_desc.initialize(script_find_plugin, "script_find_plugin"sv, "find_plugin"sv);
 
 		vm_->RegisterFunction(&find_plugin_desc);
+
+		mem_block_desc.func(&memory_block::script_allocate, "script_allocate"sv, "allocate"sv);
+		mem_block_desc.func(&memory_block::script_allocate_aligned, "script_allocate_aligned"sv, "allocate_aligned"sv);
+		mem_block_desc.func(&memory_block::script_allocate_zero, "script_allocate_zero"sv, "allocate_zero"sv);
+		mem_block_desc.func(&memory_block::script_set_dtor_func, "script_set_dtor_func"sv, "hook_dtor"sv);
+		mem_block_desc.func(&memory_block::script_disown, "script_disown"sv, "disown"sv);
+		mem_block_desc.func(&memory_block::script_ptr_as_int, "script_ptr_as_int"sv, "ptr_as_int"sv);
+		mem_block_desc.func(&memory_block::script_get_size, "script_get_size"sv, "get_size"sv);
+		mem_block_desc.func(&memory_block::script_delete, "script_delete"sv, "free"sv);
+		mem_block_desc.dtor();
+
+		if(!vm_->RegisterClass(&mem_block_desc)) {
+			error("vmod: failed to register memory block script class\n"sv);
+			return false;
+		}
 
 		if(!vm_->SetValue(vmod_scope, "game_dir", game_dir.c_str())) {
 			error("vmod: failed to set game dir value\n"sv);
@@ -588,7 +723,7 @@ namespace vmod
 		in_vscript_server_term = false;
 	}
 
-	static char vscript_printfunc_buffer[2048];
+	static char __vscript_printfunc_buffer[2048];
 	static detour_va_args PrintFunc_detour;
 	static void PrintFunc_detour_callback(gsdk::HSQUIRRELVM m_hVM, const gsdk::SQChar *s, ...)
 	{
@@ -598,12 +733,12 @@ namespace vmod
 		#pragma clang diagnostic push
 		#pragma clang diagnostic ignored "-Wformat-nonliteral"
 	#endif
-		std::vsnprintf(vscript_printfunc_buffer, sizeof(vscript_printfunc_buffer), s, varg_list);
+		std::vsnprintf(__vscript_printfunc_buffer, sizeof(__vscript_printfunc_buffer), s, varg_list);
 	#ifdef __clang__
 		#pragma clang diagnostic pop
 	#endif
 		in_vscript_print = true;
-		PrintFunc_detour.call<void, decltype(PrintFunc)>(m_hVM, "%s", vscript_printfunc_buffer);
+		PrintFunc_detour.call<void, decltype(PrintFunc)>(m_hVM, "%s", __vscript_printfunc_buffer);
 		in_vscript_print = false;
 		va_end(varg_list);
 	}
@@ -630,20 +765,61 @@ namespace vmod
 		return true;
 	}
 
-	std::string_view vmod::to_string(gsdk::HSCRIPT value) noexcept
+	static script_variant_t call_to_func(gsdk::HSCRIPT func, gsdk::HSCRIPT value) noexcept
 	{
 		script_variant_t ret;
 		script_variant_t arg{value};
 
-		if(vm_->ExecuteFunction(to_string_func, &arg, 1, &ret, nullptr, true) == gsdk::SCRIPT_ERROR) {
-			return {};
+		if(vmod.vm()->ExecuteFunction(func, &arg, 1, &ret, nullptr, true) == gsdk::SCRIPT_ERROR) {
+			null_variant(ret);
+			return ret;
 		}
+
+		return ret;
+	}
+
+	std::string_view vmod::to_string(gsdk::HSCRIPT value) const noexcept
+	{
+		script_variant_t ret{call_to_func(to_string_func, value)};
 
 		if(ret.m_type != gsdk::FIELD_CSTRING) {
 			return {};
 		}
 
 		return ret.m_pszString;
+	}
+
+	int vmod::to_int(gsdk::HSCRIPT value) const noexcept
+	{
+		script_variant_t ret{call_to_func(to_int_func, value)};
+
+		if(ret.m_type != gsdk::FIELD_INTEGER) {
+			return {};
+		}
+
+		return ret.m_int;
+	}
+
+	float vmod::to_float(gsdk::HSCRIPT value) const noexcept
+	{
+		script_variant_t ret{call_to_func(to_float_func, value)};
+
+		if(ret.m_type != gsdk::FIELD_FLOAT) {
+			return {};
+		}
+
+		return ret.m_float;
+	}
+
+	bool vmod::to_bool(gsdk::HSCRIPT value) const noexcept
+	{
+		script_variant_t ret{call_to_func(to_bool_func, value)};
+
+		if(ret.m_type != gsdk::FIELD_BOOLEAN) {
+			return {};
+		}
+
+		return ret.m_bool;
 	}
 
 	bool vmod::binding_mods() noexcept
@@ -731,15 +907,21 @@ namespace vmod
 			return false;
 		}
 
-		to_string_func = vm_->LookupFunction("__to_string__", base_script_scope);
-		if(!to_string_func || to_string_func == gsdk::INVALID_HSCRIPT) {
-			if(base_script_from_file) {
-				error("vmod: base script '%s' missing '__to_string__' function\n"sv, base_script_path.c_str());
-			} else {
-				error("vmod: base script missing '__to_string__' function\n"sv);
+		#define __VMOD_GET_FUNC_FROM_BASE_SCRIPT(varname, funcname) \
+			varname = vm_->LookupFunction(#funcname, base_script_scope); \
+			if(!varname || varname == gsdk::INVALID_HSCRIPT) { \
+				if(base_script_from_file) { \
+					error("vmod: base script '%s' missing '" #funcname "' function\n"sv, base_script_path.c_str()); \
+				} else { \
+					error("vmod: base script missing '" #funcname "' function\n"sv); \
+				} \
+				return false; \
 			}
-			return false;
-		}
+
+		__VMOD_GET_FUNC_FROM_BASE_SCRIPT(to_string_func, __to_string__)
+		__VMOD_GET_FUNC_FROM_BASE_SCRIPT(to_int_func, __to_int__)
+		__VMOD_GET_FUNC_FROM_BASE_SCRIPT(to_float_func, __to_float__)
+		__VMOD_GET_FUNC_FROM_BASE_SCRIPT(to_bool_func, __to_bool__)
 
 		if(!bindings()) {
 			return false;
@@ -824,6 +1006,18 @@ namespace vmod
 		if(vm_) {
 			if(to_string_func && to_string_func != gsdk::INVALID_HSCRIPT) {
 				vm_->ReleaseFunction(to_string_func);
+			}
+
+			if(to_int_func && to_int_func != gsdk::INVALID_HSCRIPT) {
+				vm_->ReleaseFunction(to_int_func);
+			}
+
+			if(to_float_func && to_float_func != gsdk::INVALID_HSCRIPT) {
+				vm_->ReleaseFunction(to_float_func);
+			}
+
+			if(to_bool_func && to_bool_func != gsdk::INVALID_HSCRIPT) {
+				vm_->ReleaseFunction(to_bool_func);
 			}
 
 			if(base_script && base_script != gsdk::INVALID_HSCRIPT) {

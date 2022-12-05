@@ -9,14 +9,6 @@
 
 namespace vmod
 {
-	template <>
-	constexpr inline gsdk::ScriptDataType_t type_to_field<yaml_node_type_t>() noexcept
-	{ return gsdk::FIELD_INTEGER; }
-
-	template <>
-	inline void initialize_variant_value<yaml_node_type_t>(gsdk::ScriptVariant_t &var, yaml_node_type_t value) noexcept
-	{ var.m_int = static_cast<int>(value); }
-
 	class yaml final
 	{
 		friend class vmod;

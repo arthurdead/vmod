@@ -14,7 +14,7 @@ namespace gsdk
 		m_nGrowSize = static_cast<int>(sizeof(T) * num);
 
 		if(!m_pMemory) {
-			m_pMemory = static_cast<T *>(std::malloc(sizeof(T) * num));
+			m_pMemory = static_cast<T *>(std::aligned_alloc(alignof(T), sizeof(T) * num));
 		} else {
 			m_pMemory = static_cast<T *>(std::realloc(static_cast<void *>(m_pMemory), sizeof(T) * num));
 		}

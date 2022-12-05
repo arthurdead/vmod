@@ -258,17 +258,6 @@ namespace vmod
 		template <typename T, typename ...Args>
 		inline auto call(Args &&...args) noexcept -> function_return_t<T>
 		{
-			struct scope_enable final {
-				inline scope_enable(detour &det_) noexcept
-					: det{det_} {
-					det.disable();
-				}
-				inline ~scope_enable() noexcept {
-					det.enable();
-				}
-				detour &det;
-			};
-
 			scope_enable se{*this};
 			return reinterpret_cast<function_pointer_t<T>>(old_func)(std::forward<Args>(args)...);
 		}
@@ -282,6 +271,17 @@ namespace vmod
 		}
 
 	protected:
+		struct scope_enable final {
+			inline scope_enable(detour &det_) noexcept
+				: det{det_} {
+				det.disable();
+			}
+			inline ~scope_enable() noexcept {
+				det.enable();
+			}
+			detour &det;
+		};
+
 		void backup_bytes() noexcept;
 
 		union {
@@ -310,17 +310,6 @@ namespace vmod
 		template <typename R, typename T, typename ...Args>
 		inline R call(Args &&...args) noexcept
 		{
-			struct scope_enable final {
-				inline scope_enable(detour &det_) noexcept
-					: det{det_} {
-					det.disable();
-				}
-				inline ~scope_enable() noexcept {
-					det.enable();
-				}
-				detour &det;
-			};
-
 			scope_enable se{*this};
 			return reinterpret_cast<T>(old_func)(std::forward<Args>(args)...);
 		}

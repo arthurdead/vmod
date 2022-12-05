@@ -51,9 +51,11 @@ namespace vmod
 			inline function &operator=(function &&other) noexcept
 			{
 				scope = other.scope;
-				func = other.func;
 				other.scope = gsdk::INVALID_HSCRIPT;
+				func = other.func;
 				other.func = gsdk::INVALID_HSCRIPT;
+				owner = other.owner;
+				other.owner = nullptr;
 				return *this;
 			}
 
@@ -69,7 +71,9 @@ namespace vmod
 
 		private:
 			inline function() noexcept
-				: scope{gsdk::INVALID_HSCRIPT}, func{gsdk::INVALID_HSCRIPT}
+				: scope{gsdk::INVALID_HSCRIPT},
+				func{gsdk::INVALID_HSCRIPT},
+				owner{nullptr}
 			{
 			}
 			function(const function &) = delete;
@@ -89,6 +93,7 @@ namespace vmod
 
 			gsdk::HSCRIPT scope;
 			gsdk::HSCRIPT func;
+			plugin *owner;
 		};
 
 		template <typename T>
@@ -115,6 +120,16 @@ namespace vmod
 	private:
 		static bool bindings() noexcept;
 		static void unbindings() noexcept;
+
+		struct scope_assume_current final
+		{
+			inline scope_assume_current(plugin *pl_) noexcept
+			{ assumed_currently_running = pl_; }
+			inline ~scope_assume_current() noexcept
+			{ assumed_currently_running = nullptr; }
+		};
+
+		static plugin *assumed_currently_running;
 
 		gsdk::HSCRIPT script_lookup_function(std::string_view func_name) noexcept;
 		script_variant_t script_lookup_value(std::string_view val_name) noexcept;
