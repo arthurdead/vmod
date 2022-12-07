@@ -43,13 +43,12 @@ namespace vmod
 		~memory_block() noexcept;
 
 	private:
-		friend bool ffi_bindings() noexcept;
-		friend void ffi_unbindings() noexcept;
+		friend class memory_singleton;
 
 		static bool bindings() noexcept;
 		static void unbindings() noexcept;
 
-		bool register_instance() noexcept;
+		bool initialize() noexcept;
 
 		inline memory_block(std::size_t size_) noexcept
 			: ptr{static_cast<unsigned char *>(std::malloc(size_))}, size{size_}
@@ -66,14 +65,7 @@ namespace vmod
 		{
 		}
 
-		static gsdk::HSCRIPT script_allocate(std::size_t size) noexcept;
-		static gsdk::HSCRIPT script_allocate_aligned(std::size_t align, std::size_t size) noexcept;
-		static gsdk::HSCRIPT script_allocate_zero(std::size_t num, std::size_t size) noexcept;
-
-		inline void script_set_dtor_func(gsdk::HSCRIPT func) noexcept
-		{
-			dtor_func = func;
-		}
+		void script_set_dtor_func(gsdk::HSCRIPT func) noexcept;
 
 		inline void script_disown() noexcept
 		{ ptr = nullptr; }
@@ -83,6 +75,9 @@ namespace vmod
 
 		inline std::uintptr_t script_ptr_as_int() noexcept
 		{ return reinterpret_cast<std::uintptr_t>(ptr); }
+
+		inline void *script_ptr() noexcept
+		{ return ptr; }
 
 		inline std::size_t script_get_size() const noexcept
 		{ return size; }

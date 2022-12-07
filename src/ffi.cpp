@@ -3,76 +3,6 @@
 
 namespace vmod
 {
-	memory_block::~memory_block() noexcept
-	{
-		gsdk::IScriptVM *vm{vmod.vm()};
-
-		if(ptr) {
-			if(dtor_func && dtor_func != gsdk::INVALID_HSCRIPT) {
-				script_variant_t args{instance};
-				vm->ExecuteFunction(dtor_func, &args, 1, nullptr, nullptr, true);
-			}
-		}
-
-		if(instance && instance != gsdk::INVALID_HSCRIPT) {
-			vm->RemoveInstance(instance);
-		}
-
-		if(ptr) {
-			free(ptr);
-		}
-	}
-
-	gsdk::HSCRIPT memory_block::script_allocate(std::size_t size) noexcept
-	{
-		memory_block *block{new memory_block{size}};
-
-		if(!block->register_instance()) {
-			return nullptr;
-		}
-
-		return block->instance;
-	}
-
-	gsdk::HSCRIPT memory_block::script_allocate_aligned(std::size_t align, std::size_t size) noexcept
-	{
-		memory_block *block{new memory_block{static_cast<std::align_val_t>(align), size}};
-
-		if(!block->register_instance()) {
-			return nullptr;
-		}
-
-		return block->instance;
-	}
-
-	gsdk::HSCRIPT memory_block::script_allocate_zero(std::size_t num, std::size_t size) noexcept
-	{
-		memory_block *block{new memory_block{num, size}};
-
-		if(!block->register_instance()) {
-			return nullptr;
-		}
-
-		return block->instance;
-	}
-
-	static class_desc_t<memory_block> mem_block_desc{"__vmod_memory_block_class"};
-
-	bool memory_block::register_instance() noexcept
-	{
-		using namespace std::literals::string_view_literals;
-
-		instance = vmod.vm()->RegisterInstance(&mem_block_desc, this);
-		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
-			error("vmod: failed to register memory block instance\n"sv);
-			return false;
-		}
-
-		//vm->SetInstanceUniqeId
-
-		return true;
-	}
-
 	static void script_var_to_ffi_ptr(ffi_type *type_ptr, void *arg_ptr, const script_variant_t &arg_var) noexcept
 	{
 		switch(type_ptr->type) {
@@ -182,6 +112,234 @@ namespace vmod
 			case FFI_TYPE_POINTER: return &ffi_type_pointer;
 			default: return nullptr;
 		}
+	}
+
+	class memory_singleton final : public gsdk::ISquirrelMetamethodDelegate
+	{
+	public:
+		bool bindings() noexcept;
+
+		void unbindings() noexcept
+		{
+			memory_block::unbindings();
+
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			if(get_impl) {
+				vm->DestroySquirrelMetamethod_Get(get_impl);
+			}
+
+			if(instance && instance != gsdk::INVALID_HSCRIPT) {
+				vm->RemoveInstance(instance);
+			}
+
+			if(scope && scope != gsdk::INVALID_HSCRIPT) {
+				vm->ReleaseScope(scope);
+			}
+
+			gsdk::HSCRIPT vmod_scope{vmod.scope()};
+			if(vm->ValueExists(vmod_scope, "memory")) {
+				vm->ClearValue(vmod_scope, "memory");
+			}
+		}
+
+		static gsdk::HSCRIPT script_allocate(std::size_t size) noexcept
+		{
+			memory_block *block{new memory_block{size}};
+
+			if(!block->initialize()) {
+				delete block;
+				return nullptr;
+			}
+
+			return block->instance;
+		}
+
+		static gsdk::HSCRIPT script_allocate_aligned(std::size_t align, std::size_t size) noexcept
+		{
+			memory_block *block{new memory_block{static_cast<std::align_val_t>(align), size}};
+
+			if(!block->initialize()) {
+				delete block;
+				return nullptr;
+			}
+
+			return block->instance;
+		}
+
+		static gsdk::HSCRIPT script_allocate_zero(std::size_t num, std::size_t size) noexcept
+		{
+			memory_block *block{new memory_block{num, size}};
+
+			if(!block->initialize()) {
+				delete block;
+				return nullptr;
+			}
+
+			return block->instance;
+		}
+
+		static script_variant_t script_read(void *ptr, int type) noexcept
+		{
+			ffi_type *type_ptr{ffi_type_id_to_ptr(type)};
+			if(!type_ptr) {
+				vmod.vm()->RaiseException("vmod: invalid type");
+				return {};
+			}
+
+			script_variant_t ret_var;
+			ffi_ptr_to_script_var(type_ptr, ptr, ret_var);
+			return ret_var;
+		}
+
+		static void script_write(void *ptr, int type, script_variant_t arg_var) noexcept
+		{
+			ffi_type *type_ptr{ffi_type_id_to_ptr(type)};
+			if(!type_ptr) {
+				vmod.vm()->RaiseException("vmod: invalid type");
+				return;
+			}
+
+			script_var_to_ffi_ptr(type_ptr, ptr, arg_var);
+		}
+
+		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
+
+		gsdk::HSCRIPT scope{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+		gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
+	};
+
+	static class memory_singleton memory_singleton;
+
+	bool memory_singleton::Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value)
+	{
+		using namespace std::literals::string_view_literals;
+
+		return vmod.vm()->GetValue(instance, name.c_str(), &value);
+	}
+
+	static class_desc_t<class memory_singleton> memory_desc{"__vmod_memory_singleton_class"};
+
+	static class_desc_t<memory_block> mem_block_desc{"__vmod_memory_block_class"};
+
+	bool memory_singleton::bindings() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		memory_desc.func(&memory_singleton::script_allocate, "__script_allocate"sv, "allocate"sv);
+		memory_desc.func(&memory_singleton::script_allocate_aligned, "__script_allocate_aligned"sv, "allocate_aligned"sv);
+		memory_desc.func(&memory_singleton::script_allocate_zero, "__script_allocate_zero"sv, "allocate_zero"sv);
+		memory_desc.func(&memory_singleton::script_read, "__script_read"sv, "read"sv);
+		memory_desc.func(&memory_singleton::script_write, "__script_write"sv, "write"sv);
+
+		if(!vm->RegisterClass(&memory_desc)) {
+			error("vmod: failed to register memory singleton script class\n"sv);
+			return false;
+		}
+
+		instance = vm->RegisterInstance(&memory_desc, &::vmod::memory_singleton);
+		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create memory singleton instance\n"sv);
+			return false;
+		}
+
+		vm->SetInstanceUniqeId(instance, "__vmod_memory_singleton");
+
+		scope = vm->CreateScope("__vmod_memory_scope", nullptr);
+		if(!scope || scope == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create memory scope\n"sv);
+			return false;
+		}
+
+		gsdk::HSCRIPT vmod_scope{vmod.scope()};
+		if(!vm->SetValue(vmod_scope, "memory", scope)) {
+			error("vmod: failed to set memory instance value\n"sv);
+			return false;
+		}
+
+		get_impl = vm->MakeSquirrelMetamethod_Get(vmod_scope, "memory", &static_cast<gsdk::ISquirrelMetamethodDelegate &>(::vmod::memory_singleton), false);
+		if(!get_impl) {
+			error("vmod: failed to create memory _get metamethod\n"sv);
+			return false;
+		}
+
+		if(!memory_block::bindings()) {
+			return false;
+		}
+
+		return true;
+	}
+
+	void memory_block::script_set_dtor_func(gsdk::HSCRIPT func) noexcept
+	{
+		dtor_func = vmod.vm()->ReferenceObject(func);
+	}
+
+	bool memory_block::bindings() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		mem_block_desc.func(&memory_block::script_set_dtor_func, "__script_set_dtor_func"sv, "hook_free"sv);
+		mem_block_desc.func(&memory_block::script_disown, "__script_disown"sv, "disown"sv);
+		mem_block_desc.func(&memory_block::script_delete, "__script_delete"sv, "free"sv);
+		mem_block_desc.func(&memory_block::script_ptr_as_int, "__script_ptr_as_int"sv, "get_ptr_as_int"sv);
+		mem_block_desc.func(&memory_block::script_ptr, "__script_ptr"sv, "get_ptr"sv);
+		mem_block_desc.func(&memory_block::script_get_size, "__script_get_size"sv, "get_size"sv);
+		mem_block_desc.dtor();
+
+		if(!vm->RegisterClass(&mem_block_desc)) {
+			error("vmod: failed to register memory block script class\n"sv);
+			return false;
+		}
+
+		return true;
+	}
+
+	void memory_block::unbindings() noexcept
+	{
+
+	}
+
+	memory_block::~memory_block() noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(ptr) {
+			if(dtor_func && dtor_func != gsdk::INVALID_HSCRIPT) {
+				script_variant_t args{instance};
+				vm->ExecuteFunction(dtor_func, &args, 1, nullptr, nullptr, true);
+
+				vm->ReleaseFunction(dtor_func);
+			}
+		}
+
+		if(instance && instance != gsdk::INVALID_HSCRIPT) {
+			vm->RemoveInstance(instance);
+		}
+
+		if(ptr) {
+			free(ptr);
+		}
+	}
+
+	bool memory_block::initialize() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		instance = vmod.vm()->RegisterInstance(&mem_block_desc, this);
+		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to register memory block instance\n"sv);
+			return false;
+		}
+
+		//vm->SetInstanceUniqeId
+
+		return true;
 	}
 
 	class script_cif final
@@ -446,30 +604,6 @@ namespace vmod
 
 	static class_desc_t<class ffi_singleton> ffi_singleton_desc{"__vmod_ffi_singleton_class"};
 
-	bool memory_block::bindings() noexcept
-	{
-		using namespace std::literals::string_view_literals;
-
-		gsdk::IScriptVM *vm{vmod.vm()};
-
-		mem_block_desc.func(&memory_block::script_allocate, "__script_allocate"sv, "allocate"sv);
-		mem_block_desc.func(&memory_block::script_allocate_aligned, "__script_allocate_aligned"sv, "allocate_aligned"sv);
-		mem_block_desc.func(&memory_block::script_allocate_zero, "__script_allocate_zero"sv, "allocate_zero"sv);
-		mem_block_desc.dtor();
-
-		if(!vm->RegisterClass(&mem_block_desc)) {
-			error("vmod: failed to register memory block script class\n"sv);
-			return false;
-		}
-
-		return true;
-	}
-
-	void memory_block::unbindings() noexcept
-	{
-
-	}
-
 	bool ffi_singleton::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -637,6 +771,14 @@ namespace vmod
 			}
 		}
 
+		if(!script_cif::bindings()) {
+			return false;
+		}
+
+		if(!dynamic_detour::bindings()) {
+			return false;
+		}
+
 		return true;
 	}
 
@@ -676,23 +818,19 @@ namespace vmod
 		if(vm->ValueExists(vmod_scope, "ffi")) {
 			vm->ClearValue(vmod_scope, "ffi");
 		}
+
+		dynamic_detour::unbindings();
+
+		script_cif::unbindings();
 	}
 
 	bool ffi_bindings() noexcept
 	{
-		if(!script_cif::bindings()) {
-			return false;
-		}
-
-		if(!memory_block::bindings()) {
+		if(!memory_singleton.bindings()) {
 			return false;
 		}
 
 		if(!ffi_singleton.bindings()) {
-			return false;
-		}
-
-		if(!dynamic_detour::bindings()) {
 			return false;
 		}
 
@@ -701,11 +839,7 @@ namespace vmod
 
 	void ffi_unbindings() noexcept
 	{
-		dynamic_detour::unbindings();
-
-		script_cif::unbindings();
-
-		memory_block::unbindings();
+		memory_singleton.unbindings();
 
 		ffi_singleton.unbindings();
 	}

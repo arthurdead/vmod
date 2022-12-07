@@ -337,13 +337,13 @@ namespace vmod
 	constexpr inline gsdk::ScriptDataType_t type_to_field<generic_func_t>() noexcept
 	{ return gsdk::FIELD_INTEGER; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, generic_func_t value) noexcept
-	{ var.m_int = reinterpret_cast<int>(value); }
+	{ var.m_hScript = reinterpret_cast<gsdk::HSCRIPT>(value); }
 	template <>
 	inline generic_func_t variant_to_value<generic_func_t>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
-			return reinterpret_cast<generic_func_t>(var.m_int);
+			return reinterpret_cast<generic_func_t>(var.m_hScript);
 		}
 
 		return nullptr;
@@ -355,7 +355,7 @@ namespace vmod
 	{ return gsdk::FIELD_INTEGER; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, generic_mfp_t value) noexcept
 	{
-		var.m_pszString = reinterpret_cast<const char *>(new generic_internal_mfp_t{value});
+		var.m_hScript = reinterpret_cast<gsdk::HSCRIPT>(new generic_internal_mfp_t{value});
 		var.m_flags |= gsdk::SV_FREE;
 	}
 	template <>
@@ -363,7 +363,7 @@ namespace vmod
 	{
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER: {
-				const generic_internal_mfp_t *mfp{reinterpret_cast<const generic_internal_mfp_t *>(var.m_pVector)};
+				const generic_internal_mfp_t *mfp{reinterpret_cast<const generic_internal_mfp_t *>(var.m_hScript)};
 				return mfp->func;
 			}
 		}

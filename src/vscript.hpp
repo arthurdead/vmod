@@ -125,6 +125,9 @@ namespace vmod
 					case gsdk::FIELD_HSCRIPT: {
 						free_variant_hscript(*this);
 					} break;
+					default: {
+						std::free(m_hScript);
+					} break;
 				}
 				m_flags &= ~gsdk::SV_FREE;
 			}
@@ -140,6 +143,15 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<const script_variant_t *>() noexcept
 	{ return gsdk::FIELD_VOID; }
+	template <>
+	inline script_variant_t variant_to_value<script_variant_t>(const gsdk::ScriptVariant_t &var) noexcept
+	{
+		script_variant_t temp_var;
+		temp_var.m_type = var.m_type;
+		temp_var.m_flags = 0;
+		temp_var.m_hScript = var.m_hScript;
+		return temp_var;
+	}
 
 	template <typename T>
 	inline gsdk::ScriptVariant_t value_to_variant(T &&value) noexcept
