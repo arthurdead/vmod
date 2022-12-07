@@ -61,7 +61,7 @@ vmod_root = join_paths(addons,'vmod')
 
 install = engine_dir != ''
 
-thirdparty_default_options_c = [
+thirdparty_default_options = [
 	'warning_level=0',
 	'werror=false',
 	'buildtype=release',
@@ -72,8 +72,17 @@ thirdparty_default_options_c = [
 	'b_thinlto_cache=true',
 	'b_lundef=true',
 	'strip=true',
-	'c_std=gnu18',
 	'default_library=static'
+]
+
+thirdparty_default_options_c = thirdparty_default_options + [
+	'c_std=gnu18'
+]
+
+thirdparty_default_options_cpp = thirdparty_default_options + [
+	'cpp_std=gnu++20',
+	'cpp_eh=none',
+	'cpp_rtti=false'
 ]
 
 libiberty = subproject('libiberty',
@@ -87,7 +96,7 @@ libyaml = subproject('libyaml',
 )
 
 squirrel = subproject('squirrel',
-	default_options: thirdparty_default_options_c,
+	default_options: thirdparty_default_options_cpp,
 	required: true
 )
 

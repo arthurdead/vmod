@@ -12,7 +12,7 @@ project('squirrel', 'cpp',
 		'strip=true',
 		'cpp_std=gnu++20',
 		'cpp_eh=default',
-		'cpp_rtti=true'
+		'cpp_rtti=false'
 	],
 )
 

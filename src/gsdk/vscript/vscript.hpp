@@ -242,6 +242,7 @@ namespace gsdk
 	public:
 		virtual ~ISquirrelMetamethodDelegate();
 
+		//TODO!!! change to CUtlConstString
 		virtual bool Get(const CUtlString &, ScriptVariant_t &) = 0;
 	};
 
