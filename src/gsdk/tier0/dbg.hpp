@@ -26,43 +26,43 @@ namespace gsdk
 	using SpewOutputFunc_t = SpewRetval_t(*)(SpewType_t, const char *);
 }
 
-extern "C" void __attribute__((__visibility__("default"))) SpewOutputFunc(gsdk::SpewOutputFunc_t);
-extern "C" gsdk::SpewOutputFunc_t __attribute__((__visibility__("default"))) GetSpewOutputFunc();
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) SpewOutputFunc(gsdk::SpewOutputFunc_t);
+extern "C" __attribute__((__visibility__("default"))) gsdk::SpewOutputFunc_t __attribute__((__cdecl__)) GetSpewOutputFunc();
 
-extern "C" void __attribute__((__visibility__("default"))) Error(const char *, ...);
-extern "C" void __attribute__((__visibility__("default"))) ErrorV(const char *, va_list);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) Error(const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ErrorV(const char *, va_list);
 
-extern "C" void __attribute__((__visibility__("default"))) Msg(const char * , ...);
-extern "C" void __attribute__((__visibility__("default"))) DMsg(const char *, int, const char *, ...);
-extern "C" void __attribute__((__visibility__("default"))) MsgV(const char *, va_list);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) Msg(const char * , ...);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DMsg(const char *, int, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) MsgV(const char *, va_list);
 
-extern "C" void __attribute__((__visibility__("default"))) Warning(const char *, ...);
-extern "C" void __attribute__((__visibility__("default"))) DWarning(const char *, int, const char *, ...);
-extern "C" void __attribute__((__visibility__("default"))) WarningV(const char *, va_list);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) Warning(const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DWarning(const char *, int, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) WarningV(const char *, va_list);
 
-extern "C" void __attribute__((__visibility__("default"))) Log(const char *, ...);
-extern "C" void __attribute__((__visibility__("default"))) DLog(const char *, int, const char *, ...);
-extern "C" void __attribute__((__visibility__("default"))) LogV(const char *, va_list);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) Log(const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DLog(const char *, int, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) LogV(const char *, va_list);
 
-extern "C" void __attribute__((__visibility__("default"))) DevMsg(int,const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DevMsg(int,const char *, ...);
 
-extern "C" void __attribute__((__visibility__("default"))) DevWarning(int,const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DevWarning(int,const char *, ...);
 
-extern "C" void __attribute__((__visibility__("default"))) DevLog(int,const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DevLog(int,const char *, ...);
 
-extern "C" void __attribute__((__visibility__("default"))) ConColorMsg(int, const gsdk::Color &, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConColorMsg(int, const gsdk::Color &, const char *, ...);
 
-extern "C" void __attribute__((__visibility__("default"))) ConWarning(int, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConWarning(int, const char *, ...);
 
-extern "C" void __attribute__((__visibility__("default"))) ConMsg(int, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConMsg(int, const char *, ...);
 
-extern "C" void __attribute__((__visibility__("default"))) ConLog(int, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConLog(int, const char *, ...);
 
-extern "C" void __attribute__((__visibility__("default"))) ConDColorMsg(const gsdk::Color &, const char *, ...);
-extern "C" void __attribute__((__visibility__("default"))) ConDMsg(const char *, ...);
-extern "C" void __attribute__((__visibility__("default"))) ConDWarning(const char *, ...);
-extern "C" void __attribute__((__visibility__("default"))) ConDLog(const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConDColorMsg(const gsdk::Color &, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConDMsg(const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConDWarning(const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConDLog(const char *, ...);
 
-extern "C" void __attribute__((__visibility__("default"))) NetMsg(int, const char *, ... );
-extern "C" void __attribute__((__visibility__("default"))) NetWarning(int, const char *, ... );
-extern "C" void __attribute__((__visibility__("default"))) NetLog(int, const char *, ... );
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) NetMsg(int, const char *, ... );
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) NetWarning(int, const char *, ... );
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) NetLog(int, const char *, ... );

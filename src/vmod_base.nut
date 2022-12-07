@@ -17,4 +17,3 @@ function __to_bool__(value)
 {
 	return value ? true : false;
 }
-
