@@ -248,15 +248,17 @@ namespace vmod
 
 		vm->SetInstanceUniqeId(instance, "__vmod_memory_singleton");
 
+		gsdk::HSCRIPT vmod_scope{vmod.scope()};
+
+	#if 0
 		scope = vm->CreateScope("__vmod_memory_scope", nullptr);
 		if(!scope || scope == gsdk::INVALID_HSCRIPT) {
 			error("vmod: failed to create memory scope\n"sv);
 			return false;
 		}
 
-		gsdk::HSCRIPT vmod_scope{vmod.scope()};
 		if(!vm->SetValue(vmod_scope, "memory", scope)) {
-			error("vmod: failed to set memory instance value\n"sv);
+			error("vmod: failed to set memory scope value\n"sv);
 			return false;
 		}
 
@@ -265,6 +267,12 @@ namespace vmod
 			error("vmod: failed to create memory _get metamethod\n"sv);
 			return false;
 		}
+	#else
+		if(!vm->SetValue(vmod_scope, "memory", instance)) {
+			error("vmod: failed to set memory instance value\n"sv);
+			return false;
+		}
+	#endif
 
 		if(!memory_block::bindings()) {
 			return false;
@@ -662,6 +670,7 @@ namespace vmod
 			return false;
 		}
 
+		//TODO!!!! make these instances and add get_alignment/size/id
 		{
 			if(!vm->SetValue(types_table, "void", script_variant_t{FFI_TYPE_VOID})) {
 				error("vmod: failed to set ffi types void value\n"sv);
