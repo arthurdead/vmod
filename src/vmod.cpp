@@ -15,8 +15,11 @@
 #include <iostream>
 
 #include "convar.hpp"
-#include "yaml.hpp"
 #include <utility>
+
+#include "gsdk/tier1/utlstring.hpp"
+#include "yaml.hpp"
+#include "ffi.hpp"
 
 namespace vmod
 {
@@ -36,10 +39,16 @@ namespace vmod
 namespace vmod
 {
 	static void(gsdk::IScriptVM::*CreateArray)(gsdk::ScriptVariant_t &);
+	static int(gsdk::IScriptVM::*GetArrayCount)(gsdk::HSCRIPT);
 }
 
 namespace gsdk
 {
+	int IScriptVM::GetArrayCount(HSCRIPT array)
+	{
+		return (this->*vmod::GetArrayCount)(array);
+	}
+
 	HSCRIPT IScriptVM::CreateArray() noexcept
 	{
 		ScriptVariant_t var;
@@ -75,7 +84,7 @@ namespace vmod
 		}
 	}
 
-	gsdk::HSCRIPT vmod::script_find_plugin_impl(std::string_view name) noexcept
+	gsdk::HSCRIPT vmod::script_find_plugin(std::string_view name) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -96,155 +105,48 @@ namespace vmod
 		return nullptr;
 	}
 
-	gsdk::HSCRIPT vmod::script_find_plugin(std::string_view name) noexcept
-	{ return ::vmod::vmod.script_find_plugin_impl(name); }
+	static class_desc_t<class vmod> vmod_desc{"vmod_singleton"};
 
-	static func_desc_t find_plugin_desc;
-
-	struct memory_block final
+	bool vmod::Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value)
 	{
-		friend class vmod;
-
-	public:
-		memory_block() = delete;
-		memory_block(const memory_block &) = delete;
-		memory_block &operator=(const memory_block &) = delete;
-		memory_block(memory_block &&) = delete;
-		memory_block &operator=(memory_block &&) = delete;
-
-		inline ~memory_block() noexcept
-		{
-			gsdk::IScriptVM *vm{vmod.vm()};
-
-			if(ptr) {
-				if(dtor_func && dtor_func != gsdk::INVALID_HSCRIPT) {
-					script_variant_t args{instance};
-					vm->ExecuteFunction(dtor_func, &args, 1, nullptr, nullptr, true);
-				}
-			}
-
-			if(instance && instance != gsdk::INVALID_HSCRIPT) {
-				vm->RemoveInstance(instance);
-			}
-
-			if(ptr) {
-				free(ptr);
-			}
-		}
-
-	private:
-		bool register_instance() noexcept;
-
-		inline memory_block(std::size_t size_) noexcept
-			: ptr{static_cast<unsigned char *>(std::malloc(size_))}, size{size_}
-		{
-		}
-
-		inline memory_block(std::align_val_t align, std::size_t size_) noexcept
-			: ptr{static_cast<unsigned char *>(std::aligned_alloc(static_cast<std::size_t>(align), size_))}, size{size_}
-		{
-		}
-
-		inline memory_block(std::size_t num, std::size_t size_) noexcept
-			: ptr{static_cast<unsigned char *>(std::calloc(num, size_))}, size{num * size_}
-		{
-		}
-
-		static gsdk::HSCRIPT script_allocate(std::size_t size) noexcept
-		{
-			memory_block *block{new memory_block{size}};
-
-			if(!block->register_instance()) {
-				return nullptr;
-			}
-
-			return block->instance;
-		}
-
-		static gsdk::HSCRIPT script_allocate_aligned(std::size_t align, std::size_t size) noexcept
-		{
-			memory_block *block{new memory_block{static_cast<std::align_val_t>(align), size}};
-
-			if(!block->register_instance()) {
-				return nullptr;
-			}
-
-			return block->instance;
-		}
-
-		static gsdk::HSCRIPT script_allocate_zero(std::size_t num, std::size_t size) noexcept
-		{
-			memory_block *block{new memory_block{num, size}};
-
-			if(!block->register_instance()) {
-				return nullptr;
-			}
-
-			return block->instance;
-		}
-
-		inline void script_set_dtor_func(gsdk::HSCRIPT func) noexcept
-		{
-			dtor_func = func;
-		}
-
-		inline void script_disown() noexcept
-		{ ptr = nullptr; }
-
-		inline void script_delete() noexcept
-		{ delete this; }
-
-		inline std::uintptr_t script_ptr_as_int() noexcept
-		{ return reinterpret_cast<std::uintptr_t>(ptr); }
-
-		inline std::size_t script_get_size() const noexcept
-		{ return size; }
-
-		unsigned char *ptr;
-		std::size_t size;
-		gsdk::HSCRIPT dtor_func{gsdk::INVALID_HSCRIPT};
-		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
-	};
-
-	static class_desc_t<memory_block> mem_block_desc{"memory_block"};
-
-	bool memory_block::register_instance() noexcept
-	{
-		using namespace std::literals::string_view_literals;
-
-		instance = vmod.vm()->RegisterInstance(&mem_block_desc, this);
-		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
-			error("vmod: failed to register memory block instance\n"sv);
-			return false;
-		}
-
-		return true;
+		return vm_->GetValue(instance, name.c_str(), &value);
 	}
 
 	bool vmod::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
-		find_plugin_desc.initialize(script_find_plugin, "script_find_plugin"sv, "find_plugin"sv);
+		vmod_desc.func(&vmod::script_find_plugin, "script_find_plugin"sv, "find_plugin"sv);
 
-		vm_->RegisterFunction(&find_plugin_desc);
-
-		mem_block_desc.func(&memory_block::script_allocate, "script_allocate"sv, "allocate"sv);
-		mem_block_desc.func(&memory_block::script_allocate_aligned, "script_allocate_aligned"sv, "allocate_aligned"sv);
-		mem_block_desc.func(&memory_block::script_allocate_zero, "script_allocate_zero"sv, "allocate_zero"sv);
-		mem_block_desc.func(&memory_block::script_set_dtor_func, "script_set_dtor_func"sv, "hook_dtor"sv);
-		mem_block_desc.func(&memory_block::script_disown, "script_disown"sv, "disown"sv);
-		mem_block_desc.func(&memory_block::script_ptr_as_int, "script_ptr_as_int"sv, "ptr_as_int"sv);
-		mem_block_desc.func(&memory_block::script_get_size, "script_get_size"sv, "get_size"sv);
-		mem_block_desc.func(&memory_block::script_delete, "script_delete"sv, "free"sv);
-		mem_block_desc.dtor();
-
-		if(!vm_->RegisterClass(&mem_block_desc)) {
-			error("vmod: failed to register memory block script class\n"sv);
+		if(!vm_->RegisterClass(&vmod_desc)) {
+			error("vmod: failed to register vmod script class\n"sv);
 			return false;
 		}
 
-		if(!vm_->SetValue(vmod_scope, "game_dir", game_dir.c_str())) {
+		instance = vm_->RegisterInstance(&vmod_desc, this);
+		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create vmod instance\n"sv);
+			return false;
+		}
+
+		plugins_table_ = vm_->CreateTable();
+		if(!plugins_table_ || plugins_table_ == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create plugins table\n"sv);
+			return false;
+		}
+
+		if(!vm_->SetValue(scope_, "plugins", plugins_table_)) {
+			error("vmod: failed to set plugins table value\n"sv);
+			return false;
+		}
+
+		get_impl = vm_->MakeSquirrelMetamethod_Get(nullptr, "vmod", this, false);
+		if(!get_impl) {
+			error("vmod: failed to create vmod _get metamethod\n"sv);
+			return false;
+		}
+
+		if(!vm_->SetValue(scope_, "game_dir", game_dir.c_str())) {
 			error("vmod: failed to set game dir value\n"sv);
 			return false;
 		}
@@ -257,6 +159,15 @@ namespace vmod
 			return false;
 		}
 
+		if(!ffi_bindings()) {
+			return false;
+		}
+
+		return true;
+	}
+
+	bool vmod::binding_mods() noexcept
+	{
 		return true;
 	}
 
@@ -266,8 +177,26 @@ namespace vmod
 
 		yaml::unbindings();
 
-		if(vm_->ValueExists(vmod_scope, "game_dir")) {
-			vm_->ClearValue(vmod_scope, "game_dir");
+		ffi_unbindings();
+
+		if(plugins_table_ && plugins_table_ != gsdk::INVALID_HSCRIPT) {
+			vm_->ReleaseTable(plugins_table_);
+		}
+
+		if(vm_->ValueExists(scope_, "plugins")) {
+			vm_->ClearValue(scope_, "plugins");
+		}
+
+		if(instance && instance != gsdk::INVALID_HSCRIPT) {
+			vm_->RemoveInstance(instance);
+		}
+
+		if(get_impl) {
+			vm_->DestroySquirrelMetamethod_Get(get_impl);
+		}
+
+		if(vm_->ValueExists(scope_, "game_dir")) {
+			vm_->ClearValue(scope_, "game_dir");
 		}
 	}
 
@@ -280,6 +209,9 @@ namespace vmod
 	static bool(*VScriptRunScript)(const char *, gsdk::HSCRIPT, bool);
 	static void(gsdk::CTFGameRules::*RegisterScriptFunctions)();
 	static void(*PrintFunc)(gsdk::HSQUIRRELVM, const gsdk::SQChar *, ...);
+	static void(*ErrorFunc)(gsdk::HSQUIRRELVM, const gsdk::SQChar *, ...);
+	static void(gsdk::IScriptVM::*RegisterFunctionGuts)(gsdk::ScriptFunctionBinding_t *, gsdk::ScriptClassDesc_t *);
+	static gsdk::SQRESULT(*sq_setparamscheck)(gsdk::HSQUIRRELVM, gsdk::SQInteger, const gsdk::SQChar *);
 	static gsdk::ScriptClassDesc_t **sv_classdesc_pHead;
 
 	static bool in_vscript_server_init;
@@ -299,10 +231,189 @@ namespace vmod
 					return gsdk::SPEW_CONTINUE;
 				}
 			} break;
+			case gsdk::SPEW_MESSAGE: {
+				if(in_vscript_print) {
+					return gsdk::SPEW_CONTINUE;
+				}
+			} break;
 			default: break;
 		}
 
 		return old_spew(type, str);
+	}
+
+	static bool vscript_server_init_called;
+
+	static bool in_vscript_server_term;
+	static gsdk::IScriptVM *(gsdk::IScriptManager::*CreateVM_original)(gsdk::ScriptLanguage_t);
+	static gsdk::IScriptVM *CreateVM_detour_callback(gsdk::IScriptManager *pthis, gsdk::ScriptLanguage_t lang) noexcept
+	{
+		if(in_vscript_server_init) {
+			gsdk::IScriptVM *vmod_vm{vmod.vm()};
+			if(lang == vmod_vm->GetLanguage()) {
+				return vmod_vm;
+			} else {
+				return nullptr;
+			}
+		}
+
+		return (pthis->*CreateVM_original)(lang);
+	}
+
+	static void(gsdk::IScriptManager::*DestroyVM_original)(gsdk::IScriptVM *);
+	static void DestroyVM_detour_callback(gsdk::IScriptManager *pthis, gsdk::IScriptVM *vm) noexcept
+	{
+		if(in_vscript_server_term) {
+			if(vm == vmod.vm()) {
+				return;
+			}
+		}
+
+		(pthis->*DestroyVM_original)(vm);
+	}
+
+	static gsdk::ScriptStatus_t(gsdk::IScriptVM::*Run_original)(const char *, bool);
+	static gsdk::ScriptStatus_t Run_detour_callback(gsdk::IScriptVM *pthis, const char *script, bool wait) noexcept
+	{
+		if(in_vscript_server_init) {
+			if(script == reinterpret_cast<const char *>(g_Script_vscript_server)) {
+				return gsdk::SCRIPT_DONE;
+			}
+		}
+
+		return (pthis->*Run_original)(script, wait);
+	}
+
+	static detour<decltype(VScriptRunScript)> VScriptRunScript_detour;
+	static bool VScriptRunScript_detour_callback(const char *script, gsdk::HSCRIPT scope, bool warn) noexcept
+	{
+		if(!vscript_server_init_called) {
+			if(strcmp(script, "mapspawn") == 0) {
+				return true;
+			}
+		}
+
+		return VScriptRunScript_detour(script, scope, warn);
+	}
+
+	static detour<decltype(VScriptServerInit)> VScriptServerInit_detour;
+	static bool VScriptServerInit_detour_callback() noexcept
+	{
+		in_vscript_server_init = true;
+		bool ret{vscript_server_init_called ? true : VScriptServerInit_detour()};
+		*g_pScriptVM = vmod.vm();
+		if(vscript_server_init_called) {
+			VScriptRunScript_detour("mapspawn", nullptr, false);
+		}
+		in_vscript_server_init = false;
+		return ret;
+	}
+
+	static detour<decltype(VScriptServerTerm)> VScriptServerTerm_detour;
+	static void VScriptServerTerm_detour_callback() noexcept
+	{
+		in_vscript_server_term = true;
+		//VScriptServerTerm_detour();
+		*g_pScriptVM = vmod.vm();
+		in_vscript_server_term = false;
+	}
+
+	static char __vscript_printfunc_buffer[2048];
+	static detour<decltype(PrintFunc)> PrintFunc_detour;
+	static void PrintFunc_detour_callback(gsdk::HSQUIRRELVM m_hVM, const gsdk::SQChar *s, ...)
+	{
+		va_list varg_list;
+		va_start(varg_list, s);
+	#ifdef __clang__
+		#pragma clang diagnostic push
+		#pragma clang diagnostic ignored "-Wformat-nonliteral"
+	#endif
+		std::vsnprintf(__vscript_printfunc_buffer, sizeof(__vscript_printfunc_buffer), s, varg_list);
+	#ifdef __clang__
+		#pragma clang diagnostic pop
+	#endif
+		in_vscript_print = true;
+		PrintFunc_detour(m_hVM, "%s", __vscript_printfunc_buffer);
+		in_vscript_print = false;
+		va_end(varg_list);
+	}
+
+	static detour<decltype(ErrorFunc)> ErrorFunc_detour;
+	static void ErrorFunc_detour_callback(gsdk::HSQUIRRELVM m_hVM, const gsdk::SQChar *s, ...)
+	{
+		va_list varg_list;
+		va_start(varg_list, s);
+	#ifdef __clang__
+		#pragma clang diagnostic push
+		#pragma clang diagnostic ignored "-Wformat-nonliteral"
+	#endif
+		std::vsnprintf(__vscript_printfunc_buffer, sizeof(__vscript_printfunc_buffer), s, varg_list);
+	#ifdef __clang__
+		#pragma clang diagnostic pop
+	#endif
+		in_vscript_print = true;
+		ErrorFunc_detour(m_hVM, "%s", __vscript_printfunc_buffer);
+		in_vscript_print = false;
+		va_end(varg_list);
+	}
+
+	static gsdk::ScriptFunctionBinding_t *current_binding;
+
+	static detour<decltype(RegisterFunctionGuts)> RegisterFunctionGuts_detour;
+	static void RegisterFunctionGuts_detour_callback(gsdk::IScriptVM *vm, gsdk::ScriptFunctionBinding_t *binding, gsdk::ScriptClassDesc_t *classdesc)
+	{
+		current_binding = binding;
+
+		RegisterFunctionGuts_detour(vm, binding, classdesc);
+
+		if(binding->m_flags & func_desc_t::SF_VA_FUNC) {
+			for(std::size_t i{0}; i < 14; ++i) {
+				binding->m_desc.m_Parameters.emplace_back(gsdk::FIELD_VARIANT);
+			}
+		}
+
+		current_binding = nullptr;
+	}
+
+	static detour<decltype(sq_setparamscheck)> sq_setparamscheck_detour;
+	static gsdk::SQRESULT sq_setparamscheck_detour_callback(gsdk::HSQUIRRELVM v, gsdk::SQInteger nparamscheck, const gsdk::SQChar *typemask)
+	{
+		if(current_binding && (current_binding->m_flags & func_desc_t::SF_VA_FUNC)) {
+			nparamscheck = -nparamscheck;
+		}
+
+		return sq_setparamscheck_detour(v, nparamscheck, typemask);
+	}
+
+	bool vmod::detours() noexcept
+	{
+		RegisterFunctionGuts_detour.initialize(RegisterFunctionGuts, RegisterFunctionGuts_detour_callback);
+		RegisterFunctionGuts_detour.enable();
+
+		sq_setparamscheck_detour.initialize(sq_setparamscheck, sq_setparamscheck_detour_callback);
+		sq_setparamscheck_detour.enable();
+
+		PrintFunc_detour.initialize(PrintFunc, PrintFunc_detour_callback);
+		PrintFunc_detour.enable();
+
+		ErrorFunc_detour.initialize(ErrorFunc, ErrorFunc_detour_callback);
+		ErrorFunc_detour.enable();
+
+		VScriptServerInit_detour.initialize(VScriptServerInit, VScriptServerInit_detour_callback);
+		VScriptServerInit_detour.enable();
+
+		VScriptServerTerm_detour.initialize(VScriptServerTerm, VScriptServerTerm_detour_callback);
+		VScriptServerTerm_detour.enable();
+
+		VScriptRunScript_detour.initialize(VScriptRunScript, VScriptRunScript_detour_callback);
+		VScriptRunScript_detour.enable();
+
+		CreateVM_original = swap_vfunc(vsmgr, &gsdk::IScriptManager::CreateVM, CreateVM_detour_callback);
+		DestroyVM_original = swap_vfunc(vsmgr, &gsdk::IScriptManager::DestroyVM, DestroyVM_detour_callback);
+
+		Run_original = swap_vfunc(vm_, static_cast<decltype(Run_original)>(&gsdk::IScriptVM::Run), Run_detour_callback);
+
+		return true;
 	}
 
 	bool vmod::load() noexcept
@@ -458,6 +569,12 @@ namespace vmod
 			return false;
 		}
 
+		auto sq_setparamscheck_it{vscript_global_qual.find("sq_setparamscheck"s)};
+		if(sq_setparamscheck_it == vscript_global_qual.end()) {
+			error("vmod: missing 'sq_setparamscheck' symbol\n"sv);
+			return false;
+		}
+
 		auto CSquirrelVM_it{vscript_symbols.find("CSquirrelVM"s)};
 		if(CSquirrelVM_it == vscript_symbols.end()) {
 			error("vmod: missing 'CSquirrelVM' symbols\n"sv);
@@ -470,9 +587,27 @@ namespace vmod
 			return false;
 		}
 
+		auto GetArrayCount_it{CSquirrelVM_it->second.find("GetArrayCount(HSCRIPT__*)"s)};
+		if(GetArrayCount_it == CSquirrelVM_it->second.end()) {
+			error("vmod: missing 'CSquirrelVM::GetArrayCount(HSCRIPT__*)' symbol\n"sv);
+			return false;
+		}
+
 		auto PrintFunc_it{CSquirrelVM_it->second.find("PrintFunc(SQVM*, char const*, ...)"s)};
 		if(PrintFunc_it == CSquirrelVM_it->second.end()) {
 			error("vmod: missing 'CSquirrelVM::PrintFunc(SQVM*, char const*, ...)' symbol\n"sv);
+			return false;
+		}
+
+		auto ErrorFunc_it{CSquirrelVM_it->second.find("ErrorFunc(SQVM*, char const*, ...)"s)};
+		if(ErrorFunc_it == CSquirrelVM_it->second.end()) {
+			error("vmod: missing 'CSquirrelVM::ErrorFunc(SQVM*, char const*, ...)' symbol\n"sv);
+			return false;
+		}
+
+		auto RegisterFunctionGuts_it{CSquirrelVM_it->second.find("RegisterFunctionGuts(ScriptFunctionBinding_t*, ScriptClassDesc_t*)"s)};
+		if(RegisterFunctionGuts_it == CSquirrelVM_it->second.end()) {
+			error("vmod: missing 'CSquirrelVM::RegisterFunctionGuts(ScriptFunctionBinding_t*, ScriptClassDesc_t*)' symbol\n"sv);
 			return false;
 		}
 
@@ -486,15 +621,17 @@ namespace vmod
 		g_pScriptVM = g_pScriptVM_it->second.addr<gsdk::IScriptVM **>();
 
 		CreateArray = CreateArray_it->second.mfp<decltype(CreateArray)>();
-		PrintFunc = PrintFunc_it->second.func_va_args<decltype(PrintFunc)>();
+		GetArrayCount = GetArrayCount_it->second.mfp<decltype(GetArrayCount)>();
+
+		PrintFunc = PrintFunc_it->second.func<decltype(PrintFunc)>();
+		ErrorFunc = ErrorFunc_it->second.func<decltype(ErrorFunc)>();
+		RegisterFunctionGuts = RegisterFunctionGuts_it->second.mfp<decltype(RegisterFunctionGuts)>();
+		sq_setparamscheck = sq_setparamscheck_it->second.func<decltype(sq_setparamscheck)>();
 
 		sv_classdesc_pHead = sv_pHead_it->second.addr<gsdk::ScriptClassDesc_t **>();
 
 		write_file(root_dir/"internal_scripts"sv/"init.nut"sv, g_Script_init, std::strlen(reinterpret_cast<const char *>(g_Script_init)+1));
 		write_file(root_dir/"internal_scripts"sv/"vscript_server.nut"sv, g_Script_vscript_server, std::strlen(reinterpret_cast<const char *>(g_Script_vscript_server)+1));
-
-		old_spew = GetSpewOutputFunc();
-		SpewOutputFunc(new_spew);
 
 		vm_ = vsmgr->CreateVM(script_language);
 		if(!vm_) {
@@ -513,20 +650,9 @@ namespace vmod
 			return false;
 		}
 
-		vmod_scope = vm_->CreateScope("vmod", nullptr);
-		if(!vmod_scope || vmod_scope == gsdk::INVALID_HSCRIPT) {
+		scope_ = vm_->CreateScope("vmod", nullptr);
+		if(!scope_ || scope_ == gsdk::INVALID_HSCRIPT) {
 			error("vmod: failed to create vmod scope\n"sv);
-			return false;
-		}
-
-		plugins_table_ = vm_->CreateTable();
-		if(!plugins_table_ || plugins_table_ == gsdk::INVALID_HSCRIPT) {
-			error("vmod: failed to create plugins table\n"sv);
-			return false;
-		}
-
-		if(!vm_->SetValue(vmod_scope, "plugins", plugins_table_)) {
-			error("vmod: failed to set plugins table value\n"sv);
 			return false;
 		}
 
@@ -651,7 +777,10 @@ namespace vmod
 					continue;
 				}
 
-				plugins.emplace_back(new plugin{std::move(path)})->load();
+				plugin *pl{new plugin{std::move(path)}};
+				pl->load();
+
+				plugins.emplace_back(pl);
 			}
 
 			for(const auto &pl : plugins) {
@@ -665,192 +794,8 @@ namespace vmod
 			plugins_loaded = true;
 		});
 
-		return true;
-	}
-
-	static bool vscript_server_init_called;
-
-	static bool in_vscript_server_term;
-	static gsdk::IScriptVM *(gsdk::IScriptManager::*CreateVM_original)(gsdk::ScriptLanguage_t);
-	static gsdk::IScriptVM *CreateVM_detour_callback(gsdk::IScriptManager *pthis, gsdk::ScriptLanguage_t lang) noexcept
-	{
-		if(in_vscript_server_init) {
-			gsdk::IScriptVM *vmod_vm{vmod.vm()};
-			if(lang == vmod_vm->GetLanguage()) {
-				return vmod_vm;
-			} else {
-				return nullptr;
-			}
-		}
-
-		return (pthis->*CreateVM_original)(lang);
-	}
-
-	static void(gsdk::IScriptManager::*DestroyVM_original)(gsdk::IScriptVM *);
-	static void DestroyVM_detour_callback(gsdk::IScriptManager *pthis, gsdk::IScriptVM *vm) noexcept
-	{
-		if(in_vscript_server_term) {
-			if(vm == vmod.vm()) {
-				return;
-			}
-		}
-
-		(pthis->*DestroyVM_original)(vm);
-	}
-
-	static gsdk::ScriptStatus_t(gsdk::IScriptVM::*Run_original)(const char *, bool);
-	static gsdk::ScriptStatus_t Run_detour_callback(gsdk::IScriptVM *pthis, const char *script, bool wait) noexcept
-	{
-		if(in_vscript_server_init) {
-			if(script == reinterpret_cast<const char *>(g_Script_vscript_server)) {
-				return gsdk::SCRIPT_DONE;
-			}
-		}
-
-		return (pthis->*Run_original)(script, wait);
-	}
-
-	static detour VScriptRunScript_detour;
-	static bool VScriptRunScript_detour_callback(const char *script, gsdk::HSCRIPT scope, bool warn) noexcept
-	{
-		if(!vscript_server_init_called) {
-			if(strcmp(script, "mapspawn") == 0) {
-				return true;
-			}
-		}
-
-		return VScriptRunScript_detour.call<decltype(VScriptRunScript)>(script, scope, warn);
-	}
-
-	static detour VScriptServerInit_detour;
-	static bool VScriptServerInit_detour_callback() noexcept
-	{
-		in_vscript_server_init = true;
-		bool ret{vscript_server_init_called ? true : VScriptServerInit_detour.call<decltype(VScriptServerInit)>()};
-		*g_pScriptVM = vmod.vm();
-		if(vscript_server_init_called) {
-			VScriptRunScript_detour.call<decltype(VScriptRunScript)>("mapspawn", nullptr, false);
-		}
-		in_vscript_server_init = false;
-		return ret;
-	}
-
-	static detour VScriptServerTerm_detour;
-	static void VScriptServerTerm_detour_callback() noexcept
-	{
-		in_vscript_server_term = true;
-		//VScriptServerTerm_detour.call<decltype(VScriptServerTerm)>();
-		*g_pScriptVM = vmod.vm();
-		in_vscript_server_term = false;
-	}
-
-	static char __vscript_printfunc_buffer[2048];
-	static detour_va_args PrintFunc_detour;
-	static void PrintFunc_detour_callback(gsdk::HSQUIRRELVM m_hVM, const gsdk::SQChar *s, ...)
-	{
-		va_list varg_list;
-		va_start(varg_list, s);
-	#ifdef __clang__
-		#pragma clang diagnostic push
-		#pragma clang diagnostic ignored "-Wformat-nonliteral"
-	#endif
-		std::vsnprintf(__vscript_printfunc_buffer, sizeof(__vscript_printfunc_buffer), s, varg_list);
-	#ifdef __clang__
-		#pragma clang diagnostic pop
-	#endif
-		in_vscript_print = true;
-		PrintFunc_detour.call<void, decltype(PrintFunc)>(m_hVM, "%s", __vscript_printfunc_buffer);
-		in_vscript_print = false;
-		va_end(varg_list);
-	}
-
-	bool vmod::detours() noexcept
-	{
-		PrintFunc_detour.initialize(PrintFunc, PrintFunc_detour_callback);
-		PrintFunc_detour.enable();
-
-		VScriptServerInit_detour.initialize(VScriptServerInit, VScriptServerInit_detour_callback);
-		VScriptServerInit_detour.enable();
-
-		VScriptServerTerm_detour.initialize(VScriptServerTerm, VScriptServerTerm_detour_callback);
-		VScriptServerTerm_detour.enable();
-
-		VScriptRunScript_detour.initialize(VScriptRunScript, VScriptRunScript_detour_callback);
-		VScriptRunScript_detour.enable();
-
-		CreateVM_original = swap_vfunc(vsmgr, &gsdk::IScriptManager::CreateVM, CreateVM_detour_callback);
-		DestroyVM_original = swap_vfunc(vsmgr, &gsdk::IScriptManager::DestroyVM, DestroyVM_detour_callback);
-
-		Run_original = swap_vfunc(vm_, static_cast<decltype(Run_original)>(&gsdk::IScriptVM::Run), Run_detour_callback);
-
-		return true;
-	}
-
-	static script_variant_t call_to_func(gsdk::HSCRIPT func, gsdk::HSCRIPT value) noexcept
-	{
-		script_variant_t ret;
-		script_variant_t arg{value};
-
-		if(vmod.vm()->ExecuteFunction(func, &arg, 1, &ret, nullptr, true) == gsdk::SCRIPT_ERROR) {
-			null_variant(ret);
-			return ret;
-		}
-
-		return ret;
-	}
-
-	std::string_view vmod::to_string(gsdk::HSCRIPT value) const noexcept
-	{
-		script_variant_t ret{call_to_func(to_string_func, value)};
-
-		if(ret.m_type != gsdk::FIELD_CSTRING) {
-			return {};
-		}
-
-		return ret.m_pszString;
-	}
-
-	int vmod::to_int(gsdk::HSCRIPT value) const noexcept
-	{
-		script_variant_t ret{call_to_func(to_int_func, value)};
-
-		if(ret.m_type != gsdk::FIELD_INTEGER) {
-			return {};
-		}
-
-		return ret.m_int;
-	}
-
-	float vmod::to_float(gsdk::HSCRIPT value) const noexcept
-	{
-		script_variant_t ret{call_to_func(to_float_func, value)};
-
-		if(ret.m_type != gsdk::FIELD_FLOAT) {
-			return {};
-		}
-
-		return ret.m_float;
-	}
-
-	bool vmod::to_bool(gsdk::HSCRIPT value) const noexcept
-	{
-		script_variant_t ret{call_to_func(to_bool_func, value)};
-
-		if(ret.m_type != gsdk::FIELD_BOOLEAN) {
-			return {};
-		}
-
-		return ret.m_bool;
-	}
-
-	bool vmod::binding_mods() noexcept
-	{
-		return true;
-	}
-
-	bool vmod::load_late() noexcept
-	{
-		using namespace std::literals::string_view_literals;
+		old_spew = GetSpewOutputFunc();
+		SpewOutputFunc(new_spew);
 
 		if(!VScriptServerInit_detour_callback()) {
 			error("vmod: VScriptServerInit failed\n"sv);
@@ -858,6 +803,9 @@ namespace vmod
 		}
 
 		(reinterpret_cast<gsdk::CTFGameRules *>(0xbebebebe)->*RegisterScriptFunctions)();
+
+		vm_->SetOutputCallback(vscript_output);
+		vm_->SetErrorCallback(vscript_error_output);
 
 		vscript_server_init_called = true;
 
@@ -966,6 +914,68 @@ namespace vmod
 		return true;
 	}
 
+	static script_variant_t call_to_func(gsdk::HSCRIPT func, gsdk::HSCRIPT value) noexcept
+	{
+		script_variant_t ret;
+		script_variant_t arg{value};
+
+		if(vmod.vm()->ExecuteFunction(func, &arg, 1, &ret, nullptr, true) == gsdk::SCRIPT_ERROR) {
+			null_variant(ret);
+			return ret;
+		}
+
+		return ret;
+	}
+
+	std::string_view vmod::to_string(gsdk::HSCRIPT value) const noexcept
+	{
+		script_variant_t ret{call_to_func(to_string_func, value)};
+
+		if(ret.m_type != gsdk::FIELD_CSTRING) {
+			return {};
+		}
+
+		return ret.m_pszString;
+	}
+
+	int vmod::to_int(gsdk::HSCRIPT value) const noexcept
+	{
+		script_variant_t ret{call_to_func(to_int_func, value)};
+
+		if(ret.m_type != gsdk::FIELD_INTEGER) {
+			return 0;
+		}
+
+		return ret.m_int;
+	}
+
+	float vmod::to_float(gsdk::HSCRIPT value) const noexcept
+	{
+		script_variant_t ret{call_to_func(to_float_func, value)};
+
+		if(ret.m_type != gsdk::FIELD_FLOAT) {
+			return 0.0f;
+		}
+
+		return ret.m_float;
+	}
+
+	bool vmod::to_bool(gsdk::HSCRIPT value) const noexcept
+	{
+		script_variant_t ret{call_to_func(to_bool_func, value)};
+
+		if(ret.m_type != gsdk::FIELD_BOOLEAN) {
+			return false;
+		}
+
+		return ret.m_bool;
+	}
+
+	bool vmod::load_late() noexcept
+	{
+		return true;
+	}
+
 	void vmod::map_loaded(std::string_view name) noexcept
 	{
 		is_map_loaded = true;
@@ -1022,6 +1032,10 @@ namespace vmod
 
 	void vmod::unload() noexcept
 	{
+		if(old_spew) {
+			SpewOutputFunc(old_spew);
+		}
+
 		vmod_unload_plugins();
 
 		if(vm_) {
@@ -1068,16 +1082,8 @@ namespace vmod
 				vm_->ReleaseScript(server_init_script);
 			}
 
-			if(plugins_table_ && plugins_table_ != gsdk::INVALID_HSCRIPT) {
-				vm_->ReleaseTable(plugins_table_);
-			}
-
-			if(vm_->ValueExists(vmod_scope, "plugins")) {
-				vm_->ClearValue(vmod_scope, "plugins");
-			}
-
-			if(vmod_scope && vmod_scope != gsdk::INVALID_HSCRIPT) {
-				vm_->ReleaseScope(vmod_scope);
+			if(scope_ && scope_ != gsdk::INVALID_HSCRIPT) {
+				vm_->ReleaseScope(scope_);
 			}
 
 			vsmgr->DestroyVM(vm_);

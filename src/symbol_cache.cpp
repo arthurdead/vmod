@@ -38,19 +38,19 @@ namespace vmod
 
 	void symbol_cache::qualification_info::name_info::resolve(void *base) noexcept
 	{
-		mfp_.addr = reinterpret_cast<generic_func_t>(static_cast<unsigned char *>(base) + offset);
+		mfp_.addr = reinterpret_cast<generic_plain_mfp_t>(static_cast<unsigned char *>(base) + offset);
 		mfp_.adjustor = 0;
 	}
 
 	void symbol_cache::class_info::ctor_info::resolve(void *base) noexcept
 	{
-		generic_func_t temp{reinterpret_cast<generic_func_t>(static_cast<unsigned char *>(base) + offset)};
+		generic_plain_mfp_t temp{reinterpret_cast<generic_plain_mfp_t>(static_cast<unsigned char *>(base) + offset)};
 		mfp_ = mfp_from_func<void, empty_class>(temp);
 	}
 
 	void symbol_cache::class_info::dtor_info::resolve(void *base) noexcept
 	{
-		generic_func_t temp{reinterpret_cast<generic_func_t>(static_cast<unsigned char *>(base) + offset)};
+		generic_plain_mfp_t temp{reinterpret_cast<generic_plain_mfp_t>(static_cast<unsigned char *>(base) + offset)};
 		mfp_ = mfp_from_func<void, empty_class>(temp);
 	}
 
@@ -215,7 +215,7 @@ namespace vmod
 		std::size_t allocated;
 		char *unmangled_buffer;
 
-		constexpr std::size_t guessed_name_length{128};
+		constexpr std::size_t guessed_name_length{256};
 
 		switch(component->type) {
 			case DEMANGLE_COMPONENT_LOCAL_NAME: {

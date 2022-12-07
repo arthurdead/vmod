@@ -11,7 +11,7 @@ namespace vmod
 {
 	class plugin;
 
-	class vmod final
+	class vmod final : public gsdk::ISquirrelMetamethodDelegate
 	{
 		friend class vsp;
 
@@ -30,6 +30,9 @@ namespace vmod
 		inline gsdk::IScriptVM *vm() noexcept
 		{ return vm_; }
 
+		inline gsdk::HSCRIPT scope() noexcept
+		{ return scope_; }
+
 		inline gsdk::HSCRIPT plugins_table() noexcept
 		{ return plugins_table_; }
 
@@ -43,14 +46,15 @@ namespace vmod
 		void map_unloaded() noexcept;
 		void map_active() noexcept;
 
-		gsdk::HSCRIPT script_find_plugin_impl(std::string_view name) noexcept;
-		static gsdk::HSCRIPT script_find_plugin(std::string_view name) noexcept;
+		gsdk::HSCRIPT script_find_plugin(std::string_view name) noexcept;
 
 		bool binding_mods() noexcept;
 		bool bindings() noexcept;
 		void unbindings() noexcept;
 
 		bool detours() noexcept;
+
+		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
 
 		bool is_map_loaded;
 
@@ -74,7 +78,10 @@ namespace vmod
 
 		gsdk::IScriptVM *vm_;
 
-		gsdk::HSCRIPT vmod_scope{gsdk::INVALID_HSCRIPT};
+		gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
+		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+
+		gsdk::HSCRIPT scope_{gsdk::INVALID_HSCRIPT};
 		gsdk::HSCRIPT plugins_table_{gsdk::INVALID_HSCRIPT};
 
 		gsdk::HSCRIPT server_init_script{gsdk::INVALID_HSCRIPT};

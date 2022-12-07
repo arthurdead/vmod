@@ -59,7 +59,7 @@ namespace vmod
 		static bool bindings() noexcept;
 		static void unbindings() noexcept;
 
-		static gsdk::HSCRIPT script_load(std::filesystem::path &&path_) noexcept;
+		friend class yaml_singleton;
 
 		inline std::size_t script_num_documents() const noexcept
 		{ return documents.size(); }

@@ -31,6 +31,8 @@ namespace gsdk
 		template <typename ...Args>
 		T &emplace_back(Args &&...args) noexcept;
 
+		void erase(std::size_t i) noexcept;
+
 		CUtlMemory<T> m_Memory;
 		int m_Size;
 		T *m_pElements;

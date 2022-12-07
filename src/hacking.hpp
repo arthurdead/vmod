@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <utility>
 #include <cstring>
+#include <vector>
 #include <unistd.h>
 #include <sys/mman.h>
 
@@ -61,6 +62,9 @@ namespace vmod
 	{
 		using return_type = R;
 
+		static constexpr bool va{false};
+		static constexpr bool member{false};
+
 		template <std::size_t i>
 		struct arg
 		{
@@ -68,13 +72,29 @@ namespace vmod
 		};
 
 		using pointer_type = R(*)(Args...);
+		using plain_pointer_type = pointer_type;
+		using thiscall_pointer_type = R(__attribute__((__thiscall__)) *)(Args...);
+	};
+
+	template <typename R, typename ...Args>
+	struct function_traits<R(*)(Args..., ...)> : function_traits<R(*)(Args...)>
+	{
+		static constexpr bool va{true};
+
+		using pointer_type = R(*)(Args..., ...);
+		using plain_pointer_type = pointer_type;
+		using thiscall_pointer_type = pointer_type;
 	};
 
 	template <typename R, typename C, typename ...Args>
 	struct function_traits<R(C::*)(Args...)>
 	{
 		using return_type = R;
+
 		using class_type = C;
+
+		static constexpr bool va{false};
+		static constexpr bool member{true};
 
 		template <std::size_t i>
 		struct arg
@@ -83,10 +103,27 @@ namespace vmod
 		};
 
 		using pointer_type = R(C::*)(Args...);
+		using plain_pointer_type = R(*)(C *, Args...);
+		using thiscall_pointer_type = R(__attribute__((__thiscall__)) *)(C *, Args...);
+	};
+
+	template <typename R, typename C, typename ...Args>
+	struct function_traits<R(C::*)(Args..., ...)> : function_traits<R(C::*)(Args...)>
+	{
+		static constexpr bool va{true};
+
+		using pointer_type = R(C::*)(Args..., ...);
+		using plain_pointer_type = pointer_type;
+		using thiscall_pointer_type = pointer_type;
 	};
 
 	template <typename R, typename ...Args>
 	struct function_traits<R(Args...)> : function_traits<R(*)(Args...)>
+	{
+	};
+
+	template <typename R, typename ...Args>
+	struct function_traits<R(Args..., ...)> : function_traits<R(*)(Args..., ...)>
 	{
 	};
 
@@ -97,26 +134,19 @@ namespace vmod
 	using function_pointer_t = typename function_traits<T>::pointer_type;
 
 	template <typename T>
-	const std::string &demangle() noexcept
-	{
-		static std::string buffer;
+	using function_thiscall_pointer_t = typename function_traits<T>::thiscall_pointer_type;
 
-		if(buffer.empty()) {
-			const char *mangled{typeid(T).name()};
+	template <typename T>
+	using function_plain_pointer_t = typename function_traits<T>::plain_pointer_type;
 
-			int status;
-			std::size_t allocated;
-			char *temp_buffer{__cxxabiv1::__cxa_demangle(mangled, nullptr, &allocated, &status)};
-			if(status == 0 && allocated > 0 && temp_buffer) {
-				buffer = temp_buffer;
-			}
-			if(temp_buffer) {
-				std::free(temp_buffer);
-			}
-		}
+	template <typename T>
+	using function_class_t = typename function_traits<T>::class_type;
 
-		return buffer;
-	}
+	template <typename T>
+	constexpr bool function_is_member_v{function_traits<T>::member};
+
+	template <typename T>
+	const std::string &demangle() noexcept;
 
 	class empty_class final
 	{
@@ -125,6 +155,7 @@ namespace vmod
 	};
 
 	using generic_func_t = void(*)();
+	using generic_plain_mfp_t = void(__attribute__((__thiscall__)) *)(empty_class *);
 	using generic_mfp_t = void(empty_class::*)();
 
 	static_assert(sizeof(&empty_class::empty_function) == sizeof(std::uint64_t));
@@ -133,53 +164,120 @@ namespace vmod
 	template <typename R, typename C, typename ...Args>
 	union alignas(std::uint64_t) mfp_internal_t
 	{
-		mfp_internal_t() noexcept = default;
+		inline mfp_internal_t() noexcept
+			: func{nullptr}
+		{
+		}
 
 		inline mfp_internal_t(R(C::*func_)(Args...)) noexcept
 			: func{func_}
 		{
 		}
 
-		inline mfp_internal_t(generic_func_t addr_) noexcept
+		inline mfp_internal_t(R(__attribute__((__thiscall__)) *addr_)(C *, Args...)) noexcept
 			: addr{addr_}, adjustor{0}
 		{
 		}
 
-		inline mfp_internal_t(generic_func_t addr_, std::size_t adjustor_) noexcept
+		inline mfp_internal_t(R(__attribute__((__thiscall__)) *addr_)(C *, Args...), std::size_t adjustor_) noexcept
 			: addr{addr_}, adjustor{adjustor_}
 		{
 		}
 
 		struct {
-			generic_func_t addr;
+			R(__attribute__((__thiscall__)) *addr)(C *, Args...);
 			std::size_t adjustor;
 		};
 		R(C::*func)(Args...);
 	};
 
-	static_assert(sizeof(mfp_internal_t<void, empty_class>) == sizeof(&empty_class::empty_function));
-	static_assert(alignof(mfp_internal_t<void, empty_class>) == alignof(&empty_class::empty_function));
+	template <typename R, typename C, typename ...Args>
+	union alignas(std::uint64_t) mfp_internal_va_t
+	{
+		inline mfp_internal_va_t() noexcept
+			: func{nullptr}
+		{
+		}
 
-	using generic_vtable_t = generic_func_t *;
+		inline mfp_internal_va_t(R(C::*func_)(Args..., ...)) noexcept
+			: func{func_}
+		{
+		}
+
+		inline mfp_internal_va_t(R(*addr_)(C *, Args..., ...)) noexcept
+			: addr{addr_}, adjustor{0}
+		{
+		}
+
+		inline mfp_internal_va_t(R(*addr_)(C *, Args..., ...), std::size_t adjustor_) noexcept
+			: addr{addr_}, adjustor{adjustor_}
+		{
+		}
+
+		struct {
+			R(*addr)(C *, Args..., ...);
+			std::size_t adjustor;
+		};
+		R(C::*func)(Args..., ...);
+	};
+
+	using generic_internal_mfp_t = mfp_internal_t<void, empty_class>;
+	using generic_internal_mfp_va_t = mfp_internal_va_t<void, empty_class>;
+
+	static_assert(sizeof(generic_internal_mfp_t) == sizeof(&empty_class::empty_function));
+	static_assert(alignof(generic_internal_mfp_t) == alignof(&empty_class::empty_function));
+
+	static_assert(sizeof(generic_internal_mfp_va_t) == sizeof(generic_internal_mfp_t));
+	static_assert(alignof(generic_internal_mfp_va_t) == alignof(generic_internal_mfp_t));
+
+	using generic_vtable_t = generic_plain_mfp_t *;
 
 	template <typename R, typename C, typename ...Args>
-	inline std::pair<generic_func_t, std::size_t> mfp_to_func(R (C::*func)(Args...)) noexcept
+	inline mfp_internal_t<R, C, Args...> get_internal_mfp(R(C::*func)(Args...)) noexcept
+	{
+		mfp_internal_t<R, C, Args...> internal{func};
+		return internal;
+	}
+
+	template <typename R, typename C, typename ...Args>
+	inline std::pair<R(__attribute__((__thiscall__)) *)(C *, Args...), std::size_t> mfp_to_func(R(C::*func)(Args...)) noexcept
 	{
 		mfp_internal_t<R, C, Args...> internal{func};
 		return {internal.addr, internal.adjustor};
 	}
 
 	template <typename R, typename C, typename ...Args>
-	inline auto mfp_from_func(generic_func_t addr) noexcept -> R(C::*)(Args...)
+	inline std::pair<R(*)(C *, Args..., ...), std::size_t> mfp_to_func(R(C::*func)(Args..., ...)) noexcept
+	{
+		mfp_internal_va_t<R, C, Args...> internal{func};
+		return {internal.addr, internal.adjustor};
+	}
+
+	template <typename R, typename C, typename ...Args>
+	inline auto mfp_from_func(R(__attribute__((__thiscall__)) *addr)(C *, Args...)) noexcept -> R(C::*)(Args...)
 	{
 		mfp_internal_t<R, C, Args...> internal{addr};
 		return internal.func;
 	}
 
 	template <typename R, typename C, typename ...Args>
-	inline auto mfp_from_func(generic_func_t addr, std::size_t adjustor) noexcept -> R(C::*)(Args...)
+	inline auto mfp_from_func(R(*addr)(C *, Args..., ...)) noexcept -> R(C::*)(Args..., ...)
+	{
+		mfp_internal_va_t<R, C, Args...> internal{addr};
+		return internal.func;
+	}
+
+	template <typename R, typename C, typename ...Args>
+	inline auto mfp_from_func(R(__attribute__((__thiscall__)) *addr)(C *, Args...), std::size_t adjustor) noexcept -> R(C::*)(Args...)
 	{
 		mfp_internal_t<R, C, Args...> internal{addr, adjustor};
+		return internal.func;
+	}
+
+	template <typename R, typename C, typename ...Args>
+	inline auto mfp_from_func(R(*addr)(C *, Args..., ...), std::size_t adjustor) noexcept -> R(C::*)(Args..., ...)
+	{
+		mfp_internal_va_t<R, C, Args...> internal{addr, adjustor};
 		return internal.func;
 	}
 
@@ -187,21 +285,21 @@ namespace vmod
 	inline std::size_t vfunc_index(R(C::*func)(Args...)) noexcept
 	{
 		mfp_internal_t<R, C, Args...> internal{func};
-		return ((reinterpret_cast<std::uintptr_t>(internal.addr)-1) / sizeof(generic_func_t));
+		return ((reinterpret_cast<std::uintptr_t>(internal.addr)-1) / sizeof(generic_plain_mfp_t));
 	}
 
 	template <typename C>
-	inline generic_func_t *vtable_from_addr(void *addr) noexcept
-	{ return reinterpret_cast<generic_func_t *>(addr); }
+	inline generic_plain_mfp_t *vtable_from_addr(void *addr) noexcept
+	{ return reinterpret_cast<generic_plain_mfp_t *>(addr); }
 
 	template <typename C>
-	inline generic_func_t *vtable_from_object(C *ptr) noexcept
+	inline generic_plain_mfp_t *vtable_from_object(C *ptr) noexcept
 	{
 	#ifdef __clang__
 		#pragma clang diagnostic push
 		#pragma clang diagnostic ignored "-Wundefined-reinterpret-cast"
 	#endif
-		return *reinterpret_cast<generic_func_t **>(ptr);
+		return *reinterpret_cast<generic_plain_mfp_t **>(ptr);
 	#ifdef __clang__
 		#pragma clang diagnostic pop
 	#endif
@@ -231,35 +329,36 @@ namespace vmod
 	template <typename R, typename C, typename ...Args>
 	inline auto swap_vfunc(C *ptr, R(C::*old_func)(Args...), R(*new_func)(C *, Args...)) noexcept -> R(C::*)(Args...)
 	{
-		generic_func_t *vtable{vtable_from_object<C>(ptr)};
+		generic_plain_mfp_t *vtable{vtable_from_object<C>(ptr)};
 		std::size_t index{vfunc_index(old_func)};
-		generic_func_t old_vfunc{vtable[index]};
-		page_info func_page{vtable + ((index > 0) ? (index-1) : 0), sizeof(generic_func_t)};
+		generic_plain_mfp_t old_vfunc{vtable[index]};
+		page_info func_page{vtable + ((index > 0) ? (index-1) : 0), sizeof(generic_plain_mfp_t)};
 		func_page.protect(PROT_READ|PROT_WRITE|PROT_EXEC);
-		vtable[index] = reinterpret_cast<generic_func_t>(new_func);
-		return mfp_from_func<R, C, Args...>(old_vfunc);
+	#ifdef __clang__
+		#pragma clang diagnostic push
+		#pragma clang diagnostic ignored "-Wcast-function-type"
+	#endif
+		vtable[index] = reinterpret_cast<generic_plain_mfp_t>(new_func);
+		auto mfp{mfp_from_func<R, C, Args...>(reinterpret_cast<R(__attribute__((__thiscall__)) *)(C *, Args...)>(old_vfunc))};
+	#ifdef __clang__
+		#pragma clang diagnostic pop
+	#endif
+		return mfp;
 	}
 
-	class detour
+	template <typename T>
+	class detour_base
 	{
 	public:
-		detour() noexcept = default;
-		~detour() noexcept;
-
-		template <typename R, typename ...Args>
-		inline void initialize(R(*old_func_)(Args...), R(*new_func_)(Args...)) noexcept
+		inline detour_base() noexcept
 		{
-			old_func = reinterpret_cast<generic_func_t>(old_func_);
-			new_func = reinterpret_cast<generic_func_t>(new_func_);
-
-			backup_bytes();
 		}
 
-		template <typename T, typename ...Args>
-		inline auto call(Args &&...args) noexcept -> function_return_t<T>
+		inline ~detour_base() noexcept
 		{
-			scope_enable se{*this};
-			return reinterpret_cast<function_pointer_t<T>>(old_func)(std::forward<Args>(args)...);
+			if(old_func) {
+				disable();
+			}
 		}
 
 		void enable() noexcept;
@@ -271,47 +370,90 @@ namespace vmod
 		}
 
 	protected:
-		struct scope_enable final {
-			inline scope_enable(detour &det_) noexcept
-				: det{det_} {
-				det.disable();
-			}
-			inline ~scope_enable() noexcept {
-				det.enable();
-			}
-			detour &det;
-		};
-
 		void backup_bytes() noexcept;
 
 		union {
 			generic_func_t old_func;
-			generic_mfp_t old_mfp;
+			generic_internal_mfp_t old_mfp;
 		};
 
-		generic_func_t new_func;
+		union {
+			generic_func_t new_func;
+			generic_plain_mfp_t new_mfp;
+		};
 
-	private:
 		unsigned char old_bytes[1 + sizeof(std::uintptr_t)];
 	};
 
-	class detour_va_args final : public detour
+	template <typename T>
+	struct __detour_scope_enable final {
+		inline __detour_scope_enable(detour_base<T> &det_) noexcept
+			: det{det_} {
+			det.disable();
+		}
+		inline ~__detour_scope_enable() noexcept {
+			det.enable();
+		}
+		detour_base<T> &det;
+	};
+
+	template <typename T, bool = function_is_member_v<T>>
+	class detour;
+
+	template <typename T>
+	class detour<T, false> final : public detour_base<T>
 	{
 	public:
-		template <typename T>
-		inline void initialize(T old_func_, T new_func_) noexcept
+		inline void initialize(function_pointer_t<T> old_func_, function_pointer_t<T> new_func_) noexcept
 		{
-			old_func = reinterpret_cast<generic_func_t>(old_func_);
-			new_func = reinterpret_cast<generic_func_t>(new_func_);
+		#ifdef __clang__
+			#pragma clang diagnostic push
+			#pragma clang diagnostic ignored "-Wcast-function-type"
+		#endif
+			this->old_mfp.addr = reinterpret_cast<generic_plain_mfp_t>(old_func_);
+			this->new_func = reinterpret_cast<generic_func_t>(new_func_);
+		#ifdef __clang__
+			#pragma clang diagnostic pop
+		#endif
+			this->old_mfp.adjustor = 0;
 
-			backup_bytes();
+			this->backup_bytes();
 		}
 
-		template <typename R, typename T, typename ...Args>
-		inline R call(Args &&...args) noexcept
+		template <typename ...Args>
+		inline function_return_t<T> operator()(Args &&...args) noexcept
 		{
-			scope_enable se{*this};
-			return reinterpret_cast<T>(old_func)(std::forward<Args>(args)...);
+			__detour_scope_enable<T> se{*this};
+			return reinterpret_cast<function_pointer_t<T>>(this->old_func)(std::forward<Args>(args)...);
+		}
+	};
+
+	template <typename T>
+	class detour<T, true> final : public detour_base<T>
+	{
+	public:
+		inline void initialize(function_pointer_t<T> old_func_, function_plain_pointer_t<T> new_func_) noexcept
+		{
+		#ifdef __clang__
+			#pragma clang diagnostic push
+			#pragma clang diagnostic ignored "-Wcast-function-type"
+		#endif
+			this->old_mfp.func = reinterpret_cast<generic_mfp_t>(old_func_);
+			this->new_mfp = reinterpret_cast<generic_plain_mfp_t>(new_func_);
+		#ifdef __clang__
+			#pragma clang diagnostic pop
+		#endif
+
+			this->backup_bytes();
+		}
+
+		template <typename ...Args>
+		inline function_return_t<T> operator()(function_class_t<T> *obj, Args &&...args) noexcept
+		{
+			__detour_scope_enable<T> se{*this};
+			return (obj->*reinterpret_cast<function_pointer_t<T>>(this->old_mfp.func))(std::forward<Args>(args)...);
 		}
 	};
 }
+
+#include "hacking.tpp"

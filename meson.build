@@ -85,6 +85,7 @@ dependencies = [
 	dependency('threads'),
 	dependency('dl'),
 	dependency('libelf'),
+	dependency('libffi'),
 	libyaml.get_variable('yaml_dep'),
 	libiberty.get_variable('iberty_dep')
 ]
@@ -132,8 +133,10 @@ lib = shared_library('vmod',
 		join_paths('src','gsdk.cpp'),
 		join_paths('src','vscript.cpp'),
 		join_paths('src','yaml.cpp'),
+		join_paths('src','ffi.cpp'),
 		join_paths('src','hacking.cpp'),
 		join_paths('src','symbol_cache.cpp'),
+		join_paths('src','gsdk','vscript','vscript.cpp'),
 		join_paths('src','gsdk','vstdlib','convar.cpp'),
 		join_paths('src','gsdk','engine','vsp.cpp')
 	),

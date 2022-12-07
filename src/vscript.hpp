@@ -15,10 +15,7 @@ namespace vmod
 	std::remove_reference_t<T> variant_to_value(const gsdk::ScriptVariant_t &) noexcept = delete;
 
 	template <typename T>
-	void initialize_variant_value(gsdk::ScriptVariant_t &, T) noexcept;
-
-	template <typename T>
-	gsdk::ScriptVariant_t value_to_variant(T value) noexcept;
+	gsdk::ScriptVariant_t value_to_variant(T &&value) noexcept;
 }
 
 #include "vscript_variant.tpp"
@@ -26,11 +23,11 @@ namespace vmod
 namespace vmod
 {
 	template <typename T>
-	inline void value_to_variant(gsdk::ScriptVariant_t &var, T value) noexcept
+	inline void value_to_variant(gsdk::ScriptVariant_t &var, T &&value) noexcept
 	{
 		var.m_type = static_cast<short>(type_to_field<std::decay_t<T>>());
 		var.m_flags = 0;
-		initialize_variant_value<std::decay_t<T>>(var, std::forward<T>(value));
+		initialize_variant_value(var, std::forward<T>(value));
 	}
 }
 
@@ -77,14 +74,22 @@ namespace vmod
 		script_variant_t &operator=(const script_variant_t &) = delete;
 
 		template <typename T>
-		inline script_variant_t(T value) noexcept
+		inline script_variant_t(T &&value) noexcept
 		{
 			std::memset(unk1, 0, sizeof(unk1));
 			value_to_variant<T>(*this, std::forward<T>(value));
 		}
 
 		template <typename T>
-		inline script_variant_t &operator=(T value) noexcept
+		inline script_variant_t &operator=(T &&value) noexcept
+		{
+			free();
+			value_to_variant<T>(*this, std::forward<T>(value));
+			return *this;
+		}
+
+		template <typename T>
+		inline script_variant_t &assign(T value) noexcept
 		{
 			free();
 			value_to_variant<T>(*this, std::forward<T>(value));
@@ -100,6 +105,10 @@ namespace vmod
 
 		template <typename T>
 		explicit inline operator T() const noexcept
+		{ return variant_to_value<T>(*this); }
+
+		template <typename T>
+		inline T get() const noexcept
 		{ return variant_to_value<T>(*this); }
 
 	private:
@@ -128,9 +137,12 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<script_variant_t>() noexcept
 	{ return gsdk::FIELD_VARIANT; }
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field<const script_variant_t *>() noexcept
+	{ return gsdk::FIELD_VOID; }
 
 	template <typename T>
-	inline gsdk::ScriptVariant_t value_to_variant(T value) noexcept
+	inline gsdk::ScriptVariant_t value_to_variant(T &&value) noexcept
 	{
 		script_variant_t var;
 		value_to_variant<T>(var, std::forward<T>(value));
@@ -145,6 +157,12 @@ namespace vmod
 		template <typename R, typename ...Args>
 		inline void initialize(R(*func)(Args...), std::string_view name, std::string_view script_name) noexcept
 		{ initialize_static<R, Args...>(func, name, script_name); }
+
+		template <typename R, typename ...Args>
+		inline void initialize(R(*func)(Args..., ...), std::string_view name, std::string_view script_name) noexcept
+		{ initialize_static<R, Args...>(func, name, script_name); }
+
+		static constexpr int SF_VA_FUNC{(1 << 1)};
 
 	private:
 		func_desc_t(const func_desc_t &) = delete;
@@ -176,28 +194,72 @@ namespace vmod
 		inline func_desc_t(R(C::*func)(Args...), std::string_view name, std::string_view script_name) noexcept
 		{ initialize_member<R, C, Args...>(func, name, script_name); }
 
+		template <typename R, typename C, typename ...Args>
+		inline func_desc_t(R(C::*func)(Args..., ...), std::string_view name, std::string_view script_name) noexcept
+		{ initialize_member<R, C, Args...>(func, name, script_name); }
+
 		template <typename R, typename ...Args>
 		inline func_desc_t(R(*func)(Args...), std::string_view name, std::string_view script_name) noexcept
-		{ initialize(func, name, script_name); }
+		{ initialize<R, Args...>(func, name, script_name); }
+
+		template <typename R, typename ...Args>
+		inline func_desc_t(R(*func)(Args..., ...), std::string_view name, std::string_view script_name) noexcept
+		{ initialize<R, Args...>(func, name, script_name); }
 
 		template <typename R, typename C, typename ...Args>
 		void initialize_member(R(C::*func)(Args...), std::string_view name, std::string_view script_name);
+
+		template <typename R, typename C, typename ...Args>
+		void initialize_member(R(C::*func)(Args..., ...), std::string_view name, std::string_view script_name);
 
 		template <typename R, typename ...Args>
 		void initialize_static(R(*func)(Args...), std::string_view name, std::string_view script_name);
 
 		template <typename R, typename ...Args>
-		void initialize_shared(std::string_view name, std::string_view script_name);
+		void initialize_static(R(*func)(Args..., ...), std::string_view name, std::string_view script_name);
+
+		template <typename R, typename ...Args>
+		void initialize_shared(std::string_view name, std::string_view script_name, bool va);
 
 		template <typename R, typename C, typename ...Args>
-		static bool binding(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
+		static bool binding_member(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
+
+		template <typename R, typename C, typename ...Args>
+		static bool binding_member_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
+
+		template <typename R, typename ...Args>
+		static bool binding(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
+
+		template <typename R, typename ...Args>
+		static bool binding_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
 
 		template <typename R, typename C, typename ...Args, std::size_t ...I>
-		static R call_impl(generic_func_t binding_func, std::size_t adjustor, void *obj, gsdk::ScriptVariant_t *args_var, std::index_sequence<I...>) noexcept;
+		static R call_member_impl(R(__attribute__((__thiscall__)) *binding_func)(C *, Args...), std::size_t adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, std::index_sequence<I...>) noexcept;
 
 		template <typename R, typename C, typename ...Args>
-		static inline R call(generic_func_t binding_func, std::size_t adjustor, void *obj, gsdk::ScriptVariant_t *args_var) noexcept
-		{ return call_impl<R, C, Args...>(binding_func, adjustor, obj, args_var, std::make_index_sequence<sizeof...(Args)>()); }
+		static inline R call_member(R(__attribute__((__thiscall__)) *binding_func)(C *, Args...), std::size_t adjustor, void *obj, const gsdk::ScriptVariant_t *args_var) noexcept
+		{ return call_member_impl<R, C, Args...>(binding_func, adjustor, obj, args_var, std::make_index_sequence<sizeof...(Args)>()); }
+
+		template <typename R, typename C, typename ...Args, std::size_t ...I>
+		static R call_member_va_impl(R(*binding_func)(C *, Args..., ...), std::size_t adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, const gsdk::ScriptVariant_t *args_var_va, std::size_t num_va, std::index_sequence<I...>) noexcept;
+
+		template <typename R, typename C, typename ...Args>
+		static inline R call_member_va(R(*binding_func)(C *, Args..., ...), std::size_t adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, const gsdk::ScriptVariant_t *args_var_va, std::size_t num_va) noexcept
+		{ return call_member_va_impl<R, C, Args...>(binding_func, adjustor, obj, args_var, args_var_va, num_va, std::make_index_sequence<sizeof...(Args)>()); }
+
+		template <typename R, typename ...Args, std::size_t ...I>
+		static R call_impl(R(*binding_func)(Args...), const gsdk::ScriptVariant_t *args_var, std::index_sequence<I...>) noexcept;
+
+		template <typename R, typename ...Args>
+		static inline R call(R(*binding_func)(Args...), const gsdk::ScriptVariant_t *args_var) noexcept
+		{ return call_impl<R, Args...>(binding_func, args_var, std::make_index_sequence<sizeof...(Args)>()); }
+
+		template <typename R, typename ...Args, std::size_t ...I>
+		static R call_va_impl(R(*binding_func)(Args..., ...), const gsdk::ScriptVariant_t *args_var, const gsdk::ScriptVariant_t *args_var_va, std::size_t num_va, std::index_sequence<I...>) noexcept;
+
+		template <typename R, typename ...Args>
+		static inline R call_va(R(*binding_func)(Args..., ...), const gsdk::ScriptVariant_t *args_var, const gsdk::ScriptVariant_t *args_var_va, std::size_t num_va) noexcept
+		{ return call_va_impl<R, Args...>(binding_func, args_var, args_var_va, num_va, std::make_index_sequence<sizeof...(Args)>()); }
 	};
 
 	static_assert(sizeof(func_desc_t) == sizeof(gsdk::ScriptFunctionBinding_t));
@@ -270,6 +332,13 @@ namespace vmod
 		}
 
 		template <typename R, typename ...Args>
+		inline func_desc_t &func(R(*func)(Args..., ...), std::string_view name, std::string_view script_name) noexcept
+		{
+			func_desc_t temp{func, name, script_name};
+			return static_cast<func_desc_t &>(m_FunctionBindings.emplace_back(std::move(temp)));
+		}
+
+		template <typename R, typename ...Args>
 		inline func_desc_t &func(R(T::*func)(Args...), std::string_view name, std::string_view script_name) noexcept
 		{
 			func_desc_t temp{func, name, script_name};
@@ -279,6 +348,17 @@ namespace vmod
 		template <typename R, typename ...Args>
 		inline func_desc_t &func(R(T::*func_)(Args...) const, std::string_view name, std::string_view script_name) noexcept
 		{ return func<R, Args...>(reinterpret_cast<R(T::*)(Args...)>(func_), name, script_name); }
+
+		template <typename R, typename ...Args>
+		inline func_desc_t &func(R(T::*func)(Args..., ...), std::string_view name, std::string_view script_name) noexcept
+		{
+			func_desc_t temp{func, name, script_name};
+			return static_cast<func_desc_t &>(m_FunctionBindings.emplace_back(std::move(temp)));
+		}
+
+		template <typename R, typename ...Args>
+		inline func_desc_t &func(R(T::*func_)(Args..., ...) const, std::string_view name, std::string_view script_name) noexcept
+		{ return func<R, Args...>(reinterpret_cast<R(T::*)(Args..., ...)>(func_), name, script_name); }
 
 		inline class_desc_t &dtor(void(*func)(T *)) noexcept
 		{

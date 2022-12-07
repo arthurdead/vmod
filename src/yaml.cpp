@@ -18,22 +18,63 @@ namespace vmod
 		return documents[i]->root_object;
 	}
 
-	gsdk::HSCRIPT yaml::script_load(std::filesystem::path &&path_) noexcept
+	class yaml_singleton final
 	{
-		if(!path_.is_absolute()) {
-			path_ = std::filesystem::current_path() / path_;
+	public:
+		static bool bindings() noexcept;
+		static void unbindings() noexcept;
+
+	private:
+		static gsdk::HSCRIPT script_load(std::filesystem::path &&path_) noexcept
+		{
+			if(!path_.is_absolute()) {
+				path_ = std::filesystem::current_path() / path_;
+			}
+
+			yaml *temp_yaml{new yaml{std::move(path_)}};
+
+			return temp_yaml->instance;
 		}
 
-		yaml *temp_yaml{new yaml{std::move(path_)}};
+		static inline gsdk::HSCRIPT instance;
+	};
 
-		return temp_yaml->instance;
+	static class_desc_t<yaml_singleton> yaml_singleton_desc{"yaml_singleton"};
+
+	bool yaml_singleton::bindings() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		yaml_singleton_desc.func(&yaml_singleton::script_load, "script_load"sv, "load"sv);
+
+		if(!vm->RegisterClass(&yaml_singleton_desc)) {
+			error("vmod: failed to register yaml singleton script class\n"sv);
+			return false;
+		}
+
+		instance = vm->RegisterInstance(&yaml_singleton_desc, nullptr);
+		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to register yaml singleton instance\n"sv);
+			return false;
+		}
+
+		vm->SetInstanceUniqeId(instance, "yaml_singleton");
+
+		gsdk::HSCRIPT vmod_scope{vmod.scope()};
+		if(!vm->SetValue(vmod_scope, "yaml", instance)) {
+			error("vmod: failed to set yaml singleton value\n"sv);
+			return false;
+		}
+
+		return true;
 	}
 
 	bool yaml::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
-		yaml_desc.func(&yaml::script_load, "script_load"sv, "load"sv);
 		yaml_desc.func(&yaml::script_num_documents, "script_num_documents"sv, "num_documents"sv);
 		yaml_desc.func(&yaml::script_get_document, "script_get_document"sv, "get_document"sv);
 		yaml_desc.func(&yaml::script_delete, "script_delete"sv, "free"sv);
@@ -44,12 +85,30 @@ namespace vmod
 			return false;
 		}
 
+		if(!yaml_singleton::bindings()) {
+			return false;
+		}
+
 		return true;
+	}
+
+	void yaml_singleton::unbindings() noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(instance && instance != gsdk::INVALID_HSCRIPT) {
+			vm->RemoveInstance(instance);
+		}
+
+		gsdk::HSCRIPT vmod_scope{vmod.scope()};
+		if(vm->ValueExists(vmod_scope, "yaml")) {
+			vm->ClearValue(vmod_scope, "yaml");
+		}
 	}
 
 	void yaml::unbindings() noexcept
 	{
-		
+		yaml_singleton::unbindings();
 	}
 
 	yaml::document::~document() noexcept
@@ -181,7 +240,25 @@ namespace vmod
 
 	yaml::yaml(std::filesystem::path &&path_) noexcept
 	{
-		instance = vmod.vm()->RegisterInstance(&yaml_desc, this);
+		using namespace std::literals::string_view_literals;
+
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		instance = vm->RegisterInstance(&yaml_desc, this);
+		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to register yaml instance\n"sv);
+			return;
+		}
+
+		{
+			char id[256];
+			if(!vm->GenerateUniqueKey("yaml_", id, sizeof(id))) {
+				error("vmod: failed to generate yaml unique id\n"sv);
+				return;
+			}
+
+			vm->SetInstanceUniqeId(instance, id);
+		}
 
 		yaml_parser_t parser;
 		if(yaml_parser_initialize(&parser) != 1) {

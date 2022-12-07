@@ -54,7 +54,10 @@ namespace vmod
 			{
 				virtual ~name_info() noexcept = default;
 
-				name_info() noexcept = default;
+				inline name_info() noexcept
+				{
+				}
+
 				name_info(const name_info &) = delete;
 				name_info &operator=(const name_info &) = delete;
 				name_info(name_info &&) noexcept = default;
@@ -67,10 +70,6 @@ namespace vmod
 				template <typename T>
 				inline auto func() const noexcept -> function_pointer_t<T>
 				{ return reinterpret_cast<function_pointer_t<T>>(func_); }
-
-				template <typename T>
-				inline T func_va_args() const noexcept
-				{ return reinterpret_cast<T>(func_); }
 
 				template <typename T>
 				inline auto mfp() const noexcept -> function_pointer_t<T>
@@ -104,7 +103,7 @@ namespace vmod
 				union {
 					void *addr_;
 					generic_func_t func_;
-					mfp_internal_t<void, empty_class> mfp_;
+					generic_internal_mfp_t mfp_;
 				};
 
 				names_t names;

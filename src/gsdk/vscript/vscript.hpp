@@ -11,6 +11,7 @@
 namespace gsdk
 {
 	class CUtlBuffer;
+	class CUtlString;
 
 	class IScriptVM;
 
@@ -48,7 +49,7 @@ namespace gsdk
 	struct ScriptFuncDescriptor_t
 	{
 	public:
-		ScriptFuncDescriptor_t() noexcept
+		inline ScriptFuncDescriptor_t() noexcept
 		{
 		}
 
@@ -149,7 +150,7 @@ namespace gsdk
 
 	using ScriptFunctionBindingStorageType_t = void *;
 
-	using ScriptBindingFunc_t = bool(*)(ScriptFunctionBindingStorageType_t, int, void *, ScriptVariant_t *, int, ScriptVariant_t *);
+	using ScriptBindingFunc_t = bool(*)(ScriptFunctionBindingStorageType_t, int, void *, const ScriptVariant_t *, int, ScriptVariant_t *);
 
 	enum ScriptFuncBindingFlags_t : int
 	{
@@ -237,8 +238,17 @@ namespace gsdk
 
 	using HSQUIRRELVM = void *;
 	using SQChar = char;
+	using SQInteger = int;
+	using SQRESULT = int;
 
-	class ISquirrelMetamethodDelegate;
+	class ISquirrelMetamethodDelegate
+	{
+	public:
+		virtual ~ISquirrelMetamethodDelegate();
+
+		virtual bool Get(const CUtlString &, ScriptVariant_t &) = 0;
+	};
+
 	class CSquirrelMetamethodDelegateImpl;
 	class SQVM;
 
@@ -341,7 +351,16 @@ namespace gsdk
 			ReleaseValue(var);
 		}
 		virtual int GetNumTableEntries(HSCRIPT) = 0;
+		int GetArrayCount(HSCRIPT);
 		virtual int GetKeyValue(HSCRIPT, int, ScriptVariant_t *, ScriptVariant_t *) = 0;
+		inline void GetArrayValue(HSCRIPT array, int i, ScriptVariant_t *value)
+		{
+			ScriptVariant_t tmp;
+			tmp.m_type = FIELD_VOID;
+			tmp.m_flags = 0;
+			tmp.m_hScript = nullptr;
+			GetKeyValue(array, i, &tmp, value);
+		}
 		virtual bool GetValue(HSCRIPT, const char *, ScriptVariant_t *) = 0;
 		virtual void ReleaseValue(ScriptVariant_t &) = 0;
 		inline void ReleaseValue(HSCRIPT object) noexcept
@@ -360,7 +379,17 @@ namespace gsdk
 		virtual void SetOutputCallback(ScriptOutputFunc_t) = 0;
 		virtual void SetErrorCallback(ScriptErrorFunc_t) = 0;
 		virtual bool RaiseException(const char *) = 0;
-		virtual CSquirrelMetamethodDelegateImpl *MakeSquirrelMetamethod_Get(HSCRIPT &, const char *, ISquirrelMetamethodDelegate *, bool) = 0;
+	private:
+		virtual CSquirrelMetamethodDelegateImpl *MakeSquirrelMetamethod_Get_impl(HSCRIPT &, const char *, ISquirrelMetamethodDelegate *, bool) = 0;
+	public:
+		inline CSquirrelMetamethodDelegateImpl *MakeSquirrelMetamethod_Get(HSCRIPT scope, const char *name, ISquirrelMetamethodDelegate *delegate, bool free)
+		{
+			if(!scope) {
+				scope = GetRootTable();
+			}
+
+			return MakeSquirrelMetamethod_Get_impl(scope, name, delegate, free);
+		}
 		virtual void DestroySquirrelMetamethod_Get(CSquirrelMetamethodDelegateImpl *) = 0;
 		virtual int GetKeyValue2(HSCRIPT, int, ScriptVariant_t *, ScriptVariant_t *) = 0;
 		virtual SQVM *GetInternalVM() = 0;

@@ -2,6 +2,7 @@
 #include "vmod.hpp"
 #include "filesystem.hpp"
 #include <cctype>
+#include <charconv>
 #include <sys/inotify.h>
 
 namespace vmod
@@ -173,7 +174,12 @@ namespace vmod
 			std::string base_scope_name{"__vmod_plugin_"sv};
 			{
 				std::hash<std::filesystem::path> path_hash{};
-				base_scope_name += std::to_string(path_hash(path));
+
+				char temp_buffer[16];
+				std::to_chars_result tc_res{std::to_chars(temp_buffer, temp_buffer + sizeof(temp_buffer), path_hash(path))};
+				tc_res.ptr[0] = '\0';
+
+				base_scope_name += temp_buffer;
 			}
 
 			{

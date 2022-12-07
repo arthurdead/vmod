@@ -11,8 +11,7 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<bool>() noexcept
 	{ return gsdk::FIELD_BOOLEAN; }
-	template <>
-	inline void initialize_variant_value<bool>(gsdk::ScriptVariant_t &var, bool value) noexcept
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, bool value) noexcept
 	{ var.m_bool = value; }
 	template <>
 	inline bool variant_to_value<bool>(const gsdk::ScriptVariant_t &var) noexcept
@@ -119,8 +118,7 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<unsigned int>() noexcept
 	{ return gsdk::FIELD_INTEGER; }
-	template <>
-	inline void initialize_variant_value<unsigned int>(gsdk::ScriptVariant_t &var, unsigned int value) noexcept
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, unsigned int value) noexcept
 	{ var.m_int = static_cast<int>(value); }
 	template <>
 	inline unsigned int variant_to_value<unsigned int>(const gsdk::ScriptVariant_t &var) noexcept
@@ -129,8 +127,7 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<int>() noexcept
 	{ return gsdk::FIELD_INTEGER; }
-	template <>
-	inline void initialize_variant_value<int>(gsdk::ScriptVariant_t &var, int value) noexcept
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, int value) noexcept
 	{ var.m_int = value; }
 	template <>
 	inline int variant_to_value<int>(const gsdk::ScriptVariant_t &var) noexcept
@@ -139,8 +136,7 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<unsigned short>() noexcept
 	{ return gsdk::FIELD_INTEGER; }
-	template <>
-	inline void initialize_variant_value<unsigned short>(gsdk::ScriptVariant_t &var, unsigned short value) noexcept
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, unsigned short value) noexcept
 	{ var.m_int = static_cast<int>(value); }
 	template <>
 	inline unsigned short variant_to_value<unsigned short>(const gsdk::ScriptVariant_t &var) noexcept
@@ -149,8 +145,7 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<short>() noexcept
 	{ return gsdk::FIELD_INTEGER; }
-	template <>
-	inline void initialize_variant_value<short>(gsdk::ScriptVariant_t &var, short value) noexcept
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, short value) noexcept
 	{ var.m_int = static_cast<int>(value); }
 	template <>
 	inline short variant_to_value<short>(const gsdk::ScriptVariant_t &var) noexcept
@@ -159,8 +154,7 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<unsigned long>() noexcept
 	{ return gsdk::FIELD_INTEGER; }
-	template <>
-	inline void initialize_variant_value<unsigned long>(gsdk::ScriptVariant_t &var, unsigned long value) noexcept
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, unsigned long value) noexcept
 	{ var.m_int = static_cast<int>(value); }
 	template <>
 	inline unsigned long variant_to_value<unsigned long>(const gsdk::ScriptVariant_t &var) noexcept
@@ -169,8 +163,7 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<long>() noexcept
 	{ return gsdk::FIELD_INTEGER; }
-	template <>
-	inline void initialize_variant_value<long>(gsdk::ScriptVariant_t &var, long value) noexcept
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, long value) noexcept
 	{ var.m_int = static_cast<int>(value); }
 	template <>
 	inline long variant_to_value<long>(const gsdk::ScriptVariant_t &var) noexcept
@@ -179,8 +172,7 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<unsigned long long>() noexcept
 	{ return gsdk::FIELD_INTEGER; }
-	template <>
-	inline void initialize_variant_value<unsigned long long>(gsdk::ScriptVariant_t &var, unsigned long long value) noexcept
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, unsigned long long value) noexcept
 	{ var.m_int = static_cast<int>(value); }
 	template <>
 	inline unsigned long long variant_to_value<unsigned long long>(const gsdk::ScriptVariant_t &var) noexcept
@@ -189,8 +181,7 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<long long>() noexcept
 	{ return gsdk::FIELD_INTEGER; }
-	template <>
-	inline void initialize_variant_value<long long>(gsdk::ScriptVariant_t &var, long long value) noexcept
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, long long value) noexcept
 	{ var.m_int = static_cast<int>(value); }
 	template <>
 	inline long long variant_to_value<long long>(const gsdk::ScriptVariant_t &var) noexcept
@@ -199,8 +190,7 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<float>() noexcept
 	{ return gsdk::FIELD_FLOAT; }
-	template <>
-	inline void initialize_variant_value<float>(gsdk::ScriptVariant_t &var, float value) noexcept
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, float value) noexcept
 	{ var.m_float = value; }
 	template <>
 	inline float variant_to_value<float>(const gsdk::ScriptVariant_t &var) noexcept
@@ -209,8 +199,7 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<double>() noexcept
 	{ return gsdk::FIELD_FLOAT; }
-	template <>
-	inline void initialize_variant_value<double>(gsdk::ScriptVariant_t &var, double value) noexcept
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, double value) noexcept
 	{ var.m_float = static_cast<float>(value); }
 	template <>
 	inline double variant_to_value<double>(const gsdk::ScriptVariant_t &var) noexcept
@@ -219,8 +208,7 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<long double>() noexcept
 	{ return gsdk::FIELD_FLOAT; }
-	template <>
-	inline void initialize_variant_value<long double>(gsdk::ScriptVariant_t &var, long double value) noexcept
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, long double value) noexcept
 	{ var.m_float = static_cast<float>(value); }
 	template <>
 	inline long double variant_to_value<long double>(const gsdk::ScriptVariant_t &var) noexcept
@@ -229,8 +217,7 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<gsdk::HSCRIPT>() noexcept
 	{ return gsdk::FIELD_HSCRIPT; }
-	template <>
-	inline void initialize_variant_value<gsdk::HSCRIPT>(gsdk::ScriptVariant_t &var, gsdk::HSCRIPT value) noexcept
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, gsdk::HSCRIPT value) noexcept
 	{ var.m_hScript = value; }
 	template <>
 	inline gsdk::HSCRIPT variant_to_value<gsdk::HSCRIPT>(const gsdk::ScriptVariant_t &var) noexcept
@@ -247,11 +234,10 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<std::string_view>() noexcept
 	{ return gsdk::FIELD_CSTRING; }
-	template <>
-	inline void initialize_variant_value<std::string_view>(gsdk::ScriptVariant_t &var, std::string_view value) noexcept
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, std::string_view value) noexcept
 	{ var.m_pszString = value.data(); }
 
-	static char __vscript_variable_to_value_buffer[128 * 4];
+	static char __vscript_variable_to_value_buffer[11 + ((2 + (6 + 6)) * 4) + 2];
 
 	template <>
 	inline std::string_view variant_to_value<std::string_view>(const gsdk::ScriptVariant_t &var) noexcept
@@ -315,6 +301,8 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<std::filesystem::path>() noexcept
 	{ return gsdk::FIELD_CSTRING; }
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, const std::filesystem::path &value) noexcept
+	{ var.m_pszString = value.c_str(); }
 	template <>
 	inline std::filesystem::path variant_to_value<std::filesystem::path>(const gsdk::ScriptVariant_t &var) noexcept
 	{
