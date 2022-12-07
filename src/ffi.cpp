@@ -56,7 +56,7 @@ namespace vmod
 		return block->instance;
 	}
 
-	static class_desc_t<memory_block> mem_block_desc{"memory_block"};
+	static class_desc_t<memory_block> mem_block_desc{"__vmod_memory_block_class"};
 
 	bool memory_block::register_instance() noexcept
 	{
@@ -68,7 +68,120 @@ namespace vmod
 			return false;
 		}
 
+		//vm->SetInstanceUniqeId
+
 		return true;
+	}
+
+	static void script_var_to_ffi_ptr(ffi_type *type_ptr, void *arg_ptr, const script_variant_t &arg_var) noexcept
+	{
+		switch(type_ptr->type) {
+			case FFI_TYPE_INT:
+			*reinterpret_cast<int *>(arg_ptr) = arg_var.get<int>();
+			break;
+			case FFI_TYPE_FLOAT:
+			*reinterpret_cast<float *>(arg_ptr) = arg_var.get<float>();
+			break;
+			case FFI_TYPE_DOUBLE:
+			*reinterpret_cast<double *>(arg_ptr) = arg_var.get<double>();
+			break;
+			case FFI_TYPE_LONGDOUBLE:
+			*reinterpret_cast<long double *>(arg_ptr) = arg_var.get<long double>();
+			break;
+			case FFI_TYPE_UINT8:
+			*reinterpret_cast<unsigned char *>(arg_ptr) = static_cast<unsigned char>(arg_var.get<unsigned short>());
+			break;
+			case FFI_TYPE_SINT8:
+			*reinterpret_cast<signed char *>(arg_ptr) = static_cast<signed char>(arg_var.get<short>());
+			break;
+			case FFI_TYPE_UINT16:
+			*reinterpret_cast<unsigned short *>(arg_ptr) = arg_var.get<unsigned short>();
+			break;
+			case FFI_TYPE_SINT16:
+			*reinterpret_cast<short *>(arg_ptr) = arg_var.get<short>();
+			break;
+			case FFI_TYPE_UINT32:
+			*reinterpret_cast<unsigned int *>(arg_ptr) = arg_var.get<unsigned int>();
+			break;
+			case FFI_TYPE_SINT32:
+			*reinterpret_cast<int *>(arg_ptr) = arg_var.get<int>();
+			break;
+			case FFI_TYPE_UINT64:
+			*reinterpret_cast<unsigned long long *>(arg_ptr) = arg_var.get<unsigned long long>();
+			break;
+			case FFI_TYPE_SINT64:
+			*reinterpret_cast<long long *>(arg_ptr) = arg_var.get<long long>();
+			break;
+			case FFI_TYPE_POINTER:
+			*reinterpret_cast<void **>(arg_ptr) = arg_var.get<void *>();
+			break;
+		}
+	}
+
+	static void ffi_ptr_to_script_var(ffi_type *type_ptr, void *arg_ptr, script_variant_t &arg_var) noexcept
+	{
+		switch(type_ptr->type) {
+			case FFI_TYPE_INT:
+			arg_var.assign<int>(*reinterpret_cast<int *>(arg_ptr));
+			break;
+			case FFI_TYPE_FLOAT:
+			arg_var.assign<float>(*reinterpret_cast<float *>(arg_ptr));
+			break;
+			case FFI_TYPE_DOUBLE:
+			arg_var.assign<double>(*reinterpret_cast<double *>(arg_ptr));
+			break;
+			case FFI_TYPE_LONGDOUBLE:
+			arg_var.assign<long double>(*reinterpret_cast<long double *>(arg_ptr));
+			break;
+			case FFI_TYPE_UINT8:
+			arg_var.assign<unsigned short>(*reinterpret_cast<unsigned char *>(arg_ptr));
+			break;
+			case FFI_TYPE_SINT8:
+			arg_var.assign<short>(*reinterpret_cast<signed char *>(arg_ptr));
+			break;
+			case FFI_TYPE_UINT16:
+			arg_var.assign<unsigned short>(*reinterpret_cast<unsigned short *>(arg_ptr));
+			break;
+			case FFI_TYPE_SINT16:
+			arg_var.assign<short>(*reinterpret_cast<short *>(arg_ptr));
+			break;
+			case FFI_TYPE_UINT32:
+			arg_var.assign<unsigned int>(*reinterpret_cast<unsigned int *>(arg_ptr));
+			break;
+			case FFI_TYPE_SINT32:
+			arg_var.assign<int>(*reinterpret_cast<int *>(arg_ptr));
+			break;
+			case FFI_TYPE_UINT64:
+			arg_var.assign<unsigned long long>(*reinterpret_cast<unsigned long long *>(arg_ptr));
+			break;
+			case FFI_TYPE_SINT64:
+			arg_var.assign<long long>(*reinterpret_cast<long long *>(arg_ptr));
+			break;
+			case FFI_TYPE_POINTER:
+			arg_var.assign<void *>(*reinterpret_cast<void **>(arg_ptr));
+			break;
+		}
+	}
+
+	static ffi_type *ffi_type_id_to_ptr(int id) noexcept
+	{
+		switch(id) {
+			case FFI_TYPE_VOID: return &ffi_type_void;
+			case FFI_TYPE_INT: return &ffi_type_sint;
+			case FFI_TYPE_FLOAT: return &ffi_type_float;
+			case FFI_TYPE_DOUBLE: return &ffi_type_double;
+			case FFI_TYPE_LONGDOUBLE: return &ffi_type_longdouble;
+			case FFI_TYPE_UINT8: return &ffi_type_uint8;
+			case FFI_TYPE_SINT8: return &ffi_type_sint8;
+			case FFI_TYPE_UINT16: return &ffi_type_uint16;
+			case FFI_TYPE_SINT16: return &ffi_type_sint16;
+			case FFI_TYPE_UINT32: return &ffi_type_uint32;
+			case FFI_TYPE_SINT32: return &ffi_type_sint32;
+			case FFI_TYPE_UINT64: return &ffi_type_uint64;
+			case FFI_TYPE_SINT64: return &ffi_type_sint64;
+			case FFI_TYPE_POINTER: return &ffi_type_pointer;
+			default: return nullptr;
+		}
 	}
 
 	class script_cif final
@@ -87,24 +200,12 @@ namespace vmod
 	private:
 		friend class ffi_singleton;
 
-		script_cif(ffi_abi abi, ffi_type *ret, std::vector<ffi_type *> &&args) noexcept
+		inline script_cif(ffi_type *ret, std::vector<ffi_type *> &&args) noexcept
 			: arg_type_ptrs{std::move(args)}, ret_type_ptr{ret}
 		{
-			ffi_prep_cif(&cif_, abi, arg_type_ptrs.size(), ret_type_ptr, const_cast<ffi_type **>(arg_type_ptrs.data()));
-
-			for(ffi_type *arg_type_ptr : arg_type_ptrs) {
-				std::unique_ptr<unsigned char[]> &arg_ptr{args_storage.emplace_back()};
-				arg_ptr.reset(reinterpret_cast<unsigned char *>(std::aligned_alloc(arg_type_ptr->alignment, arg_type_ptr->size)));
-			}
-
-			for(std::unique_ptr<unsigned char[]> &ptr : args_storage) {
-				args_storage_ptrs.emplace_back(ptr.get());
-			}
-
-			if(ret_type_ptr != &ffi_type_void) {
-				ret_storage.reset(reinterpret_cast<unsigned char *>(std::aligned_alloc(ret_type_ptr->alignment, ret_type_ptr->size)));
-			}
 		}
+
+		bool initialize(generic_func_t func_, ffi_abi abi) noexcept;
 
 		script_variant_t script_call(const script_variant_t *va_args, std::size_t num_args, ...) noexcept
 		{
@@ -116,100 +217,18 @@ namespace vmod
 			for(std::size_t i{0}; i < num_args; ++i) {
 				ffi_type *arg_type{arg_type_ptrs[i]};
 				const script_variant_t &arg_var{va_args[i]};
-
 				std::unique_ptr<unsigned char[]> &arg_ptr{args_storage[i]};
-				switch(arg_type->type) {
-					case FFI_TYPE_INT:
-					*reinterpret_cast<int *>(arg_ptr.get()) = arg_var.get<int>();
-					break;
-					case FFI_TYPE_FLOAT:
-					*reinterpret_cast<float *>(arg_ptr.get()) = arg_var.get<float>();
-					break;
-					case FFI_TYPE_DOUBLE:
-					*reinterpret_cast<double *>(arg_ptr.get()) = arg_var.get<double>();
-					break;
-					case FFI_TYPE_LONGDOUBLE:
-					*reinterpret_cast<long double *>(arg_ptr.get()) = arg_var.get<long double>();
-					break;
-					case FFI_TYPE_UINT8:
-					*reinterpret_cast<unsigned char *>(arg_ptr.get()) = static_cast<unsigned char>(arg_var.get<unsigned short>());
-					break;
-					case FFI_TYPE_SINT8:
-					*reinterpret_cast<signed char *>(arg_ptr.get()) = static_cast<signed char>(arg_var.get<short>());
-					break;
-					case FFI_TYPE_UINT16:
-					*reinterpret_cast<unsigned short *>(arg_ptr.get()) = arg_var.get<unsigned short>();
-					break;
-					case FFI_TYPE_SINT16:
-					*reinterpret_cast<short *>(arg_ptr.get()) = arg_var.get<short>();
-					break;
-					case FFI_TYPE_UINT32:
-					*reinterpret_cast<unsigned int *>(arg_ptr.get()) = arg_var.get<unsigned int>();
-					break;
-					case FFI_TYPE_SINT32:
-					*reinterpret_cast<int *>(arg_ptr.get()) = arg_var.get<int>();
-					break;
-					case FFI_TYPE_UINT64:
-					*reinterpret_cast<unsigned long long *>(arg_ptr.get()) = arg_var.get<unsigned long long>();
-					break;
-					case FFI_TYPE_SINT64:
-					*reinterpret_cast<long long *>(arg_ptr.get()) = arg_var.get<long long>();
-					break;
-					case FFI_TYPE_POINTER:
-					*reinterpret_cast<void **>(arg_ptr.get()) = arg_var.get<void *>();
-					break;
-				}
+
+				script_var_to_ffi_ptr(arg_type, reinterpret_cast<void *>(arg_ptr.get()), arg_var);
 			}
 
 			ffi_call(&cif_, reinterpret_cast<void(*)()>(func), reinterpret_cast<void *>(ret_storage.get()), const_cast<void **>(args_storage_ptrs.data()));
 
 			script_variant_t ret_var;
-			switch(ret_type_ptr->type) {
-				case FFI_TYPE_INT:
-				ret_var.assign<int>(*reinterpret_cast<int *>(ret_storage.get()));
-				break;
-				case FFI_TYPE_FLOAT:
-				ret_var.assign<float>(*reinterpret_cast<float *>(ret_storage.get()));
-				break;
-				case FFI_TYPE_DOUBLE:
-				ret_var.assign<double>(*reinterpret_cast<double *>(ret_storage.get()));
-				break;
-				case FFI_TYPE_LONGDOUBLE:
-				ret_var.assign<long double>(*reinterpret_cast<long double *>(ret_storage.get()));
-				break;
-				case FFI_TYPE_UINT8:
-				ret_var.assign<unsigned short>(*reinterpret_cast<unsigned char *>(ret_storage.get()));
-				break;
-				case FFI_TYPE_SINT8:
-				ret_var.assign<short>(*reinterpret_cast<signed char *>(ret_storage.get()));
-				break;
-				case FFI_TYPE_UINT16:
-				ret_var.assign<unsigned short>(*reinterpret_cast<unsigned short *>(ret_storage.get()));
-				break;
-				case FFI_TYPE_SINT16:
-				ret_var.assign<short>(*reinterpret_cast<short *>(ret_storage.get()));
-				break;
-				case FFI_TYPE_UINT32:
-				ret_var.assign<unsigned int>(*reinterpret_cast<unsigned int *>(ret_storage.get()));
-				break;
-				case FFI_TYPE_SINT32:
-				ret_var.assign<int>(*reinterpret_cast<int *>(ret_storage.get()));
-				break;
-				case FFI_TYPE_UINT64:
-				ret_var.assign<unsigned long long>(*reinterpret_cast<unsigned long long *>(ret_storage.get()));
-				break;
-				case FFI_TYPE_SINT64:
-				ret_var.assign<long long>(*reinterpret_cast<long long *>(ret_storage.get()));
-				break;
-				case FFI_TYPE_POINTER:
-				ret_var.assign<void *>(*reinterpret_cast<void **>(ret_storage.get()));
-				break;
-			}
+			ffi_ptr_to_script_var(ret_type_ptr, reinterpret_cast<void *>(ret_storage.get()), ret_var);
 
 			return ret_var;
 		}
-
-		bool register_instance() noexcept;
 
 		ffi_cif cif_;
 
@@ -224,7 +243,7 @@ namespace vmod
 		gsdk::HSCRIPT instance;
 	};
 
-	static class_desc_t<script_cif> cif_desc{"cif"};
+	static class_desc_t<script_cif> cif_desc{"__vmod_ffi_cif_class"};
 
 	bool script_cif::bindings() noexcept
 	{
@@ -232,7 +251,7 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		cif_desc.func(&script_cif::script_call, "script_call"sv, "call"sv);
+		cif_desc.func(&script_cif::script_call, "__script_call"sv, "call"sv);
 		cif_desc.dtor();
 
 		if(!vm->RegisterClass(&cif_desc)) {
@@ -248,55 +267,62 @@ namespace vmod
 
 	}
 
-	bool script_cif::register_instance() noexcept
+	bool script_cif::initialize(generic_func_t func_, ffi_abi abi) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
-		instance = vmod.vm()->RegisterInstance(&cif_desc, this);
-		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
-			error("vmod: failed to register cif instance\n"sv);
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(ffi_prep_cif(&cif_, abi, arg_type_ptrs.size(), ret_type_ptr, const_cast<ffi_type **>(arg_type_ptrs.data())) != FFI_OK) {
 			return false;
+		}
+
+		instance = vm->RegisterInstance(&cif_desc, this);
+		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+			vm->RaiseException("vmod: failed to register cif instance");
+			return false;
+		}
+
+		//vm->SetInstanceUniqeId
+
+		func = func_;
+
+		for(ffi_type *arg_type_ptr : arg_type_ptrs) {
+			std::unique_ptr<unsigned char[]> &arg_ptr{args_storage.emplace_back()};
+			arg_ptr.reset(reinterpret_cast<unsigned char *>(std::aligned_alloc(arg_type_ptr->alignment, arg_type_ptr->size)));
+		}
+
+		for(std::unique_ptr<unsigned char[]> &ptr : args_storage) {
+			args_storage_ptrs.emplace_back(ptr.get());
+		}
+
+		if(ret_type_ptr != &ffi_type_void) {
+			ret_storage.reset(reinterpret_cast<unsigned char *>(std::aligned_alloc(ret_type_ptr->alignment, ret_type_ptr->size)));
 		}
 
 		return true;
 	}
 
-	static class ffi_singleton final : public gsdk::ISquirrelMetamethodDelegate
+	class ffi_singleton final : public gsdk::ISquirrelMetamethodDelegate
 	{
 	public:
-		static bool bindings() noexcept;
-		static void unbindings() noexcept;
-
-	private:
-		static ffi_type *type_id_to_ptr(int id) noexcept
+		inline ~ffi_singleton() noexcept override
 		{
-			switch(id) {
-				case FFI_TYPE_VOID: return &ffi_type_void;
-				case FFI_TYPE_INT: return &ffi_type_sint;
-				case FFI_TYPE_FLOAT: return &ffi_type_float;
-				case FFI_TYPE_DOUBLE: return &ffi_type_double;
-				case FFI_TYPE_LONGDOUBLE: return &ffi_type_longdouble;
-				case FFI_TYPE_UINT8: return &ffi_type_uint8;
-				case FFI_TYPE_SINT8: return &ffi_type_sint8;
-				case FFI_TYPE_UINT16: return &ffi_type_uint16;
-				case FFI_TYPE_SINT16: return &ffi_type_sint16;
-				case FFI_TYPE_UINT32: return &ffi_type_uint32;
-				case FFI_TYPE_SINT32: return &ffi_type_sint32;
-				case FFI_TYPE_UINT64: return &ffi_type_uint64;
-				case FFI_TYPE_SINT64: return &ffi_type_sint64;
-				case FFI_TYPE_POINTER: return &ffi_type_pointer;
-				default: return nullptr;
-			}
 		}
 
+		bool bindings() noexcept;
+		void unbindings() noexcept;
+
+	private:
 		static gsdk::HSCRIPT script_create_cif(generic_func_t func, ffi_abi abi, int ret, gsdk::HSCRIPT args) noexcept
 		{
-			ffi_type *ret_ptr{type_id_to_ptr(ret)};
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			ffi_type *ret_ptr{ffi_type_id_to_ptr(ret)};
 			if(!ret_ptr) {
+				vm->RaiseException("vmod: invalid return type");
 				return nullptr;
 			}
-
-			gsdk::IScriptVM *vm{vmod.vm()};
 
 			std::vector<ffi_type *> args_ptrs;
 
@@ -306,36 +332,110 @@ namespace vmod
 				vm->GetArrayValue(args, i, &value);
 
 				if(value.m_type != gsdk::FIELD_INTEGER) {
+					vm->RaiseException("vmod: not a ffi type");
 					return nullptr;
 				}
 
-				ffi_type *arg_ptr{type_id_to_ptr(value.m_int)};
+				ffi_type *arg_ptr{ffi_type_id_to_ptr(value.m_int)};
 				if(!arg_ptr) {
+					vm->RaiseException("vmod: invalid argument type");
 					return nullptr;
 				}
 
 				args_ptrs.emplace_back(arg_ptr);
 			}
 
-			class script_cif *cif{new script_cif{abi, ret_ptr, std::move(args_ptrs)}};
-			if(!cif->register_instance()) {
+			script_cif *cif{new script_cif{ret_ptr, std::move(args_ptrs)}};
+			if(!cif->initialize(func, abi)) {
 				delete cif;
+				vm->RaiseException("vmod: failed to register ffi cif instance");
 				return nullptr;
 			}
-
-			cif->func = func;
 
 			return cif->instance;
 		}
 
+		static dynamic_detour *script_create_detour_shared(int ret, gsdk::HSCRIPT args) noexcept
+		{
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			ffi_type *ret_ptr{ffi_type_id_to_ptr(ret)};
+			if(!ret_ptr) {
+				vm->RaiseException("vmod: invalid return type");
+				return nullptr;
+			}
+
+			std::vector<ffi_type *> args_ptrs;
+
+			int num_args{vm->GetArrayCount(args)};
+			for(int i{0}; i < num_args; ++i) {
+				script_variant_t value;
+				vm->GetArrayValue(args, i, &value);
+
+				if(value.m_type != gsdk::FIELD_INTEGER) {
+					vm->RaiseException("vmod: not a ffi type");
+					return nullptr;
+				}
+
+				ffi_type *arg_ptr{ffi_type_id_to_ptr(value.m_int)};
+				if(!arg_ptr) {
+					vm->RaiseException("vmod: invalid argument type");
+					return nullptr;
+				}
+
+				args_ptrs.emplace_back(arg_ptr);
+			}
+
+			dynamic_detour *det{new dynamic_detour{ret_ptr, std::move(args_ptrs)}};
+			return det;
+		}
+
+		static gsdk::HSCRIPT script_create_detour_member(generic_mfp_t old_func, gsdk::HSCRIPT new_func, ffi_abi abi, int ret, gsdk::HSCRIPT args) noexcept
+		{
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			dynamic_detour *det{script_create_detour_shared(ret, args)};
+			if(!det) {
+				return nullptr;
+			}
+
+			if(!det->initialize(old_func, new_func, abi)) {
+				delete det;
+				vm->RaiseException("vmod: failed to register detour instance");
+				return nullptr;
+			}
+
+			return det->instance;
+		}
+
+		static gsdk::HSCRIPT script_create_detour_static(generic_func_t old_func, gsdk::HSCRIPT new_func, ffi_abi abi, int ret, gsdk::HSCRIPT args) noexcept
+		{
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			dynamic_detour *det{script_create_detour_shared(ret, args)};
+			if(!det) {
+				return nullptr;
+			}
+
+			if(!det->initialize(old_func, new_func, abi)) {
+				delete det;
+				vm->RaiseException("vmod: failed to register detour instance");
+				return nullptr;
+			}
+
+			return det->instance;
+		}
+
 		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
 
-		static inline gsdk::HSCRIPT scope{gsdk::INVALID_HSCRIPT};
-		static inline gsdk::HSCRIPT types_table{gsdk::INVALID_HSCRIPT};
-		static inline gsdk::HSCRIPT abi_table{gsdk::INVALID_HSCRIPT};
-		static inline gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
-		static inline gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
-	} ffi_singleton;
+		gsdk::HSCRIPT scope{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT types_table{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT abi_table{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+		gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
+	};
+
+	static class ffi_singleton ffi_singleton;
 
 	bool ffi_singleton::Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value)
 	{
@@ -344,7 +444,7 @@ namespace vmod
 		return vmod.vm()->GetValue(instance, name.c_str(), &value);
 	}
 
-	static class_desc_t<class ffi_singleton> ffi_singleton_desc{"ffi"};
+	static class_desc_t<class ffi_singleton> ffi_singleton_desc{"__vmod_ffi_singleton_class"};
 
 	bool memory_block::bindings() noexcept
 	{
@@ -352,9 +452,9 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		mem_block_desc.func(&memory_block::script_allocate, "script_allocate"sv, "allocate"sv);
-		mem_block_desc.func(&memory_block::script_allocate_aligned, "script_allocate_aligned"sv, "allocate_aligned"sv);
-		mem_block_desc.func(&memory_block::script_allocate_zero, "script_allocate_zero"sv, "allocate_zero"sv);
+		mem_block_desc.func(&memory_block::script_allocate, "__script_allocate"sv, "allocate"sv);
+		mem_block_desc.func(&memory_block::script_allocate_aligned, "__script_allocate_aligned"sv, "allocate_aligned"sv);
+		mem_block_desc.func(&memory_block::script_allocate_zero, "__script_allocate_zero"sv, "allocate_zero"sv);
 		mem_block_desc.dtor();
 
 		if(!vm->RegisterClass(&mem_block_desc)) {
@@ -376,7 +476,9 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		ffi_singleton_desc.func(&ffi_singleton::script_create_cif, "script_create_cif"sv, "cif"sv);
+		ffi_singleton_desc.func(&ffi_singleton::script_create_cif, "__script_create_cif"sv, "cif"sv);
+		ffi_singleton_desc.func(&ffi_singleton::script_create_detour_static, "__script_create_detour_static"sv, "detour_static"sv);
+		ffi_singleton_desc.func(&ffi_singleton::script_create_detour_member, "__script_create_detour_member"sv, "detour_member"sv);
 
 		if(!vm->RegisterClass(&ffi_singleton_desc)) {
 			error("vmod: failed to register ffi script class\n"sv);
@@ -389,9 +491,9 @@ namespace vmod
 			return false;
 		}
 
-		vm->SetInstanceUniqeId(instance, "ffi_singleton");
+		vm->SetInstanceUniqeId(instance, "__vmod_ffi_singleton");
 
-		scope = vm->CreateScope("ffi", nullptr);
+		scope = vm->CreateScope("__vmod_ffi_scope", nullptr);
 		if(!scope || scope == gsdk::INVALID_HSCRIPT) {
 			error("vmod: failed to create ffi scope\n"sv);
 			return false;
@@ -403,7 +505,7 @@ namespace vmod
 			return false;
 		}
 
-		get_impl = vm->MakeSquirrelMetamethod_Get(vmod_scope, "ffi", &::vmod::ffi_singleton, false);
+		get_impl = vm->MakeSquirrelMetamethod_Get(vmod_scope, "ffi", &static_cast<gsdk::ISquirrelMetamethodDelegate &>(::vmod::ffi_singleton), false);
 		if(!get_impl) {
 			error("vmod: failed to create ffi _get metamethod\n"sv);
 			return false;
@@ -546,16 +648,16 @@ namespace vmod
 			vm->ReleaseTable(types_table);
 		}
 
-		if(vm->ValueExists(instance, "types")) {
-			vm->ClearValue(instance, "types");
+		if(vm->ValueExists(scope, "types")) {
+			vm->ClearValue(scope, "types");
 		}
 
 		if(abi_table && abi_table != gsdk::INVALID_HSCRIPT) {
 			vm->ReleaseTable(abi_table);
 		}
 
-		if(vm->ValueExists(instance, "abi")) {
-			vm->ClearValue(instance, "abi");
+		if(vm->ValueExists(scope, "abi")) {
+			vm->ClearValue(scope, "abi");
 		}
 
 		if(get_impl) {
@@ -586,7 +688,11 @@ namespace vmod
 			return false;
 		}
 
-		if(!ffi_singleton::bindings()) {
+		if(!ffi_singleton.bindings()) {
+			return false;
+		}
+
+		if(!dynamic_detour::bindings()) {
 			return false;
 		}
 
@@ -595,15 +701,54 @@ namespace vmod
 
 	void ffi_unbindings() noexcept
 	{
+		dynamic_detour::unbindings();
+
 		script_cif::unbindings();
 
 		memory_block::unbindings();
 
-		ffi_singleton::unbindings();
+		ffi_singleton.unbindings();
+	}
+
+	static class_desc_t<class dynamic_detour> detour_desc{"__vmod_detour_class"};
+
+	bool dynamic_detour::bindings() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		detour_desc.func(&dynamic_detour::script_call, "__script_call"sv, "call"sv);
+		detour_desc.func(&dynamic_detour::script_enable, "__script_enable"sv, "enable"sv);
+		detour_desc.func(&dynamic_detour::script_disable, "__script_disable"sv, "disable"sv);
+		detour_desc.func(&dynamic_detour::script_delete, "__script_delete"sv, "free"sv);
+		detour_desc.dtor();
+
+		if(!vm->RegisterClass(&detour_desc)) {
+			error("vmod: failed to register detour script class\n"sv);
+			return false;
+		}
+
+		return true;
+	}
+
+	void dynamic_detour::unbindings() noexcept
+	{
+		
 	}
 
 	dynamic_detour::~dynamic_detour() noexcept
 	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(new_func && new_func != gsdk::INVALID_HSCRIPT) {
+			vm->ReleaseFunction(new_func);
+		}
+
+		if(instance && instance != gsdk::INVALID_HSCRIPT) {
+			vm->RemoveInstance(instance);
+		}
+
 		if(old_func) {
 			disable();
 		}
@@ -611,6 +756,140 @@ namespace vmod
 		if(closure) {
 			ffi_closure_free(closure);
 		}
+	}
+
+	script_variant_t dynamic_detour::script_call(const script_variant_t *va_args, std::size_t num_args, ...) noexcept
+	{
+		if(num_args != arg_type_ptrs.size()) {
+			vmod.vm()->RaiseException("wrong number of parameters");
+			return {};
+		}
+
+		for(std::size_t i{0}; i < num_args; ++i) {
+			ffi_type *arg_type{arg_type_ptrs[i]};
+			const script_variant_t &arg_var{va_args[i]};
+			std::unique_ptr<unsigned char[]> &arg_ptr{args_storage[i]};
+
+			script_var_to_ffi_ptr(arg_type, reinterpret_cast<void *>(arg_ptr.get()), arg_var);
+		}
+
+		{
+			scope_enable sce{*this};
+			ffi_call(&cif_, reinterpret_cast<void(*)()>(old_func), reinterpret_cast<void *>(ret_storage.get()), const_cast<void **>(args_storage_ptrs.data()));
+		}
+
+		script_variant_t ret_var;
+		ffi_ptr_to_script_var(ret_type_ptr, reinterpret_cast<void *>(ret_storage.get()), ret_var);
+
+		return ret_var;
+	}
+
+	void dynamic_detour::closure_binding(ffi_cif *cif_, void *ret, void *args[], void *userptr) noexcept
+	{
+		std::vector<script_variant_t> sargs;
+
+		dynamic_detour *det{reinterpret_cast<dynamic_detour *>(userptr)};
+
+		sargs.emplace_back(det->instance);
+
+		for(std::size_t i{0}; i < cif_->nargs; ++i) {
+			ffi_type *arg_type_ptr{cif_->arg_types[i]};
+			script_variant_t &arg_var{sargs.emplace_back()};
+
+			ffi_ptr_to_script_var(arg_type_ptr, args[i], arg_var);
+		}
+
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		gsdk::HSCRIPT scope{nullptr};
+
+		script_variant_t ret_var;
+		if(vm->ExecuteFunction(det->new_func, sargs.data(), static_cast<int>(sargs.size()), ((det->ret_type_ptr == &ffi_type_void) ? nullptr : &ret_var), scope, true) == gsdk::SCRIPT_ERROR) {
+			return;
+		}
+
+		if(det->ret_type_ptr != &ffi_type_void) {
+			script_var_to_ffi_ptr(det->ret_type_ptr, ret, ret_var);
+		}
+	}
+
+	bool dynamic_detour::initialize_shared(gsdk::HSCRIPT new_func_, ffi_abi abi) noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		closure = static_cast<ffi_closure *>(ffi_closure_alloc(sizeof(ffi_closure), reinterpret_cast<void **>(&closure_func)));
+		if(!closure) {
+			vm->RaiseException("vmod:: failed to allocate detour closure");
+			return false;
+		}
+
+		if(ffi_prep_cif(&cif_, abi, arg_type_ptrs.size(), ret_type_ptr, const_cast<ffi_type **>(arg_type_ptrs.data())) != FFI_OK) {
+			vm->RaiseException("vmod:: failed to create detour cif");
+			return false;
+		}
+
+		if(ffi_prep_closure_loc(closure, &cif_, closure_binding, this, reinterpret_cast<void *>(closure_func)) != FFI_OK) {
+			vm->RaiseException("vmod:: failed to prepare detour closure");
+			return false;
+		}
+
+		instance = vm->RegisterInstance(&detour_desc, this);
+		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+			vm->RaiseException("vmod: failed to register cif instance");
+			return false;
+		}
+
+		//vm->SetInstanceUniqeId
+
+		for(ffi_type *arg_type_ptr : arg_type_ptrs) {
+			std::unique_ptr<unsigned char[]> &arg_ptr{args_storage.emplace_back()};
+			arg_ptr.reset(reinterpret_cast<unsigned char *>(std::aligned_alloc(arg_type_ptr->alignment, arg_type_ptr->size)));
+		}
+
+		for(std::unique_ptr<unsigned char[]> &ptr : args_storage) {
+			args_storage_ptrs.emplace_back(ptr.get());
+		}
+
+		if(ret_type_ptr != &ffi_type_void) {
+			ret_storage.reset(reinterpret_cast<unsigned char *>(std::aligned_alloc(ret_type_ptr->alignment, ret_type_ptr->size)));
+		}
+
+		new_func = vm->ReferenceObject(new_func_);
+
+		return true;
+	}
+
+	bool dynamic_detour::initialize(generic_func_t old_func_, gsdk::HSCRIPT new_func_, ffi_abi abi) noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(!initialize_shared(new_func_, abi)) {
+			return false;
+		}
+
+		old_mfp.addr = reinterpret_cast<generic_plain_mfp_t>(old_func_);
+		old_mfp.adjustor = 0;
+
+		backup_bytes();
+
+		return true;
+	}
+
+	bool dynamic_detour::initialize(generic_mfp_t old_func_, gsdk::HSCRIPT new_func_, ffi_abi abi) noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		arg_type_ptrs.insert(arg_type_ptrs.begin(), &ffi_type_pointer);
+
+		if(!initialize_shared(new_func_, abi)) {
+			return false;
+		}
+
+		old_mfp.func = old_func_;
+
+		backup_bytes();
+
+		return true;
 	}
 
 	void dynamic_detour::enable() noexcept

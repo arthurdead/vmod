@@ -315,6 +315,7 @@ namespace vmod
 		return {};
 	}
 
+	static_assert(sizeof(void *) == sizeof(int));
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<void *>() noexcept
 	{ return gsdk::FIELD_INTEGER; }
@@ -331,6 +332,7 @@ namespace vmod
 		return nullptr;
 	}
 
+	static_assert(sizeof(generic_func_t) == sizeof(int));
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<generic_func_t>() noexcept
 	{ return gsdk::FIELD_INTEGER; }
@@ -347,17 +349,23 @@ namespace vmod
 		return nullptr;
 	}
 
+	static_assert(sizeof(generic_internal_mfp_t *) == sizeof(int));
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<generic_mfp_t>() noexcept
 	{ return gsdk::FIELD_INTEGER; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, generic_mfp_t value) noexcept
-	{ var.m_int = reinterpret_cast<int>(mfp_to_func(value).first); }
+	{
+		var.m_pszString = reinterpret_cast<const char *>(new generic_internal_mfp_t{value});
+		var.m_flags |= gsdk::SV_FREE;
+	}
 	template <>
 	inline generic_mfp_t variant_to_value<generic_mfp_t>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
-			case gsdk::FIELD_INTEGER:
-			return mfp_from_func(reinterpret_cast<generic_plain_mfp_t>(var.m_int));
+			case gsdk::FIELD_INTEGER: {
+				const generic_internal_mfp_t *mfp{reinterpret_cast<const generic_internal_mfp_t *>(var.m_pVector)};
+				return mfp->func;
+			}
 		}
 
 		return nullptr;

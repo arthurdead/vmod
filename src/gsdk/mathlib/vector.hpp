@@ -13,6 +13,9 @@ namespace gsdk
 #endif
 	{
 	public:
+		inline vec_t *data() noexcept
+		{ return reinterpret_cast<vec_t *>(this); }
+
 		vec_t x, y, z;
 	};
 

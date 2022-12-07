@@ -7,6 +7,7 @@
 #include "../tier1/utlvector.hpp"
 #include "../server/datamap.hpp"
 #include <cstring>
+#include <squirrel.h>
 
 namespace gsdk
 {
@@ -92,12 +93,7 @@ namespace gsdk
 		FIELD_VARIANT
 	};
 
-	struct HSCRIPT__ final
-	{
-		int unused[1];
-	};
-
-	using HSCRIPT = HSCRIPT__ *;
+	using HSCRIPT = HSQOBJECT *;
 	inline HSCRIPT INVALID_HSCRIPT{reinterpret_cast<HSCRIPT>(-1)};
 
 	class CVariantDefaultAllocator;
@@ -241,11 +237,6 @@ namespace gsdk
 	using ScriptOutputFunc_t = void(*)(const char *);
 	using ScriptErrorFunc_t = bool(*)(ScriptErrorLevel_t, const char *);
 
-	using HSQUIRRELVM = void *;
-	using SQChar = char;
-	using SQInteger = int;
-	using SQRESULT = int;
-
 	class ISquirrelMetamethodDelegate
 	{
 	public:
@@ -255,7 +246,6 @@ namespace gsdk
 	};
 
 	class CSquirrelMetamethodDelegateImpl;
-	class SQVM;
 
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
@@ -287,6 +277,10 @@ namespace gsdk
 			return ret;
 		}
 		virtual HSCRIPT ReferenceScope(HSCRIPT) = 0;
+		inline HSCRIPT ReferenceObject(HSCRIPT object)
+		{
+			return ReferenceScope(object);
+		}
 		virtual void ReleaseScope(HSCRIPT) = 0;
 	private:
 		virtual HSCRIPT LookupFunction_impl(const char *, HSCRIPT = nullptr) = 0;
@@ -376,6 +370,14 @@ namespace gsdk
 			var.m_hScript = object;
 			ReleaseValue(var);
 		}
+		inline void ReleaseObject(HSCRIPT object) noexcept
+		{
+			ScriptVariant_t var;
+			var.m_type = FIELD_HSCRIPT;
+			var.m_flags = 0;
+			var.m_hScript = object;
+			ReleaseValue(var);
+		}
 		virtual bool ClearValue(HSCRIPT, const char *) = 0;
 		virtual void WriteState(CUtlBuffer *) = 0;
 		virtual void ReadState(CUtlBuffer *) = 0;
@@ -397,7 +399,7 @@ namespace gsdk
 		}
 		virtual void DestroySquirrelMetamethod_Get(CSquirrelMetamethodDelegateImpl *) = 0;
 		virtual int GetKeyValue2(HSCRIPT, int, ScriptVariant_t *, ScriptVariant_t *) = 0;
-		virtual SQVM *GetInternalVM() = 0;
+		virtual HSQUIRRELVM GetInternalVM() = 0;
 		virtual bool GetScalarValue(HSCRIPT, ScriptVariant_t *) = 0;
 		virtual void ArrayAddToTail(HSCRIPT, const ScriptVariant_t &) = 0;
 		virtual HSCRIPT GetRootTable() = 0;

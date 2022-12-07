@@ -31,11 +31,16 @@ if compiler.get_id() == 'clang'
 		'-Wno-global-constructors',
 		'-Wno-exit-time-destructors',
 		'-Wno-switch-enum',
+		'-Wno-reserved-macro-identifier',
+		'-Wno-reserved-identifier'
+	]
+
+	cpp_args += [
 		'-Wno-error=unused-function',
 		'-Wno-error=unused-private-field',
 		'-Wno-error=unused-local-typedef',
-		'-Wno-reserved-macro-identifier',
-		'-Wno-reserved-identifier'
+		'-Wno-error=missing-variable-declarations',
+		'-Wno-error=old-style-cast'
 	]
 
 	cpp_args += [
@@ -81,13 +86,19 @@ libyaml = subproject('libyaml',
 	required: true
 )
 
+squirrel = subproject('squirrel',
+	default_options: thirdparty_default_options_c,
+	required: true
+)
+
 dependencies = [
 	dependency('threads'),
 	dependency('dl'),
 	dependency('libelf'),
 	dependency('libffi'),
 	libyaml.get_variable('yaml_dep'),
-	libiberty.get_variable('iberty_dep')
+	libiberty.get_variable('iberty_dep'),
+	squirrel.get_variable('squirrel_dep')
 ]
 
 vmod_base_script_src = files('src/vmod_base.nut')
@@ -118,6 +129,17 @@ if engine_dir != ''
 	tier0 = declare_dependency(
 		link_args: [
 			join_paths(engine_bin,tier0_lib_name)
+		]
+	)
+
+	vscript_lib_name = 'vscript.so'
+	if dedicated
+		vscript_lib_name = 'vscript_srv.so'
+	endif
+
+	vscript = declare_dependency(
+		link_args: [
+			join_paths(engine_bin,vscript_lib_name)
 		]
 	)
 

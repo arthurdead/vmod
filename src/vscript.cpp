@@ -4,5 +4,5 @@
 namespace vmod
 {
 	void free_variant_hscript(gsdk::ScriptVariant_t &value) noexcept
-	{ vmod.vm()->ReleaseValue(value); }
+	{ vmod.vm()->ReleaseObject(value.m_hScript); }
 }

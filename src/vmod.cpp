@@ -105,7 +105,7 @@ namespace vmod
 		return nullptr;
 	}
 
-	static class_desc_t<class vmod> vmod_desc{"vmod_singleton"};
+	static class_desc_t<class vmod> vmod_desc{"__vmod_singleton_class"};
 
 	bool vmod::Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value)
 	{
@@ -115,8 +115,8 @@ namespace vmod
 	static class server_symbols_singleton final {
 		friend class vmod;
 
-		static gsdk::HSCRIPT script_lookup_shared(std::string_view name, symbol_cache::const_iterator it) noexcept;
-		static gsdk::HSCRIPT script_lookup_shared(std::string_view name, symbol_cache::qualification_info::const_iterator it) noexcept;
+		static gsdk::HSCRIPT script_lookup_shared(symbol_cache::const_iterator it) noexcept;
+		static gsdk::HSCRIPT script_lookup_shared(symbol_cache::qualification_info::const_iterator it) noexcept;
 
 		struct script_qual_it_t final
 		{
@@ -138,7 +138,7 @@ namespace vmod
 					return nullptr;
 				}
 
-				return script_lookup_shared(name, tmp_it);
+				return script_lookup_shared(tmp_it);
 			}
 
 			inline std::string_view script_name() const noexcept
@@ -171,7 +171,7 @@ namespace vmod
 					return nullptr;
 				}
 
-				return script_lookup_shared(name, tmp_it);
+				return script_lookup_shared(tmp_it);
 			}
 
 			inline std::string_view script_name() const noexcept
@@ -208,7 +208,7 @@ namespace vmod
 				return nullptr;
 			}
 
-			return script_lookup_shared(name, it);
+			return script_lookup_shared(it);
 		}
 
 		gsdk::HSCRIPT script_lookup_global(std::string_view name) const noexcept
@@ -224,7 +224,7 @@ namespace vmod
 				return nullptr;
 			}
 
-			return script_lookup_shared(name, it);
+			return script_lookup_shared(it);
 		}
 
 		static bool bindings() noexcept;
@@ -241,7 +241,7 @@ namespace vmod
 
 	static class_desc_t<class server_symbols_singleton> server_symbols_desc{"server_symbols"};
 
-	gsdk::HSCRIPT server_symbols_singleton::script_lookup_shared(std::string_view name, symbol_cache::const_iterator it) noexcept
+	gsdk::HSCRIPT server_symbols_singleton::script_lookup_shared(symbol_cache::const_iterator it) noexcept
 	{
 		script_qual_it_t *script_it{new script_qual_it_t};
 		script_it->it_ = it;
@@ -255,10 +255,12 @@ namespace vmod
 			return nullptr;
 		}
 
+		//vm->SetInstanceUniqeId
+
 		return script_it->instance;
 	}
 
-	gsdk::HSCRIPT server_symbols_singleton::script_lookup_shared(std::string_view name, symbol_cache::qualification_info::const_iterator it) noexcept
+	gsdk::HSCRIPT server_symbols_singleton::script_lookup_shared(symbol_cache::qualification_info::const_iterator it) noexcept
 	{
 		script_name_it_t *script_it{new script_name_it_t};
 		script_it->it_ = it;
@@ -272,6 +274,8 @@ namespace vmod
 			return nullptr;
 		}
 
+		//vm->SetInstanceUniqeId
+
 		return script_it->instance;
 	}
 
@@ -281,8 +285,8 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		server_symbols_desc.func(&server_symbols_singleton::script_lookup, "script_lookup"sv, "lookup"sv);
-		server_symbols_desc.func(&server_symbols_singleton::script_lookup_global, "script_lookup_global"sv, "lookup_global"sv);
+		server_symbols_desc.func(&server_symbols_singleton::script_lookup, "__script_lookup"sv, "lookup"sv);
+		server_symbols_desc.func(&server_symbols_singleton::script_lookup_global, "__script_lookup_global"sv, "lookup_global"sv);
 
 		if(!vm->RegisterClass(&server_symbols_desc)) {
 			error("vmod: failed to register server symbols script class\n"sv);
@@ -295,14 +299,16 @@ namespace vmod
 			return false;
 		}
 
+		vm->SetInstanceUniqeId(instance, "__vmod_server_symbols_singleton");
+
 		if(!vm->SetValue(vmod.symbols_table(), "server", instance)) {
 			error("vmod: failed to set server symbols table value\n"sv);
 			return false;
 		}
 
-		qual_it_desc.func(&script_qual_it_t::script_name, "script_name"sv, "get_name"sv);
-		qual_it_desc.func(&script_qual_it_t::script_lookup, "script_lookup"sv, "lookup"sv);
-		qual_it_desc.func(&script_qual_it_t::script_delete, "script_delete"sv, "free"sv);
+		qual_it_desc.func(&script_qual_it_t::script_name, "__script_name"sv, "get_name"sv);
+		qual_it_desc.func(&script_qual_it_t::script_lookup, "__script_lookup"sv, "lookup"sv);
+		qual_it_desc.func(&script_qual_it_t::script_delete, "__script_delete"sv, "free"sv);
 		qual_it_desc.dtor();
 
 		if(!vm->RegisterClass(&qual_it_desc)) {
@@ -310,13 +316,13 @@ namespace vmod
 			return false;
 		}
 
-		name_it_desc.func(&script_name_it_t::script_name, "script_name"sv, "get_name"sv);
-		name_it_desc.func(&script_name_it_t::script_addr, "script_addr"sv, "get_addr"sv);
-		name_it_desc.func(&script_name_it_t::script_func, "script_func"sv, "get_func"sv);
-		name_it_desc.func(&script_name_it_t::script_mfp, "script_mfp"sv, "get_mfp"sv);
-		name_it_desc.func(&script_name_it_t::script_size, "script_size"sv, "get_size"sv);
-		name_it_desc.func(&script_name_it_t::script_lookup, "script_lookup"sv, "lookup"sv);
-		name_it_desc.func(&script_name_it_t::script_delete, "script_delete"sv, "free"sv);
+		name_it_desc.func(&script_name_it_t::script_name, "__script_name"sv, "get_name"sv);
+		name_it_desc.func(&script_name_it_t::script_addr, "__script_addr"sv, "get_addr"sv);
+		name_it_desc.func(&script_name_it_t::script_func, "__script_func"sv, "get_func"sv);
+		name_it_desc.func(&script_name_it_t::script_mfp, "__script_mfp"sv, "get_mfp"sv);
+		name_it_desc.func(&script_name_it_t::script_size, "__script_size"sv, "get_size"sv);
+		name_it_desc.func(&script_name_it_t::script_lookup, "__script_lookup"sv, "lookup"sv);
+		name_it_desc.func(&script_name_it_t::script_delete, "__script_delete"sv, "free"sv);
 		name_it_desc.dtor();
 
 		if(!vm->RegisterClass(&name_it_desc)) {
@@ -331,7 +337,7 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
-		vmod_desc.func(&vmod::script_find_plugin, "script_find_plugin"sv, "find_plugin"sv);
+		vmod_desc.func(&vmod::script_find_plugin, "__script_find_plugin"sv, "find_plugin"sv);
 
 		if(!vm_->RegisterClass(&vmod_desc)) {
 			error("vmod: failed to register vmod script class\n"sv);
@@ -343,6 +349,8 @@ namespace vmod
 			error("vmod: failed to create vmod instance\n"sv);
 			return false;
 		}
+
+		vm_->SetInstanceUniqeId(instance, "__vmod_singleton");
 
 		plugins_table_ = vm_->CreateTable();
 		if(!plugins_table_ || plugins_table_ == gsdk::INVALID_HSCRIPT) {
@@ -448,10 +456,10 @@ namespace vmod
 	static void(*VScriptServerTerm)();
 	static bool(*VScriptRunScript)(const char *, gsdk::HSCRIPT, bool);
 	static void(gsdk::CTFGameRules::*RegisterScriptFunctions)();
-	static void(*PrintFunc)(gsdk::HSQUIRRELVM, const gsdk::SQChar *, ...);
-	static void(*ErrorFunc)(gsdk::HSQUIRRELVM, const gsdk::SQChar *, ...);
+	static void(*PrintFunc)(HSQUIRRELVM, const SQChar *, ...);
+	static void(*ErrorFunc)(HSQUIRRELVM, const SQChar *, ...);
 	static void(gsdk::IScriptVM::*RegisterFunctionGuts)(gsdk::ScriptFunctionBinding_t *, gsdk::ScriptClassDesc_t *);
-	static gsdk::SQRESULT(*sq_setparamscheck)(gsdk::HSQUIRRELVM, gsdk::SQInteger, const gsdk::SQChar *);
+	static SQRESULT(*sq_setparamscheck)(HSQUIRRELVM, SQInteger, const SQChar *);
 	static gsdk::ScriptClassDesc_t **sv_classdesc_pHead;
 
 	static bool in_vscript_server_init;
@@ -560,7 +568,7 @@ namespace vmod
 
 	static char __vscript_printfunc_buffer[2048];
 	static detour<decltype(PrintFunc)> PrintFunc_detour;
-	static void PrintFunc_detour_callback(gsdk::HSQUIRRELVM m_hVM, const gsdk::SQChar *s, ...)
+	static void PrintFunc_detour_callback(HSQUIRRELVM m_hVM, const SQChar *s, ...)
 	{
 		va_list varg_list;
 		va_start(varg_list, s);
@@ -579,7 +587,7 @@ namespace vmod
 	}
 
 	static detour<decltype(ErrorFunc)> ErrorFunc_detour;
-	static void ErrorFunc_detour_callback(gsdk::HSQUIRRELVM m_hVM, const gsdk::SQChar *s, ...)
+	static void ErrorFunc_detour_callback(HSQUIRRELVM m_hVM, const SQChar *s, ...)
 	{
 		va_list varg_list;
 		va_start(varg_list, s);
@@ -616,13 +624,20 @@ namespace vmod
 	}
 
 	static detour<decltype(sq_setparamscheck)> sq_setparamscheck_detour;
-	static gsdk::SQRESULT sq_setparamscheck_detour_callback(gsdk::HSQUIRRELVM v, gsdk::SQInteger nparamscheck, const gsdk::SQChar *typemask)
+	static SQRESULT sq_setparamscheck_detour_callback(HSQUIRRELVM v, SQInteger nparamscheck, const SQChar *typemask)
 	{
 		if(current_binding && (current_binding->m_flags & func_desc_t::SF_VA_FUNC)) {
 			nparamscheck = -nparamscheck;
 		}
 
 		return sq_setparamscheck_detour(v, nparamscheck, typemask);
+	}
+
+	static bool (gsdk::IScriptVM::*RaiseException_original)(const char *);
+	static bool RaiseException_detour_callback(gsdk::IScriptVM *vm, const char *str)
+	{
+		error("%s\n", str);
+		return (vm->*RaiseException_original)(str);
 	}
 
 	bool vmod::detours() noexcept
@@ -652,6 +667,8 @@ namespace vmod
 		DestroyVM_original = swap_vfunc(vsmgr, &gsdk::IScriptManager::DestroyVM, DestroyVM_detour_callback);
 
 		Run_original = swap_vfunc(vm_, static_cast<decltype(Run_original)>(&gsdk::IScriptVM::Run), Run_detour_callback);
+
+		RaiseException_original = swap_vfunc(vm_, &gsdk::IScriptVM::RaiseException, RaiseException_detour_callback);
 
 		return true;
 	}
@@ -1145,12 +1162,6 @@ namespace vmod
 			return false;
 		}
 
-		if(!bindings()) {
-			return false;
-		}
-
-		vmod_refresh_plugins();
-
 		return true;
 	}
 
@@ -1213,6 +1224,12 @@ namespace vmod
 
 	bool vmod::load_late() noexcept
 	{
+		if(!bindings()) {
+			return false;
+		}
+
+		vmod_refresh_plugins();
+
 		return true;
 	}
 

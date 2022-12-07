@@ -3,5 +3,6 @@ subprojects/packagecache/
 subprojects/libyaml.wrap
 subprojects/yaml-?.?.?/
 subprojects/binutils-?.??/
+subprojects/squirrel/
 *.sublime-workspace
 *.sublime-project

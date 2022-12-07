@@ -14,8 +14,11 @@ namespace vmod
 		friend class vmod;
 
 	public:
-		yaml(std::filesystem::path &&path_) noexcept;
 		~yaml() noexcept;
+		yaml() noexcept = default;
+
+	private:
+		bool initialize(std::filesystem::path &&path_) noexcept;
 
 		class document final : public yaml_document_t
 		{

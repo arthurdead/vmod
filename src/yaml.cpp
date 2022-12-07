@@ -7,7 +7,7 @@
 
 namespace vmod
 {
-	static class_desc_t<yaml> yaml_desc{"yaml"};
+	static class_desc_t<yaml> yaml_desc{"__vmod_yaml_class"};
 
 	gsdk::HSCRIPT yaml::script_get_document(std::size_t i) noexcept
 	{
@@ -31,7 +31,12 @@ namespace vmod
 				path_ = std::filesystem::current_path() / path_;
 			}
 
-			yaml *temp_yaml{new yaml{std::move(path_)}};
+			yaml *temp_yaml{new yaml};
+
+			if(!temp_yaml->initialize(std::move(path_))) {
+				delete temp_yaml;
+				return nullptr;
+			}
 
 			return temp_yaml->instance;
 		}
@@ -39,7 +44,7 @@ namespace vmod
 		static inline gsdk::HSCRIPT instance;
 	};
 
-	static class_desc_t<yaml_singleton> yaml_singleton_desc{"yaml_singleton"};
+	static class_desc_t<yaml_singleton> yaml_singleton_desc{"__vmod_yaml_singleton_class"};
 
 	bool yaml_singleton::bindings() noexcept
 	{
@@ -47,7 +52,7 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		yaml_singleton_desc.func(&yaml_singleton::script_load, "script_load"sv, "load"sv);
+		yaml_singleton_desc.func(&yaml_singleton::script_load, "__script_load"sv, "load"sv);
 
 		if(!vm->RegisterClass(&yaml_singleton_desc)) {
 			error("vmod: failed to register yaml singleton script class\n"sv);
@@ -60,7 +65,7 @@ namespace vmod
 			return false;
 		}
 
-		vm->SetInstanceUniqeId(instance, "yaml_singleton");
+		vm->SetInstanceUniqeId(instance, "__vmod_yaml_singleton");
 
 		gsdk::HSCRIPT vmod_scope{vmod.scope()};
 		if(!vm->SetValue(vmod_scope, "yaml", instance)) {
@@ -75,9 +80,9 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
-		yaml_desc.func(&yaml::script_num_documents, "script_num_documents"sv, "num_documents"sv);
-		yaml_desc.func(&yaml::script_get_document, "script_get_document"sv, "get_document"sv);
-		yaml_desc.func(&yaml::script_delete, "script_delete"sv, "free"sv);
+		yaml_desc.func(&yaml::script_num_documents, "__script_num_documents"sv, "num_documents"sv);
+		yaml_desc.func(&yaml::script_get_document, "__script_get_document"sv, "get_document"sv);
+		yaml_desc.func(&yaml::script_delete, "__script_delete"sv, "free"sv);
 		yaml_desc.dtor();
 
 		if(!vmod.vm()->RegisterClass(&yaml_desc)) {
@@ -115,7 +120,7 @@ namespace vmod
 	{
 		while(!object_stack.empty()) {
 			gsdk::HSCRIPT obj{object_stack.top()};
-			vmod.vm()->ReleaseValue(obj);
+			vmod.vm()->ReleaseObject(obj);
 			object_stack.pop();
 		}
 
@@ -238,31 +243,17 @@ namespace vmod
 		return false;
 	}
 
-	yaml::yaml(std::filesystem::path &&path_) noexcept
+	static char __yaml_id_buff[1024];
+
+	bool yaml::initialize(std::filesystem::path &&path_) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		instance = vm->RegisterInstance(&yaml_desc, this);
-		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
-			vm->RaiseException("vmod: failed to register yaml instance");
-			return;
-		}
-
-		{
-			char id[256];
-			if(!vm->GenerateUniqueKey("yaml_", id, sizeof(id))) {
-				vm->RaiseException("vmod: failed to generate yaml unique id");
-				return;
-			}
-
-			vm->SetInstanceUniqeId(instance, id);
-		}
-
 		yaml_parser_t parser;
 		if(yaml_parser_initialize(&parser) != 1) {
-			return;
+			return false;
 		}
 
 		std::size_t size;
@@ -275,7 +266,7 @@ namespace vmod
 				yaml_document_t temp_doc;
 				if(yaml_parser_load(&parser, &temp_doc) != 1) {
 					documents.clear();
-					break;
+					return false;
 				}
 
 				yaml_node_t *root{yaml_document_get_root_node(&temp_doc)};
@@ -289,7 +280,7 @@ namespace vmod
 				if(!doc->node_to_variant(root, root_var)) {
 					delete doc;
 					documents.clear();
-					break;
+					return false;
 				}
 
 				doc->root_object = root_var.m_hScript;
@@ -298,6 +289,21 @@ namespace vmod
 		}
 
 		yaml_parser_delete(&parser);
+
+		instance = vm->RegisterInstance(&yaml_desc, this);
+		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+			vm->RaiseException("vmod: failed to register yaml instance");
+			return false;
+		}
+
+		if(!vm->GenerateUniqueKey("__vmod_yaml_", __yaml_id_buff, sizeof(__yaml_id_buff))) {
+			vm->RaiseException("vmod: failed to generate yaml unique id");
+			return false;
+		}
+
+		vm->SetInstanceUniqeId(instance, __yaml_id_buff);
+
+		return true;
 	}
 
 	yaml::~yaml() noexcept
