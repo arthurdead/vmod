@@ -112,6 +112,221 @@ namespace vmod
 		return vm_->GetValue(instance, name.c_str(), &value);
 	}
 
+	static class server_symbols_singleton final {
+		friend class vmod;
+
+		static gsdk::HSCRIPT script_lookup_shared(std::string_view name, symbol_cache::const_iterator it) noexcept;
+		static gsdk::HSCRIPT script_lookup_shared(std::string_view name, symbol_cache::qualification_info::const_iterator it) noexcept;
+
+		struct script_qual_it_t final
+		{
+			inline ~script_qual_it_t() noexcept
+			{
+				if(this->instance && this->instance != gsdk::INVALID_HSCRIPT) {
+					vmod.vm()->RemoveInstance(this->instance);
+				}
+			}
+
+			gsdk::HSCRIPT script_lookup(std::string_view name) const noexcept
+			{
+				using namespace std::literals::string_view_literals;
+
+				std::string name_tmp{name};
+
+				auto tmp_it{it_->second.find(name_tmp)};
+				if(tmp_it == it_->second.end()) {
+					return nullptr;
+				}
+
+				return script_lookup_shared(name, tmp_it);
+			}
+
+			inline std::string_view script_name() const noexcept
+			{ return it_->first; }
+
+			inline void script_delete() noexcept
+			{ delete this; }
+
+			symbol_cache::const_iterator it_;
+			gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+		};
+
+		struct script_name_it_t final
+		{
+			inline ~script_name_it_t() noexcept
+			{
+				if(this->instance && this->instance != gsdk::INVALID_HSCRIPT) {
+					vmod.vm()->RemoveInstance(this->instance);
+				}
+			}
+
+			gsdk::HSCRIPT script_lookup(std::string_view name) const noexcept
+			{
+				using namespace std::literals::string_view_literals;
+
+				std::string name_tmp{name};
+
+				auto tmp_it{it_->second.find(name_tmp)};
+				if(tmp_it == it_->second.end()) {
+					return nullptr;
+				}
+
+				return script_lookup_shared(name, tmp_it);
+			}
+
+			inline std::string_view script_name() const noexcept
+			{ return it_->first; }
+			inline void *script_addr() const noexcept
+			{ return it_->second.addr<void *>(); }
+			inline generic_func_t script_func() const noexcept
+			{ return it_->second.func<generic_func_t>(); }
+			inline generic_mfp_t script_mfp() const noexcept
+			{ return it_->second.mfp<generic_mfp_t>(); }
+			inline std::size_t script_size() const noexcept
+			{ return it_->second.size(); }
+
+			inline void script_delete() noexcept
+			{ delete this; }
+
+			symbol_cache::qualification_info::const_iterator it_;
+			gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+		};
+
+		static inline class_desc_t<script_qual_it_t> qual_it_desc{"qual_it"};
+		static inline class_desc_t<script_name_it_t> name_it_desc{"name_it"};
+
+		gsdk::HSCRIPT script_lookup(std::string_view name) const noexcept
+		{
+			using namespace std::literals::string_view_literals;
+
+			std::string name_tmp{name};
+
+			const symbol_cache &syms{vmod.server_lib.symbols()};
+
+			auto it{syms.find(name_tmp)};
+			if(it == syms.end()) {
+				return nullptr;
+			}
+
+			return script_lookup_shared(name, it);
+		}
+
+		gsdk::HSCRIPT script_lookup_global(std::string_view name) const noexcept
+		{
+			using namespace std::literals::string_view_literals;
+
+			std::string name_tmp{name};
+
+			const symbol_cache::qualification_info &syms{vmod.server_lib.symbols().global()};
+
+			auto it{syms.find(name_tmp)};
+			if(it == syms.end()) {
+				return nullptr;
+			}
+
+			return script_lookup_shared(name, it);
+		}
+
+		static bool bindings() noexcept;
+
+		static inline void unbindings() noexcept
+		{
+			if(instance && instance != gsdk::INVALID_HSCRIPT) {
+				vmod.vm()->RemoveInstance(instance);
+			}
+		}
+
+		static inline gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+	} server_symbols_singleton;
+
+	static class_desc_t<class server_symbols_singleton> server_symbols_desc{"server_symbols"};
+
+	gsdk::HSCRIPT server_symbols_singleton::script_lookup_shared(std::string_view name, symbol_cache::const_iterator it) noexcept
+	{
+		script_qual_it_t *script_it{new script_qual_it_t};
+		script_it->it_ = it;
+
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		script_it->instance = vm->RegisterInstance(&qual_it_desc, script_it);
+		if(!script_it->instance || script_it->instance == gsdk::INVALID_HSCRIPT) {
+			delete script_it;
+			vm->RaiseException("vmod: failed to create symbol qualification iterator instance");
+			return nullptr;
+		}
+
+		return script_it->instance;
+	}
+
+	gsdk::HSCRIPT server_symbols_singleton::script_lookup_shared(std::string_view name, symbol_cache::qualification_info::const_iterator it) noexcept
+	{
+		script_name_it_t *script_it{new script_name_it_t};
+		script_it->it_ = it;
+
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		script_it->instance = vm->RegisterInstance(&name_it_desc, script_it);
+		if(!script_it->instance || script_it->instance == gsdk::INVALID_HSCRIPT) {
+			delete script_it;
+			vm->RaiseException("vmod: failed to create symbol name iterator instance");
+			return nullptr;
+		}
+
+		return script_it->instance;
+	}
+
+	bool server_symbols_singleton::bindings() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		server_symbols_desc.func(&server_symbols_singleton::script_lookup, "script_lookup"sv, "lookup"sv);
+		server_symbols_desc.func(&server_symbols_singleton::script_lookup_global, "script_lookup_global"sv, "lookup_global"sv);
+
+		if(!vm->RegisterClass(&server_symbols_desc)) {
+			error("vmod: failed to register server symbols script class\n"sv);
+			return false;
+		}
+
+		instance = vm->RegisterInstance(&server_symbols_desc, &::vmod::server_symbols_singleton);
+		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create server symbols instance\n"sv);
+			return false;
+		}
+
+		if(!vm->SetValue(vmod.symbols_table(), "server", instance)) {
+			error("vmod: failed to set server symbols table value\n"sv);
+			return false;
+		}
+
+		qual_it_desc.func(&script_qual_it_t::script_name, "script_name"sv, "get_name"sv);
+		qual_it_desc.func(&script_qual_it_t::script_lookup, "script_lookup"sv, "lookup"sv);
+		qual_it_desc.func(&script_qual_it_t::script_delete, "script_delete"sv, "free"sv);
+		qual_it_desc.dtor();
+
+		if(!vm->RegisterClass(&qual_it_desc)) {
+			error("vmod: failed to register symbol qualification iterator script class\n"sv);
+			return false;
+		}
+
+		name_it_desc.func(&script_name_it_t::script_name, "script_name"sv, "get_name"sv);
+		name_it_desc.func(&script_name_it_t::script_addr, "script_addr"sv, "get_addr"sv);
+		name_it_desc.func(&script_name_it_t::script_func, "script_func"sv, "get_func"sv);
+		name_it_desc.func(&script_name_it_t::script_mfp, "script_mfp"sv, "get_mfp"sv);
+		name_it_desc.func(&script_name_it_t::script_size, "script_size"sv, "get_size"sv);
+		name_it_desc.func(&script_name_it_t::script_lookup, "script_lookup"sv, "lookup"sv);
+		name_it_desc.func(&script_name_it_t::script_delete, "script_delete"sv, "free"sv);
+		name_it_desc.dtor();
+
+		if(!vm->RegisterClass(&name_it_desc)) {
+			error("vmod: failed to register symbol name iterator script class\n"sv);
+			return false;
+		}
+
+		return true;
+	}
+
 	bool vmod::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -137,6 +352,21 @@ namespace vmod
 
 		if(!vm_->SetValue(scope_, "plugins", plugins_table_)) {
 			error("vmod: failed to set plugins table value\n"sv);
+			return false;
+		}
+
+		symbols_table_ = vm_->CreateTable();
+		if(!symbols_table_ || symbols_table_ == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create symbols table\n"sv);
+			return false;
+		}
+
+		if(!vm_->SetValue(scope_, "symbols", symbols_table_)) {
+			error("vmod: failed to set symbols table value\n"sv);
+			return false;
+		}
+
+		if(!server_symbols_singleton::bindings()) {
 			return false;
 		}
 
@@ -177,6 +407,8 @@ namespace vmod
 
 		yaml::unbindings();
 
+		server_symbols_singleton::unbindings();
+
 		ffi_unbindings();
 
 		if(plugins_table_ && plugins_table_ != gsdk::INVALID_HSCRIPT) {
@@ -185,6 +417,14 @@ namespace vmod
 
 		if(vm_->ValueExists(scope_, "plugins")) {
 			vm_->ClearValue(scope_, "plugins");
+		}
+
+		if(symbols_table_ && symbols_table_ != gsdk::INVALID_HSCRIPT) {
+			vm_->ReleaseTable(symbols_table_);
+		}
+
+		if(vm_->ValueExists(scope_, "symbols")) {
+			vm_->ClearValue(scope_, "symbols");
 		}
 
 		if(instance && instance != gsdk::INVALID_HSCRIPT) {

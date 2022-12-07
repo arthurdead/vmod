@@ -89,10 +89,15 @@ namespace gsdk
 		FIELD_TYPEUNKNOWN = FIELD_TYPECOUNT,
 		FIELD_CSTRING,
 		FIELD_HSCRIPT,
-		FIELD_VARIANT,
+		FIELD_VARIANT
 	};
 
-	using HSCRIPT = void *;
+	struct HSCRIPT__ final
+	{
+		int unused[1];
+	};
+
+	using HSCRIPT = HSCRIPT__ *;
 	inline HSCRIPT INVALID_HSCRIPT{reinterpret_cast<HSCRIPT>(-1)};
 
 	class CVariantDefaultAllocator;

@@ -36,6 +36,9 @@ namespace vmod
 		inline gsdk::HSCRIPT plugins_table() noexcept
 		{ return plugins_table_; }
 
+		inline gsdk::HSCRIPT symbols_table() noexcept
+		{ return symbols_table_; }
+
 	private:
 		bool load_late() noexcept;
 		bool load() noexcept;
@@ -64,6 +67,8 @@ namespace vmod
 
 		gsdk::CVarDLLIdentifier_t cvar_dll_id_{gsdk::INVALID_CVAR_DLL_IDENTIFIER};
 
+		friend class server_symbols_singleton;
+
 		gsdk_engine_library engine_lib;
 
 		gsdk_server_library server_lib;
@@ -83,6 +88,8 @@ namespace vmod
 
 		gsdk::HSCRIPT scope_{gsdk::INVALID_HSCRIPT};
 		gsdk::HSCRIPT plugins_table_{gsdk::INVALID_HSCRIPT};
+
+		gsdk::HSCRIPT symbols_table_{gsdk::INVALID_HSCRIPT};
 
 		gsdk::HSCRIPT server_init_script{gsdk::INVALID_HSCRIPT};
 

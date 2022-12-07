@@ -28,20 +28,6 @@ namespace vmod
 		return {};
 	}
 
-	template <>
-	constexpr inline gsdk::ScriptDataType_t type_to_field<generic_func_t>() noexcept
-	{ return gsdk::FIELD_VOID; }
-	template <>
-	inline generic_func_t variant_to_value<generic_func_t>(const gsdk::ScriptVariant_t &var) noexcept
-	{
-		switch(var.m_type) {
-			case gsdk::FIELD_VOID:
-			return reinterpret_cast<generic_func_t>(var.m_hScript);
-		}
-
-		return nullptr;
-	}
-
 	extern bool ffi_bindings() noexcept;
 	extern void ffi_unbindings() noexcept;
 

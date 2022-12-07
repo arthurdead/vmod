@@ -246,14 +246,14 @@ namespace vmod
 
 		instance = vm->RegisterInstance(&yaml_desc, this);
 		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
-			error("vmod: failed to register yaml instance\n"sv);
+			vm->RaiseException("vmod: failed to register yaml instance");
 			return;
 		}
 
 		{
 			char id[256];
 			if(!vm->GenerateUniqueKey("yaml_", id, sizeof(id))) {
-				error("vmod: failed to generate yaml unique id\n"sv);
+				vm->RaiseException("vmod: failed to generate yaml unique id");
 				return;
 			}
 
