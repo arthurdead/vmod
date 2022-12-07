@@ -65,15 +65,40 @@ namespace vmod
 		static constexpr bool va{false};
 		static constexpr bool member{false};
 
+		using args_tuple = std::tuple<Args...>;
+
 		template <std::size_t i>
 		struct arg
 		{
-			using type = std::tuple_element_t<i, std::tuple<Args...>>;
+			using type = std::tuple_element_t<i, args_tuple>;
 		};
 
 		using pointer_type = R(*)(Args...);
 		using plain_pointer_type = pointer_type;
 		using thiscall_pointer_type = R(__attribute__((__thiscall__)) *)(Args...);
+	};
+
+	template <typename R, typename C, typename ...Args>
+	struct function_traits<R(C::*)(Args...)>
+	{
+		using return_type = R;
+
+		using class_type = C;
+
+		static constexpr bool va{false};
+		static constexpr bool member{true};
+
+		using args_tuple = std::tuple<Args...>;
+
+		template <std::size_t i>
+		struct arg
+		{
+			using type = std::tuple_element_t<i, args_tuple>;
+		};
+
+		using pointer_type = R(C::*)(Args...);
+		using plain_pointer_type = R(*)(C *, Args...);
+		using thiscall_pointer_type = R(__attribute__((__thiscall__)) *)(C *, Args...);
 	};
 
 	template <typename R, typename ...Args>
@@ -87,27 +112,6 @@ namespace vmod
 	};
 
 	template <typename R, typename C, typename ...Args>
-	struct function_traits<R(C::*)(Args...)>
-	{
-		using return_type = R;
-
-		using class_type = C;
-
-		static constexpr bool va{false};
-		static constexpr bool member{true};
-
-		template <std::size_t i>
-		struct arg
-		{
-			using type = std::tuple_element_t<i, std::tuple<Args...>>;
-		};
-
-		using pointer_type = R(C::*)(Args...);
-		using plain_pointer_type = R(*)(C *, Args...);
-		using thiscall_pointer_type = R(__attribute__((__thiscall__)) *)(C *, Args...);
-	};
-
-	template <typename R, typename C, typename ...Args>
 	struct function_traits<R(C::*)(Args..., ...)> : function_traits<R(C::*)(Args...)>
 	{
 		static constexpr bool va{true};
@@ -118,7 +122,32 @@ namespace vmod
 	};
 
 	template <typename R, typename ...Args>
+	struct function_traits<R(*)(Args...) noexcept> : public function_traits<R(*)(Args...)>
+	{
+	};
+
+	template <typename R, typename ...Args>
+	struct function_traits<R(*)(Args..., ...) noexcept> : public function_traits<R(*)(Args..., ...)>
+	{
+	};
+
+	template <typename R, typename C, typename ...Args>
+	struct function_traits<R(C::*)(Args...) noexcept> : function_traits<R(C::*)(Args...)>
+	{
+	};
+
+	template <typename R, typename C, typename ...Args>
+	struct function_traits<R(C::*)(Args..., ...) noexcept> : function_traits<R(C::*)(Args..., ...)>
+	{
+	};
+
+	template <typename R, typename ...Args>
 	struct function_traits<R(Args...)> : function_traits<R(*)(Args...)>
+	{
+	};
+
+	template <typename R, typename ...Args>
+	struct function_traits<R(Args...) noexcept> : function_traits<R(*)(Args...) noexcept>
 	{
 	};
 
@@ -127,8 +156,16 @@ namespace vmod
 	{
 	};
 
+	template <typename R, typename ...Args>
+	struct function_traits<R(Args..., ...) noexcept> : function_traits<R(*)(Args..., ...) noexcept>
+	{
+	};
+
 	template <typename T>
 	using function_return_t = typename function_traits<T>::return_type;
+
+	template <typename T>
+	using function_args_tuple_t = typename function_traits<T>::args_tuple;
 
 	template <typename T>
 	using function_pointer_t = typename function_traits<T>::pointer_type;
@@ -144,6 +181,9 @@ namespace vmod
 
 	template <typename T>
 	constexpr bool function_is_member_v{function_traits<T>::member};
+
+	template <typename T>
+	constexpr bool function_is_va_v{function_traits<T>::va};
 
 	template <typename T>
 	const std::string &demangle() noexcept;

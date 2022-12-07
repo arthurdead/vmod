@@ -6,12 +6,15 @@
 #include <memory>
 #include "gsdk.hpp"
 #include "convar.hpp"
+#include "vscript.hpp"
 
 namespace vmod
 {
 	class plugin;
 
-	class vmod final : public gsdk::ISquirrelMetamethodDelegate
+	class script_variant_t;
+
+	class vmod final : public gsdk::ISquirrelMetamethodDelegate, public singleton_instance_helper<vmod>
 	{
 		friend class vsp;
 
@@ -39,6 +42,8 @@ namespace vmod
 		inline gsdk::HSCRIPT symbols_table() noexcept
 		{ return symbols_table_; }
 
+		static vmod &instance() noexcept;
+
 	private:
 		bool load_late() noexcept;
 		bool load() noexcept;
@@ -50,6 +55,7 @@ namespace vmod
 		void map_active() noexcept;
 
 		gsdk::HSCRIPT script_find_plugin(std::string_view name) noexcept;
+		std::filesystem::path script_join_paths(const script_variant_t *va_args, std::size_t num_args, ...) noexcept;
 
 		bool binding_mods() noexcept;
 		bool bindings() noexcept;
@@ -84,7 +90,7 @@ namespace vmod
 		gsdk::IScriptVM *vm_;
 
 		gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
-		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT vs_instance_{gsdk::INVALID_HSCRIPT};
 
 		gsdk::HSCRIPT scope_{gsdk::INVALID_HSCRIPT};
 		gsdk::HSCRIPT plugins_table_{gsdk::INVALID_HSCRIPT};

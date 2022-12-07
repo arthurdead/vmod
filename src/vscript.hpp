@@ -201,6 +201,8 @@ namespace vmod
 
 		template <typename T>
 		friend class class_desc_t;
+		template <typename T>
+		friend class singleton_class_desc_t;
 
 		template <typename R, typename C, typename ...Args>
 		inline func_desc_t(R(C::*func)(Args...), std::string_view name, std::string_view script_name) noexcept
@@ -232,6 +234,12 @@ namespace vmod
 
 		template <typename R, typename ...Args>
 		void initialize_shared(std::string_view name, std::string_view script_name, bool va);
+
+		template <typename R, typename C, typename ...Args>
+		static bool binding_member_singleton(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
+
+		template <typename R, typename C, typename ...Args>
+		static bool binding_member_singleton_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
 
 		template <typename R, typename C, typename ...Args>
 		static bool binding_member(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
@@ -278,36 +286,54 @@ namespace vmod
 	static_assert(alignof(func_desc_t) == alignof(gsdk::ScriptFunctionBinding_t));
 
 	template <typename T>
+	class instance_helper : public gsdk::IScriptInstanceHelper
+	{
+	public:
+		virtual ~instance_helper() noexcept = default;
+
+		inline void *GetProxied(void *ptr) noexcept override
+		{ return ptr; }
+
+		inline bool ToString(void *ptr, char *buff, int siz) noexcept override final
+		{
+			const std::string &name{demangle<T>()};
+			std::snprintf(buff, static_cast<std::size_t>(siz), "(%s : %p)", name.c_str(), ptr);
+			return true;
+		}
+
+		inline void *BindOnRead([[maybe_unused]] gsdk::HSCRIPT instance, void *ptr, [[maybe_unused]] const char *id) noexcept override
+		{ return ptr; }
+
+		static inline instance_helper &singleton() noexcept
+		{
+			static instance_helper singleton_;
+			return singleton_;
+		}
+	};
+
+	template <typename T>
+	class singleton_instance_helper : public instance_helper<T>
+	{
+	public:
+		inline void *GetProxied([[maybe_unused]] void *ptr) noexcept override final
+		{ return static_cast<T *>(this); }
+
+		inline void *BindOnRead([[maybe_unused]] gsdk::HSCRIPT instance, [[maybe_unused]] void *ptr, [[maybe_unused]] const char *id) noexcept override final
+		{ return static_cast<T *>(this); }
+	};
+
+	template <typename T>
 	class alignas(gsdk::ScriptClassDesc_t) class_desc_t : public gsdk::ScriptClassDesc_t
 	{
 	public:
 		class_desc_t(const class_desc_t &) = delete;
 		class_desc_t &operator=(const class_desc_t &) = delete;
 
-		class instance_helper final : public gsdk::IScriptInstanceHelper
+		inline class_desc_t &operator=(instance_helper<T> &helper) noexcept
 		{
-		public:
-			virtual ~instance_helper() noexcept = default;
-
-			inline void *GetProxied(void *ptr) noexcept override final
-			{ return ptr; }
-
-			inline bool ToString(void *ptr, char *buff, int siz) noexcept override final
-			{
-				const std::string &name{demangle<T>()};
-				std::snprintf(buff, static_cast<std::size_t>(siz), "(%s : %p)", name.c_str(), ptr);
-				return true;
-			}
-
-			inline void *BindOnRead([[maybe_unused]] gsdk::HSCRIPT instance, void *ptr, [[maybe_unused]] const char *id) noexcept override final
-			{ return ptr; }
-
-			static inline instance_helper &singleton() noexcept
-			{
-				static instance_helper singleton_;
-				return singleton_;
-			}
-		};
+			pHelper = &helper;
+			return *this;
+		}
 
 		inline class_desc_t(class_desc_t &&other) noexcept
 			: gsdk::ScriptClassDesc_t{}
@@ -403,6 +429,40 @@ namespace vmod
 		{ return new T; }
 		static inline void destruct(void *ptr) noexcept
 		{ delete reinterpret_cast<T *>(ptr); }
+	};
+
+	template <typename T>
+	class singleton_class_desc_t : public class_desc_t<T>
+	{
+	public:
+		using class_desc_t<T>::class_desc_t;
+		using class_desc_t<T>::operator=;
+
+		template <typename ...Args>
+		inline func_desc_t &func(Args &&...args) noexcept
+		{
+			func_desc_t &temp{class_desc_t<T>::func(std::forward<Args>(args)...)};
+			using F = std::tuple_element_t<0, std::tuple<Args...>>;
+			if constexpr(function_is_member_v<F>) {
+				using R = function_return_t<F>;
+				using A = function_args_tuple_t<F>;
+				make_singleton<F, R>(temp, std::type_identity<A>{});
+			}
+			return temp;
+		}
+
+	private:
+		template <typename F, typename R, typename ...Args>
+		void make_singleton(func_desc_t &desc, std::type_identity<std::tuple<Args...>>) noexcept
+		{
+			desc.m_flags &= ~static_cast<unsigned>(gsdk::SF_MEMBER_FUNC);
+
+			if constexpr(function_is_va_v<F>) {
+				desc.m_pfnBinding = static_cast<gsdk::ScriptBindingFunc_t>(func_desc_t::binding_member_singleton_va<R, T, Args...>);
+			} else {
+				desc.m_pfnBinding = static_cast<gsdk::ScriptBindingFunc_t>(func_desc_t::binding_member_singleton<R, T, Args...>);
+			}
+		}
 	};
 
 	static_assert(sizeof(class_desc_t<empty_class>) == sizeof(gsdk::ScriptClassDesc_t));

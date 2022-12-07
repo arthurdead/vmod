@@ -105,11 +105,14 @@ namespace vmod
 		return nullptr;
 	}
 
-	static class_desc_t<class vmod> vmod_desc{"__vmod_singleton_class"};
+	static singleton_class_desc_t<class vmod> vmod_desc{"__vmod_singleton_class"};
+
+	inline class vmod &vmod::instance() noexcept
+	{ return ::vmod::vmod; }
 
 	bool vmod::Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value)
 	{
-		return vm_->GetValue(instance, name.c_str(), &value);
+		return vm_->GetValue(vs_instance_, name.c_str(), &value);
 	}
 
 	static class server_symbols_singleton final {
@@ -333,24 +336,37 @@ namespace vmod
 		return true;
 	}
 
+	std::filesystem::path vmod::script_join_paths(const script_variant_t *va_args, std::size_t num_args, ...) noexcept
+	{
+		std::filesystem::path final_path;
+
+		for(std::size_t i{0}; i < num_args; ++i) {
+			final_path /= va_args[i].get<std::filesystem::path>();
+		}
+
+		return final_path;
+	}
+
 	bool vmod::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
 		vmod_desc.func(&vmod::script_find_plugin, "__script_find_plugin"sv, "find_plugin"sv);
+		vmod_desc.func(&vmod::script_join_paths, "__script_join_paths"sv, "join_paths"sv);
+		vmod_desc = *this;
 
 		if(!vm_->RegisterClass(&vmod_desc)) {
 			error("vmod: failed to register vmod script class\n"sv);
 			return false;
 		}
 
-		instance = vm_->RegisterInstance(&vmod_desc, this);
-		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+		vs_instance_ = vm_->RegisterInstance(&vmod_desc, this);
+		if(!vs_instance_ || vs_instance_ == gsdk::INVALID_HSCRIPT) {
 			error("vmod: failed to create vmod instance\n"sv);
 			return false;
 		}
 
-		vm_->SetInstanceUniqeId(instance, "__vmod_singleton");
+		vm_->SetInstanceUniqeId(vs_instance_, "__vmod_singleton");
 
 		plugins_table_ = vm_->CreateTable();
 		if(!plugins_table_ || plugins_table_ == gsdk::INVALID_HSCRIPT) {
@@ -386,6 +402,11 @@ namespace vmod
 
 		if(!vm_->SetValue(scope_, "game_dir", game_dir.c_str())) {
 			error("vmod: failed to set game dir value\n"sv);
+			return false;
+		}
+
+		if(!vm_->SetValue(scope_, "root_dir", root_dir.c_str())) {
+			error("vmod: failed to set root dir value\n"sv);
 			return false;
 		}
 
@@ -435,8 +456,8 @@ namespace vmod
 			vm_->ClearValue(scope_, "symbols");
 		}
 
-		if(instance && instance != gsdk::INVALID_HSCRIPT) {
-			vm_->RemoveInstance(instance);
+		if(vs_instance_ && vs_instance_ != gsdk::INVALID_HSCRIPT) {
+			vm_->RemoveInstance(vs_instance_);
 		}
 
 		if(get_impl) {
@@ -445,6 +466,10 @@ namespace vmod
 
 		if(vm_->ValueExists(scope_, "game_dir")) {
 			vm_->ClearValue(scope_, "game_dir");
+		}
+
+		if(vm_->ValueExists(scope_, "root_dir")) {
+			vm_->ClearValue(scope_, "root_dir");
 		}
 	}
 
@@ -536,7 +561,7 @@ namespace vmod
 	static bool VScriptRunScript_detour_callback(const char *script, gsdk::HSCRIPT scope, bool warn) noexcept
 	{
 		if(!vscript_server_init_called) {
-			if(strcmp(script, "mapspawn") == 0) {
+			if(std::strcmp(script, "mapspawn") == 0) {
 				return true;
 			}
 		}
@@ -693,7 +718,28 @@ namespace vmod
 			return false;
 		}
 
-		std::string_view launcher_lib_name{"bin/dedicated_srv.so"sv};
+		std::filesystem::path exe_filename;
+
+		{
+			char exe[PATH_MAX];
+			ssize_t len{readlink("/proc/self/exe", exe, sizeof(exe))};
+			exe[len] = '\0';
+
+			exe_filename = exe;
+			exe_filename = exe_filename.filename();
+			exe_filename.replace_extension();
+		}
+
+		std::string_view launcher_lib_name;
+		if(exe_filename == "hl2_linux"sv) {
+			launcher_lib_name = "bin/launcher.so"sv;
+		} else if(exe_filename == "srcds_linux"sv) {
+			launcher_lib_name = "bin/dedicated_srv.so"sv;
+		} else {
+			std::cout << "\033[0;31m"sv << "vmod: unsupported exe filename: '"sv << exe_filename << "'\n"sv << "\033[0m"sv;
+			return false;
+		}
+
 		if(!launcher_lib.load(launcher_lib_name)) {
 			std::cout << "\033[0;31m"sv << "vmod: failed to open launcher library: '"sv << launcher_lib.error_string() << "'\n"sv << "\033[0m"sv;
 			return false;
@@ -1221,6 +1267,15 @@ namespace vmod
 
 		return ret.m_bool;
 	}
+
+	bool __vmod_to_bool(gsdk::HSCRIPT object) noexcept
+	{ return vmod.to_bool(object); }
+	float __vmod_to_float(gsdk::HSCRIPT object) noexcept
+	{ return vmod.to_float(object); }
+	int __vmod_to_int(gsdk::HSCRIPT object) noexcept
+	{ return vmod.to_int(object); }
+	std::string_view __vmod_to_string(gsdk::HSCRIPT object) noexcept
+	{ return vmod.to_string(object); }
 
 	bool vmod::load_late() noexcept
 	{

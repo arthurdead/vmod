@@ -1,9 +1,13 @@
 #include <filesystem>
-#include "vmod.hpp"
 #include <charconv>
 
 namespace vmod
 {
+	extern bool __vmod_to_bool(gsdk::HSCRIPT) noexcept;
+	extern float __vmod_to_float(gsdk::HSCRIPT) noexcept;
+	extern int __vmod_to_int(gsdk::HSCRIPT) noexcept;
+	extern std::string_view __vmod_to_string(gsdk::HSCRIPT) noexcept;
+
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<void>() noexcept
 	{ return gsdk::FIELD_VOID; }
@@ -40,7 +44,7 @@ namespace vmod
 				return var.m_bool;
 			}
 			case gsdk::FIELD_HSCRIPT: {
-				return vmod.to_bool(var.m_hScript);
+				return __vmod_to_bool(var.m_hScript);
 			}
 		}
 
@@ -74,7 +78,7 @@ namespace vmod
 				return var.m_bool ? static_cast<T>(1.0f) : static_cast<T>(0.0f);
 			}
 			case gsdk::FIELD_HSCRIPT: {
-				return static_cast<T>(vmod.to_float(var.m_hScript));
+				return static_cast<T>(__vmod_to_float(var.m_hScript));
 			}
 		}
 
@@ -108,7 +112,7 @@ namespace vmod
 				return var.m_bool ? static_cast<T>(1) : static_cast<T>(0);
 			}
 			case gsdk::FIELD_HSCRIPT: {
-				return static_cast<T>(vmod.to_int(var.m_hScript));
+				return static_cast<T>(__vmod_to_int(var.m_hScript));
 			}
 		}
 
@@ -291,7 +295,7 @@ namespace vmod
 				return var.m_bool ? "true"sv : "false"sv;
 			}
 			case gsdk::FIELD_HSCRIPT: {
-				return vmod.to_string(var.m_hScript);
+				return __vmod_to_string(var.m_hScript);
 			}
 		}
 
@@ -303,6 +307,14 @@ namespace vmod
 	{ return gsdk::FIELD_CSTRING; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, const std::filesystem::path &value) noexcept
 	{ var.m_pszString = value.c_str(); }
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, std::filesystem::path &&value) noexcept
+	{
+		std::size_t len{value.native().length()};
+		var.m_pszString = new char[len+1];
+		std::strncpy(const_cast<char *>(var.m_pszString), value.c_str(), len);
+		const_cast<char *>(var.m_pszString)[len] = '\0';
+		var.m_flags |= gsdk::SV_FREE;
+	}
 	template <>
 	inline std::filesystem::path variant_to_value<std::filesystem::path>(const gsdk::ScriptVariant_t &var) noexcept
 	{

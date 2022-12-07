@@ -5,7 +5,7 @@ namespace vmod
 	{
 		m_pfnConstruct = nullptr;
 		m_pfnDestruct = nullptr;
-		pHelper = &instance_helper::singleton();
+		pHelper = &instance_helper<T>::singleton();
 		m_pNextDesc = nullptr;
 		m_pBaseDesc = nullptr;
 		m_pszClassname = demangle<T>().c_str();
@@ -51,6 +51,16 @@ namespace vmod
 		} else {
 			return binding_func(variant_to_value<std::decay_t<Args>>(args_var[I])...);
 		}
+	}
+
+	template <typename R, typename C, typename ...Args>
+	bool func_desc_t::binding_member_singleton(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept
+	{
+		if(!obj) {
+			obj = &C::instance();
+		}
+
+		return binding_member<R, C, Args...>(binding_func, adjustor, obj, args_var, num_args, ret_var);
 	}
 
 	template <typename R, typename C, typename ...Args>
@@ -153,6 +163,16 @@ namespace vmod
 		} else {
 			return binding_func(variant_to_value<std::decay_t<Args>>(args_var[I])..., reinterpret_cast<const script_variant_t *>(args_var_va), num_va);
 		}
+	}
+
+	template <typename R, typename C, typename ...Args>
+	bool func_desc_t::binding_member_singleton_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept
+	{
+		if(!obj) {
+			obj = &C::instance();
+		}
+
+		return binding_member_va<R, C, Args...>(binding_func, adjustor, obj, args_var, num_args, ret_var);
 	}
 
 	template <typename R, typename C, typename ...Args>

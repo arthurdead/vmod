@@ -18,11 +18,15 @@ namespace vmod
 		return documents[i]->root_object;
 	}
 
-	class yaml_singleton final
+	class yaml_singleton final : public singleton_instance_helper<yaml_singleton>
 	{
 	public:
-		static bool bindings() noexcept;
-		static void unbindings() noexcept;
+		~yaml_singleton() noexcept override;
+
+		bool bindings() noexcept;
+		void unbindings() noexcept;
+
+		static yaml_singleton &instance() noexcept;
 
 	private:
 		static gsdk::HSCRIPT script_load(std::filesystem::path &&path_) noexcept
@@ -41,10 +45,19 @@ namespace vmod
 			return temp_yaml->instance;
 		}
 
-		static inline gsdk::HSCRIPT instance;
+		gsdk::HSCRIPT vs_instance_;
 	};
 
-	static class_desc_t<yaml_singleton> yaml_singleton_desc{"__vmod_yaml_singleton_class"};
+	yaml_singleton::~yaml_singleton() noexcept
+	{
+	}
+
+	static singleton_class_desc_t<yaml_singleton> yaml_singleton_desc{"__vmod_yaml_singleton_class"};
+
+	static class yaml_singleton yaml_singleton;
+
+	inline class yaml_singleton &yaml_singleton::instance() noexcept
+	{ return ::vmod::yaml_singleton; }
 
 	bool yaml_singleton::bindings() noexcept
 	{
@@ -53,22 +66,23 @@ namespace vmod
 		gsdk::IScriptVM *vm{vmod.vm()};
 
 		yaml_singleton_desc.func(&yaml_singleton::script_load, "__script_load"sv, "load"sv);
+		yaml_singleton_desc = ::vmod::yaml_singleton;
 
 		if(!vm->RegisterClass(&yaml_singleton_desc)) {
 			error("vmod: failed to register yaml singleton script class\n"sv);
 			return false;
 		}
 
-		instance = vm->RegisterInstance(&yaml_singleton_desc, nullptr);
-		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+		vs_instance_ = vm->RegisterInstance(&yaml_singleton_desc, &::vmod::yaml_singleton);
+		if(!vs_instance_ || vs_instance_ == gsdk::INVALID_HSCRIPT) {
 			error("vmod: failed to register yaml singleton instance\n"sv);
 			return false;
 		}
 
-		vm->SetInstanceUniqeId(instance, "__vmod_yaml_singleton");
+		vm->SetInstanceUniqeId(vs_instance_, "__vmod_yaml_singleton");
 
 		gsdk::HSCRIPT vmod_scope{vmod.scope()};
-		if(!vm->SetValue(vmod_scope, "yaml", instance)) {
+		if(!vm->SetValue(vmod_scope, "yaml", vs_instance_)) {
 			error("vmod: failed to set yaml singleton value\n"sv);
 			return false;
 		}
@@ -90,7 +104,7 @@ namespace vmod
 			return false;
 		}
 
-		if(!yaml_singleton::bindings()) {
+		if(!yaml_singleton.bindings()) {
 			return false;
 		}
 
@@ -101,8 +115,8 @@ namespace vmod
 	{
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		if(instance && instance != gsdk::INVALID_HSCRIPT) {
-			vm->RemoveInstance(instance);
+		if(vs_instance_ && vs_instance_ != gsdk::INVALID_HSCRIPT) {
+			vm->RemoveInstance(vs_instance_);
 		}
 
 		gsdk::HSCRIPT vmod_scope{vmod.scope()};
@@ -113,7 +127,7 @@ namespace vmod
 
 	void yaml::unbindings() noexcept
 	{
-		yaml_singleton::unbindings();
+		yaml_singleton.unbindings();
 	}
 
 	yaml::document::~document() noexcept
@@ -296,7 +310,7 @@ namespace vmod
 			return false;
 		}
 
-		if(!vm->GenerateUniqueKey("__vmod_yaml_", __yaml_id_buff, sizeof(__yaml_id_buff))) {
+		if(!vm->GenerateUniqueKey("__vmod_yaml_instance_", __yaml_id_buff, sizeof(__yaml_id_buff))) {
 			vm->RaiseException("vmod: failed to generate yaml unique id");
 			return false;
 		}

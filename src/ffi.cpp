@@ -1,5 +1,6 @@
 #include "ffi.hpp"
 #include "gsdk/tier1/utlstring.hpp"
+#include "vmod.hpp"
 
 namespace vmod
 {
@@ -114,10 +115,12 @@ namespace vmod
 		}
 	}
 
-	class memory_singleton final : public gsdk::ISquirrelMetamethodDelegate
+	class memory_singleton final : public gsdk::ISquirrelMetamethodDelegate, public singleton_instance_helper<memory_singleton>
 	{
 	public:
 		bool bindings() noexcept;
+
+		static memory_singleton &instance() noexcept;
 
 		void unbindings() noexcept
 		{
@@ -129,8 +132,8 @@ namespace vmod
 				vm->DestroySquirrelMetamethod_Get(get_impl);
 			}
 
-			if(instance && instance != gsdk::INVALID_HSCRIPT) {
-				vm->RemoveInstance(instance);
+			if(vs_instance_ && vs_instance_ != gsdk::INVALID_HSCRIPT) {
+				vm->RemoveInstance(vs_instance_);
 			}
 
 			if(scope && scope != gsdk::INVALID_HSCRIPT) {
@@ -143,6 +146,7 @@ namespace vmod
 			}
 		}
 
+	private:
 		static gsdk::HSCRIPT script_allocate(std::size_t size) noexcept
 		{
 			memory_block *block{new memory_block{size}};
@@ -206,7 +210,7 @@ namespace vmod
 		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
 
 		gsdk::HSCRIPT scope{gsdk::INVALID_HSCRIPT};
-		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT vs_instance_{gsdk::INVALID_HSCRIPT};
 		gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
 	};
 
@@ -216,10 +220,13 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
-		return vmod.vm()->GetValue(instance, name.c_str(), &value);
+		return vmod.vm()->GetValue(vs_instance_, name.c_str(), &value);
 	}
 
-	static class_desc_t<class memory_singleton> memory_desc{"__vmod_memory_singleton_class"};
+	static singleton_class_desc_t<class memory_singleton> memory_desc{"__vmod_memory_singleton_class"};
+
+	inline class memory_singleton &memory_singleton::instance() noexcept
+	{ return ::vmod::memory_singleton; }
 
 	static class_desc_t<memory_block> mem_block_desc{"__vmod_memory_block_class"};
 
@@ -234,19 +241,20 @@ namespace vmod
 		memory_desc.func(&memory_singleton::script_allocate_zero, "__script_allocate_zero"sv, "allocate_zero"sv);
 		memory_desc.func(&memory_singleton::script_read, "__script_read"sv, "read"sv);
 		memory_desc.func(&memory_singleton::script_write, "__script_write"sv, "write"sv);
+		memory_desc = ::vmod::memory_singleton;
 
 		if(!vm->RegisterClass(&memory_desc)) {
 			error("vmod: failed to register memory singleton script class\n"sv);
 			return false;
 		}
 
-		instance = vm->RegisterInstance(&memory_desc, &::vmod::memory_singleton);
-		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+		vs_instance_ = vm->RegisterInstance(&memory_desc, &::vmod::memory_singleton);
+		if(!vs_instance_ || vs_instance_ == gsdk::INVALID_HSCRIPT) {
 			error("vmod: failed to create memory singleton instance\n"sv);
 			return false;
 		}
 
-		vm->SetInstanceUniqeId(instance, "__vmod_memory_singleton");
+		vm->SetInstanceUniqeId(vs_instance_, "__vmod_memory_singleton");
 
 		gsdk::HSCRIPT vmod_scope{vmod.scope()};
 
@@ -268,7 +276,7 @@ namespace vmod
 			return false;
 		}
 	#else
-		if(!vm->SetValue(vmod_scope, "memory", instance)) {
+		if(!vm->SetValue(vmod_scope, "memory", vs_instance_)) {
 			error("vmod: failed to set memory instance value\n"sv);
 			return false;
 		}
@@ -469,7 +477,7 @@ namespace vmod
 		return true;
 	}
 
-	class ffi_singleton final : public gsdk::ISquirrelMetamethodDelegate
+	class ffi_singleton final : public gsdk::ISquirrelMetamethodDelegate, public singleton_instance_helper<ffi_singleton>
 	{
 	public:
 		inline ~ffi_singleton() noexcept override
@@ -478,6 +486,8 @@ namespace vmod
 
 		bool bindings() noexcept;
 		void unbindings() noexcept;
+
+		static ffi_singleton &instance() noexcept;
 
 	private:
 		static gsdk::HSCRIPT script_create_cif(generic_func_t func, ffi_abi abi, int ret, gsdk::HSCRIPT args) noexcept
@@ -597,20 +607,23 @@ namespace vmod
 		gsdk::HSCRIPT scope{gsdk::INVALID_HSCRIPT};
 		gsdk::HSCRIPT types_table{gsdk::INVALID_HSCRIPT};
 		gsdk::HSCRIPT abi_table{gsdk::INVALID_HSCRIPT};
-		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT vs_instance_{gsdk::INVALID_HSCRIPT};
 		gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
 	};
 
 	static class ffi_singleton ffi_singleton;
 
+	inline class ffi_singleton &ffi_singleton::instance() noexcept
+	{ return ::vmod::ffi_singleton; }
+
 	bool ffi_singleton::Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value)
 	{
 		using namespace std::literals::string_view_literals;
 
-		return vmod.vm()->GetValue(instance, name.c_str(), &value);
+		return vmod.vm()->GetValue(vs_instance_, name.c_str(), &value);
 	}
 
-	static class_desc_t<class ffi_singleton> ffi_singleton_desc{"__vmod_ffi_singleton_class"};
+	static singleton_class_desc_t<class ffi_singleton> ffi_singleton_desc{"__vmod_ffi_singleton_class"};
 
 	bool ffi_singleton::bindings() noexcept
 	{
@@ -621,19 +634,20 @@ namespace vmod
 		ffi_singleton_desc.func(&ffi_singleton::script_create_cif, "__script_create_cif"sv, "cif"sv);
 		ffi_singleton_desc.func(&ffi_singleton::script_create_detour_static, "__script_create_detour_static"sv, "detour_static"sv);
 		ffi_singleton_desc.func(&ffi_singleton::script_create_detour_member, "__script_create_detour_member"sv, "detour_member"sv);
+		ffi_singleton_desc = ::vmod::ffi_singleton;
 
 		if(!vm->RegisterClass(&ffi_singleton_desc)) {
 			error("vmod: failed to register ffi script class\n"sv);
 			return false;
 		}
 
-		instance = vm->RegisterInstance(&ffi_singleton_desc, &::vmod::ffi_singleton);
-		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+		vs_instance_ = vm->RegisterInstance(&ffi_singleton_desc, &::vmod::ffi_singleton);
+		if(!vs_instance_ || vs_instance_ == gsdk::INVALID_HSCRIPT) {
 			error("vmod: failed to create ffi instance\n"sv);
 			return false;
 		}
 
-		vm->SetInstanceUniqeId(instance, "__vmod_ffi_singleton");
+		vm->SetInstanceUniqeId(vs_instance_, "__vmod_ffi_singleton");
 
 		scope = vm->CreateScope("__vmod_ffi_scope", nullptr);
 		if(!scope || scope == gsdk::INVALID_HSCRIPT) {
@@ -815,8 +829,8 @@ namespace vmod
 			vm->DestroySquirrelMetamethod_Get(get_impl);
 		}
 
-		if(instance && instance != gsdk::INVALID_HSCRIPT) {
-			vm->RemoveInstance(instance);
+		if(vs_instance_ && vs_instance_ != gsdk::INVALID_HSCRIPT) {
+			vm->RemoveInstance(vs_instance_);
 		}
 
 		if(scope && scope != gsdk::INVALID_HSCRIPT) {
