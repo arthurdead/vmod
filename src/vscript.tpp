@@ -13,6 +13,28 @@ namespace vmod
 		m_pszDescription = m_pszClassname;
 	}
 
+	template <typename T>
+	class_desc_t<T> &class_desc_t<T>::operator=(class_desc_t &&other) noexcept
+	{
+		m_pszScriptName = other.m_pszScriptName;
+		other.m_pszScriptName = nullptr;
+		m_pszClassname = other.m_pszClassname;
+		other.m_pszClassname = nullptr;
+		m_pszDescription = other.m_pszDescription;
+		other.m_pszDescription = nullptr;
+		m_pBaseDesc = other.m_pBaseDesc;
+		other.m_pBaseDesc = nullptr;
+		m_FunctionBindings = std::move(other.m_FunctionBindings);
+		m_pfnConstruct = other.m_pfnConstruct;
+		other.m_pfnConstruct = nullptr;
+		m_pfnDestruct = other.m_pfnDestruct;
+		other.m_pfnDestruct = nullptr;
+		pHelper = other.pHelper;
+		other.pHelper = nullptr;
+		m_pNextDesc = nullptr;
+		return *this;
+	}
+
 	template <typename R, typename ...Args>
 	void func_desc_t::initialize_shared(std::string_view name, std::string_view script_name, bool va)
 	{

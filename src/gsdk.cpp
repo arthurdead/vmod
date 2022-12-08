@@ -13,6 +13,7 @@ namespace vmod
 	gsdk::IServerGameDLL *gamedll;
 	gsdk::IServerTools *servertools;
 	gsdk::IEntityFactoryDictionary *entityfactorydict;
+	gsdk::IServerNetworkStringTableContainer *sv_stringtables;
 
 	bool gsdk_library::load(const std::filesystem::path &path) noexcept
 	{
@@ -97,6 +98,13 @@ namespace vmod
 		if(!sv_engine) {
 			err_str = "missing IVEngineServer interface version "s;
 			err_str += gsdk::IVEngineServer::interface_name;
+			return false;
+		}
+
+		sv_stringtables = iface<gsdk::IServerNetworkStringTableContainer>();
+		if(!sv_stringtables) {
+			err_str = "missing IServerNetworkStringTableContainer interface version "s;
+			err_str += gsdk::IServerNetworkStringTableContainer::interface_name;
 			return false;
 		}
 

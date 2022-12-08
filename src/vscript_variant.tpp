@@ -424,6 +424,15 @@ namespace vmod
 		return nullptr;
 	}
 
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field<const void *>() noexcept
+	{ return type_to_field<void *>(); }
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, const void *value) noexcept
+	{ initialize_variant_value(var, const_cast<void *>(value)); }
+	template <>
+	inline const void *variant_to_value<const void *>(const gsdk::ScriptVariant_t &var) noexcept
+	{ return variant_to_value<void *>(var); }
+
 	static_assert(sizeof(generic_func_t) == sizeof(int));
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<generic_func_t>() noexcept

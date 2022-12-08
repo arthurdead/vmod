@@ -312,55 +312,46 @@ namespace vmod
 	};
 
 	template <typename T>
-	class singleton_instance_helper : public instance_helper<T>
+	class singleton_instance_helper final : public instance_helper<T>
 	{
 	public:
-		inline void *GetProxied([[maybe_unused]] void *ptr) noexcept override final
-		{ return static_cast<T *>(this); }
+		static inline T &instance() noexcept
+		{ return T::instance(); }
 
-		inline void *BindOnRead([[maybe_unused]] gsdk::HSCRIPT instance, [[maybe_unused]] void *ptr, [[maybe_unused]] const char *id) noexcept override final
-		{ return static_cast<T *>(this); }
+		inline void *GetProxied([[maybe_unused]] void *ptr) noexcept override final
+		{ return static_cast<T *>(&singleton_instance_helper<T>::instance()); }
+
+		inline void *BindOnRead([[maybe_unused]] gsdk::HSCRIPT instance_, [[maybe_unused]] void *ptr, [[maybe_unused]] const char *id) noexcept override final
+		{ return static_cast<T *>(&singleton_instance_helper<T>::instance()); }
+
+		static inline singleton_instance_helper &singleton() noexcept
+		{
+			static singleton_instance_helper singleton_;
+			return singleton_;
+		}
 	};
 
 	template <typename T>
 	class alignas(gsdk::ScriptClassDesc_t) class_desc_t : public gsdk::ScriptClassDesc_t
 	{
 	public:
+		class_desc_t() = delete;
 		class_desc_t(const class_desc_t &) = delete;
 		class_desc_t &operator=(const class_desc_t &) = delete;
+
+		inline class_desc_t(class_desc_t &&other) noexcept
+			: gsdk::ScriptClassDesc_t{}
+		{ operator=(std::move(other)); }
+
+		class_desc_t &operator=(class_desc_t &&other) noexcept;
+
+		class_desc_t(std::string_view name) noexcept;
 
 		inline class_desc_t &operator=(instance_helper<T> &helper) noexcept
 		{
 			pHelper = &helper;
 			return *this;
 		}
-
-		inline class_desc_t(class_desc_t &&other) noexcept
-			: gsdk::ScriptClassDesc_t{}
-		{ operator=(std::move(other)); }
-
-		inline class_desc_t &operator=(class_desc_t &&other) noexcept
-		{
-			m_pszScriptName = other.m_pszScriptName;
-			other.m_pszScriptName = nullptr;
-			m_pszClassname = other.m_pszClassname;
-			other.m_pszClassname = nullptr;
-			m_pszDescription = other.m_pszDescription;
-			other.m_pszDescription = nullptr;
-			m_pBaseDesc = other.m_pBaseDesc;
-			other.m_pBaseDesc = nullptr;
-			m_FunctionBindings = std::move(other.m_FunctionBindings);
-			m_pfnConstruct = other.m_pfnConstruct;
-			other.m_pfnConstruct = nullptr;
-			m_pfnDestruct = other.m_pfnDestruct;
-			other.m_pfnDestruct = nullptr;
-			pHelper = other.pHelper;
-			other.pHelper = nullptr;
-			m_pNextDesc = nullptr;
-			return *this;
-		}
-
-		class_desc_t(std::string_view name) noexcept;
 
 		template <typename R, typename ...Args>
 		inline func_desc_t &func(R(*func)(Args...), std::string_view name, std::string_view script_name) noexcept
@@ -437,6 +428,25 @@ namespace vmod
 	public:
 		using class_desc_t<T>::class_desc_t;
 		using class_desc_t<T>::operator=;
+
+		inline singleton_class_desc_t(std::string_view name) noexcept
+			: class_desc_t<T>{name}
+		{
+			this->pHelper = &singleton_instance_helper<T>::singleton();
+		}
+
+		class_desc_t<T> &operator=(instance_helper<T> &helper) noexcept = delete;
+
+		inline singleton_class_desc_t<T> &operator=(singleton_instance_helper<T> &helper) noexcept
+		{
+			this->pHelper = &helper;
+			return *this;
+		}
+
+		class_desc_t<T> &dtor(void(*func)(T *)) noexcept = delete;
+		class_desc_t<T> &dtor() noexcept = delete;
+		class_desc_t<T> &ctor(T *(*func)()) noexcept = delete;
+		class_desc_t<T> &ctor() noexcept = delete;
 
 		template <typename ...Args>
 		inline func_desc_t &func(Args &&...args) noexcept

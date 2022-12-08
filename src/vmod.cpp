@@ -116,9 +116,9 @@ namespace vmod
 		return vm_->GetValue(vs_instance_, name.c_str(), &value);
 	}
 
-	static class server_symbols_singleton final : public singleton_instance_helper<server_symbols_singleton> {
+	static class server_symbols_singleton final {
 	public:
-		~server_symbols_singleton() noexcept override;
+		~server_symbols_singleton() noexcept;
 
 		static server_symbols_singleton &instance() noexcept;
 
@@ -302,7 +302,6 @@ namespace vmod
 
 		server_symbols_desc.func(&server_symbols_singleton::script_lookup, "__script_lookup"sv, "lookup"sv);
 		server_symbols_desc.func(&server_symbols_singleton::script_lookup_global, "__script_lookup_global"sv, "lookup_global"sv);
-		server_symbols_desc = *this;
 
 		if(!vm->RegisterClass(&server_symbols_desc)) {
 			error("vmod: failed to register server symbols script class\n"sv);
@@ -349,7 +348,7 @@ namespace vmod
 		return true;
 	}
 
-	class filesystem_singleton final : public gsdk::ISquirrelMetamethodDelegate, public singleton_instance_helper<filesystem_singleton>
+	class filesystem_singleton final : public gsdk::ISquirrelMetamethodDelegate
 	{
 	public:
 		~filesystem_singleton() noexcept override;
@@ -431,7 +430,6 @@ namespace vmod
 
 		filesystem_singleton_desc.func(&filesystem_singleton::script_join_paths, "__script_join_paths"sv, "join_paths"sv);
 		filesystem_singleton_desc.func(&filesystem_singleton::script_glob, "__script_glob"sv, "glob"sv);
-		filesystem_singleton_desc = *this;
 
 		if(!vm->RegisterClass(&filesystem_singleton_desc)) {
 			error("vmod: failed to register vmod filesystem script class\n"sv);
@@ -498,12 +496,154 @@ namespace vmod
 		}
 	}
 
-	bool vmod::bindings() noexcept
+	class_desc_t<vmod::script_stringtable> vmod::stringtable_desc{"__vmod_stringtable_class"};
+
+	static gsdk::INetworkStringTable *m_pDownloadableFileTable;
+	static gsdk::INetworkStringTable *m_pModelPrecacheTable;
+	static gsdk::INetworkStringTable *m_pGenericPrecacheTable;
+	static gsdk::INetworkStringTable *m_pSoundPrecacheTable;
+	static gsdk::INetworkStringTable *m_pDecalPrecacheTable;
+
+	static gsdk::INetworkStringTable *g_pStringTableParticleEffectNames;
+	static gsdk::INetworkStringTable *g_pStringTableEffectDispatch;
+	static gsdk::INetworkStringTable *g_pStringTableVguiScreen;
+	static gsdk::INetworkStringTable *g_pStringTableMaterials;
+	static gsdk::INetworkStringTable *g_pStringTableInfoPanel;
+	static gsdk::INetworkStringTable *g_pStringTableClientSideChoreoScenes;
+
+	std::size_t vmod::script_stringtable::script_find_index(std::string_view name) const noexcept
+	{
+		gsdk::IScriptVM *vm{::vmod::vmod.vm()};
+
+		if(!table) {
+			vm->RaiseException("vmod: stringtable is not created yet");
+			return static_cast<std::size_t>(-1);
+		}
+
+		return static_cast<std::size_t>(table->FindStringIndex(name.data()));
+	}
+
+	std::size_t vmod::script_stringtable::script_num_strings() const noexcept
+	{
+		gsdk::IScriptVM *vm{::vmod::vmod.vm()};
+
+		if(!table) {
+			vm->RaiseException("vmod: stringtable is not created yet");
+			return static_cast<std::size_t>(-1);
+		}
+
+		return static_cast<std::size_t>(table->GetNumStrings());
+	}
+
+	std::string_view vmod::script_stringtable::script_get_string(std::size_t i) const noexcept
+	{
+		gsdk::IScriptVM *vm{::vmod::vmod.vm()};
+
+		if(!table) {
+			vm->RaiseException("vmod: stringtable is not created yet");
+			return {};
+		}
+
+		return table->GetString(static_cast<int>(i));
+	}
+
+	std::size_t vmod::script_stringtable::script_add_string(std::string_view name, ssize_t bytes, const void *data) noexcept
+	{
+		gsdk::IScriptVM *vm{::vmod::vmod.vm()};
+
+		if(!table) {
+			vm->RaiseException("vmod: stringtable is not created yet");
+			return static_cast<std::size_t>(-1);
+		}
+
+		return static_cast<std::size_t>(table->AddString(true, name.data(), static_cast<ssize_t>(bytes), data));
+	}
+
+	vmod::script_stringtable::~script_stringtable() noexcept
+	{
+		if(instance && instance != gsdk::INVALID_HSCRIPT) {
+			::vmod::vmod.vm()->RemoveInstance(instance);
+		}
+	}
+
+	void vmod::stringtables_removed() noexcept
+	{
+		are_string_tables_created = false;
+
+		for(const auto &it : script_stringtables) {
+			it.second->table = nullptr;
+		}
+	}
+
+	void vmod::recreate_script_stringtables() noexcept
+	{
+		are_string_tables_created = true;
+
+		using namespace std::literals::string_literals;
+
+		static auto set_table_value{
+			[this](std::string &&name, gsdk::INetworkStringTable *value) noexcept -> void {
+				auto it{script_stringtables.find(name)};
+				if(it != script_stringtables.end()) {
+					it->second->table = value;
+				}
+			}
+		};
+
+		set_table_value(gsdk::DOWNLOADABLE_FILE_TABLENAME, m_pDownloadableFileTable);
+		set_table_value(gsdk::MODEL_PRECACHE_TABLENAME, m_pModelPrecacheTable);
+		set_table_value(gsdk::GENERIC_PRECACHE_TABLENAME, m_pGenericPrecacheTable);
+		set_table_value(gsdk::SOUND_PRECACHE_TABLENAME, m_pSoundPrecacheTable);
+		set_table_value(gsdk::DECAL_PRECACHE_TABLENAME, m_pDecalPrecacheTable);
+
+		set_table_value("ParticleEffectNames"s, g_pStringTableParticleEffectNames);
+		set_table_value("EffectDispatch"s, g_pStringTableEffectDispatch);
+		set_table_value("VguiScreen"s, g_pStringTableVguiScreen);
+		set_table_value("Materials"s, g_pStringTableMaterials);
+		set_table_value("InfoPanel"s, g_pStringTableInfoPanel);
+		set_table_value("Scenes"s, g_pStringTableClientSideChoreoScenes);
+
+		for(const auto &pl : plugins) {
+			if(!*pl) {
+				continue;
+			}
+
+			pl->string_tables_created();
+		}
+	}
+
+	bool vmod::create_script_stringtable(std::string &&name) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
+		std::unique_ptr<script_stringtable> ptr{new script_stringtable};
+
+		gsdk::HSCRIPT table_instance{vm_->RegisterInstance(&stringtable_desc, ptr.get())};
+		if(!table_instance || table_instance == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create stringtable '%s' instance\n"sv);
+			return false;
+		}
+
+		if(!vm_->SetValue(stringtable_table, name.c_str(), table_instance)) {
+			vm_->RemoveInstance(table_instance);
+			error("vmod: failed to set stringtable '%s' value\n"sv);
+			return false;
+		}
+
+		ptr->instance = table_instance;
+		ptr->table = nullptr;
+
+		script_stringtables.emplace(std::move(name), std::move(ptr));
+
+		return true;
+	}
+
+	bool vmod::bindings() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+		using namespace std::literals::string_literals;
+
 		vmod_desc.func(&vmod::script_find_plugin, "__script_find_plugin"sv, "find_plugin"sv);
-		vmod_desc = *this;
 
 		if(!vm_->RegisterClass(&vmod_desc)) {
 			error("vmod: failed to register vmod script class\n"sv);
@@ -538,6 +678,73 @@ namespace vmod
 		if(!vm_->SetValue(scope_, "syms", symbols_table_)) {
 			error("vmod: failed to set symbols table value\n"sv);
 			return false;
+		}
+
+		stringtable_table = vm_->CreateTable();
+		if(!stringtable_table || stringtable_table == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create stringtable table\n"sv);
+			return false;
+		}
+
+		if(!vm_->SetValue(scope_, "strtables", stringtable_table)) {
+			error("vmod: failed to set stringtable table value\n"sv);
+			return false;
+		}
+
+		stringtable_desc.func(&script_stringtable::script_find_index, "__script_find_index"sv, "find"sv);
+		stringtable_desc.func(&script_stringtable::script_num_strings, "__script_num_strings"sv, "num"sv);
+		stringtable_desc.func(&script_stringtable::script_get_string, "__script_get_string"sv, "get"sv);
+		stringtable_desc.func(&script_stringtable::script_add_string, "__script_add_string"sv, "add"sv);
+
+		if(!vm_->RegisterClass(&stringtable_desc)) {
+			error("vmod: failed to register stringtable script class\n"sv);
+			return false;
+		}
+
+		{
+			if(!create_script_stringtable(gsdk::DOWNLOADABLE_FILE_TABLENAME)) {
+				return false;
+			}
+
+			if(!create_script_stringtable(gsdk::MODEL_PRECACHE_TABLENAME)) {
+				return false;
+			}
+
+			if(!create_script_stringtable(gsdk::GENERIC_PRECACHE_TABLENAME)) {
+				return false;
+			}
+
+			if(!create_script_stringtable(gsdk::SOUND_PRECACHE_TABLENAME)) {
+				return false;
+			}
+
+			if(!create_script_stringtable(gsdk::DECAL_PRECACHE_TABLENAME)) {
+				return false;
+			}
+
+			if(!create_script_stringtable("ParticleEffectNames"s)) {
+				return false;
+			}
+
+			if(!create_script_stringtable("EffectDispatch"s)) {
+				return false;
+			}
+
+			if(!create_script_stringtable("VguiScreen"s)) {
+				return false;
+			}
+
+			if(!create_script_stringtable("Materials"s)) {
+				return false;
+			}
+
+			if(!create_script_stringtable("InfoPanel"s)) {
+				return false;
+			}
+
+			if(!create_script_stringtable("Scenes"s)) {
+				return false;
+			}
 		}
 
 		if(!server_symbols_singleton.bindings()) {
@@ -605,6 +812,16 @@ namespace vmod
 
 		if(vm_->ValueExists(scope_, "syms")) {
 			vm_->ClearValue(scope_, "syms");
+		}
+
+		script_stringtables.clear();
+
+		if(stringtable_table && stringtable_table != gsdk::INVALID_HSCRIPT) {
+			vm_->ReleaseTable(stringtable_table);
+		}
+
+		if(vm_->ValueExists(scope_, "strtables")) {
+			vm_->ClearValue(scope_, "strtables");
 		}
 
 		if(vs_instance_ && vs_instance_ != gsdk::INVALID_HSCRIPT) {
@@ -822,6 +1039,48 @@ namespace vmod
 		return (vm->*RaiseException_original)(str);
 	}
 
+	static void (gsdk::IServerGameDLL::*CreateNetworkStringTables_original)();
+	void vmod::CreateNetworkStringTables_detour_callback(gsdk::IServerGameDLL *dll)
+	{
+		(dll->*CreateNetworkStringTables_original)();
+
+		m_pDownloadableFileTable = sv_stringtables->FindTable(gsdk::DOWNLOADABLE_FILE_TABLENAME);
+		m_pModelPrecacheTable = sv_stringtables->FindTable(gsdk::MODEL_PRECACHE_TABLENAME);
+		m_pGenericPrecacheTable = sv_stringtables->FindTable(gsdk::GENERIC_PRECACHE_TABLENAME);
+		m_pSoundPrecacheTable = sv_stringtables->FindTable(gsdk::SOUND_PRECACHE_TABLENAME);
+		m_pDecalPrecacheTable = sv_stringtables->FindTable(gsdk::DECAL_PRECACHE_TABLENAME);
+
+		g_pStringTableParticleEffectNames = sv_stringtables->FindTable("ParticleEffectNames");
+		g_pStringTableEffectDispatch = sv_stringtables->FindTable("EffectDispatch");
+		g_pStringTableVguiScreen = sv_stringtables->FindTable("VguiScreen");
+		g_pStringTableMaterials = sv_stringtables->FindTable("Materials");
+		g_pStringTableInfoPanel = sv_stringtables->FindTable("InfoPanel");
+		g_pStringTableClientSideChoreoScenes = sv_stringtables->FindTable("Scenes");
+
+		::vmod::vmod.recreate_script_stringtables();
+	}
+
+	static void (gsdk::IServerNetworkStringTableContainer::*RemoveAllTables_original)();
+	void vmod::RemoveAllTables_detour_callback(gsdk::IServerNetworkStringTableContainer *cont)
+	{
+		::vmod::vmod.stringtables_removed();
+
+		m_pDownloadableFileTable = nullptr;
+		m_pModelPrecacheTable = nullptr;
+		m_pGenericPrecacheTable = nullptr;
+		m_pSoundPrecacheTable = nullptr;
+		m_pDecalPrecacheTable = nullptr;
+
+		g_pStringTableParticleEffectNames = nullptr;
+		g_pStringTableEffectDispatch = nullptr;
+		g_pStringTableVguiScreen = nullptr;
+		g_pStringTableMaterials = nullptr;
+		g_pStringTableInfoPanel = nullptr;
+		g_pStringTableClientSideChoreoScenes = nullptr;
+
+		(cont->*RemoveAllTables_original)();
+	}
+
 	bool vmod::detours() noexcept
 	{
 		RegisterFunctionGuts_detour.initialize(RegisterFunctionGuts, RegisterFunctionGuts_detour_callback);
@@ -849,8 +1108,11 @@ namespace vmod
 		DestroyVM_original = swap_vfunc(vsmgr, &gsdk::IScriptManager::DestroyVM, DestroyVM_detour_callback);
 
 		Run_original = swap_vfunc(vm_, static_cast<decltype(Run_original)>(&gsdk::IScriptVM::Run), Run_detour_callback);
-
 		RaiseException_original = swap_vfunc(vm_, &gsdk::IScriptVM::RaiseException, RaiseException_detour_callback);
+
+		CreateNetworkStringTables_original = swap_vfunc(gamedll, &gsdk::IServerGameDLL::CreateNetworkStringTables, CreateNetworkStringTables_detour_callback);
+
+		RemoveAllTables_original = swap_vfunc(sv_stringtables, &gsdk::IServerNetworkStringTableContainer::RemoveAllTables, RemoveAllTables_detour_callback);
 
 		return true;
 	}
@@ -1460,6 +1722,8 @@ namespace vmod
 
 	void vmod::map_active() noexcept
 	{
+		is_map_active = true;
+
 		for(const auto &pl : plugins) {
 			if(!*pl) {
 				continue;
@@ -1482,6 +1746,7 @@ namespace vmod
 		}
 
 		is_map_loaded = false;
+		is_map_active = false;
 	}
 
 	void vmod::game_frame([[maybe_unused]] bool) noexcept

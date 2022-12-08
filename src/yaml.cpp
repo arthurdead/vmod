@@ -18,10 +18,10 @@ namespace vmod
 		return documents[i]->root_object;
 	}
 
-	class yaml_singleton final : public singleton_instance_helper<yaml_singleton>
+	class yaml_singleton final
 	{
 	public:
-		~yaml_singleton() noexcept override;
+		~yaml_singleton() noexcept;
 
 		bool bindings() noexcept;
 		void unbindings() noexcept;
@@ -66,7 +66,6 @@ namespace vmod
 		gsdk::IScriptVM *vm{vmod.vm()};
 
 		yaml_singleton_desc.func(&yaml_singleton::script_load, "__script_load"sv, "load"sv);
-		yaml_singleton_desc = ::vmod::yaml_singleton;
 
 		if(!vm->RegisterClass(&yaml_singleton_desc)) {
 			error("vmod: failed to register yaml singleton script class\n"sv);

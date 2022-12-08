@@ -7,6 +7,7 @@
 #include "gsdk/launcher/launcher.hpp"
 #include "gsdk/engine/sv_engine.hpp"
 #include "gsdk/engine/globalvars.hpp"
+#include "gsdk/engine/stringtable.hpp"
 #include "gsdk/server/server.hpp"
 #include "gsdk/filesystem/filesystem.hpp"
 #include "gsdk/vstdlib/convar.hpp"
@@ -24,6 +25,7 @@ namespace vmod
 	extern gsdk::IServerGameDLL *gamedll;
 	extern gsdk::IServerTools *servertools;
 	extern gsdk::IEntityFactoryDictionary *entityfactorydict;
+	extern gsdk::IServerNetworkStringTableContainer *sv_stringtables;
 
 	template <typename ...Args>
 	void print(std::string_view fmt, Args &&...args);
@@ -50,6 +52,8 @@ namespace vmod
 
 		template <typename T>
 		T *iface() noexcept;
+		template <typename T>
+		T *iface(std::string_view name) noexcept;
 
 		template <typename T>
 		T *addr(std::string_view name) noexcept;
@@ -76,6 +80,9 @@ namespace vmod
 	template <typename T>
 	inline T *gsdk_library::iface() noexcept
 	{ return static_cast<T *>(find_iface(T::interface_name)); }
+	template <typename T>
+	inline T *gsdk_library::iface(std::string_view name) noexcept
+	{ return static_cast<T *>(find_iface(name)); }
 
 	class gsdk_launcher_library final : public gsdk_library
 	{

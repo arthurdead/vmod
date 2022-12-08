@@ -115,7 +115,7 @@ namespace vmod
 		}
 	}
 
-	class memory_singleton final : public gsdk::ISquirrelMetamethodDelegate, public singleton_instance_helper<memory_singleton>
+	class memory_singleton final : public gsdk::ISquirrelMetamethodDelegate
 	{
 	public:
 		bool bindings() noexcept;
@@ -396,7 +396,6 @@ namespace vmod
 		memory_desc.func(&memory_singleton::script_add, "__script_add"sv, "add"sv);
 		memory_desc.func(&memory_singleton::script_sub, "__script_sub"sv, "sub"sv);
 		memory_desc.func(&memory_singleton::script_get_vtable, "__script_get_vtable"sv, "get_vtable"sv);
-		memory_desc = ::vmod::memory_singleton;
 
 		if(!vm->RegisterClass(&memory_desc)) {
 			error("vmod: failed to register memory singleton script class\n"sv);
@@ -743,7 +742,7 @@ namespace vmod
 		return true;
 	}
 
-	class ffi_singleton final : public gsdk::ISquirrelMetamethodDelegate, public singleton_instance_helper<ffi_singleton>
+	class ffi_singleton final : public gsdk::ISquirrelMetamethodDelegate
 	{
 	public:
 		inline ~ffi_singleton() noexcept override
@@ -874,7 +873,6 @@ namespace vmod
 		ffi_singleton_desc.func(&ffi_singleton::script_create_cif, "__script_create_cif"sv, "cif"sv);
 		ffi_singleton_desc.func(&ffi_singleton::script_create_detour_static, "__script_create_detour_static"sv, "detour_static"sv);
 		ffi_singleton_desc.func(&ffi_singleton::script_create_detour_member, "__script_create_detour_member"sv, "detour_member"sv);
-		ffi_singleton_desc = ::vmod::ffi_singleton;
 
 		if(!vm->RegisterClass(&ffi_singleton_desc)) {
 			error("vmod: failed to register ffi script class\n"sv);

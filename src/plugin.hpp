@@ -166,6 +166,7 @@ namespace vmod
 		typed_function<void()> plugin_loaded;
 		typed_function<void()> plugin_unloaded;
 		typed_function<void()> all_plugins_loaded;
+		typed_function<void()> string_tables_created;
 	};
 }
 

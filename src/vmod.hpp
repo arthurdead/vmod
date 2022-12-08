@@ -4,6 +4,7 @@
 #include <vector>
 #include <filesystem>
 #include <memory>
+#include <unordered_map>
 #include "gsdk.hpp"
 #include "convar.hpp"
 #include "vscript.hpp"
@@ -14,13 +15,17 @@ namespace vmod
 
 	class script_variant_t;
 
-	class vmod final : public gsdk::ISquirrelMetamethodDelegate, public singleton_instance_helper<vmod>
+	class vmod final : public gsdk::ISquirrelMetamethodDelegate
 	{
 		friend class vsp;
 
 	public:
 		inline bool map_is_loaded() const noexcept
 		{ return is_map_loaded; }
+		inline bool map_is_active() const noexcept
+		{ return is_map_active; }
+		inline bool string_tables_created() const noexcept
+		{ return are_string_tables_created; }
 
 		std::string_view to_string(gsdk::HSCRIPT value) const noexcept;
 		int to_int(gsdk::HSCRIPT value) const noexcept;
@@ -48,6 +53,9 @@ namespace vmod
 		static vmod &instance() noexcept;
 
 	private:
+		static void CreateNetworkStringTables_detour_callback(gsdk::IServerGameDLL *dll);
+		static void RemoveAllTables_detour_callback(gsdk::IServerNetworkStringTableContainer *cont);
+
 		bool load_late() noexcept;
 		bool load() noexcept;
 		void unload() noexcept;
@@ -67,7 +75,12 @@ namespace vmod
 
 		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
 
+		void recreate_script_stringtables() noexcept;
+		void stringtables_removed() noexcept;
+
 		bool is_map_loaded;
+		bool is_map_active;
+		bool are_string_tables_created;
 
 		std::filesystem::path game_dir_;
 		std::filesystem::path plugins_dir;
@@ -98,6 +111,45 @@ namespace vmod
 		gsdk::HSCRIPT plugins_table_{gsdk::INVALID_HSCRIPT};
 
 		gsdk::HSCRIPT symbols_table_{gsdk::INVALID_HSCRIPT};
+
+		class script_stringtable final
+		{
+		public:
+			~script_stringtable() noexcept;
+
+			script_stringtable(const script_stringtable &) noexcept = delete;
+			script_stringtable &operator=(const script_stringtable &) noexcept = delete;
+			inline script_stringtable(script_stringtable &&other) noexcept
+			{ operator=(std::move(other)); }
+			inline script_stringtable &operator=(script_stringtable &&other) noexcept
+			{
+				instance = other.instance;
+				other.instance = gsdk::INVALID_HSCRIPT;
+				table = other.table;
+				other.table = nullptr;
+				return *this;
+			}
+
+			std::size_t script_find_index(std::string_view name) const noexcept;
+			std::size_t script_num_strings() const noexcept;
+			std::string_view script_get_string(std::size_t i) const noexcept;
+			std::size_t script_add_string(std::string_view name, ssize_t bytes, const void *data) noexcept;
+
+		private:
+			friend class vmod;
+
+			script_stringtable() noexcept = default;
+
+			gsdk::INetworkStringTable *table;
+			gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+		};
+
+		static class_desc_t<vmod::script_stringtable> stringtable_desc;
+
+		gsdk::HSCRIPT stringtable_table{gsdk::INVALID_HSCRIPT};
+		std::unordered_map<std::string, std::unique_ptr<script_stringtable>> script_stringtables;
+
+		bool create_script_stringtable(std::string &&name) noexcept;
 
 		gsdk::HSCRIPT server_init_script{gsdk::INVALID_HSCRIPT};
 

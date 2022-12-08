@@ -411,8 +411,8 @@ namespace vmod
 		std::size_t size;
 	};
 
-	template <typename R, typename C, typename ...Args>
-	inline auto swap_vfunc(C *ptr, R(C::*old_func)(Args...), R(*new_func)(C *, Args...)) noexcept -> R(C::*)(Args...)
+	template <typename R, typename C, typename U, typename ...Args>
+	inline auto swap_vfunc(C *ptr, R(U::*old_func)(Args...), R(*new_func)(C *, Args...)) noexcept -> R(C::*)(Args...)
 	{
 		generic_plain_mfp_t *vtable{vtable_from_object<C>(ptr)};
 		std::size_t index{vfunc_index(old_func)};

@@ -49,6 +49,8 @@ namespace vmod
 			return plugin_unloaded.func;
 		} else if(func_name == "all_plugins_loaded"sv) {
 			return all_plugins_loaded.func;
+		} else if(func_name == "string_tables_created"sv) {
+			return string_tables_created.func;
 		}
 
 		gsdk::IScriptVM *vm{vmod.vm()};
@@ -148,6 +150,7 @@ namespace vmod
 		plugin_loaded = std::move(other.plugin_loaded);
 		plugin_unloaded = std::move(other.plugin_unloaded);
 		all_plugins_loaded = std::move(other.all_plugins_loaded);
+		string_tables_created = std::move(other.string_tables_created);
 
 		return *this;
 	}
@@ -253,19 +256,6 @@ namespace vmod
 				}
 			}
 
-			map_active = lookup_function("map_active"sv);
-			map_loaded = lookup_function("map_loaded"sv);
-			map_unloaded = lookup_function("map_unloaded"sv);
-			plugin_loaded = lookup_function("plugin_loaded"sv);
-			plugin_unloaded = lookup_function("plugin_unloaded"sv);
-			all_plugins_loaded = lookup_function("all_plugins_loaded"sv);
-
-			plugin_loaded();
-
-			if(vmod.map_is_loaded()) {
-				map_loaded(gsdk::STRING(sv_globals->mapname));
-			}
-
 			{
 				script_variant_t temp_var;
 				if(vm->GetValue(private_scope_, "VMOD_AUTO_RELOAD", &temp_var) && temp_var == true) {
@@ -273,6 +263,28 @@ namespace vmod
 				} else {
 					unwatch();
 				}
+			}
+
+			map_active = lookup_function("map_active"sv);
+			map_loaded = lookup_function("map_loaded"sv);
+			map_unloaded = lookup_function("map_unloaded"sv);
+			plugin_loaded = lookup_function("plugin_loaded"sv);
+			plugin_unloaded = lookup_function("plugin_unloaded"sv);
+			all_plugins_loaded = lookup_function("all_plugins_loaded"sv);
+			string_tables_created = lookup_function("string_tables_created"sv);
+
+			plugin_loaded();
+
+			if(vmod.map_is_loaded()) {
+				map_loaded(gsdk::STRING(sv_globals->mapname));
+			}
+
+			if(vmod.map_is_active()) {
+				map_active();
+			}
+
+			if(vmod.string_tables_created()) {
+				string_tables_created();
 			}
 		}
 
