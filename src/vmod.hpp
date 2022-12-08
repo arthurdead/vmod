@@ -42,6 +42,9 @@ namespace vmod
 		inline gsdk::HSCRIPT symbols_table() noexcept
 		{ return symbols_table_; }
 
+		inline const std::filesystem::path &game_dir() const noexcept
+		{ return game_dir_; }
+
 		static vmod &instance() noexcept;
 
 	private:
@@ -66,7 +69,7 @@ namespace vmod
 
 		bool is_map_loaded;
 
-		std::filesystem::path game_dir;
+		std::filesystem::path game_dir_;
 		std::filesystem::path plugins_dir;
 		std::filesystem::path root_dir;
 

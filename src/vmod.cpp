@@ -349,7 +349,7 @@ namespace vmod
 		return true;
 	}
 
-	class filesystem_singleton final : public singleton_instance_helper<filesystem_singleton>
+	class filesystem_singleton final : public gsdk::ISquirrelMetamethodDelegate, public singleton_instance_helper<filesystem_singleton>
 	{
 	public:
 		~filesystem_singleton() noexcept override;
@@ -402,8 +402,17 @@ namespace vmod
 			return final_path;
 		}
 
+		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
+
 		gsdk::HSCRIPT vs_instance_;
+		gsdk::HSCRIPT scope;
+		gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
 	};
+
+	bool filesystem_singleton::Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value)
+	{
+		return vmod.vm()->GetValue(vs_instance_, name.c_str(), &value);
+	}
 
 	filesystem_singleton::~filesystem_singleton() {}
 
@@ -437,8 +446,26 @@ namespace vmod
 
 		vm->SetInstanceUniqeId(vs_instance_, "__vmod_filesystem_singleton");
 
-		if(!vm->SetValue(vmod.scope(), "fs", vs_instance_)) {
-			error("vmod: failed to set filesystem instance value\n"sv);
+		scope = vm->CreateScope("__vmod_fs_scope", nullptr);
+		if(!scope || scope == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create filesystem scope\n"sv);
+			return false;
+		}
+
+		gsdk::HSCRIPT vmod_scope{vmod.scope()};
+		if(!vm->SetValue(vmod_scope, "fs", scope)) {
+			error("vmod: failed to set filesystem scope value\n"sv);
+			return false;
+		}
+
+		if(!vm->SetValue(scope, "game_dir", vmod.game_dir().c_str())) {
+			error("vmod: failed to set game dir value\n"sv);
+			return false;
+		}
+
+		get_impl = vm->MakeSquirrelMetamethod_Get(vmod_scope, "fs", this, false);
+		if(!get_impl) {
+			error("vmod: failed to create filesystem _get metamethod\n"sv);
 			return false;
 		}
 
@@ -451,6 +478,18 @@ namespace vmod
 
 		if(vs_instance_ && vs_instance_ != gsdk::INVALID_HSCRIPT) {
 			vm->RemoveInstance(vs_instance_);
+		}
+
+		if(get_impl) {
+			vm->DestroySquirrelMetamethod_Get(get_impl);
+		}
+
+		if(vm->ValueExists(scope, "game_dir")) {
+			vm->ClearValue(scope, "game_dir");
+		}
+
+		if(scope && scope != gsdk::INVALID_HSCRIPT) {
+			vm->ReleaseScope(scope);
 		}
 
 		gsdk::HSCRIPT vmod_scope{vmod.scope()};
@@ -515,11 +554,6 @@ namespace vmod
 			return false;
 		}
 
-		if(!vm_->SetValue(scope_, "game_dir", game_dir.c_str())) {
-			error("vmod: failed to set game dir value\n"sv);
-			return false;
-		}
-
 		if(!vm_->SetValue(scope_, "root_dir", root_dir.c_str())) {
 			error("vmod: failed to set root dir value\n"sv);
 			return false;
@@ -579,10 +613,6 @@ namespace vmod
 
 		if(get_impl) {
 			vm_->DestroySquirrelMetamethod_Get(get_impl);
-		}
-
-		if(vm_->ValueExists(scope_, "game_dir")) {
-			vm_->ClearValue(scope_, "game_dir");
 		}
 
 		if(vm_->ValueExists(scope_, "root_dir")) {
@@ -875,10 +905,10 @@ namespace vmod
 			char gamedir[PATH_MAX];
 			sv_engine->GetGameDir(gamedir, sizeof(gamedir));
 
-			game_dir = gamedir;
+			game_dir_ = gamedir;
 		}
 
-		root_dir = game_dir;
+		root_dir = game_dir_;
 		root_dir /= "addons/vmod"sv;
 
 		plugins_dir = root_dir;
@@ -888,7 +918,7 @@ namespace vmod
 		base_script_path /= "base/vmod_base"sv;
 		base_script_path.replace_extension(scripts_extension);
 
-		std::filesystem::path server_lib_name{game_dir};
+		std::filesystem::path server_lib_name{game_dir_};
 		if(sv_engine->IsDedicatedServer()) {
 			server_lib_name /= "bin/server_srv.so";
 		} else {
