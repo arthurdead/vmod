@@ -55,7 +55,6 @@ namespace vmod
 		void map_active() noexcept;
 
 		gsdk::HSCRIPT script_find_plugin(std::string_view name) noexcept;
-		std::filesystem::path script_join_paths(const script_variant_t *va_args, std::size_t num_args, ...) noexcept;
 
 		bool binding_mods() noexcept;
 		bool bindings() noexcept;

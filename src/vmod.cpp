@@ -13,6 +13,7 @@
 #include <climits>
 
 #include <iostream>
+#include "glob.h"
 
 #include "convar.hpp"
 #include <utility>
@@ -115,7 +116,13 @@ namespace vmod
 		return vm_->GetValue(vs_instance_, name.c_str(), &value);
 	}
 
-	static class server_symbols_singleton final {
+	static class server_symbols_singleton final : public singleton_instance_helper<server_symbols_singleton> {
+	public:
+		~server_symbols_singleton() noexcept override;
+
+		static server_symbols_singleton &instance() noexcept;
+
+	private:
 		friend class vmod;
 
 		static gsdk::HSCRIPT script_lookup_shared(symbol_cache::const_iterator it) noexcept;
@@ -230,19 +237,24 @@ namespace vmod
 			return script_lookup_shared(it);
 		}
 
-		static bool bindings() noexcept;
+		bool bindings() noexcept;
 
-		static inline void unbindings() noexcept
+		inline void unbindings() noexcept
 		{
-			if(instance && instance != gsdk::INVALID_HSCRIPT) {
-				vmod.vm()->RemoveInstance(instance);
+			if(vs_instance_ && vs_instance_ != gsdk::INVALID_HSCRIPT) {
+				vmod.vm()->RemoveInstance(vs_instance_);
 			}
 		}
 
-		static inline gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT vs_instance_{gsdk::INVALID_HSCRIPT};
 	} server_symbols_singleton;
 
-	static class_desc_t<class server_symbols_singleton> server_symbols_desc{"server_symbols"};
+	server_symbols_singleton::~server_symbols_singleton() {}
+
+	static singleton_class_desc_t<class server_symbols_singleton> server_symbols_desc{"server_symbols"};
+
+	inline class server_symbols_singleton &server_symbols_singleton::instance() noexcept
+	{ return ::vmod::server_symbols_singleton; }
 
 	gsdk::HSCRIPT server_symbols_singleton::script_lookup_shared(symbol_cache::const_iterator it) noexcept
 	{
@@ -290,21 +302,22 @@ namespace vmod
 
 		server_symbols_desc.func(&server_symbols_singleton::script_lookup, "__script_lookup"sv, "lookup"sv);
 		server_symbols_desc.func(&server_symbols_singleton::script_lookup_global, "__script_lookup_global"sv, "lookup_global"sv);
+		server_symbols_desc = *this;
 
 		if(!vm->RegisterClass(&server_symbols_desc)) {
 			error("vmod: failed to register server symbols script class\n"sv);
 			return false;
 		}
 
-		instance = vm->RegisterInstance(&server_symbols_desc, &::vmod::server_symbols_singleton);
-		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+		vs_instance_ = vm->RegisterInstance(&server_symbols_desc, &::vmod::server_symbols_singleton);
+		if(!vs_instance_ || vs_instance_ == gsdk::INVALID_HSCRIPT) {
 			error("vmod: failed to create server symbols instance\n"sv);
 			return false;
 		}
 
-		vm->SetInstanceUniqeId(instance, "__vmod_server_symbols_singleton");
+		vm->SetInstanceUniqeId(vs_instance_, "__vmod_server_symbols_singleton");
 
-		if(!vm->SetValue(vmod.symbols_table(), "server", instance)) {
+		if(!vm->SetValue(vmod.symbols_table(), "server", vs_instance_)) {
 			error("vmod: failed to set server symbols table value\n"sv);
 			return false;
 		}
@@ -336,15 +349,114 @@ namespace vmod
 		return true;
 	}
 
-	std::filesystem::path vmod::script_join_paths(const script_variant_t *va_args, std::size_t num_args, ...) noexcept
+	class filesystem_singleton final : public singleton_instance_helper<filesystem_singleton>
 	{
-		std::filesystem::path final_path;
+	public:
+		~filesystem_singleton() noexcept override;
 
-		for(std::size_t i{0}; i < num_args; ++i) {
-			final_path /= va_args[i].get<std::filesystem::path>();
+		static filesystem_singleton &instance() noexcept;
+
+		bool bindings() noexcept;
+		void unbindings() noexcept;
+
+	private:
+		static int script_globerr(const char *epath, int eerrno)
+		{
+			//vmod.vm()->RaiseException("vmod: glob error %i on %s:", eerrno, epath);
+			return 0;
 		}
 
-		return final_path;
+		static gsdk::HSCRIPT script_glob(std::filesystem::path pattern) noexcept
+		{
+			glob_t glob;
+			if(::glob(pattern.c_str(), GLOB_ERR|GLOB_NOSORT, script_globerr, &glob) != 0) {
+				globfree(&glob);
+				return nullptr;
+			}
+
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			gsdk::HSCRIPT arr{vm->CreateArray()};
+
+			for(std::size_t i{0}; i < glob.gl_pathc; ++i) {
+				std::string temp{glob.gl_pathv[i]};
+
+				script_variant_t var;
+				var.assign<std::string>(std::move(temp));
+				vm->ArrayAddToTail(arr, std::move(var));
+			}
+
+			globfree(&glob);
+
+			return arr;
+		}
+
+		static std::filesystem::path script_join_paths(const script_variant_t *va_args, std::size_t num_args, ...) noexcept
+		{
+			std::filesystem::path final_path;
+
+			for(std::size_t i{0}; i < num_args; ++i) {
+				final_path /= va_args[i].get<std::filesystem::path>();
+			}
+
+			return final_path;
+		}
+
+		gsdk::HSCRIPT vs_instance_;
+	};
+
+	filesystem_singleton::~filesystem_singleton() {}
+
+	static class filesystem_singleton filesystem_singleton;
+
+	static singleton_class_desc_t<class filesystem_singleton> filesystem_singleton_desc{"__vmod_filesystem_singleton_class"};
+
+	inline class filesystem_singleton &filesystem_singleton::instance() noexcept
+	{ return ::vmod::filesystem_singleton; }
+
+	bool filesystem_singleton::bindings() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		filesystem_singleton_desc.func(&filesystem_singleton::script_join_paths, "__script_join_paths"sv, "join_paths"sv);
+		filesystem_singleton_desc.func(&filesystem_singleton::script_glob, "__script_glob"sv, "glob"sv);
+		filesystem_singleton_desc = *this;
+
+		if(!vm->RegisterClass(&filesystem_singleton_desc)) {
+			error("vmod: failed to register vmod filesystem script class\n"sv);
+			return false;
+		}
+
+		vs_instance_ = vm->RegisterInstance(&filesystem_singleton_desc, this);
+		if(!vs_instance_ || vs_instance_ == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create vmod filesystem instance\n"sv);
+			return false;
+		}
+
+		vm->SetInstanceUniqeId(vs_instance_, "__vmod_filesystem_singleton");
+
+		if(!vm->SetValue(vmod.scope(), "fs", vs_instance_)) {
+			error("vmod: failed to set filesystem instance value\n"sv);
+			return false;
+		}
+
+		return true;
+	}
+
+	void filesystem_singleton::unbindings() noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(vs_instance_ && vs_instance_ != gsdk::INVALID_HSCRIPT) {
+			vm->RemoveInstance(vs_instance_);
+		}
+
+		gsdk::HSCRIPT vmod_scope{vmod.scope()};
+		if(vm->ValueExists(vmod_scope, "fs")) {
+			vm->ClearValue(vmod_scope, "fs");
+		}
 	}
 
 	bool vmod::bindings() noexcept
@@ -352,7 +464,6 @@ namespace vmod
 		using namespace std::literals::string_view_literals;
 
 		vmod_desc.func(&vmod::script_find_plugin, "__script_find_plugin"sv, "find_plugin"sv);
-		vmod_desc.func(&vmod::script_join_paths, "__script_join_paths"sv, "join_paths"sv);
 		vmod_desc = *this;
 
 		if(!vm_->RegisterClass(&vmod_desc)) {
@@ -385,12 +496,16 @@ namespace vmod
 			return false;
 		}
 
-		if(!vm_->SetValue(scope_, "symbols", symbols_table_)) {
+		if(!vm_->SetValue(scope_, "syms", symbols_table_)) {
 			error("vmod: failed to set symbols table value\n"sv);
 			return false;
 		}
 
-		if(!server_symbols_singleton::bindings()) {
+		if(!server_symbols_singleton.bindings()) {
+			return false;
+		}
+
+		if(!filesystem_singleton.bindings()) {
 			return false;
 		}
 
@@ -436,7 +551,9 @@ namespace vmod
 
 		yaml::unbindings();
 
-		server_symbols_singleton::unbindings();
+		server_symbols_singleton.unbindings();
+
+		filesystem_singleton.unbindings();
 
 		ffi_unbindings();
 
@@ -452,8 +569,8 @@ namespace vmod
 			vm_->ReleaseTable(symbols_table_);
 		}
 
-		if(vm_->ValueExists(scope_, "symbols")) {
-			vm_->ClearValue(scope_, "symbols");
+		if(vm_->ValueExists(scope_, "syms")) {
+			vm_->ClearValue(scope_, "syms");
 		}
 
 		if(vs_instance_ && vs_instance_ != gsdk::INVALID_HSCRIPT) {

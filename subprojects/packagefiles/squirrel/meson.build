@@ -31,7 +31,11 @@ squirrel_lib = static_library('squirrel',
 		join_paths('squirrel','sqtable.cpp'),
 		join_paths('squirrel','sqvm.cpp')
 	),
-	gnu_symbol_visibility: 'inlineshidden'
+	gnu_symbol_visibility: 'inlineshidden',
+	include_directories:
+		include_directories(
+			'include'
+		)
 )
 
 squirrel_dep = declare_dependency(link_with: squirrel_lib)

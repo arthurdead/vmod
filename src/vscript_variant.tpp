@@ -303,6 +303,86 @@ namespace vmod
 	}
 
 	template <>
+	inline std::string variant_to_value<std::string>(const gsdk::ScriptVariant_t &var) noexcept
+	{
+		using namespace std::literals::string_literals;
+
+		constexpr std::size_t buffers_size{sizeof(__vscript_variable_to_value_buffer) / 4};
+
+		switch(var.m_type) {
+			case gsdk::FIELD_FLOAT: {
+				std::string temp;
+				temp.resize(buffers_size);
+
+				char *begin{temp.data()};
+				char *end{temp.data() + buffers_size};
+
+				std::to_chars(begin, end, var.m_float);
+				return begin;
+			}
+			case gsdk::FIELD_CSTRING: {
+				return var.m_pszString;
+			}
+			case gsdk::FIELD_VECTOR: {
+				std::string temp;
+				temp.resize(sizeof(__vscript_variable_to_value_buffer));
+
+				std::strncpy(temp.data(), "(vector : (", buffers_size);
+
+				char *begin{temp.data() + 11};
+				char *end{begin + buffers_size};
+				std::to_chars_result tc_res{std::to_chars(begin, end, var.m_pVector->x)};
+
+				std::strncat(tc_res.ptr, ", ", buffers_size);
+
+				begin = (tc_res.ptr + 2);
+				end = (begin + buffers_size);
+				tc_res = std::to_chars(begin, end, var.m_pVector->y);
+
+				std::strncat(tc_res.ptr, ", ", buffers_size);
+
+				begin = (tc_res.ptr + 2);
+				end = (begin + buffers_size);
+				std::to_chars(begin, end, var.m_pVector->z);
+
+				std::strncat(tc_res.ptr, "))", buffers_size);
+
+				return temp;
+			}
+			case gsdk::FIELD_INTEGER: {
+				std::string temp;
+				temp.resize(buffers_size);
+
+				char *begin{temp.data()};
+				char *end{temp.data() + buffers_size};
+
+				std::to_chars(begin, end, var.m_int);
+				return begin;
+			}
+			case gsdk::FIELD_BOOLEAN: {
+				return var.m_bool ? "true"s : "false"s;
+			}
+			case gsdk::FIELD_HSCRIPT: {
+				return std::string{__vmod_to_string(var.m_hScript)};
+			}
+		}
+
+		return {};
+	}
+
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field<std::string>() noexcept
+	{ return gsdk::FIELD_CSTRING; }
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, std::string &&value) noexcept
+	{
+		std::size_t len{value.length()};
+		var.m_pszString = new char[len+1];
+		std::strncpy(const_cast<char *>(var.m_pszString), value.c_str(), len);
+		const_cast<char *>(var.m_pszString)[len] = '\0';
+		var.m_flags |= gsdk::SV_FREE;
+	}
+
+	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<std::filesystem::path>() noexcept
 	{ return gsdk::FIELD_CSTRING; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, const std::filesystem::path &value) noexcept

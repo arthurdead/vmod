@@ -101,6 +101,16 @@ namespace vmod
 		using thiscall_pointer_type = R(__attribute__((__thiscall__)) *)(C *, Args...);
 	};
 
+	template <typename R, typename C, typename ...Args>
+	struct function_traits<R(C::*)(Args...) const> : function_traits<R(C::*)(Args...)>
+	{
+		using class_type = const C;
+
+		using pointer_type = R(C::*)(Args...) const;
+		using plain_pointer_type = R(*)(const C *, Args...);
+		using thiscall_pointer_type = R(__attribute__((__thiscall__)) *)(const C *, Args...);
+	};
+
 	template <typename R, typename ...Args>
 	struct function_traits<R(*)(Args..., ...)> : function_traits<R(*)(Args...)>
 	{
@@ -108,7 +118,7 @@ namespace vmod
 
 		using pointer_type = R(*)(Args..., ...);
 		using plain_pointer_type = pointer_type;
-		using thiscall_pointer_type = pointer_type;
+		using thiscall_pointer_type = plain_pointer_type;
 	};
 
 	template <typename R, typename C, typename ...Args>
@@ -117,8 +127,18 @@ namespace vmod
 		static constexpr bool va{true};
 
 		using pointer_type = R(C::*)(Args..., ...);
-		using plain_pointer_type = pointer_type;
-		using thiscall_pointer_type = pointer_type;
+		using plain_pointer_type = R(*)(C *, Args..., ...);
+		using thiscall_pointer_type = plain_pointer_type;
+	};
+
+	template <typename R, typename C, typename ...Args>
+	struct function_traits<R(C::*)(Args..., ...) const> : function_traits<R(C::*)(Args...)>
+	{
+		static constexpr bool va{true};
+
+		using pointer_type = R(C::*)(Args..., ...) const;
+		using plain_pointer_type = R(*)(const C *, Args..., ...);
+		using thiscall_pointer_type = plain_pointer_type;
 	};
 
 	template <typename R, typename ...Args>
@@ -137,7 +157,17 @@ namespace vmod
 	};
 
 	template <typename R, typename C, typename ...Args>
+	struct function_traits<R(C::*)(Args...) const noexcept> : function_traits<R(C::*)(Args...) const>
+	{
+	};
+
+	template <typename R, typename C, typename ...Args>
 	struct function_traits<R(C::*)(Args..., ...) noexcept> : function_traits<R(C::*)(Args..., ...)>
+	{
+	};
+
+	template <typename R, typename C, typename ...Args>
+	struct function_traits<R(C::*)(Args..., ...) const noexcept> : function_traits<R(C::*)(Args..., ...) const>
 	{
 	};
 

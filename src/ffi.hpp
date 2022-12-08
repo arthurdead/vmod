@@ -92,7 +92,7 @@ namespace vmod
 	{
 	public:
 		inline dynamic_detour(ffi_type *ret, std::vector<ffi_type *> &&args) noexcept
-			: arg_type_ptrs{std::move(args)}, ret_type_ptr{ret}
+			: cif_{}, arg_type_ptrs{std::move(args)}, ret_type_ptr{ret}
 		{
 		}
 

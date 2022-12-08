@@ -141,8 +141,8 @@ namespace vmod
 			}
 
 			gsdk::HSCRIPT vmod_scope{vmod.scope()};
-			if(vm->ValueExists(vmod_scope, "memory")) {
-				vm->ClearValue(vmod_scope, "memory");
+			if(vm->ValueExists(vmod_scope, "mem")) {
+				vm->ClearValue(vmod_scope, "mem");
 			}
 		}
 
@@ -265,18 +265,18 @@ namespace vmod
 			return false;
 		}
 
-		if(!vm->SetValue(vmod_scope, "memory", scope)) {
+		if(!vm->SetValue(vmod_scope, "mem", scope)) {
 			error("vmod: failed to set memory scope value\n"sv);
 			return false;
 		}
 
-		get_impl = vm->MakeSquirrelMetamethod_Get(vmod_scope, "memory", &static_cast<gsdk::ISquirrelMetamethodDelegate &>(::vmod::memory_singleton), false);
+		get_impl = vm->MakeSquirrelMetamethod_Get(vmod_scope, "mem", &static_cast<gsdk::ISquirrelMetamethodDelegate &>(::vmod::memory_singleton), false);
 		if(!get_impl) {
 			error("vmod: failed to create memory _get metamethod\n"sv);
 			return false;
 		}
 	#else
-		if(!vm->SetValue(vmod_scope, "memory", vs_instance_)) {
+		if(!vm->SetValue(vmod_scope, "mem", vs_instance_)) {
 			error("vmod: failed to set memory instance value\n"sv);
 			return false;
 		}
@@ -375,7 +375,7 @@ namespace vmod
 		friend class ffi_singleton;
 
 		inline script_cif(ffi_type *ret, std::vector<ffi_type *> &&args) noexcept
-			: arg_type_ptrs{std::move(args)}, ret_type_ptr{ret}
+			: cif_{}, arg_type_ptrs{std::move(args)}, ret_type_ptr{ret}
 		{
 		}
 

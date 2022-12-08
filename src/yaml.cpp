@@ -265,10 +265,19 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		yaml_parser_t parser;
+		struct scope_delete_parser final {
+			inline scope_delete_parser(yaml_parser_t &parser_) noexcept
+				: parser{parser_} {}
+			inline ~scope_delete_parser() noexcept
+			{ yaml_parser_delete(&parser); }
+			yaml_parser_t &parser;
+		};
+
+		yaml_parser_t parser{};
 		if(yaml_parser_initialize(&parser) != 1) {
 			return false;
 		}
+		scope_delete_parser sdp{parser};
 
 		std::size_t size;
 		std::unique_ptr<unsigned char[]> data{read_file(path_, size)};
@@ -277,7 +286,7 @@ namespace vmod
 			yaml_parser_set_input_string(&parser, data.get(), size);
 
 			while(true) {
-				yaml_document_t temp_doc;
+				yaml_document_t temp_doc{};
 				if(yaml_parser_load(&parser, &temp_doc) != 1) {
 					documents.clear();
 					return false;
@@ -301,8 +310,6 @@ namespace vmod
 				documents.emplace_back(doc);
 			}
 		}
-
-		yaml_parser_delete(&parser);
 
 		instance = vm->RegisterInstance(&yaml_desc, this);
 		if(!instance || instance == gsdk::INVALID_HSCRIPT) {

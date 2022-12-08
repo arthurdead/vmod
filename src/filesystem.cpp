@@ -23,7 +23,7 @@ namespace vmod
 		fstat(fd, &stat);
 		size = static_cast<std::size_t>(stat.st_size);
 
-		std::unique_ptr<unsigned char[]> data{new unsigned char[size]};
+		std::unique_ptr<unsigned char[]> data{new unsigned char[size+1]};
 		read(fd, data.get(), size);
 		data[size] = '\0';
 

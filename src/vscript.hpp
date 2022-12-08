@@ -294,7 +294,7 @@ namespace vmod
 		inline void *GetProxied(void *ptr) noexcept override
 		{ return ptr; }
 
-		inline bool ToString(void *ptr, char *buff, int siz) noexcept override final
+		inline bool ToString(void *ptr, char *buff, int siz) noexcept override
 		{
 			const std::string &name{demangle<T>()};
 			std::snprintf(buff, static_cast<std::size_t>(siz), "(%s : %p)", name.c_str(), ptr);

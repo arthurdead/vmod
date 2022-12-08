@@ -3,7 +3,7 @@ project('vmod', 'cpp',
 		'warning_level=3',
 		'werror=true',
 		'buildtype=debug',
-		'b_sanitize=none',
+		'b_sanitize=address',
 		'b_lundef=false',
 		'strip=false',
 		'cpp_std=gnu++20',
@@ -11,6 +11,10 @@ project('vmod', 'cpp',
 		'cpp_rtti=true'
 	],
 )
+
+link_args = [
+	
+]
 
 cpp_args = [
 	'-Wno-error=unused-variable',
@@ -177,7 +181,8 @@ lib = shared_library('vmod',
 	dependencies: dependencies,
 	install: install,
 	install_dir: addons,
-	cpp_args: cpp_args
+	cpp_args: cpp_args,
+	link_args: link_args
 )
 
 configure_file(

@@ -316,6 +316,12 @@ namespace gsdk
 		virtual bool ValueExists(HSCRIPT, const char *) = 0;
 		virtual bool SetValue(HSCRIPT, const char *, const char *) = 0;
 		virtual bool SetValue(HSCRIPT, const char *, const ScriptVariant_t &) = 0;
+		inline bool SetValue(HSCRIPT scope, const char *name, ScriptVariant_t &&var) noexcept
+		{
+			bool ret{SetValue(scope, name, static_cast<const ScriptVariant_t &>(var))};
+			var.m_flags &= ~SV_FREE;
+			return ret;
+		}
 		inline bool SetValue(HSCRIPT scope, const char *name, HSCRIPT object) noexcept
 		{
 			ScriptVariant_t var;
@@ -403,6 +409,11 @@ namespace gsdk
 		virtual HSQUIRRELVM GetInternalVM() = 0;
 		virtual bool GetScalarValue(HSCRIPT, ScriptVariant_t *) = 0;
 		virtual void ArrayAddToTail(HSCRIPT, const ScriptVariant_t &) = 0;
+		inline void ArrayAddToTail(HSCRIPT array, ScriptVariant_t &&var) noexcept
+		{
+			ArrayAddToTail(array, static_cast<const ScriptVariant_t &>(var));
+			var.m_flags &= ~SV_FREE;
+		}
 		virtual HSCRIPT GetRootTable() = 0;
 		virtual HSCRIPT CopyHandle(HSCRIPT) = 0;
 		virtual HSCRIPT GetIdentity(HSCRIPT) = 0;
