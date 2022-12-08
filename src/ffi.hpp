@@ -28,6 +28,23 @@ namespace vmod
 		return {};
 	}
 
+	static_assert(sizeof(ffi_type *) == sizeof(int));
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field<ffi_type *>() noexcept
+	{ return gsdk::FIELD_INTEGER; }
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, ffi_type *value) noexcept
+	{ var.m_hScript = reinterpret_cast<gsdk::HSCRIPT>(value); }
+	template <>
+	inline ffi_type *variant_to_value<ffi_type *>(const gsdk::ScriptVariant_t &var) noexcept
+	{
+		switch(var.m_type) {
+			case gsdk::FIELD_INTEGER:
+			return reinterpret_cast<ffi_type *>(var.m_hScript);
+		}
+
+		return {};
+	}
+
 	extern bool ffi_bindings() noexcept;
 	extern void ffi_unbindings() noexcept;
 

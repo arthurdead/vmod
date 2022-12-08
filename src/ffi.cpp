@@ -128,12 +128,22 @@ namespace vmod
 
 			gsdk::IScriptVM *vm{vmod.vm()};
 
+			types.clear();
+
 			if(get_impl) {
 				vm->DestroySquirrelMetamethod_Get(get_impl);
 			}
 
 			if(vs_instance_ && vs_instance_ != gsdk::INVALID_HSCRIPT) {
 				vm->RemoveInstance(vs_instance_);
+			}
+
+			if(types_table && types_table != gsdk::INVALID_HSCRIPT) {
+				vm->ReleaseTable(types_table);
+			}
+
+			if(vm->ValueExists(scope, "types")) {
+				vm->ClearValue(scope, "types");
 			}
 
 			if(scope && scope != gsdk::INVALID_HSCRIPT) {
@@ -171,6 +181,28 @@ namespace vmod
 			return block->instance;
 		}
 
+		static gsdk::HSCRIPT script_allocate_type(gsdk::HSCRIPT type) noexcept
+		{
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			script_variant_t type_id;
+			if(!vm->GetValue(type, "__internal_ptr__", &type_id)) {
+				vm->RaiseException("vmod: invalid type");
+				return {};
+			}
+
+			ffi_type *type_ptr{type_id.get<ffi_type *>()};
+
+			memory_block *block{new memory_block{static_cast<std::align_val_t>(type_ptr->alignment), type_ptr->size}};
+
+			if(!block->initialize()) {
+				delete block;
+				return nullptr;
+			}
+
+			return block->instance;
+		}
+
 		static gsdk::HSCRIPT script_allocate_zero(std::size_t num, std::size_t size) noexcept
 		{
 			memory_block *block{new memory_block{num, size}};
@@ -183,38 +215,138 @@ namespace vmod
 			return block->instance;
 		}
 
-		static script_variant_t script_read(void *ptr, int type) noexcept
+		static script_variant_t script_read(void *ptr, gsdk::HSCRIPT type) noexcept
 		{
-			ffi_type *type_ptr{ffi_type_id_to_ptr(type)};
-			if(!type_ptr) {
-				vmod.vm()->RaiseException("vmod: invalid type");
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			script_variant_t type_id;
+			if(!vm->GetValue(type, "__internal_ptr__", &type_id)) {
+				vm->RaiseException("vmod: invalid type");
 				return {};
 			}
+
+			ffi_type *type_ptr{type_id.get<ffi_type *>()};
 
 			script_variant_t ret_var;
 			ffi_ptr_to_script_var(type_ptr, ptr, ret_var);
 			return ret_var;
 		}
 
-		static void script_write(void *ptr, int type, script_variant_t arg_var) noexcept
+		static void script_write(void *ptr, gsdk::HSCRIPT type, script_variant_t arg_var) noexcept
 		{
-			ffi_type *type_ptr{ffi_type_id_to_ptr(type)};
-			if(!type_ptr) {
-				vmod.vm()->RaiseException("vmod: invalid type");
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			script_variant_t type_id;
+			if(!vm->GetValue(type, "__internal_ptr__", &type_id)) {
+				vm->RaiseException("vmod: invalid type");
 				return;
 			}
+
+			ffi_type *type_ptr{type_id.get<ffi_type *>()};
 
 			script_var_to_ffi_ptr(type_ptr, ptr, arg_var);
 		}
 
 		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
 
+		struct mem_type final
+		{
+			mem_type() noexcept = default;
+			mem_type(const mem_type &) = delete;
+			mem_type &operator=(const mem_type &) = delete;
+			inline mem_type(mem_type &&other) noexcept
+			{ operator=(std::move(other)); }
+			inline mem_type &operator=(mem_type &&other) noexcept
+			{
+				type_ptr = other.type_ptr;
+				other.type_ptr = nullptr;
+				name = std::move(other.name);
+				table = other.table;
+				other.table = nullptr;
+				return *this;
+			}
+
+			~mem_type() noexcept;
+
+			ffi_type *type_ptr;
+			std::string name;
+			gsdk::HSCRIPT table;
+		};
+
+		bool register_type(ffi_type *type_ptr, std::string_view name) noexcept
+		{
+			using namespace std::literals::string_view_literals;
+
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			gsdk::HSCRIPT type_table{vm->CreateTable()};
+			if(!type_table || type_table == gsdk::INVALID_HSCRIPT) {
+				error("vmod: failed to create type '%s' table\n", name.data());
+				return false;
+			}
+
+			mem_type type;
+			type.table = type_table;
+			type.type_ptr = type_ptr;
+			type.name = name;
+			types.emplace_back(std::move(type));
+
+			if(!vm->SetValue(type_table, "size", script_variant_t{type_ptr->size})) {
+				error("vmod: failed to set type '%s' size value\n", name.data());
+				return false;
+			}
+
+			if(!vm->SetValue(type_table, "alignment", script_variant_t{type_ptr->alignment})) {
+				error("vmod: failed to set type '%s' alignment value\n", name.data());
+				return false;
+			}
+
+			if(!vm->SetValue(type_table, "id", script_variant_t{type_ptr->type})) {
+				error("vmod: failed to set type '%s' id value\n", name.data());
+				return false;
+			}
+
+			if(!vm->SetValue(type_table, "__internal_ptr__", script_variant_t{type_ptr})) {
+				error("vmod: failed to set type '%s' internal ptr value\n", name.data());
+				return false;
+			}
+
+			if(!vm->SetValue(type_table, "name", script_variant_t{name})) {
+				error("vmod: failed to set type '%s' name value\n", name.data());
+				return false;
+			}
+
+			if(!vm->SetValue(types_table, name.data(), type_table)) {
+				error("vmod: failed to set type '%s' name value\n", name.data());
+				return false;
+			}
+
+			return true;
+		}
+
+		std::vector<mem_type> types;
 		gsdk::HSCRIPT scope{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT types_table{gsdk::INVALID_HSCRIPT};
 		gsdk::HSCRIPT vs_instance_{gsdk::INVALID_HSCRIPT};
 		gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
 	};
 
 	static class memory_singleton memory_singleton;
+
+	memory_singleton::mem_type::~mem_type() noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(!name.empty()) {
+			if(vm->ValueExists(::vmod::memory_singleton.types_table, name.c_str())) {
+				vm->ClearValue(::vmod::memory_singleton.types_table, name.c_str());
+			}
+		}
+
+		if(table && table != gsdk::INVALID_HSCRIPT) {
+			vm->ReleaseTable(table);
+		}
+	}
 
 	bool memory_singleton::Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value)
 	{
@@ -239,6 +371,7 @@ namespace vmod
 		memory_desc.func(&memory_singleton::script_allocate, "__script_allocate"sv, "allocate"sv);
 		memory_desc.func(&memory_singleton::script_allocate_aligned, "__script_allocate_aligned"sv, "allocate_aligned"sv);
 		memory_desc.func(&memory_singleton::script_allocate_zero, "__script_allocate_zero"sv, "allocate_zero"sv);
+		memory_desc.func(&memory_singleton::script_allocate_type, "__script_allocate_type"sv, "allocate_type"sv);
 		memory_desc.func(&memory_singleton::script_read, "__script_read"sv, "read"sv);
 		memory_desc.func(&memory_singleton::script_write, "__script_write"sv, "write"sv);
 		memory_desc = ::vmod::memory_singleton;
@@ -258,7 +391,6 @@ namespace vmod
 
 		gsdk::HSCRIPT vmod_scope{vmod.scope()};
 
-	#if 0
 		scope = vm->CreateScope("__vmod_memory_scope", nullptr);
 		if(!scope || scope == gsdk::INVALID_HSCRIPT) {
 			error("vmod: failed to create memory scope\n"sv);
@@ -275,12 +407,124 @@ namespace vmod
 			error("vmod: failed to create memory _get metamethod\n"sv);
 			return false;
 		}
-	#else
-		if(!vm->SetValue(vmod_scope, "mem", vs_instance_)) {
-			error("vmod: failed to set memory instance value\n"sv);
+
+		types_table = vm->CreateTable();
+		if(!types_table || types_table == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create memory types table\n"sv);
 			return false;
 		}
-	#endif
+
+		if(!vm->SetValue(scope, "types", types_table)) {
+			error("vmod: failed to set memory types table value\n"sv);
+			return false;
+		}
+
+		{
+			if(!register_type(&ffi_type_void, "void"sv)) {
+				error("vmod: failed to register memory type void\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_sint, "int"sv)) {
+				error("vmod: failed to register memory type int\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_uint, "uint"sv)) {
+				error("vmod: failed to register memory type uint\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_schar, "char"sv)) {
+				error("vmod: failed to register memory type char\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_uchar, "uchar"sv)) {
+				error("vmod: failed to register memory type uchar\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_sshort, "short"sv)) {
+				error("vmod: failed to register memory type short\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_ushort, "ushort"sv)) {
+				error("vmod: failed to register memory type ushort\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_slong, "long"sv)) {
+				error("vmod: failed to register memory type long\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_ulong, "ulong"sv)) {
+				error("vmod: failed to register memory type ulong\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_float, "float"sv)) {
+				error("vmod: failed to register memory type float\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_double, "double"sv)) {
+				error("vmod: failed to register memory type double\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_longdouble, "long_double"sv)) {
+				error("vmod: failed to register memory type long double\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_uint8, "uint8"sv)) {
+				error("vmod: failed to register memory type uint8\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_sint8, "int8"sv)) {
+				error("vmod: failed to register memory type int8\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_uint16, "uint16"sv)) {
+				error("vmod: failed to register memory type uint16\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_sint16, "int16"sv)) {
+				error("vmod: failed to register memory type int16\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_uint32, "uint32"sv)) {
+				error("vmod: failed to register memory type uint32\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_sint32, "int32"sv)) {
+				error("vmod: failed to register memory type int32\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_uint64, "uint64"sv)) {
+				error("vmod: failed to register memory type uint64\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_sint64, "int64"sv)) {
+				error("vmod: failed to register memory type int64\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_pointer, "ptr"sv)) {
+				error("vmod: failed to register memory type ptr\n"sv);
+				return false;
+			}
+		}
 
 		if(!memory_block::bindings()) {
 			return false;
@@ -490,15 +734,11 @@ namespace vmod
 		static ffi_singleton &instance() noexcept;
 
 	private:
-		static gsdk::HSCRIPT script_create_cif(generic_func_t func, ffi_abi abi, int ret, gsdk::HSCRIPT args) noexcept
+		static gsdk::HSCRIPT script_create_cif(generic_func_t func, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept
 		{
 			gsdk::IScriptVM *vm{vmod.vm()};
 
-			ffi_type *ret_ptr{ffi_type_id_to_ptr(ret)};
-			if(!ret_ptr) {
-				vm->RaiseException("vmod: invalid return type");
-				return nullptr;
-			}
+			ffi_type *ret_ptr{ret};
 
 			std::vector<ffi_type *> args_ptrs;
 
@@ -507,16 +747,7 @@ namespace vmod
 				script_variant_t value;
 				vm->GetArrayValue(args, i, &value);
 
-				if(value.m_type != gsdk::FIELD_INTEGER) {
-					vm->RaiseException("vmod: not a ffi type");
-					return nullptr;
-				}
-
-				ffi_type *arg_ptr{ffi_type_id_to_ptr(value.m_int)};
-				if(!arg_ptr) {
-					vm->RaiseException("vmod: invalid argument type");
-					return nullptr;
-				}
+				ffi_type *arg_ptr{value.get<ffi_type *>()};
 
 				args_ptrs.emplace_back(arg_ptr);
 			}
@@ -531,15 +762,11 @@ namespace vmod
 			return cif->instance;
 		}
 
-		static dynamic_detour *script_create_detour_shared(int ret, gsdk::HSCRIPT args) noexcept
+		static dynamic_detour *script_create_detour_shared(ffi_type *ret, gsdk::HSCRIPT args) noexcept
 		{
 			gsdk::IScriptVM *vm{vmod.vm()};
 
-			ffi_type *ret_ptr{ffi_type_id_to_ptr(ret)};
-			if(!ret_ptr) {
-				vm->RaiseException("vmod: invalid return type");
-				return nullptr;
-			}
+			ffi_type *ret_ptr{ret};
 
 			std::vector<ffi_type *> args_ptrs;
 
@@ -548,16 +775,7 @@ namespace vmod
 				script_variant_t value;
 				vm->GetArrayValue(args, i, &value);
 
-				if(value.m_type != gsdk::FIELD_INTEGER) {
-					vm->RaiseException("vmod: not a ffi type");
-					return nullptr;
-				}
-
-				ffi_type *arg_ptr{ffi_type_id_to_ptr(value.m_int)};
-				if(!arg_ptr) {
-					vm->RaiseException("vmod: invalid argument type");
-					return nullptr;
-				}
+				ffi_type *arg_ptr{value.get<ffi_type *>()};
 
 				args_ptrs.emplace_back(arg_ptr);
 			}
@@ -566,7 +784,7 @@ namespace vmod
 			return det;
 		}
 
-		static gsdk::HSCRIPT script_create_detour_member(generic_mfp_t old_func, gsdk::HSCRIPT new_func, ffi_abi abi, int ret, gsdk::HSCRIPT args) noexcept
+		static gsdk::HSCRIPT script_create_detour_member(generic_mfp_t old_func, gsdk::HSCRIPT new_func, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept
 		{
 			gsdk::IScriptVM *vm{vmod.vm()};
 
@@ -584,7 +802,7 @@ namespace vmod
 			return det->instance;
 		}
 
-		static gsdk::HSCRIPT script_create_detour_static(generic_func_t old_func, gsdk::HSCRIPT new_func, ffi_abi abi, int ret, gsdk::HSCRIPT args) noexcept
+		static gsdk::HSCRIPT script_create_detour_static(generic_func_t old_func, gsdk::HSCRIPT new_func, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept
 		{
 			gsdk::IScriptVM *vm{vmod.vm()};
 
@@ -684,74 +902,108 @@ namespace vmod
 			return false;
 		}
 
-		//TODO!!!! make these instances and add get_alignment/size/id
 		{
-			if(!vm->SetValue(types_table, "void", script_variant_t{FFI_TYPE_VOID})) {
+			if(!vm->SetValue(types_table, "void", script_variant_t{&ffi_type_void})) {
 				error("vmod: failed to set ffi types void value\n"sv);
 				return false;
 			}
 
-			if(!vm->SetValue(types_table, "int", script_variant_t{FFI_TYPE_INT})) {
+			if(!vm->SetValue(types_table, "int", script_variant_t{&ffi_type_sint})) {
 				error("vmod: failed to set ffi types int value\n"sv);
 				return false;
 			}
 
-			if(!vm->SetValue(types_table, "float", script_variant_t{FFI_TYPE_FLOAT})) {
+			if(!vm->SetValue(types_table, "uint", script_variant_t{&ffi_type_uint})) {
+				error("vmod: failed to set ffi types uint value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(types_table, "char", script_variant_t{&ffi_type_schar})) {
+				error("vmod: failed to set ffi types char value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(types_table, "uchar", script_variant_t{&ffi_type_uchar})) {
+				error("vmod: failed to set ffi types uchar value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(types_table, "short", script_variant_t{&ffi_type_sshort})) {
+				error("vmod: failed to set ffi types short value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(types_table, "ushort", script_variant_t{&ffi_type_ushort})) {
+				error("vmod: failed to set ffi types ushort value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(types_table, "long", script_variant_t{&ffi_type_slong})) {
+				error("vmod: failed to set ffi types long value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(types_table, "ulong", script_variant_t{&ffi_type_ulong})) {
+				error("vmod: failed to set ffi types ulong value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(types_table, "float", script_variant_t{&ffi_type_float})) {
 				error("vmod: failed to set ffi types float value\n"sv);
 				return false;
 			}
 
-			if(!vm->SetValue(types_table, "double", script_variant_t{FFI_TYPE_DOUBLE})) {
+			if(!vm->SetValue(types_table, "double", script_variant_t{&ffi_type_double})) {
 				error("vmod: failed to set ffi types double value\n"sv);
 				return false;
 			}
 
-			if(!vm->SetValue(types_table, "long_double", script_variant_t{FFI_TYPE_LONGDOUBLE})) {
+			if(!vm->SetValue(types_table, "long_double", script_variant_t{&ffi_type_longdouble})) {
 				error("vmod: failed to set ffi types long double value\n"sv);
 				return false;
 			}
 
-			if(!vm->SetValue(types_table, "uint8", script_variant_t{FFI_TYPE_UINT8})) {
+			if(!vm->SetValue(types_table, "uint8", script_variant_t{&ffi_type_uint8})) {
 				error("vmod: failed to set ffi types uint8 value\n"sv);
 				return false;
 			}
 
-			if(!vm->SetValue(types_table, "int8", script_variant_t{FFI_TYPE_SINT8})) {
+			if(!vm->SetValue(types_table, "int8", script_variant_t{&ffi_type_sint8})) {
 				error("vmod: failed to set ffi types int8 value\n"sv);
 				return false;
 			}
 
-			if(!vm->SetValue(types_table, "uint16", script_variant_t{FFI_TYPE_UINT16})) {
+			if(!vm->SetValue(types_table, "uint16", script_variant_t{&ffi_type_uint16})) {
 				error("vmod: failed to set ffi types uint16 value\n"sv);
 				return false;
 			}
 
-			if(!vm->SetValue(types_table, "int16", script_variant_t{FFI_TYPE_SINT16})) {
+			if(!vm->SetValue(types_table, "int16", script_variant_t{&ffi_type_sint16})) {
 				error("vmod: failed to set ffi types int16 value\n"sv);
 				return false;
 			}
 
-			if(!vm->SetValue(types_table, "uint32", script_variant_t{FFI_TYPE_UINT32})) {
+			if(!vm->SetValue(types_table, "uint32", script_variant_t{&ffi_type_uint32})) {
 				error("vmod: failed to set ffi types uint32 value\n"sv);
 				return false;
 			}
 
-			if(!vm->SetValue(types_table, "int32", script_variant_t{FFI_TYPE_SINT32})) {
+			if(!vm->SetValue(types_table, "int32", script_variant_t{&ffi_type_sint32})) {
 				error("vmod: failed to set ffi types int32 value\n"sv);
 				return false;
 			}
 
-			if(!vm->SetValue(types_table, "uint64", script_variant_t{FFI_TYPE_UINT64})) {
+			if(!vm->SetValue(types_table, "uint64", script_variant_t{&ffi_type_uint64})) {
 				error("vmod: failed to set ffi types uint64 value\n"sv);
 				return false;
 			}
 
-			if(!vm->SetValue(types_table, "int64", script_variant_t{FFI_TYPE_SINT64})) {
+			if(!vm->SetValue(types_table, "int64", script_variant_t{&ffi_type_sint64})) {
 				error("vmod: failed to set ffi types int64 value\n"sv);
 				return false;
 			}
 
-			if(!vm->SetValue(types_table, "ptr", script_variant_t{FFI_TYPE_POINTER})) {
+			if(!vm->SetValue(types_table, "ptr", script_variant_t{&ffi_type_pointer})) {
 				error("vmod: failed to set ffi types ptr value\n"sv);
 				return false;
 			}

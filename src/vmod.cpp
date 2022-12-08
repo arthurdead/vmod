@@ -317,7 +317,7 @@ namespace vmod
 
 		vm->SetInstanceUniqeId(vs_instance_, "__vmod_server_symbols_singleton");
 
-		if(!vm->SetValue(vmod.symbols_table(), "server", vs_instance_)) {
+		if(!vm->SetValue(vmod.symbols_table(), "sv", vs_instance_)) {
 			error("vmod: failed to set server symbols table value\n"sv);
 			return false;
 		}
