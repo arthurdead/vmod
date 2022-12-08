@@ -281,7 +281,7 @@ namespace vmod
 				other.type_ptr = nullptr;
 				name = std::move(other.name);
 				table = other.table;
-				other.table = nullptr;
+				other.table = gsdk::INVALID_HSCRIPT;
 				return *this;
 			}
 
@@ -1230,6 +1230,7 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
+		//TODO!!!! get scope of function
 		gsdk::HSCRIPT scope{nullptr};
 
 		script_variant_t ret_var;

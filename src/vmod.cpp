@@ -69,20 +69,15 @@ namespace vmod
 		info("%s"sv, txt);
 	}
 
+	static gsdk::ScriptErrorFunc_t server_vs_error_cb;
+
 	static bool vscript_error_output(gsdk::ScriptErrorLevel_t lvl, const char *txt)
 	{
 		using namespace std::literals::string_view_literals;
 
-		switch(lvl) {
-			case gsdk::SCRIPT_LEVEL_WARNING: {
-				warning("%s"sv, txt);
-				return false;
-			}
-			case gsdk::SCRIPT_LEVEL_ERROR: {
-				error("%s"sv, txt);
-				return false;
-			}
-		}
+		bool ret{server_vs_error_cb(lvl, txt)};
+
+		return ret;
 	}
 
 	gsdk::HSCRIPT vmod::script_find_plugin(std::string_view name) noexcept
@@ -863,6 +858,7 @@ namespace vmod
 					return gsdk::SPEW_CONTINUE;
 				}
 			} break;
+		#if 0
 			case gsdk::SPEW_WARNING: {
 				if(in_vscript_print) {
 					return gsdk::SPEW_CONTINUE;
@@ -873,6 +869,7 @@ namespace vmod
 					return gsdk::SPEW_CONTINUE;
 				}
 			} break;
+		#endif
 			default: break;
 		}
 
@@ -1081,6 +1078,17 @@ namespace vmod
 		(cont->*RemoveAllTables_original)();
 	}
 
+	static void (gsdk::IScriptVM::*SetErrorCallback_original)(gsdk::ScriptErrorFunc_t);
+	static void SetErrorCallback_detour_callback(gsdk::IScriptVM *vm, gsdk::ScriptErrorFunc_t func)
+	{
+		if(in_vscript_server_init) {
+			server_vs_error_cb = func;
+			return;
+		}
+
+		(vm->*SetErrorCallback_original)(func);
+	}
+
 	bool vmod::detours() noexcept
 	{
 		RegisterFunctionGuts_detour.initialize(RegisterFunctionGuts, RegisterFunctionGuts_detour_callback);
@@ -1109,6 +1117,7 @@ namespace vmod
 
 		Run_original = swap_vfunc(vm_, static_cast<decltype(Run_original)>(&gsdk::IScriptVM::Run), Run_detour_callback);
 		RaiseException_original = swap_vfunc(vm_, &gsdk::IScriptVM::RaiseException, RaiseException_detour_callback);
+		SetErrorCallback_original = swap_vfunc(vm_, &gsdk::IScriptVM::SetErrorCallback, SetErrorCallback_detour_callback);
 
 		CreateNetworkStringTables_original = swap_vfunc(gamedll, &gsdk::IServerGameDLL::CreateNetworkStringTables, CreateNetworkStringTables_detour_callback);
 
@@ -1524,12 +1533,9 @@ namespace vmod
 			return false;
 		}
 
-		(reinterpret_cast<gsdk::CTFGameRules *>(0xbebebebe)->*RegisterScriptFunctions)();
-
-		vm_->SetOutputCallback(vscript_output);
-		vm_->SetErrorCallback(vscript_error_output);
-
 		vscript_server_init_called = true;
+
+		(reinterpret_cast<gsdk::CTFGameRules *>(0xbebebebe)->*RegisterScriptFunctions)();
 
 		if(vm_->GetLanguage() == gsdk::SL_SQUIRREL) {
 			server_init_script = vm_->CompileScript(reinterpret_cast<const char *>(g_Script_vscript_server), "vscript_server.nut");
@@ -1831,14 +1837,8 @@ namespace vmod
 
 namespace vmod
 {
-#ifdef __clang__
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wnon-virtual-dtor"
-	#pragma clang diagnostic ignored "-Wweak-vtables"
-#else
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
-#endif
 	class vsp final : public gsdk::IServerPluginCallbacks
 	{
 	public:
@@ -1855,48 +1855,52 @@ namespace vmod
 		}
 
 	private:
-		const char *GetPluginDescription() override
-		{ return "vmod"; }
-
-		bool Load(gsdk::CreateInterfaceFn, gsdk::CreateInterfaceFn) override
-		{
-			if(!load_return) {
-				return false;
-			}
-
-			if(!vmod.load_late()) {
-				return false;
-			}
-
-			return true;
-		}
-
-		void Unload() override
-		{
-			vmod.unload();
-			unloaded = true;
-		}
-
-		void GameFrame(bool simulating) override
-		{ vmod.game_frame(simulating); }
-
-		void ServerActivate([[maybe_unused]] gsdk::edict_t *edicts, [[maybe_unused]] int num_edicts, [[maybe_unused]] int max_clients) override
-		{ vmod.map_active(); }
-
-		void LevelInit(const char *name) override
-		{ vmod.map_loaded(name); }
-
-		void LevelShutdown() override
-		{ vmod.map_unloaded(); }
+		const char *GetPluginDescription() override;
+		bool Load(gsdk::CreateInterfaceFn, gsdk::CreateInterfaceFn) override;
+		void Unload() override;
+		void GameFrame(bool simulating) override;
+		void ServerActivate([[maybe_unused]] gsdk::edict_t *edicts, [[maybe_unused]] int num_edicts, [[maybe_unused]] int max_clients) override;
+		void LevelInit(const char *name) override;
+		void LevelShutdown() override;
 
 		bool load_return;
 		bool unloaded;
 	};
-#ifdef __clang__
-	#pragma clang diagnostic pop
-#else
 	#pragma GCC diagnostic pop
-#endif
+
+	const char *vsp::GetPluginDescription()
+	{ return "vmod"; }
+
+	bool vsp::Load(gsdk::CreateInterfaceFn, gsdk::CreateInterfaceFn)
+	{
+		if(!load_return) {
+			return false;
+		}
+
+		if(!vmod.load_late()) {
+			return false;
+		}
+
+		return true;
+	}
+
+	void vsp::Unload()
+	{
+		vmod.unload();
+		unloaded = true;
+	}
+
+	void vsp::GameFrame(bool simulating)
+	{ vmod.game_frame(simulating); }
+
+	void vsp::ServerActivate([[maybe_unused]] gsdk::edict_t *edicts, [[maybe_unused]] int num_edicts, [[maybe_unused]] int max_clients)
+	{ vmod.map_active(); }
+
+	void vsp::LevelInit(const char *name)
+	{ vmod.map_loaded(name); }
+
+	void vsp::LevelShutdown()
+	{ vmod.map_unloaded(); }
 
 	static vsp vsp;
 }

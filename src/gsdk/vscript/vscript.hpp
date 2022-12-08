@@ -194,13 +194,12 @@ namespace gsdk
 
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
-	#pragma GCC diagnostic ignored "-Wweak-vtables"
 	class IScriptInstanceHelper
 	{
 	public:
-		virtual void *GetProxied(void *p) = 0;
+		virtual void *GetProxied(void *);
 		virtual bool ToString(void *, char *, int) = 0;
-		virtual void *BindOnRead(HSCRIPT, void *, const char *) = 0;
+		virtual void *BindOnRead(HSCRIPT, void *, const char *);
 	};
 	#pragma GCC diagnostic pop
 
@@ -362,9 +361,6 @@ namespace gsdk
 		inline void GetArrayValue(HSCRIPT array, int i, ScriptVariant_t *value)
 		{
 			ScriptVariant_t tmp;
-			tmp.m_type = FIELD_VOID;
-			tmp.m_flags = 0;
-			tmp.m_hScript = nullptr;
 			GetKeyValue(array, i, &tmp, value);
 		}
 		virtual bool GetValue(HSCRIPT, const char *, ScriptVariant_t *) = 0;
