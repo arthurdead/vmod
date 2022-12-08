@@ -10,6 +10,7 @@ namespace vmod
 	static class_desc_t<plugin> plugin_desc{"__vmod_plugin_class"};
 
 	plugin *plugin::assumed_currently_running;
+	plugin *plugin::scope_assume_current::old_running;
 
 	script_variant_t plugin::script_lookup_value(std::string_view val_name) noexcept
 	{

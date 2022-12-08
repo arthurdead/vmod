@@ -124,10 +124,15 @@ namespace vmod
 
 		struct scope_assume_current final
 		{
+			static plugin *old_running;
+
 			inline scope_assume_current(plugin *pl_) noexcept
-			{ assumed_currently_running = pl_; }
+			{
+				old_running = assumed_currently_running;
+				assumed_currently_running = pl_;
+			}
 			inline ~scope_assume_current() noexcept
-			{ assumed_currently_running = nullptr; }
+			{ assumed_currently_running = old_running; }
 		};
 
 		static plugin *assumed_currently_running;
