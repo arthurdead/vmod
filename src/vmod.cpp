@@ -787,8 +787,18 @@ namespace vmod
 		RegisterFunctionGuts_detour(vm, binding, classdesc);
 
 		if(binding->m_flags & func_desc_t::SF_VA_FUNC) {
-			for(std::size_t i{0}; i < 14; ++i) {
-				binding->m_desc.m_Parameters.emplace_back(gsdk::FIELD_VARIANT);
+			constexpr std::size_t arglimit{14};
+			constexpr std::size_t va_args{arglimit};
+
+			std::size_t current_size{binding->m_desc.m_Parameters.size()};
+			if(current_size < arglimit) {
+				std::size_t new_size{current_size + va_args};
+				if(new_size > arglimit) {
+					new_size = arglimit;
+				}
+				for(std::size_t i{current_size}; i < new_size; ++i) {
+					binding->m_desc.m_Parameters.emplace_back(gsdk::FIELD_VARIANT);
+				}
 			}
 		}
 

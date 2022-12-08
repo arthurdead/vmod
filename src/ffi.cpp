@@ -247,6 +247,25 @@ namespace vmod
 			script_var_to_ffi_ptr(type_ptr, ptr, arg_var);
 		}
 
+		static inline void *script_add(void *ptr, std::ptrdiff_t off) noexcept
+		{
+			unsigned char *temp{reinterpret_cast<unsigned char *>(ptr)};
+			temp += off;
+			return reinterpret_cast<void *>(temp);
+		}
+
+		static inline void *script_sub(void *ptr, std::ptrdiff_t off) noexcept
+		{
+			unsigned char *temp{reinterpret_cast<unsigned char *>(ptr)};
+			temp -= off;
+			return reinterpret_cast<void *>(temp);
+		}
+
+		static inline generic_vtable_t script_get_vtable(generic_object_t *obj) noexcept
+		{
+			return vtable_from_object(obj);
+		}
+
 		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
 
 		struct mem_type final
@@ -374,6 +393,9 @@ namespace vmod
 		memory_desc.func(&memory_singleton::script_allocate_type, "__script_allocate_type"sv, "allocate_type"sv);
 		memory_desc.func(&memory_singleton::script_read, "__script_read"sv, "read"sv);
 		memory_desc.func(&memory_singleton::script_write, "__script_write"sv, "write"sv);
+		memory_desc.func(&memory_singleton::script_add, "__script_add"sv, "add"sv);
+		memory_desc.func(&memory_singleton::script_sub, "__script_sub"sv, "sub"sv);
+		memory_desc.func(&memory_singleton::script_get_vtable, "__script_get_vtable"sv, "get_vtable"sv);
 		memory_desc = ::vmod::memory_singleton;
 
 		if(!vm->RegisterClass(&memory_desc)) {

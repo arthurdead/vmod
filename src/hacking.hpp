@@ -51,8 +51,14 @@ namespace __cxxabiv1
 
 namespace vmod
 {
-	inline __attribute__((__always_inline__)) void debugbreak() noexcept
-	{ __asm__ volatile("int $0x03"); }
+	inline __attribute__((__always_inline__)) void debugtrap() noexcept
+	{
+	#ifdef __clang__
+		__builtin_debugtrap();
+	#else
+		__asm__ volatile("int $0x03");
+	#endif
+	}
 
 	template <typename T>
 	struct function_traits;
@@ -221,9 +227,18 @@ namespace vmod
 	class empty_class final
 	{
 	public:
-		void empty_function() {}
+		[[noreturn]] inline void empty_function() noexcept
+		{ __builtin_trap(); }
+	private:
+		empty_class() = delete;
+		~empty_class() = delete;
+		empty_class(const empty_class &) = delete;
+		empty_class &operator=(const empty_class &) = delete;
+		empty_class(empty_class &&) = delete;
+		empty_class &operator=(empty_class &&) = delete;
 	};
 
+	using generic_object_t = empty_class;
 	using generic_func_t = void(*)();
 	using generic_plain_mfp_t = void(__attribute__((__thiscall__)) *)(empty_class *);
 	using generic_mfp_t = void(empty_class::*)();

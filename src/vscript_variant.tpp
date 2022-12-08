@@ -462,4 +462,38 @@ namespace vmod
 
 		return nullptr;
 	}
+
+	static_assert(sizeof(generic_vtable_t) == sizeof(int));
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field<generic_vtable_t>() noexcept
+	{ return gsdk::FIELD_INTEGER; }
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, generic_vtable_t value) noexcept
+	{ var.m_hScript = reinterpret_cast<gsdk::HSCRIPT>(value); }
+	template <>
+	inline generic_vtable_t variant_to_value<generic_vtable_t>(const gsdk::ScriptVariant_t &var) noexcept
+	{
+		switch(var.m_type) {
+			case gsdk::FIELD_INTEGER:
+			return reinterpret_cast<generic_vtable_t>(var.m_hScript);
+		}
+
+		return nullptr;
+	}
+
+	static_assert(sizeof(generic_object_t *) == sizeof(int));
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field<generic_object_t *>() noexcept
+	{ return gsdk::FIELD_INTEGER; }
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, generic_object_t *value) noexcept
+	{ var.m_hScript = reinterpret_cast<gsdk::HSCRIPT>(value); }
+	template <>
+	inline generic_object_t *variant_to_value<generic_object_t *>(const gsdk::ScriptVariant_t &var) noexcept
+	{
+		switch(var.m_type) {
+			case gsdk::FIELD_INTEGER:
+			return reinterpret_cast<generic_object_t *>(var.m_hScript);
+		}
+
+		return nullptr;
+	}
 }

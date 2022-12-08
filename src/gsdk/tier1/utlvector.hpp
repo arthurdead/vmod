@@ -14,8 +14,10 @@ namespace gsdk
 			: m_Size{0}, m_pElements{nullptr}
 		{
 		}
+
 		CUtlVector(const CUtlVector &) = delete;
 		CUtlVector &operator=(const CUtlVector &) = delete;
+
 		inline CUtlVector(CUtlVector &&other) noexcept
 		{ operator=(std::move(other)); }
 		inline CUtlVector &operator=(CUtlVector &&other) noexcept
@@ -32,6 +34,9 @@ namespace gsdk
 		T &emplace_back(Args &&...args) noexcept;
 
 		void erase(std::size_t i) noexcept;
+
+		inline std::size_t size() const noexcept
+		{ return static_cast<std::size_t>(m_Size); }
 
 		CUtlMemory<T> m_Memory;
 		int m_Size;
