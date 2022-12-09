@@ -25,7 +25,7 @@ namespace vmod
 	template <typename T>
 	inline void value_to_variant(gsdk::ScriptVariant_t &var, T &&value) noexcept
 	{
-		var.m_type = static_cast<short>(type_to_field<std::decay_t<T>>());
+		var.m_type = static_cast<short>(__type_to_field_impl<std::decay_t<T>>());
 		var.m_flags = 0;
 		initialize_variant_value(var, std::forward<T>(value));
 	}
@@ -422,6 +422,9 @@ namespace vmod
 		{ delete reinterpret_cast<T *>(ptr); }
 	};
 
+	static_assert(sizeof(class_desc_t<empty_class>) == sizeof(gsdk::ScriptClassDesc_t));
+	static_assert(alignof(class_desc_t<empty_class>) == alignof(gsdk::ScriptClassDesc_t));
+
 	template <typename T>
 	class singleton_class_desc_t : public class_desc_t<T>
 	{
@@ -475,8 +478,8 @@ namespace vmod
 		}
 	};
 
-	static_assert(sizeof(class_desc_t<empty_class>) == sizeof(gsdk::ScriptClassDesc_t));
-	static_assert(alignof(class_desc_t<empty_class>) == alignof(gsdk::ScriptClassDesc_t));
+	static_assert(sizeof(singleton_class_desc_t<empty_class>) == sizeof(gsdk::ScriptClassDesc_t));
+	static_assert(alignof(singleton_class_desc_t<empty_class>) == alignof(gsdk::ScriptClassDesc_t));
 }
 
 #include "vscript.tpp"

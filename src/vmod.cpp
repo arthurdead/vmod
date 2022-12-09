@@ -398,8 +398,8 @@ namespace vmod
 
 		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
 
-		gsdk::HSCRIPT vs_instance_;
-		gsdk::HSCRIPT scope;
+		gsdk::HSCRIPT vs_instance_{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT scope{gsdk::INVALID_HSCRIPT};
 		gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
 	};
 
@@ -633,6 +633,293 @@ namespace vmod
 		return true;
 	}
 
+	class cvar_singleton : public gsdk::ISquirrelMetamethodDelegate
+	{
+	public:
+		~cvar_singleton() noexcept override;
+
+		static cvar_singleton &instance() noexcept;
+
+		bool bindings() noexcept;
+		void unbindings() noexcept;
+
+	private:
+		class script_cvar final
+		{
+		public:
+			inline ~script_cvar() noexcept
+			{
+				if(free_var) {
+					delete var;
+				}
+
+				if(instance && instance != gsdk::INVALID_HSCRIPT) {
+					vmod.vm()->RemoveInstance(instance);
+				}
+			}
+
+		private:
+			friend class cvar_singleton;
+
+			inline void script_delete() noexcept
+			{ delete this; }
+
+			gsdk::ConVar *var;
+			bool free_var;
+			gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+		};
+
+		static inline class_desc_t<script_cvar> script_cvar_desc{"__vmod_script_cvar_class"};
+
+		static gsdk::HSCRIPT script_create_cvar(std::string_view name, std::string_view value) noexcept
+		{
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			if(cvar->FindCommandBase(name.data()) != nullptr) {
+				vm->RaiseException("vmod: name already in use");
+				return nullptr;
+			}
+
+			script_cvar *svar{new script_cvar};
+
+			gsdk::HSCRIPT cvar_instance{vm->RegisterInstance(&script_cvar_desc, svar)};
+			if(!cvar_instance || cvar_instance == gsdk::INVALID_HSCRIPT) {
+				delete svar;
+				vm->RaiseException("vmod: failed to register instance");
+				return nullptr;
+			}
+
+			ConVar *var{new ConVar};
+			var->initialize(name, value);
+
+			svar->var = var;
+			svar->free_var = true;
+			svar->instance = cvar_instance;
+
+			return svar->instance;
+		}
+
+		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
+
+		gsdk::HSCRIPT flags_table{gsdk::INVALID_HSCRIPT};
+
+		gsdk::HSCRIPT vs_instance_{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT scope{gsdk::INVALID_HSCRIPT};
+		gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
+	};
+
+	bool cvar_singleton::Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value)
+	{
+		return vmod.vm()->GetValue(vs_instance_, name.c_str(), &value);
+	}
+
+	cvar_singleton::~cvar_singleton() {}
+
+	static class cvar_singleton cvar_singleton;
+
+	static singleton_class_desc_t<class cvar_singleton> cvar_singleton_desc{"__vmod_cvar_singleton_class"};
+
+	inline class cvar_singleton &cvar_singleton::instance() noexcept
+	{ return ::vmod::cvar_singleton; }
+
+	bool cvar_singleton::bindings() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		cvar_singleton_desc.func(&cvar_singleton::script_create_cvar, "__script_create_cvar"sv, "create_var"sv);
+
+		if(!vm->RegisterClass(&cvar_singleton_desc)) {
+			error("vmod: failed to register vmod cvar singleton script class\n"sv);
+			return false;
+		}
+
+		script_cvar_desc.func(&script_cvar::script_delete, "__script_delete"sv, "free"sv);
+		script_cvar_desc.dtor();
+
+		if(!vm->RegisterClass(&script_cvar_desc)) {
+			error("vmod: failed to register vmod cvar script class\n"sv);
+			return false;
+		}
+
+		vs_instance_ = vm->RegisterInstance(&cvar_singleton_desc, this);
+		if(!vs_instance_ || vs_instance_ == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create vmod cvar singleton instance\n"sv);
+			return false;
+		}
+
+		vm->SetInstanceUniqeId(vs_instance_, "__vmod_cvar_singleton");
+
+		scope = vm->CreateScope("__vmod_cvar_scope", nullptr);
+		if(!scope || scope == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create cvar scope\n"sv);
+			return false;
+		}
+
+		gsdk::HSCRIPT vmod_scope{vmod.scope()};
+		if(!vm->SetValue(vmod_scope, "cvar", scope)) {
+			error("vmod: failed to set cvar scope value\n"sv);
+			return false;
+		}
+
+		get_impl = vm->MakeSquirrelMetamethod_Get(vmod_scope, "cvar", this, false);
+		if(!get_impl) {
+			error("vmod: failed to create cvar _get metamethod\n"sv);
+			return false;
+		}
+
+		flags_table = vm->CreateTable();
+		if(!flags_table || flags_table == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create cvar flags table\n"sv);
+			return false;
+		}
+
+		if(!vm->SetValue(scope, "flags", flags_table)) {
+			error("vmod: failed to set cvar flags table value\n"sv);
+			return false;
+		}
+
+		{
+			if(!vm->SetValue(flags_table, "none", script_variant_t{gsdk::FCVAR_NONE})) {
+				error("vmod: failed to set cvar none flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "development", script_variant_t{gsdk::FCVAR_DEVELOPMENTONLY})) {
+				error("vmod: failed to set cvar development flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "hidden", script_variant_t{gsdk::FCVAR_HIDDEN})) {
+				error("vmod: failed to set cvar hidden flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "protected", script_variant_t{gsdk::FCVAR_PROTECTED})) {
+				error("vmod: failed to set cvar protected flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "singleplayer", script_variant_t{gsdk::FCVAR_SPONLY})) {
+				error("vmod: failed to set cvar singleplayer flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "printable_only", script_variant_t{gsdk::FCVAR_PRINTABLEONLY})) {
+				error("vmod: failed to set cvar printable_only flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "never_string", script_variant_t{gsdk::FCVAR_NEVER_AS_STRING})) {
+				error("vmod: failed to set cvar never_string flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "server", script_variant_t{gsdk::FCVAR_GAMEDLL})) {
+				error("vmod: failed to set cvar server flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "client", script_variant_t{gsdk::FCVAR_CLIENTDLL})) {
+				error("vmod: failed to set cvar client flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "archive", script_variant_t{gsdk::FCVAR_ARCHIVE})) {
+				error("vmod: failed to set cvar archive flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "notify", script_variant_t{gsdk::FCVAR_NOTIFY})) {
+				error("vmod: failed to set cvar notify flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "userinfo", script_variant_t{gsdk::FCVAR_USERINFO})) {
+				error("vmod: failed to set cvar userinfo flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "cheat", script_variant_t{gsdk::FCVAR_CHEAT})) {
+				error("vmod: failed to set cvar cheat flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "replicated", script_variant_t{gsdk::FCVAR_REPLICATED})) {
+				error("vmod: failed to set cvar replicated flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "only_unconnected", script_variant_t{gsdk::FCVAR_NOT_CONNECTED})) {
+				error("vmod: failed to set cvar only_unconnected flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "allowed_in_competitive", script_variant_t{gsdk::FCVAR_ALLOWED_IN_COMPETITIVE})) {
+				error("vmod: failed to set cvar allowed_in_competitive flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "internal", script_variant_t{gsdk::FCVAR_INTERNAL_USE})) {
+				error("vmod: failed to set cvar internal flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "server_can_exec", script_variant_t{gsdk::FCVAR_SERVER_CAN_EXECUTE})) {
+				error("vmod: failed to set cvar server_can_exec flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "server_cant_query", script_variant_t{gsdk::FCVAR_SERVER_CANNOT_QUERY})) {
+				error("vmod: failed to set cvar server_cant_query flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "client_can_exec", script_variant_t{gsdk::FCVAR_CLIENTCMD_CAN_EXECUTE})) {
+				error("vmod: failed to set cvar client_can_exec flag value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(flags_table, "exec_in_default", script_variant_t{gsdk::FCVAR_EXEC_DESPITE_DEFAULT})) {
+				error("vmod: failed to set cvar exec_in_default flag value\n"sv);
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	void cvar_singleton::unbindings() noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(vs_instance_ && vs_instance_ != gsdk::INVALID_HSCRIPT) {
+			vm->RemoveInstance(vs_instance_);
+		}
+
+		if(get_impl) {
+			vm->DestroySquirrelMetamethod_Get(get_impl);
+		}
+
+		if(flags_table && flags_table != gsdk::INVALID_HSCRIPT) {
+			vm->ReleaseTable(flags_table);
+		}
+
+		if(vm->ValueExists(scope, "flags")) {
+			vm->ClearValue(scope, "flags");
+		}
+
+		if(scope && scope != gsdk::INVALID_HSCRIPT) {
+			vm->ReleaseScope(scope);
+		}
+
+		gsdk::HSCRIPT vmod_scope{vmod.scope()};
+		if(vm->ValueExists(vmod_scope, "cvar")) {
+			vm->ClearValue(vmod_scope, "cvar");
+		}
+	}
+
 	bool vmod::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -750,6 +1037,10 @@ namespace vmod
 			return false;
 		}
 
+		if(!cvar_singleton.bindings()) {
+			return false;
+		}
+
 		get_impl = vm_->MakeSquirrelMetamethod_Get(nullptr, "vmod", this, false);
 		if(!get_impl) {
 			error("vmod: failed to create vmod _get metamethod\n"sv);
@@ -791,6 +1082,8 @@ namespace vmod
 
 		filesystem_singleton.unbindings();
 
+		cvar_singleton.unbindings();
+
 		ffi_unbindings();
 
 		if(plugins_table_ && plugins_table_ != gsdk::INVALID_HSCRIPT) {
@@ -817,6 +1110,10 @@ namespace vmod
 
 		if(vm_->ValueExists(scope_, "strtables")) {
 			vm_->ClearValue(scope_, "strtables");
+		}
+
+		if(vm_->ValueExists(scope_, "cvar")) {
+			vm_->ClearValue(scope_, "cvar");
 		}
 
 		if(vs_instance_ && vs_instance_ != gsdk::INVALID_HSCRIPT) {
@@ -1294,6 +1591,56 @@ namespace vmod
 		const auto &vscript_symbols{vscript_lib.symbols()};
 		const auto &vscript_global_qual{vscript_symbols.global()};
 
+		auto sq_getversion_it{vscript_global_qual.find("sq_getversion"s)};
+		if(sq_getversion_it == vscript_global_qual.end()) {
+			error("vmod: missing 'sq_getversion' symbol\n"sv);
+			return false;
+		}
+
+		vm_ = vsmgr->CreateVM(script_language);
+		if(!vm_) {
+			error("vmod: failed to create VM\n"sv);
+			return false;
+		}
+
+		{
+			SQInteger game_sq_ver{sq_getversion_it->second.func<decltype(::sq_getversion)>()()};
+			SQInteger curr_sq_ver{::sq_getversion()};
+
+			if(curr_sq_ver != SQUIRREL_VERSION_NUMBER) {
+				error("vmod: mismatched squirrel header '%i' vs '%i'\n"sv, curr_sq_ver, SQUIRREL_VERSION_NUMBER);
+				return false;
+			}
+
+			if(game_sq_ver != curr_sq_ver) {
+				error("vmod: mismatched squirrel versions '%i' vs '%i'\n"sv, game_sq_ver, curr_sq_ver);
+				return false;
+			}
+
+			gsdk::HSCRIPT root_table{vm_->GetRootTable()};
+			script_variant_t game_sq_versionnumber;
+			if(!vm_->GetValue(root_table, "_versionnumber_", &game_sq_versionnumber)) {
+				error("vmod: failed to get _versionnumber_ value\n"sv);
+				return false;
+			}
+
+			script_variant_t game_sq_version;
+			if(!vm_->GetValue(root_table, "_version_", &game_sq_version)) {
+				error("vmod: failed to get _version_ value\n"sv);
+				return false;
+			}
+
+			info("vmod: squirrel info:\n");
+			info("vmod:   vmod:\n");
+			info("vmod:    SQUIRREL_VERSION: %s\n", SQUIRREL_VERSION);
+			info("vmod:    SQUIRREL_VERSION_NUMBER: %i\n", SQUIRREL_VERSION_NUMBER);
+			info("vmod:    sq_getversion: %i\n", curr_sq_ver);
+			info("vmod:   game:\n");
+			info("vmod:    _version_: %s\n", game_sq_version.m_pszString);
+			info("vmod:    _versionnumber_: %i\n", game_sq_versionnumber.m_int);
+			info("vmod:    sq_getversion: %i\n", game_sq_ver);
+		}
+
 		auto g_Script_init_it{vscript_global_qual.find("g_Script_init"s)};
 		if(g_Script_init_it == vscript_global_qual.end()) {
 			error("vmod: missing 'g_Script_init' symbol\n"sv);
@@ -1361,17 +1708,11 @@ namespace vmod
 
 		sv_classdesc_pHead = sv_pHead_it->second.addr<gsdk::ScriptClassDesc_t **>();
 
-		write_file(root_dir/"internal_scripts"sv/"init.nut"sv, g_Script_init, std::strlen(reinterpret_cast<const char *>(g_Script_init)+1));
-		write_file(root_dir/"internal_scripts"sv/"vscript_server.nut"sv, g_Script_vscript_server, std::strlen(reinterpret_cast<const char *>(g_Script_vscript_server)+1));
-
-		vm_ = vsmgr->CreateVM(script_language);
-		if(!vm_) {
-			error("vmod: failed to create VM\n"sv);
-			return false;
-		}
-
 		vm_->SetOutputCallback(vscript_output);
 		vm_->SetErrorCallback(vscript_error_output);
+
+		write_file(root_dir/"internal_scripts"sv/"init.nut"sv, g_Script_init, std::strlen(reinterpret_cast<const char *>(g_Script_init)+1));
+		write_file(root_dir/"internal_scripts"sv/"vscript_server.nut"sv, g_Script_vscript_server, std::strlen(reinterpret_cast<const char *>(g_Script_vscript_server)+1));
 
 		if(!detours()) {
 			return false;
@@ -1633,6 +1974,10 @@ namespace vmod
 			return false;
 		}
 
+		if(!get_func_from_base_script(typeof_func, "__typeof__"sv)) {
+			return false;
+		}
+
 		return true;
 	}
 
@@ -1693,6 +2038,17 @@ namespace vmod
 		return ret.m_bool;
 	}
 
+	std::string_view vmod::typeof_(gsdk::HSCRIPT value) const noexcept
+	{
+		script_variant_t ret{call_to_func(typeof_func, value)};
+
+		if(ret.m_type != gsdk::FIELD_CSTRING) {
+			return {};
+		}
+
+		return ret.m_pszString;
+	}
+
 	bool __vmod_to_bool(gsdk::HSCRIPT object) noexcept
 	{ return vmod.to_bool(object); }
 	float __vmod_to_float(gsdk::HSCRIPT object) noexcept
@@ -1701,6 +2057,8 @@ namespace vmod
 	{ return vmod.to_int(object); }
 	std::string_view __vmod_to_string(gsdk::HSCRIPT object) noexcept
 	{ return vmod.to_string(object); }
+	std::string_view __vmod_typeof(gsdk::HSCRIPT object) noexcept
+	{ return vmod.typeof_(object); }
 
 	bool vmod::load_late() noexcept
 	{
@@ -1808,6 +2166,10 @@ namespace vmod
 
 			if(to_bool_func && to_bool_func != gsdk::INVALID_HSCRIPT) {
 				vm_->ReleaseFunction(to_bool_func);
+			}
+
+			if(typeof_func && typeof_func != gsdk::INVALID_HSCRIPT) {
+				vm_->ReleaseFunction(typeof_func);
 			}
 
 			if(base_script && base_script != gsdk::INVALID_HSCRIPT) {

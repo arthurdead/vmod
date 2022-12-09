@@ -3,6 +3,7 @@
 #include "gsdk/vstdlib/convar.hpp"
 #include "gsdk.hpp"
 #include <string_view>
+#include <string>
 #include <functional>
 
 namespace vmod
@@ -11,8 +12,7 @@ namespace vmod
 	{
 	public:
 		ConCommand() noexcept = default;
-		inline ~ConCommand() noexcept override
-		{ unregister(); }
+		~ConCommand() noexcept override;
 
 		template <typename T>
 		inline void initialize(std::string_view name, T &&func_) noexcept
@@ -21,9 +21,7 @@ namespace vmod
 		template <typename T>
 		inline void initialize(std::string_view name, int flags, T &&func_) noexcept
 		{
-			m_pszName = name.data();
-			m_pszHelpString = "";
-			m_nFlags = flags;
+			gsdk::ConCommand::CreateBase(name.data(), nullptr, flags);
 
 			func = std::move(func_);
 
@@ -32,22 +30,15 @@ namespace vmod
 
 		inline void unregister() noexcept
 		{
-			if(m_bRegistered) {
+			if(gsdk::ConCommandBase::IsRegistered()) {
 				cvar->UnregisterConCommand(static_cast<gsdk::ConCommandBase *>(this));
 			}
 		}
 
 		inline operator bool() const noexcept
-		{ return static_cast<bool>(func) && m_bRegistered; }
+		{ return static_cast<bool>(func) && gsdk::ConCommandBase::IsRegistered(); }
 		inline bool operator!() const noexcept
-		{ return !static_cast<bool>(func) || !m_bRegistered; }
-
-		template <typename T>
-		inline ConCommand &operator=(T &&fnc) noexcept
-		{
-			func = std::move(fnc);
-			return *this;
-		}
+		{ return !static_cast<bool>(func) || !gsdk::ConCommandBase::IsRegistered(); }
 
 		inline void operator()(const gsdk::CCommand &args) noexcept
 		{
@@ -55,6 +46,7 @@ namespace vmod
 				func(args);
 			}
 		}
+
 		inline void operator()() noexcept
 		{
 			if(func) {
@@ -71,4 +63,49 @@ namespace vmod
 
 		std::function<void(const gsdk::CCommand &)> func;
 	};
+
+	class ConVar final : public gsdk::ConVar
+	{
+	public:
+		ConVar() noexcept = default;
+		~ConVar() noexcept override;
+
+		template <typename T>
+		inline void initialize(std::string_view name, T &&value) noexcept
+		{ initialize(name, std::forward<T>(value), gsdk::FCVAR_NONE); }
+
+		template <typename T>
+		void initialize(std::string_view name, T &&value, int flags) noexcept;
+
+		inline void unregister() noexcept
+		{
+			if(gsdk::ConCommandBase::IsRegistered()) {
+				cvar->UnregisterConCommand(static_cast<gsdk::ConCommandBase *>(this));
+			}
+		}
+
+		template <typename T>
+		ConVar &set(T &&value) noexcept;
+
+		//TODO!!!!
+		template <typename T>
+		ConVar &get(T &&value) const noexcept = delete;
+
+		template <typename T>
+		inline ConVar &operator=(T &&value) noexcept
+		{ return set(std::forward<T>(value)); }
+
+		template <typename T>
+		inline explicit operator T() const noexcept
+		{ return get<T>(); }
+
+	private:
+		gsdk::CVarDLLIdentifier_t GetDLLIdentifier() const override;
+
+		void Init() override;
+
+		std::string def_value_str;
+	};
 }
+
+#include "convar.tpp"

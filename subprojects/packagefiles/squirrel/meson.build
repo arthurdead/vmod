@@ -10,7 +10,7 @@ project('squirrel', 'cpp',
 		'b_thinlto_cache=true',
 		'b_lundef=true',
 		'strip=true',
-		'cpp_std=gnu++20',
+		'cpp_std=gnu++17',
 		'cpp_eh=default',
 		'cpp_rtti=false'
 	],
@@ -38,4 +38,9 @@ squirrel_lib = static_library('squirrel',
 		)
 )
 
-squirrel_dep = declare_dependency(link_with: squirrel_lib)
+squirrel_dep = declare_dependency(
+	link_with: squirrel_lib,
+	include_directories: include_directories('include')
+)
+
+squirrel_internal_dep = declare_dependency(include_directories: include_directories('squirrel'))

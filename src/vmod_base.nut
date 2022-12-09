@@ -17,3 +17,8 @@ function __to_bool__(value)
 {
 	return value ? true : false;
 }
+
+function __typeof__(value)
+{
+	return typeof(value);
+}

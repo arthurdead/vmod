@@ -1,7 +1,7 @@
 [wrap-git]
 directory = squirrel
-url = https://github.com/albertodemichelis/squirrel.git
-revision = master
+url = https://github.com/pfalcon-mirrors/squirrel-lang.git
+revision = squirrel3
 depth = 1
 patch_directory = squirrel
 

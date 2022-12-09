@@ -1,3 +1,4 @@
+#include "type_traits.hpp"
 #include <filesystem>
 #include <charconv>
 
@@ -7,6 +8,7 @@ namespace vmod
 	extern float __vmod_to_float(gsdk::HSCRIPT) noexcept;
 	extern int __vmod_to_int(gsdk::HSCRIPT) noexcept;
 	extern std::string_view __vmod_to_string(gsdk::HSCRIPT) noexcept;
+	extern std::string_view __vmod_typeof(gsdk::HSCRIPT) noexcept;
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<void>() noexcept
@@ -28,7 +30,7 @@ namespace vmod
 			}
 			case gsdk::FIELD_CSTRING: {
 				const char *begin{var.m_pszString};
-				const char *end{var.m_pszString + strlen(var.m_pszString)};
+				const char *end{var.m_pszString + std::strlen(var.m_pszString)};
 
 				unsigned short ret;
 				std::from_chars(begin, end, ret);
@@ -62,7 +64,7 @@ namespace vmod
 			}
 			case gsdk::FIELD_CSTRING: {
 				const char *begin{var.m_pszString};
-				const char *end{var.m_pszString + strlen(var.m_pszString)};
+				const char *end{var.m_pszString + std::strlen(var.m_pszString)};
 
 				T ret;
 				std::from_chars(begin, end, ret);
@@ -96,7 +98,7 @@ namespace vmod
 			}
 			case gsdk::FIELD_CSTRING: {
 				const char *begin{var.m_pszString};
-				const char *end{var.m_pszString + strlen(var.m_pszString)};
+				const char *end{var.m_pszString + std::strlen(var.m_pszString)};
 
 				T ret;
 				std::from_chars(begin, end, ret);
@@ -241,30 +243,31 @@ namespace vmod
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, std::string_view value) noexcept
 	{ var.m_pszString = value.data(); }
 
-	static char __vscript_variable_to_value_buffer[11 + ((2 + (6 + 6)) * 4) + 2];
+	static char __vscript_variant_to_value_buffer[11 + ((2 + (6 + 6)) * 4) + 2];
 
 	template <>
 	inline std::string_view variant_to_value<std::string_view>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
-		constexpr std::size_t buffers_size{sizeof(__vscript_variable_to_value_buffer) / 4};
+		constexpr std::size_t buffers_size{sizeof(__vscript_variant_to_value_buffer) / 4};
 
 		switch(var.m_type) {
 			case gsdk::FIELD_FLOAT: {
-				char *begin{__vscript_variable_to_value_buffer};
-				char *end{__vscript_variable_to_value_buffer + buffers_size};
+				char *begin{__vscript_variant_to_value_buffer};
+				char *end{__vscript_variant_to_value_buffer + buffers_size};
 
-				std::to_chars(begin, end, var.m_float);
+				std::to_chars_result tc_res{std::to_chars(begin, end, var.m_float)};
+				tc_res.ptr[0] = '\0';
 				return begin;
 			}
 			case gsdk::FIELD_CSTRING: {
 				return var.m_pszString;
 			}
 			case gsdk::FIELD_VECTOR: {
-				std::strncpy(__vscript_variable_to_value_buffer, "(vector : (", buffers_size);
+				std::strncpy(__vscript_variant_to_value_buffer, "(vector : (", buffers_size);
 
-				char *begin{__vscript_variable_to_value_buffer + 11};
+				char *begin{__vscript_variant_to_value_buffer + 11};
 				char *end{begin + buffers_size};
 				std::to_chars_result tc_res{std::to_chars(begin, end, var.m_pVector->x)};
 
@@ -282,13 +285,14 @@ namespace vmod
 
 				std::strncat(tc_res.ptr, "))", buffers_size);
 
-				return __vscript_variable_to_value_buffer;
+				return __vscript_variant_to_value_buffer;
 			}
 			case gsdk::FIELD_INTEGER: {
-				char *begin{__vscript_variable_to_value_buffer};
-				char *end{__vscript_variable_to_value_buffer + buffers_size};
+				char *begin{__vscript_variant_to_value_buffer};
+				char *end{__vscript_variant_to_value_buffer + buffers_size};
 
-				std::to_chars(begin, end, var.m_int);
+				std::to_chars_result tc_res{std::to_chars(begin, end, var.m_int)};
+				tc_res.ptr[0] = '\0';
 				return begin;
 			}
 			case gsdk::FIELD_BOOLEAN: {
@@ -307,7 +311,7 @@ namespace vmod
 	{
 		using namespace std::literals::string_literals;
 
-		constexpr std::size_t buffers_size{sizeof(__vscript_variable_to_value_buffer) / 4};
+		constexpr std::size_t buffers_size{sizeof(__vscript_variant_to_value_buffer) / 4};
 
 		switch(var.m_type) {
 			case gsdk::FIELD_FLOAT: {
@@ -317,7 +321,8 @@ namespace vmod
 				char *begin{temp.data()};
 				char *end{temp.data() + buffers_size};
 
-				std::to_chars(begin, end, var.m_float);
+				std::to_chars_result tc_res{std::to_chars(begin, end, var.m_float)};
+				tc_res.ptr[0] = '\0';
 				return begin;
 			}
 			case gsdk::FIELD_CSTRING: {
@@ -325,7 +330,7 @@ namespace vmod
 			}
 			case gsdk::FIELD_VECTOR: {
 				std::string temp;
-				temp.resize(sizeof(__vscript_variable_to_value_buffer));
+				temp.resize(sizeof(__vscript_variant_to_value_buffer));
 
 				std::strncpy(temp.data(), "(vector : (", buffers_size);
 
@@ -356,7 +361,8 @@ namespace vmod
 				char *begin{temp.data()};
 				char *end{temp.data() + buffers_size};
 
-				std::to_chars(begin, end, var.m_int);
+				std::to_chars_result tc_res{std::to_chars(begin, end, var.m_int)};
+				tc_res.ptr[0] = '\0';
 				return begin;
 			}
 			case gsdk::FIELD_BOOLEAN: {
@@ -504,5 +510,27 @@ namespace vmod
 		}
 
 		return nullptr;
+	}
+
+	template <typename T, typename = void>
+	struct type_to_field_specialized : std::false_type
+	{
+	};
+
+	template <typename T>
+	struct type_to_field_specialized<T, decltype(type_to_field<T>(), void())> : std::true_type
+	{
+	};
+
+	template <typename T>
+	constexpr gsdk::ScriptDataType_t __type_to_field_impl() noexcept
+	{
+		if constexpr(type_to_field_specialized<T>::value) {
+			return type_to_field<T>();
+		} else if constexpr(std::is_enum_v<T>) {
+			return type_to_field<std::underlying_type_t<T>>();
+		} else {
+			static_assert(false_t<T>::value);
+		}
 	}
 }

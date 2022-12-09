@@ -41,8 +41,8 @@ namespace vmod
 		m_desc.m_pszFunction = name.data();
 		m_desc.m_pszScriptName = script_name.data();
 
-		m_desc.m_ReturnType = type_to_field<std::decay_t<R>>();
-		(m_desc.m_Parameters.emplace_back(type_to_field<std::decay_t<Args>>()), ...);
+		m_desc.m_ReturnType = __type_to_field_impl<std::decay_t<R>>();
+		(m_desc.m_Parameters.emplace_back(__type_to_field_impl<std::decay_t<Args>>()), ...);
 
 		if(va) {
 			m_flags |= SF_VA_FUNC;

@@ -7,7 +7,29 @@
 #include "../tier1/utlvector.hpp"
 #include "../server/datamap.hpp"
 #include <cstring>
+
 #include <squirrel.h>
+
+#include <cassert>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsuggest-override"
+#pragma GCC diagnostic ignored "-Wextra-semi-stmt"
+#pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#pragma GCC diagnostic ignored "-Wsign-conversion"
+#pragma GCC diagnostic ignored "-Wsuggest-destructor-override"
+#pragma GCC diagnostic ignored "-Wweak-vtables"
+#pragma GCC diagnostic ignored "-Wextra-semi"
+#pragma GCC diagnostic ignored "-Wshadow-field"
+#pragma GCC diagnostic ignored "-Wdeprecated-copy-with-user-provided-copy"
+#include <sqvm.h>
+#include <sqobject.h>
+#include <sqstate.h>
+#include <squserdata.h>
+#include <sqtable.h>
+#include <sqclass.h>
+#undef type
+#pragma GCC diagnostic pop
 
 namespace gsdk
 {
@@ -247,6 +269,13 @@ namespace gsdk
 
 	class CSquirrelMetamethodDelegateImpl;
 
+	struct InstanceContext_t
+	{
+		void *pInstance;
+		ScriptClassDesc_t *pClassDesc;
+		SQObjectPtr name;
+	};
+
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 	class IScriptVM
@@ -414,6 +443,15 @@ namespace gsdk
 		virtual HSCRIPT CopyHandle(HSCRIPT) = 0;
 		virtual HSCRIPT GetIdentity(HSCRIPT) = 0;
 		virtual void CollectGarbage(const char *, bool) = 0;
+	};
+	#pragma GCC diagnostic pop
+
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
+	class CSquirrelVM : public IScriptVM
+	{
+	public:
+		HSQUIRRELVM m_hVM;
 	};
 	#pragma GCC diagnostic pop
 }

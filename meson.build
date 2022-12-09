@@ -84,7 +84,7 @@ thirdparty_default_options_c = thirdparty_default_options + [
 ]
 
 thirdparty_default_options_cpp = thirdparty_default_options + [
-	'cpp_std=gnu++20',
+	#'cpp_std=gnu++20',
 	'cpp_eh=none',
 	'cpp_rtti=false'
 ]
@@ -111,7 +111,8 @@ dependencies = [
 	dependency('libffi'),
 	libyaml.get_variable('yaml_dep'),
 	libiberty.get_variable('iberty_dep'),
-	squirrel.get_variable('squirrel_dep')
+	squirrel.get_variable('squirrel_dep'),
+	squirrel.get_variable('squirrel_internal_dep')
 ]
 
 vmod_base_script_src = files('src/vmod_base.nut')

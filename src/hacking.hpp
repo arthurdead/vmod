@@ -370,7 +370,11 @@ namespace vmod
 	inline std::size_t vfunc_index(R(C::*func)(Args...)) noexcept
 	{
 		mfp_internal_t<R, C, Args...> internal{func};
-		return ((reinterpret_cast<std::uintptr_t>(internal.addr)-1) / sizeof(generic_plain_mfp_t));
+		std::uintptr_t addr_value{reinterpret_cast<std::uintptr_t>(internal.addr)};
+		if(!(addr_value & 1)) {
+			return static_cast<std::size_t>(-1);
+		}
+		return ((addr_value-1) / sizeof(generic_plain_mfp_t));
 	}
 
 	template <typename C>
@@ -414,8 +418,12 @@ namespace vmod
 	template <typename R, typename C, typename U, typename ...Args>
 	inline auto swap_vfunc(C *ptr, R(U::*old_func)(Args...), R(*new_func)(C *, Args...)) noexcept -> R(C::*)(Args...)
 	{
-		generic_plain_mfp_t *vtable{vtable_from_object<C>(ptr)};
 		std::size_t index{vfunc_index(old_func)};
+		if(index == static_cast<std::size_t>(-1)) {
+			debugtrap();
+			return nullptr;
+		}
+		generic_plain_mfp_t *vtable{vtable_from_object<C>(ptr)};
 		generic_plain_mfp_t old_vfunc{vtable[index]};
 		page_info func_page{vtable + ((index > 0) ? (index-1) : 0), sizeof(generic_plain_mfp_t)};
 		func_page.protect(PROT_READ|PROT_WRITE|PROT_EXEC);

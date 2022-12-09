@@ -63,7 +63,8 @@ namespace gsdk
 		FCVAR_SERVER_CAN_EXECUTE =      (1 << 28),
 		FCVAR_SERVER_CANNOT_QUERY =     (1 << 29),
 		FCVAR_CLIENTCMD_CAN_EXECUTE =   (1 << 30),
-		FCVAR_EXEC_DESPITE_DEFAULT =    (1 << 31)
+		FCVAR_EXEC_DESPITE_DEFAULT =    (1 << 31),
+		FCVAR_MATERIAL_THREAD_MASK =    (FCVAR_RELOAD_MATERIALS|FCVAR_RELOAD_TEXTURES|FCVAR_MATERIAL_SYSTEM_THREAD)
 	};
 #ifdef __clang__
 	#pragma clang diagnostic pop
@@ -81,6 +82,87 @@ namespace gsdk
 
 	constexpr int INVALID_CVAR_DLL_IDENTIFIER{-1};
 
+	class ConCommandBase
+	{
+	public:
+		ConCommandBase() noexcept;
+
+		virtual ~ConCommandBase();
+		virtual bool IsCommand() const;
+		virtual bool IsFlagSet(int flags) const;
+		virtual void AddFlags(int flags) final;
+		virtual const char *GetName() const;
+		virtual const char *GetHelpText() const final;
+		virtual bool IsRegistered() const final;
+		virtual CVarDLLIdentifier_t GetDLLIdentifier() const = 0;
+		virtual void CreateBase(const char *name, const char *help = nullptr, int flags = FCVAR_NONE);
+		virtual void Init() = 0;
+
+		bool IsCompetitiveRestricted() const noexcept;
+
+		ConCommandBase *m_pNext;
+		bool m_bRegistered;
+		const char *m_pszName;
+		const char *m_pszHelpString;
+		int m_nFlags;
+	};
+
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
+	#pragma GCC diagnostic ignored "-Wweak-vtables"
+	class IConVar
+	{
+	public:
+		virtual void SetValue(const char *value) = 0;
+		virtual void SetValue(float value) = 0;
+		virtual void SetValue(int value) = 0;
+		virtual const char *GetName() const = 0;
+		virtual bool IsFlagSet(int flags) const = 0;
+	};
+	#pragma GCC diagnostic pop
+
+	class ConVar : public ConCommandBase, public IConVar
+	{
+	public:
+		ConVar() noexcept;
+		~ConVar() override;
+
+		virtual void InternalSetValue(const char *value) final;
+		virtual void InternalSetFloatValue(float value, bool force = false) final;
+		virtual void InternalSetIntValue(int value) final;
+		virtual bool ClampValue(float &value) final;
+		bool ClampValue(int &value);
+		virtual void ChangeStringValue(const char *value, float old_float) final;
+
+		void ClearString();
+
+		void SetValue(const char *value) override final;
+		void SetValue(float value) override final;
+		void SetValue(int value) override final;
+		const char *GetName() const override final;
+		bool IsFlagSet(int flags) const override final;
+
+		bool IsCommand() const override final;
+		void CreateBase(const char *name, const char *help = nullptr, int flags = FCVAR_NONE) override final;
+
+		ConVar *m_pParent;
+		const char *m_pszDefaultValue;
+		char *m_pszString;
+		int m_StringLength;
+		float m_fValue;
+		int m_nValue;
+		bool m_bHasMin;
+		float m_fMinVal;
+		bool m_bHasMax;
+		float m_fMaxVal;
+		bool m_bHasCompMin;
+		float m_fCompMinVal;
+		bool m_bHasCompMax;
+		float m_fCompMaxVal;
+		bool m_bCompetitiveRestrictions;
+		FnChangeCallback_t m_fnChangeCallback;
+	};
+
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 	class ICvar : public IAppSystem
@@ -89,15 +171,27 @@ namespace gsdk
 		static constexpr std::string_view interface_name{"VEngineCvar004"};
 
 		virtual CVarDLLIdentifier_t AllocateDLLIdentifier() = 0;
-		virtual void RegisterConCommand(ConCommandBase *) = 0;
-		virtual void UnregisterConCommand(ConCommandBase *) = 0;
+	private:
+		virtual void RegisterConCommand_impl(ConCommandBase *) = 0;
+		virtual void UnregisterConCommand_impl(ConCommandBase *) = 0;
+	public:
+		inline void RegisterConCommand(ConCommandBase *cmd) noexcept
+		{
+			RegisterConCommand_impl(cmd);
+			cmd->m_nFlags &= ~FCVAR_UNREGISTERED;
+		}
+		inline void UnregisterConCommand(ConCommandBase *cmd) noexcept
+		{
+			UnregisterConCommand_impl(cmd);
+			cmd->m_nFlags |= FCVAR_UNREGISTERED;
+		}
 		virtual void UnregisterConCommands(CVarDLLIdentifier_t) = 0;
 		virtual const char *GetCommandLineValue(const char *) = 0;
 		virtual ConCommandBase *FindCommandBase(const char *) = 0;
 		virtual const ConCommandBase *FindCommandBase(const char *) const = 0;
 		virtual ConVar *FindVar(const char *) = 0;
-		virtual const ConVar *FindVar (char *) const = 0;
-		virtual ConCommand *FindCommand(char *) = 0;
+		virtual const ConVar *FindVar(const char *) const = 0;
+		virtual ConCommand *FindCommand(const char *) = 0;
 		virtual const ConCommand *FindCommand(const char *) const = 0;
 		virtual ConCommandBase *GetCommands() = 0;
 		virtual const ConCommandBase *GetCommands() const = 0;
@@ -134,33 +228,17 @@ namespace gsdk
 		const char *m_ppArgv[COMMAND_MAX_ARGC];
 	};
 
-	class ConCommandBase
-	{
-	public:
-		virtual ~ConCommandBase() = 0;
-		virtual bool IsCommand() const;
-		virtual bool IsFlagSet(int flags) const;
-		virtual void AddFlags(int flags);
-		virtual const char *GetName() const;
-		virtual const char *GetHelpText() const;
-		virtual bool IsRegistered() const;
-		virtual CVarDLLIdentifier_t GetDLLIdentifier() const = 0;
-		virtual  void CreateBase(const char *pName, const char *pHelpString = nullptr, int flags = 0);
-		virtual void Init() = 0;
-
-		ConCommandBase *m_pNext;
-		bool m_bRegistered;
-		const char *m_pszName;
-		const char *m_pszHelpString;
-		int m_nFlags;
-	};
-
 	class ConCommand : public ConCommandBase
 	{
 	public:
+		ConCommand() noexcept;
+
 		virtual int AutoCompleteSuggest(const char *, CUtlVector<CUtlString> &);
 		virtual bool CanAutoComplete();
 		virtual void Dispatch(const CCommand &) = 0;
+
+		bool IsCommand() const override final;
+		void CreateBase(const char *name, const char *help = nullptr, int flags = FCVAR_NONE) override final;
 
 		union
 		{
