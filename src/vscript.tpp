@@ -10,7 +10,7 @@ namespace vmod
 		m_pBaseDesc = nullptr;
 		m_pszClassname = demangle<T>().c_str();
 		m_pszScriptName = name.data();
-		m_pszDescription = m_pszClassname;
+		m_pszDescription = "@";
 	}
 
 	template <typename T>
@@ -38,6 +38,8 @@ namespace vmod
 	template <typename R, typename ...Args>
 	void func_desc_t::initialize_shared(std::string_view name, std::string_view script_name, bool va)
 	{
+		m_desc.m_pszDescription = "@";
+
 		m_desc.m_pszFunction = name.data();
 		m_desc.m_pszScriptName = script_name.data();
 
@@ -298,7 +300,6 @@ namespace vmod
 	template <typename R, typename C, typename ...Args>
 	void func_desc_t::initialize_member(R(C::*func)(Args...), std::string_view name, std::string_view script_name)
 	{
-		m_desc.m_pszDescription = demangle<R(C::*)(Args...)>().c_str();
 		auto mfp{mfp_to_func<R, C, Args...>(func)};
 		m_pFunction = reinterpret_cast<void *>(mfp.first);
 		m_adjustor = static_cast<int>(mfp.second);
@@ -310,7 +311,6 @@ namespace vmod
 	template <typename R, typename C, typename ...Args>
 	void func_desc_t::initialize_member(R(C::*func)(Args..., ...), std::string_view name, std::string_view script_name)
 	{
-		m_desc.m_pszDescription = demangle<R(C::*)(Args..., ...)>().c_str();
 		auto mfp{mfp_to_func<R, C, Args...>(func)};
 		m_pFunction = reinterpret_cast<void *>(mfp.first);
 		m_adjustor = static_cast<int>(mfp.second);
@@ -322,7 +322,6 @@ namespace vmod
 	template <typename R, typename ...Args>
 	void func_desc_t::initialize_static(R(*func)(Args...), std::string_view name, std::string_view script_name)
 	{
-		m_desc.m_pszDescription = demangle<R(*)(Args...)>().c_str();
 		m_pFunction = reinterpret_cast<void *>(func);
 		m_adjustor = 0;
 		m_pfnBinding = static_cast<gsdk::ScriptBindingFunc_t>(binding<R, Args...>);
@@ -333,7 +332,6 @@ namespace vmod
 	template <typename R, typename ...Args>
 	void func_desc_t::initialize_static(R(*func)(Args..., ...), std::string_view name, std::string_view script_name)
 	{
-		m_desc.m_pszDescription = demangle<R(*)(Args..., ...)>().c_str();
 		m_pFunction = reinterpret_cast<void *>(func);
 		m_adjustor = 0;
 		m_pfnBinding = static_cast<gsdk::ScriptBindingFunc_t>(binding_va<R, Args...>);

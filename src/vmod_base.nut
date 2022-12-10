@@ -1,6 +1,10 @@
 function __to_string__(value)
 {
-	return value.tostring();
+	if(tostring in value) {
+		return value.tostring();
+	} else {
+		return null;
+	}
 }
 
 function __to_int__(value)
@@ -21,4 +25,9 @@ function __to_bool__(value)
 function __typeof__(value)
 {
 	return typeof(value);
+}
+
+function __get_func_sig__(value)
+{
+	return GetFunctionSignature(value);
 }

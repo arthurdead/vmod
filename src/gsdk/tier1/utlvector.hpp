@@ -35,6 +35,9 @@ namespace gsdk
 
 		void erase(std::size_t i) noexcept;
 
+		inline const T &operator[](std::size_t i) const noexcept
+		{ return m_Memory.m_pMemory[i]; }
+
 		inline std::size_t size() const noexcept
 		{ return static_cast<std::size_t>(m_Size); }
 

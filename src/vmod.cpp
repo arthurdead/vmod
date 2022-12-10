@@ -1224,7 +1224,6 @@ namespace vmod
 	}
 
 	static const unsigned char *g_Script_init;
-
 	static const unsigned char *g_Script_vscript_server;
 	static gsdk::IScriptVM **g_pScriptVM;
 	static bool(*VScriptServerInit)();
@@ -1524,6 +1523,44 @@ namespace vmod
 		(vm->*SetErrorCallback_original)(func);
 	}
 
+	static std::vector<const gsdk::ScriptFunctionBinding_t *> game_vscript_func_bindings;
+	static std::vector<const gsdk::ScriptClassDesc_t *> game_vscript_class_bindings;
+
+	static std::vector<const gsdk::ScriptFunctionBinding_t *> vmod_vscript_func_bindings;
+	static std::vector<const gsdk::ScriptClassDesc_t *> vmod_vscript_class_bindings;
+
+	static void (gsdk::IScriptVM::*RegisterFunction_original)(gsdk::ScriptFunctionBinding_t *);
+	static void RegisterFunction_detour_callback(gsdk::IScriptVM *vm, gsdk::ScriptFunctionBinding_t *func)
+	{
+		(vm->*RegisterFunction_original)(func);
+		std::vector<const gsdk::ScriptFunctionBinding_t *> &vec{vscript_server_init_called ? vmod_vscript_func_bindings : game_vscript_func_bindings};
+		vec.emplace_back(func);
+	}
+
+	static bool (gsdk::IScriptVM::*RegisterClass_original)(gsdk::ScriptClassDesc_t *);
+	static bool RegisterClass_detour_callback(gsdk::IScriptVM *vm, gsdk::ScriptClassDesc_t *desc)
+	{
+		bool ret{(vm->*RegisterClass_original)(desc)};
+		std::vector<const gsdk::ScriptClassDesc_t *> &vec{vscript_server_init_called ? vmod_vscript_class_bindings : game_vscript_class_bindings};
+		auto it{std::find(vec.begin(), vec.end(), desc)};
+		if(it == vec.end()) {
+			vec.emplace_back(desc);
+		}
+		return ret;
+	}
+
+	static gsdk::HSCRIPT (gsdk::IScriptVM::*RegisterInstance_original)(gsdk::ScriptClassDesc_t *, void *);
+	static gsdk::HSCRIPT RegisterInstance_detour_callback(gsdk::IScriptVM *vm, gsdk::ScriptClassDesc_t *desc, void *ptr)
+	{
+		gsdk::HSCRIPT ret{(vm->*RegisterInstance_original)(desc, ptr)};
+		std::vector<const gsdk::ScriptClassDesc_t *> &vec{vscript_server_init_called ? vmod_vscript_class_bindings : game_vscript_class_bindings};
+		auto it{std::find(vec.begin(), vec.end(), desc)};
+		if(it == vec.end()) {
+			vec.emplace_back(desc);
+		}
+		return ret;
+	}
+
 	bool vmod::detours() noexcept
 	{
 		RegisterFunctionGuts_detour.initialize(RegisterFunctionGuts, RegisterFunctionGuts_detour_callback);
@@ -1552,6 +1589,10 @@ namespace vmod
 
 		Run_original = swap_vfunc(vm_, static_cast<decltype(Run_original)>(&gsdk::IScriptVM::Run), Run_detour_callback);
 		SetErrorCallback_original = swap_vfunc(vm_, &gsdk::IScriptVM::SetErrorCallback, SetErrorCallback_detour_callback);
+
+		RegisterFunction_original = swap_vfunc(vm_, &gsdk::IScriptVM::RegisterFunction, RegisterFunction_detour_callback);
+		RegisterClass_original = swap_vfunc(vm_, &gsdk::IScriptVM::RegisterClass, RegisterClass_detour_callback);
+		RegisterInstance_original = swap_vfunc(vm_, &gsdk::IScriptVM::RegisterInstance_impl, RegisterInstance_detour_callback);
 
 		CreateNetworkStringTables_original = swap_vfunc(gamedll, &gsdk::IServerGameDLL::CreateNetworkStringTables, CreateNetworkStringTables_detour_callback);
 
@@ -1757,15 +1798,14 @@ namespace vmod
 				return false;
 			}
 
-			gsdk::HSCRIPT root_table{vm_->GetRootTable()};
 			script_variant_t game_sq_versionnumber;
-			if(!vm_->GetValue(root_table, "_versionnumber_", &game_sq_versionnumber)) {
+			if(!vm_->GetValue(nullptr, "_versionnumber_", &game_sq_versionnumber)) {
 				error("vmod: failed to get _versionnumber_ value\n"sv);
 				return false;
 			}
 
 			script_variant_t game_sq_version;
-			if(!vm_->GetValue(root_table, "_version_", &game_sq_version)) {
+			if(!vm_->GetValue(nullptr, "_version_", &game_sq_version)) {
 				error("vmod: failed to get _version_ value\n"sv);
 				return false;
 			}
@@ -1782,10 +1822,6 @@ namespace vmod
 		}
 
 		auto g_Script_init_it{vscript_global_qual.find("g_Script_init"s)};
-		if(g_Script_init_it == vscript_global_qual.end()) {
-			error("vmod: missing 'g_Script_init' symbol\n"sv);
-			return false;
-		}
 
 		auto sq_setparamscheck_it{vscript_global_qual.find("sq_setparamscheck"s)};
 		if(sq_setparamscheck_it == vscript_global_qual.end()) {
@@ -1829,7 +1865,9 @@ namespace vmod
 			return false;
 		}
 
-		g_Script_init = g_Script_init_it->second.addr<const unsigned char *>();
+		if(g_Script_init_it != vscript_global_qual.end()) {
+			g_Script_init = g_Script_init_it->second.addr<const unsigned char *>();
+		}
 
 		RegisterScriptFunctions = RegisterScriptFunctions_it->second.mfp<decltype(RegisterScriptFunctions)>();
 		VScriptServerInit = VScriptServerInit_it->second.func<decltype(VScriptServerInit)>();
@@ -1851,7 +1889,10 @@ namespace vmod
 		vm_->SetOutputCallback(vscript_output);
 		vm_->SetErrorCallback(vscript_error_output);
 
-		write_file(root_dir/"internal_scripts"sv/"init.nut"sv, g_Script_init, std::strlen(reinterpret_cast<const char *>(g_Script_init)+1));
+		if(g_Script_init) {
+			write_file(root_dir/"internal_scripts"sv/"init.nut"sv, g_Script_init, std::strlen(reinterpret_cast<const char *>(g_Script_init)+1));
+		}
+
 		write_file(root_dir/"internal_scripts"sv/"vscript_server.nut"sv, g_Script_vscript_server, std::strlen(reinterpret_cast<const char *>(g_Script_vscript_server)+1));
 
 		if(!detours()) {
@@ -2011,9 +2052,9 @@ namespace vmod
 			return false;
 		}
 
-		vscript_server_init_called = true;
-
 		(reinterpret_cast<gsdk::CTFGameRules *>(0xbebebebe)->*RegisterScriptFunctions)();
+
+		vscript_server_init_called = true;
 
 		if(vm_->GetLanguage() == gsdk::SL_SQUIRREL) {
 			server_init_script = vm_->CompileScript(reinterpret_cast<const char *>(g_Script_vscript_server), "vscript_server.nut");
@@ -2115,6 +2156,10 @@ namespace vmod
 			return false;
 		}
 
+		if(!get_func_from_base_script(funcisg_func, "__get_func_sig__"sv)) {
+			return false;
+		}
+
 		return true;
 	}
 
@@ -2139,7 +2184,11 @@ namespace vmod
 			return {};
 		}
 
-		return ret.m_pszString;
+		static std::string temp_buffer;
+
+		temp_buffer = ret.m_pszString;
+
+		return temp_buffer;
 	}
 
 	int vmod::to_int(gsdk::HSCRIPT value) const noexcept
@@ -2197,10 +2246,284 @@ namespace vmod
 	std::string_view __vmod_typeof(gsdk::HSCRIPT object) noexcept
 	{ return vmod.typeof_(object); }
 
+	static constexpr std::string_view doc_ident{"\t"};
+
+	static std::string_view datatype_to_str(gsdk::ScriptDataType_t type) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		switch(type) {
+			case gsdk::FIELD_VOID:
+			return "void"sv;
+			case gsdk::FIELD_INTEGER:
+			return "int"sv;
+			case gsdk::FIELD_FLOAT:
+			return "float"sv;
+			case gsdk::FIELD_BOOLEAN:
+			return "bool"sv;
+			case gsdk::FIELD_HSCRIPT:
+			return "handle"sv;
+			case gsdk::FIELD_VECTOR:
+			return "Vector"sv;
+			case gsdk::FIELD_CSTRING:
+			return "string"sv;
+			case gsdk::FIELD_VARIANT:
+			return "variant"sv;
+			default:
+			return "<<unknown>>"sv;
+		}
+	}
+
+	bool vmod::write_func(const gsdk::ScriptFunctionBinding_t *func, bool global, std::string_view ident, std::string &file, bool respect_hide) const noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		const gsdk::ScriptFuncDescriptor_t &func_desc{func->m_desc};
+
+		if(respect_hide) {
+			if(func_desc.m_pszDescription && func_desc.m_pszDescription[0] == '@') {
+				return false;
+			}
+		}
+
+		if(func_desc.m_pszDescription) {
+			file += ident;
+			file += "//"sv;
+			file += func_desc.m_pszDescription;
+			file += '\n';
+		}
+
+		file += ident;
+
+		if(!global) {
+			if(!(func->m_flags & gsdk::SF_MEMBER_FUNC)) {
+				file += "static "sv;
+			}
+		}
+
+		file += datatype_to_str(func_desc.m_ReturnType);
+		file += ' ';
+		file += func_desc.m_pszScriptName;
+
+		file += '(';
+		std::size_t num_args{func_desc.m_Parameters.size()};
+		for(std::size_t j{0}; j < num_args; ++j) {
+			file += datatype_to_str(func_desc.m_Parameters[j]);
+			file += ", "sv;
+		}
+		if(func->m_flags & func_desc_t::SF_VA_FUNC) {
+			file += "..."sv;
+		} else {
+			if(num_args > 0) {
+				file.erase(file.end()-2, file.end());
+			}
+		}
+		file += ")\n\n"sv;
+
+		return true;
+	}
+
+	void vmod::write_docs(const std::filesystem::path &dir, const std::vector<const gsdk::ScriptClassDesc_t *> &vec, bool respect_hide) const noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		for(const gsdk::ScriptClassDesc_t *desc : vec) {
+			if(respect_hide) {
+				if(desc->m_pszDescription && desc->m_pszDescription[0] == '@') {
+					continue;
+				}
+			}
+
+			std::string file;
+
+			file += "class "sv;
+			file += desc->m_pszScriptName;
+
+			if(desc->m_pBaseDesc) {
+				file += " : "sv;
+				file += desc->m_pBaseDesc->m_pszScriptName;
+			}
+
+			file += "\n{\n"sv;
+
+			if(desc->m_pszDescription) {
+				file += doc_ident;
+				file += "//"sv;
+				file += desc->m_pszDescription;
+				file += "\n\n"sv;
+			}
+
+			std::size_t written{0};
+			for(std::size_t i{0}; i < desc->m_FunctionBindings.size(); ++i) {
+				if(write_func(&desc->m_FunctionBindings[i], false, doc_ident, file, respect_hide)) {
+					++written;
+				}
+			}
+			if(written > 0) {
+				file.erase(file.end()-1, file.end());
+			}
+
+			file += "}\n"sv;
+
+			std::filesystem::path doc_path{dir};
+			doc_path /= desc->m_pszScriptName;
+			doc_path.replace_extension(".txt"sv);
+
+			write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+		}
+	}
+
+	void vmod::write_docs(const std::filesystem::path &dir, const std::vector<const gsdk::ScriptFunctionBinding_t *> &vec, bool respect_hide) const noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		std::string file;
+
+		std::size_t written{0};
+		for(const gsdk::ScriptFunctionBinding_t *desc : vec) {
+			if(write_func(desc, true, {}, file, respect_hide)) {
+				++written;
+			}
+		}
+		if(written > 0) {
+			file.erase(file.end()-1, file.end());
+		}
+
+		std::filesystem::path doc_path{dir};
+		doc_path /= "globals"sv;
+		doc_path.replace_extension(".txt"sv);
+
+		write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+	}
+
 	bool vmod::load_late() noexcept
 	{
+		using namespace std::literals::string_view_literals;
+
 		if(!bindings()) {
 			return false;
+		}
+
+		{
+			std::filesystem::path game_docs{root_dir/"docs"sv/"game"sv};
+			write_docs(game_docs, game_vscript_class_bindings, false);
+			write_docs(game_docs, game_vscript_func_bindings, false);
+
+			gsdk::HSCRIPT const_table;
+			if(vm_->GetValue(nullptr, "Constants", &const_table)) {
+				std::string file;
+
+				int num{vm_->GetNumTableEntries(const_table)};
+				for(int i{0}, it{0}; i < num && it != -1; ++i) {
+					script_variant_t key;
+					script_variant_t value;
+					it = vm_->GetKeyValue(const_table, it, &key, &value);
+
+					std::string_view enum_name{key.get<std::string_view>()};
+
+					if(enum_name[0] == 'E' || enum_name[0] == 'F') {
+						file += "enum class "sv;
+					} else {
+						file += "namespace "sv;
+					}
+					file += enum_name;
+					file += "\n{\n"sv;
+
+					std::unordered_map<int, std::string> bit_str_map;
+
+					gsdk::HSCRIPT enum_table{value.get<gsdk::HSCRIPT>()};
+					int num2{vm_->GetNumTableEntries(enum_table)};
+					for(int j{0}, it2{0}; j < num2 && it2 != -1; ++j) {
+						script_variant_t key2;
+						script_variant_t value2;
+						it2 = vm_->GetKeyValue(enum_table, it2, &key2, &value2);
+
+						std::string_view value_name{key2.get<std::string_view>()};
+
+						file += doc_ident;
+						file += value_name;
+						file += " = "sv;
+
+						if(enum_name[0] == 'F') {
+							unsigned int val{value2.get<unsigned int>()};
+
+							std::vector<int> bits;
+
+							for(int k{0}; val; val >>= 1, ++k) {
+								if(val & 1) {
+									bits.emplace_back(k);
+								}
+							}
+
+							std::size_t num_bits{bits.size()};
+
+							if(num_bits > 0) {
+								std::string temp_bit_str;
+
+								if(num_bits > 1) {
+									file += '(';
+								}
+								for(int bit : bits) {
+									auto name_it{bit_str_map.find(bit)};
+									if(name_it != bit_str_map.end()) {
+										file += name_it->second;
+										file += '|';
+									} else {
+										file += "(1 << "sv;
+
+										temp_bit_str.resize(6);
+
+										char *begin{temp_bit_str.data()};
+										char *end{temp_bit_str.data() + 6};
+
+										std::to_chars_result tc_res{std::to_chars(begin, end, bit)};
+										tc_res.ptr[0] = '\0';
+
+										file += begin;
+										file += ")|"sv;
+									}
+								}
+								file.pop_back();
+								if(num_bits > 1) {
+									file += ')';
+								}
+
+								if(num_bits == 1) {
+									bit_str_map.emplace(bits[0], value_name);
+								}
+							} else {
+								file += value2.get<std::string_view>();
+							}
+						} else {
+							file += value2.get<std::string_view>();
+						}
+
+						file += ',';
+
+						if(enum_name[0] == 'F') {
+							file += " //"sv;
+							file += value2.get<std::string_view>();
+						}
+
+						file += '\n';
+					}
+
+					file += "}\n\n"sv;
+				}
+				if(num > 0) {
+					file.erase(file.end()-1, file.end());
+				}
+
+				std::filesystem::path doc_path{game_docs};
+				doc_path /= "Constants"sv;
+				doc_path.replace_extension(".txt"sv);
+
+				write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+			}
+
+			std::filesystem::path vmod_docs{root_dir/"docs"sv/"vmod"sv};
+			write_docs(vmod_docs, vmod_vscript_class_bindings, true);
+			write_docs(vmod_docs, vmod_vscript_func_bindings, true);
 		}
 
 		vmod_refresh_plugins();
@@ -2307,6 +2630,10 @@ namespace vmod
 
 			if(typeof_func && typeof_func != gsdk::INVALID_HSCRIPT) {
 				vm_->ReleaseFunction(typeof_func);
+			}
+
+			if(funcisg_func && funcisg_func != gsdk::INVALID_HSCRIPT) {
+				vm_->ReleaseFunction(funcisg_func);
 			}
 
 			if(base_script && base_script != gsdk::INVALID_HSCRIPT) {

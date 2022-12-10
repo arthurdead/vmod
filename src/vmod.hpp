@@ -79,6 +79,10 @@ namespace vmod
 		void recreate_script_stringtables() noexcept;
 		void stringtables_removed() noexcept;
 
+		bool write_func(const gsdk::ScriptFunctionBinding_t *func, bool global, std::string_view ident, std::string &file, bool respect_hide) const noexcept;
+		void write_docs(const std::filesystem::path &dir, const std::vector<const gsdk::ScriptClassDesc_t *> &vec, bool respect_hide) const noexcept;
+		void write_docs(const std::filesystem::path &dir, const std::vector<const gsdk::ScriptFunctionBinding_t *> &vec, bool respect_hide) const noexcept;
+
 		bool is_map_loaded;
 		bool is_map_active;
 		bool are_string_tables_created;
@@ -164,6 +168,7 @@ namespace vmod
 		gsdk::HSCRIPT to_float_func{gsdk::INVALID_HSCRIPT};
 		gsdk::HSCRIPT to_bool_func{gsdk::INVALID_HSCRIPT};
 		gsdk::HSCRIPT typeof_func{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT funcisg_func{gsdk::INVALID_HSCRIPT};
 
 		std::vector<std::unique_ptr<plugin>> plugins;
 		bool plugins_loaded;

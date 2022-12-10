@@ -326,7 +326,7 @@ namespace gsdk
 		virtual ScriptStatus_t ExecuteFunction(HSCRIPT, const ScriptVariant_t *, int, ScriptVariant_t *, HSCRIPT, bool) = 0;
 		virtual void RegisterFunction(ScriptFunctionBinding_t *) = 0;
 		virtual bool RegisterClass(ScriptClassDesc_t *) = 0;
-	private:
+	public:
 		virtual HSCRIPT RegisterInstance_impl(ScriptClassDesc_t *, void *) = 0;
 	public:
 		inline HSCRIPT RegisterInstance(ScriptClassDesc_t *desc, void *value) noexcept
@@ -393,6 +393,17 @@ namespace gsdk
 			GetKeyValue(array, i, &tmp, value);
 		}
 		virtual bool GetValue(HSCRIPT, const char *, ScriptVariant_t *) = 0;
+		bool GetValue(HSCRIPT scope, const char *name, HSCRIPT *object) noexcept
+		{
+			ScriptVariant_t tmp;
+			bool ret{GetValue(scope, name, &tmp)};
+			if(tmp.m_type == FIELD_HSCRIPT) {
+				*object = tmp.m_hScript;
+			} else {
+				*object = INVALID_HSCRIPT;
+			}
+			return ret;
+		}
 		virtual void ReleaseValue(ScriptVariant_t &) = 0;
 		inline void ReleaseValue(HSCRIPT object) noexcept
 		{

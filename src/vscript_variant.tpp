@@ -243,10 +243,16 @@ namespace vmod
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, std::string_view value) noexcept
 	{ var.m_pszString = value.data(); }
 
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field<const char *>() noexcept
+	{ return gsdk::FIELD_CSTRING; }
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, const char *value) noexcept
+	{ var.m_pszString = value; }
+
 	static char __vscript_variant_to_value_buffer[11 + ((2 + (6 + 6)) * 4) + 2];
 
-	template <>
-	inline std::string_view variant_to_value<std::string_view>(const gsdk::ScriptVariant_t &var) noexcept
+	template <typename T>
+	inline T variant_to_value_string_view(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -296,15 +302,35 @@ namespace vmod
 				return begin;
 			}
 			case gsdk::FIELD_BOOLEAN: {
-				return var.m_bool ? "true"sv : "false"sv;
+				if constexpr(std::is_same_v<T, std::string_view>) {
+					return var.m_bool ? "true"sv : "false"sv;
+				} else {
+					return var.m_bool ? "true" : "false";
+				}
 			}
 			case gsdk::FIELD_HSCRIPT: {
-				return __vmod_to_string(var.m_hScript);
+				if constexpr(std::is_same_v<T, std::string_view>) {
+					return __vmod_to_string(var.m_hScript);
+				} else {
+					return __vmod_to_string(var.m_hScript).data();
+				}
 			}
 		}
 
-		return {};
+		if constexpr(std::is_same_v<T, std::string_view>) {
+			return {};
+		} else {
+			return "";
+		}
 	}
+
+	template <>
+	inline const char *variant_to_value<const char *>(const gsdk::ScriptVariant_t &var) noexcept
+	{ return variant_to_value_string_view<const char *>(var); }
+
+	template <>
+	inline std::string_view variant_to_value<std::string_view>(const gsdk::ScriptVariant_t &var) noexcept
+	{ return variant_to_value_string_view<std::string_view>(var); }
 
 	template <>
 	inline std::string variant_to_value<std::string>(const gsdk::ScriptVariant_t &var) noexcept
