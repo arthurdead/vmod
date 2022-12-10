@@ -4,6 +4,9 @@
 
 namespace gsdk
 {
+	class Vector2D;
+	class Quaternion;
+
 	using vec_t = float;
 
 #ifdef GSDK_ALIGN_VECTOR

@@ -254,6 +254,11 @@ namespace vmod
 		{
 		}
 
+		inline mfp_internal_t(std::uint64_t value_) noexcept
+			: value{value_}
+		{
+		}
+
 		inline mfp_internal_t(R(C::*func_)(Args...)) noexcept
 			: func{func_}
 		{
@@ -269,6 +274,7 @@ namespace vmod
 		{
 		}
 
+		std::uint64_t value;
 		struct {
 			R(__attribute__((__thiscall__)) *addr)(C *, Args...);
 			std::size_t adjustor;
@@ -281,6 +287,11 @@ namespace vmod
 	{
 		inline mfp_internal_va_t() noexcept
 			: func{nullptr}
+		{
+		}
+
+		inline mfp_internal_va_t(std::uint64_t value_) noexcept
+			: value{value_}
 		{
 		}
 
@@ -299,6 +310,7 @@ namespace vmod
 		{
 		}
 
+		std::uint64_t value;
 		struct {
 			R(*addr)(C *, Args..., ...);
 			std::size_t adjustor;

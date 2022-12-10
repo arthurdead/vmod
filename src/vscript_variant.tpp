@@ -28,6 +28,19 @@ namespace vmod
 			case gsdk::FIELD_FLOAT: {
 				return var.m_float > 0.0f;
 			}
+			case gsdk::FIELD_DOUBLE: {
+				return var.m_double > 0.0;
+			}
+			case gsdk::FIELD_STRING: {
+				const char *m_pszString{gsdk::STRING(var.m_tstring)};
+
+				const char *begin{m_pszString};
+				const char *end{m_pszString + std::strlen(m_pszString)};
+
+				unsigned short ret;
+				std::from_chars(begin, end, ret);
+				return ret > 0;
+			}
 			case gsdk::FIELD_CSTRING: {
 				const char *begin{var.m_pszString};
 				const char *end{var.m_pszString + std::strlen(var.m_pszString)};
@@ -36,21 +49,34 @@ namespace vmod
 				std::from_chars(begin, end, ret);
 				return ret > 0;
 			}
-			case gsdk::FIELD_VECTOR: {
-				return {};
+			case gsdk::FIELD_CHARACTER: {
+				return var.m_char > 0;
 			}
+			case gsdk::FIELD_SHORT: {
+				return var.m_short > 0.0f;
+			}
+			case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
 			case gsdk::FIELD_INTEGER: {
 				return var.m_int > 0;
+			}
+			case gsdk::FIELD_UINT: {
+				return var.m_uint > 0;
+			}
+			case gsdk::FIELD_INTEGER64: {
+				return var.m_longlong > 0;
+			}
+			case gsdk::FIELD_UINT64: {
+				return var.m_ulonglong > 0;
 			}
 			case gsdk::FIELD_BOOLEAN: {
 				return var.m_bool;
 			}
+			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
 			case gsdk::FIELD_HSCRIPT: {
 				return __vmod_to_bool(var.m_hScript);
 			}
+			default: return {};
 		}
-
-		return {};
 	}
 
 	template <typename T>
@@ -62,6 +88,19 @@ namespace vmod
 			case gsdk::FIELD_FLOAT: {
 				return static_cast<T>(var.m_float);
 			}
+			case gsdk::FIELD_DOUBLE: {
+				return static_cast<T>(var.m_double);
+			}
+			case gsdk::FIELD_STRING: {
+				const char *m_pszString{gsdk::STRING(var.m_tstring)};
+
+				const char *begin{m_pszString};
+				const char *end{m_pszString + std::strlen(m_pszString)};
+
+				T ret;
+				std::from_chars(begin, end, ret);
+				return ret;
+			}
 			case gsdk::FIELD_CSTRING: {
 				const char *begin{var.m_pszString};
 				const char *end{var.m_pszString + std::strlen(var.m_pszString)};
@@ -70,21 +109,34 @@ namespace vmod
 				std::from_chars(begin, end, ret);
 				return ret;
 			}
-			case gsdk::FIELD_VECTOR: {
-				return {};
+			case gsdk::FIELD_CHARACTER: {
+				return static_cast<T>(var.m_char);
 			}
+			case gsdk::FIELD_SHORT: {
+				return static_cast<T>(var.m_short);
+			}
+			case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
 			case gsdk::FIELD_INTEGER: {
 				return static_cast<T>(var.m_int);
+			}
+			case gsdk::FIELD_UINT: {
+				return static_cast<T>(var.m_uint);
+			}
+			case gsdk::FIELD_INTEGER64: {
+				return static_cast<T>(var.m_longlong);
+			}
+			case gsdk::FIELD_UINT64: {
+				return static_cast<T>(var.m_ulonglong);
 			}
 			case gsdk::FIELD_BOOLEAN: {
 				return var.m_bool ? static_cast<T>(1.0f) : static_cast<T>(0.0f);
 			}
+			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
 			case gsdk::FIELD_HSCRIPT: {
 				return static_cast<T>(__vmod_to_float(var.m_hScript));
 			}
+			default: return {};
 		}
-
-		return {};
 	}
 
 	template <typename T>
@@ -96,6 +148,19 @@ namespace vmod
 			case gsdk::FIELD_FLOAT: {
 				return static_cast<T>(var.m_float);
 			}
+			case gsdk::FIELD_DOUBLE: {
+				return static_cast<T>(var.m_double);
+			}
+			case gsdk::FIELD_STRING: {
+				const char *m_pszString{gsdk::STRING(var.m_tstring)};
+
+				const char *begin{m_pszString};
+				const char *end{m_pszString + std::strlen(m_pszString)};
+
+				T ret;
+				std::from_chars(begin, end, ret);
+				return ret;
+			}
 			case gsdk::FIELD_CSTRING: {
 				const char *begin{var.m_pszString};
 				const char *end{var.m_pszString + std::strlen(var.m_pszString)};
@@ -104,28 +169,41 @@ namespace vmod
 				std::from_chars(begin, end, ret);
 				return ret;
 			}
-			case gsdk::FIELD_VECTOR: {
-				return {};
+			case gsdk::FIELD_CHARACTER: {
+				return static_cast<T>(var.m_char);
 			}
+			case gsdk::FIELD_SHORT: {
+				return static_cast<T>(var.m_short);
+			}
+			case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
 			case gsdk::FIELD_INTEGER: {
 				return static_cast<T>(var.m_int);
+			}
+			case gsdk::FIELD_UINT: {
+				return static_cast<T>(var.m_uint);
+			}
+			case gsdk::FIELD_INTEGER64: {
+				return static_cast<T>(var.m_longlong);
+			}
+			case gsdk::FIELD_UINT64: {
+				return static_cast<T>(var.m_ulonglong);
 			}
 			case gsdk::FIELD_BOOLEAN: {
 				return var.m_bool ? static_cast<T>(1) : static_cast<T>(0);
 			}
+			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
 			case gsdk::FIELD_HSCRIPT: {
 				return static_cast<T>(__vmod_to_int(var.m_hScript));
 			}
+			default: return {};
 		}
-
-		return {};
 	}
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<unsigned int>() noexcept
-	{ return gsdk::FIELD_INTEGER; }
+	{ return gsdk::FIELD_UINT; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, unsigned int value) noexcept
-	{ var.m_int = static_cast<int>(value); }
+	{ var.m_uint = value; }
 	template <>
 	inline unsigned int variant_to_value<unsigned int>(const gsdk::ScriptVariant_t &var) noexcept
 	{ return variant_to_int_value<unsigned int>(var); }
@@ -141,54 +219,66 @@ namespace vmod
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<unsigned short>() noexcept
-	{ return gsdk::FIELD_INTEGER; }
+	{ return gsdk::FIELD_SHORT; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, unsigned short value) noexcept
-	{ var.m_int = static_cast<int>(value); }
+	{ var.m_ushort = value; }
 	template <>
 	inline unsigned short variant_to_value<unsigned short>(const gsdk::ScriptVariant_t &var) noexcept
 	{ return variant_to_int_value<unsigned short>(var); }
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<short>() noexcept
-	{ return gsdk::FIELD_INTEGER; }
+	{ return gsdk::FIELD_SHORT; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, short value) noexcept
-	{ var.m_int = static_cast<int>(value); }
+	{ var.m_short = value; }
 	template <>
 	inline short variant_to_value<short>(const gsdk::ScriptVariant_t &var) noexcept
 	{ return variant_to_int_value<short>(var); }
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<unsigned long>() noexcept
-	{ return gsdk::FIELD_INTEGER; }
+	{
+	#if __LONG_WIDTH__ == 4
+		return gsdk::FIELD_UINT;
+	#else
+		return gsdk::FIELD_UINT64;
+	#endif
+	}
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, unsigned long value) noexcept
-	{ var.m_int = static_cast<int>(value); }
+	{ var.m_ulong = value; }
 	template <>
 	inline unsigned long variant_to_value<unsigned long>(const gsdk::ScriptVariant_t &var) noexcept
 	{ return variant_to_int_value<unsigned long>(var); }
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<long>() noexcept
-	{ return gsdk::FIELD_INTEGER; }
+	{
+	#if __LONG_WIDTH__ == 4
+		return gsdk::FIELD_INTEGER;
+	#else
+		return gsdk::FIELD_INTEGER64;
+	#endif
+	}
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, long value) noexcept
-	{ var.m_int = static_cast<int>(value); }
+	{ var.m_long = value; }
 	template <>
 	inline long variant_to_value<long>(const gsdk::ScriptVariant_t &var) noexcept
 	{ return variant_to_int_value<long>(var); }
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<unsigned long long>() noexcept
-	{ return gsdk::FIELD_INTEGER; }
+	{ return gsdk::FIELD_UINT64; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, unsigned long long value) noexcept
-	{ var.m_int = static_cast<int>(value); }
+	{ var.m_ulonglong = value; }
 	template <>
 	inline unsigned long long variant_to_value<unsigned long long>(const gsdk::ScriptVariant_t &var) noexcept
 	{ return variant_to_int_value<unsigned long long>(var); }
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<long long>() noexcept
-	{ return gsdk::FIELD_INTEGER; }
+	{ return gsdk::FIELD_INTEGER64; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, long long value) noexcept
-	{ var.m_int = static_cast<int>(value); }
+	{ var.m_longlong = value; }
 	template <>
 	inline long long variant_to_value<long long>(const gsdk::ScriptVariant_t &var) noexcept
 	{ return variant_to_int_value<long long>(var); }
@@ -204,18 +294,18 @@ namespace vmod
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<double>() noexcept
-	{ return gsdk::FIELD_FLOAT; }
+	{ return gsdk::FIELD_DOUBLE; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, double value) noexcept
-	{ var.m_float = static_cast<float>(value); }
+	{ var.m_double = value; }
 	template <>
 	inline double variant_to_value<double>(const gsdk::ScriptVariant_t &var) noexcept
 	{ return variant_to_float_value<double>(var); }
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<long double>() noexcept
-	{ return gsdk::FIELD_FLOAT; }
+	{ return gsdk::FIELD_DOUBLE; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, long double value) noexcept
-	{ var.m_float = static_cast<float>(value); }
+	{ var.m_double = static_cast<double>(value); }
 	template <>
 	inline long double variant_to_value<long double>(const gsdk::ScriptVariant_t &var) noexcept
 	{ return variant_to_float_value<long double>(var); }
@@ -229,12 +319,12 @@ namespace vmod
 	inline gsdk::HSCRIPT variant_to_value<gsdk::HSCRIPT>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
+			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
 			case gsdk::FIELD_HSCRIPT: {
 				return var.m_hScript;
 			}
+			default: return {};
 		}
-
-		return {};
 	}
 
 	template <>
@@ -249,14 +339,14 @@ namespace vmod
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, const char *value) noexcept
 	{ var.m_pszString = value; }
 
-	static char __vscript_variant_to_value_buffer[11 + ((2 + (6 + 6)) * 4) + 2];
+	static char __vscript_variant_to_value_buffer[11 + ((2 + (6 + 6)) * 5) + 2];
 
 	template <typename T>
 	inline T variant_to_value_string_view(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
-		constexpr std::size_t buffers_size{sizeof(__vscript_variant_to_value_buffer) / 4};
+		constexpr std::size_t buffers_size{sizeof(__vscript_variant_to_value_buffer) / 5};
 
 		switch(var.m_type) {
 			case gsdk::FIELD_FLOAT: {
@@ -267,37 +357,66 @@ namespace vmod
 				tc_res.ptr[0] = '\0';
 				return begin;
 			}
+			case gsdk::FIELD_DOUBLE: {
+				char *begin{__vscript_variant_to_value_buffer};
+				char *end{__vscript_variant_to_value_buffer + buffers_size};
+
+				std::to_chars_result tc_res{std::to_chars(begin, end, var.m_double)};
+				tc_res.ptr[0] = '\0';
+				return begin;
+			}
+			case gsdk::FIELD_STRING: {
+				return gsdk::STRING(var.m_tstring);
+			}
 			case gsdk::FIELD_CSTRING: {
 				return var.m_pszString;
 			}
-			case gsdk::FIELD_VECTOR: {
-				std::strncpy(__vscript_variant_to_value_buffer, "(vector : (", buffers_size);
-
-				char *begin{__vscript_variant_to_value_buffer + 11};
-				char *end{begin + buffers_size};
-				std::to_chars_result tc_res{std::to_chars(begin, end, var.m_pVector->x)};
-
-				std::strncat(tc_res.ptr, ", ", buffers_size);
-
-				begin = (tc_res.ptr + 2);
-				end = (begin + buffers_size);
-				tc_res = std::to_chars(begin, end, var.m_pVector->y);
-
-				std::strncat(tc_res.ptr, ", ", buffers_size);
-
-				begin = (tc_res.ptr + 2);
-				end = (begin + buffers_size);
-				std::to_chars(begin, end, var.m_pVector->z);
-
-				std::strncat(tc_res.ptr, "))", buffers_size);
-
-				return __vscript_variant_to_value_buffer;
-			}
+			case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
 			case gsdk::FIELD_INTEGER: {
 				char *begin{__vscript_variant_to_value_buffer};
 				char *end{__vscript_variant_to_value_buffer + buffers_size};
 
 				std::to_chars_result tc_res{std::to_chars(begin, end, var.m_int)};
+				tc_res.ptr[0] = '\0';
+				return begin;
+			}
+			case gsdk::FIELD_UINT: {
+				char *begin{__vscript_variant_to_value_buffer};
+				char *end{__vscript_variant_to_value_buffer + buffers_size};
+
+				std::to_chars_result tc_res{std::to_chars(begin, end, var.m_uint)};
+				tc_res.ptr[0] = '\0';
+				return begin;
+			}
+			case gsdk::FIELD_CHARACTER: {
+				char *begin{__vscript_variant_to_value_buffer};
+				char *end{__vscript_variant_to_value_buffer + buffers_size};
+
+				std::to_chars_result tc_res{std::to_chars(begin, end, static_cast<short>(var.m_char))};
+				tc_res.ptr[0] = '\0';
+				return begin;
+			}
+			case gsdk::FIELD_SHORT: {
+				char *begin{__vscript_variant_to_value_buffer};
+				char *end{__vscript_variant_to_value_buffer + buffers_size};
+
+				std::to_chars_result tc_res{std::to_chars(begin, end, var.m_short)};
+				tc_res.ptr[0] = '\0';
+				return begin;
+			}
+			case gsdk::FIELD_INTEGER64: {
+				char *begin{__vscript_variant_to_value_buffer};
+				char *end{__vscript_variant_to_value_buffer + buffers_size};
+
+				std::to_chars_result tc_res{std::to_chars(begin, end, var.m_longlong)};
+				tc_res.ptr[0] = '\0';
+				return begin;
+			}
+			case gsdk::FIELD_UINT64: {
+				char *begin{__vscript_variant_to_value_buffer};
+				char *end{__vscript_variant_to_value_buffer + buffers_size};
+
+				std::to_chars_result tc_res{std::to_chars(begin, end, var.m_ulonglong)};
 				tc_res.ptr[0] = '\0';
 				return begin;
 			}
@@ -308,6 +427,7 @@ namespace vmod
 					return var.m_bool ? "true" : "false";
 				}
 			}
+			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
 			case gsdk::FIELD_HSCRIPT: {
 				if constexpr(std::is_same_v<T, std::string_view>) {
 					return __vmod_to_string(var.m_hScript);
@@ -315,12 +435,13 @@ namespace vmod
 					return __vmod_to_string(var.m_hScript).data();
 				}
 			}
-		}
-
-		if constexpr(std::is_same_v<T, std::string_view>) {
-			return {};
-		} else {
-			return "";
+			default: {
+				if constexpr(std::is_same_v<T, std::string_view>) {
+					return {};
+				} else {
+					return "";
+				}
+			}
 		}
 	}
 
@@ -334,73 +455,7 @@ namespace vmod
 
 	template <>
 	inline std::string variant_to_value<std::string>(const gsdk::ScriptVariant_t &var) noexcept
-	{
-		using namespace std::literals::string_literals;
-
-		constexpr std::size_t buffers_size{sizeof(__vscript_variant_to_value_buffer) / 4};
-
-		switch(var.m_type) {
-			case gsdk::FIELD_FLOAT: {
-				std::string temp;
-				temp.resize(buffers_size);
-
-				char *begin{temp.data()};
-				char *end{temp.data() + buffers_size};
-
-				std::to_chars_result tc_res{std::to_chars(begin, end, var.m_float)};
-				tc_res.ptr[0] = '\0';
-				return begin;
-			}
-			case gsdk::FIELD_CSTRING: {
-				return var.m_pszString;
-			}
-			case gsdk::FIELD_VECTOR: {
-				std::string temp;
-				temp.resize(sizeof(__vscript_variant_to_value_buffer));
-
-				std::strncpy(temp.data(), "(vector : (", buffers_size);
-
-				char *begin{temp.data() + 11};
-				char *end{begin + buffers_size};
-				std::to_chars_result tc_res{std::to_chars(begin, end, var.m_pVector->x)};
-
-				std::strncat(tc_res.ptr, ", ", buffers_size);
-
-				begin = (tc_res.ptr + 2);
-				end = (begin + buffers_size);
-				tc_res = std::to_chars(begin, end, var.m_pVector->y);
-
-				std::strncat(tc_res.ptr, ", ", buffers_size);
-
-				begin = (tc_res.ptr + 2);
-				end = (begin + buffers_size);
-				std::to_chars(begin, end, var.m_pVector->z);
-
-				std::strncat(tc_res.ptr, "))", buffers_size);
-
-				return temp;
-			}
-			case gsdk::FIELD_INTEGER: {
-				std::string temp;
-				temp.resize(buffers_size);
-
-				char *begin{temp.data()};
-				char *end{temp.data() + buffers_size};
-
-				std::to_chars_result tc_res{std::to_chars(begin, end, var.m_int)};
-				tc_res.ptr[0] = '\0';
-				return begin;
-			}
-			case gsdk::FIELD_BOOLEAN: {
-				return var.m_bool ? "true"s : "false"s;
-			}
-			case gsdk::FIELD_HSCRIPT: {
-				return std::string{__vmod_to_string(var.m_hScript)};
-			}
-		}
-
-		return {};
-	}
+	{ return std::string{variant_to_value_string_view<std::string_view>(var)}; }
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<std::string>() noexcept
@@ -431,29 +486,29 @@ namespace vmod
 	inline std::filesystem::path variant_to_value<std::filesystem::path>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
+			case gsdk::FIELD_STRING: {
+				return gsdk::STRING(var.m_tstring);
+			}
 			case gsdk::FIELD_CSTRING: {
 				return var.m_pszString;
 			}
+			default: return {};
 		}
-
-		return {};
 	}
 
-	static_assert(sizeof(void *) == sizeof(int));
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<void *>() noexcept
-	{ return gsdk::FIELD_INTEGER; }
+	{ return gsdk::FIELD_UINT64; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, void *value) noexcept
-	{ var.m_hScript = reinterpret_cast<gsdk::HSCRIPT>(value); }
+	{ var.m_ulonglong = reinterpret_cast<unsigned long long>(value); }
 	template <>
 	inline void *variant_to_value<void *>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
-			case gsdk::FIELD_INTEGER:
-			return reinterpret_cast<void *>(var.m_hScript);
+			case gsdk::FIELD_UINT64:
+			return reinterpret_cast<void *>(var.m_ulonglong);
+			default: return {};
 		}
-
-		return nullptr;
 	}
 
 	template <>
@@ -465,77 +520,69 @@ namespace vmod
 	inline const void *variant_to_value<const void *>(const gsdk::ScriptVariant_t &var) noexcept
 	{ return variant_to_value<void *>(var); }
 
-	static_assert(sizeof(generic_func_t) == sizeof(int));
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<generic_func_t>() noexcept
-	{ return gsdk::FIELD_INTEGER; }
+	{ return gsdk::FIELD_UINT64; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, generic_func_t value) noexcept
-	{ var.m_hScript = reinterpret_cast<gsdk::HSCRIPT>(value); }
+	{ var.m_ulonglong = reinterpret_cast<unsigned long long>(value); }
 	template <>
 	inline generic_func_t variant_to_value<generic_func_t>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
-			case gsdk::FIELD_INTEGER:
-			return reinterpret_cast<generic_func_t>(var.m_hScript);
+			case gsdk::FIELD_UINT64:
+			return reinterpret_cast<generic_func_t>(var.m_ulonglong);
+			default: return {};
 		}
-
-		return nullptr;
 	}
 
-	static_assert(sizeof(generic_internal_mfp_t *) == sizeof(int));
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<generic_mfp_t>() noexcept
-	{ return gsdk::FIELD_INTEGER; }
+	{ return gsdk::FIELD_UINT64; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, generic_mfp_t value) noexcept
 	{
-		var.m_hScript = reinterpret_cast<gsdk::HSCRIPT>(new generic_internal_mfp_t{value});
-		var.m_flags |= gsdk::SV_FREE;
+		generic_internal_mfp_t internal{value};
+		var.m_ulonglong = static_cast<unsigned long long>(internal.value);
 	}
 	template <>
 	inline generic_mfp_t variant_to_value<generic_mfp_t>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
-			case gsdk::FIELD_INTEGER: {
-				const generic_internal_mfp_t *mfp{reinterpret_cast<const generic_internal_mfp_t *>(var.m_hScript)};
-				return mfp->func;
+			case gsdk::FIELD_UINT64: {
+				generic_internal_mfp_t internal{static_cast<std::uint64_t>(var.m_ulonglong)};
+				return internal.func;
 			}
+			default: return {};
 		}
-
-		return nullptr;
 	}
 
-	static_assert(sizeof(generic_vtable_t) == sizeof(int));
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<generic_vtable_t>() noexcept
-	{ return gsdk::FIELD_INTEGER; }
+	{ return gsdk::FIELD_UINT64; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, generic_vtable_t value) noexcept
-	{ var.m_hScript = reinterpret_cast<gsdk::HSCRIPT>(value); }
+	{ var.m_ulonglong = reinterpret_cast<unsigned long long>(value); }
 	template <>
 	inline generic_vtable_t variant_to_value<generic_vtable_t>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
-			case gsdk::FIELD_INTEGER:
-			return reinterpret_cast<generic_vtable_t>(var.m_hScript);
+			case gsdk::FIELD_UINT64:
+			return reinterpret_cast<generic_vtable_t>(var.m_ulonglong);
+			default: return {};
 		}
-
-		return nullptr;
 	}
 
-	static_assert(sizeof(generic_object_t *) == sizeof(int));
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<generic_object_t *>() noexcept
-	{ return gsdk::FIELD_INTEGER; }
+	{ return gsdk::FIELD_UINT64; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, generic_object_t *value) noexcept
-	{ var.m_hScript = reinterpret_cast<gsdk::HSCRIPT>(value); }
+	{ var.m_ulonglong = reinterpret_cast<unsigned long long>(value); }
 	template <>
 	inline generic_object_t *variant_to_value<generic_object_t *>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
-			case gsdk::FIELD_INTEGER:
-			return reinterpret_cast<generic_object_t *>(var.m_hScript);
+			case gsdk::FIELD_UINT64:
+			return reinterpret_cast<generic_object_t *>(var.m_ulonglong);
+			default: return {};
 		}
-
-		return nullptr;
 	}
 
 	template <typename T, typename = void>

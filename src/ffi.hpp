@@ -49,6 +49,88 @@ namespace vmod
 	extern bool ffi_bindings() noexcept;
 	extern void ffi_unbindings() noexcept;
 
+	class memory_singleton final : public gsdk::ISquirrelMetamethodDelegate
+	{
+	public:
+		bool bindings() noexcept;
+
+		static memory_singleton &instance() noexcept;
+
+		void unbindings() noexcept;
+
+	private:
+		friend class vmod;
+
+		static gsdk::HSCRIPT script_allocate(std::size_t size) noexcept;
+
+		static gsdk::HSCRIPT script_allocate_aligned(std::size_t align, std::size_t size) noexcept;
+
+		static gsdk::HSCRIPT script_allocate_type(gsdk::HSCRIPT type) noexcept;
+
+		static gsdk::HSCRIPT script_allocate_zero(std::size_t num, std::size_t size) noexcept;
+
+		static script_variant_t script_read(void *ptr, gsdk::HSCRIPT type) noexcept;
+
+		static void script_write(void *ptr, gsdk::HSCRIPT type, script_variant_t arg_var) noexcept;
+
+		static inline void *script_add(void *ptr, std::ptrdiff_t off) noexcept
+		{
+			unsigned char *temp{reinterpret_cast<unsigned char *>(ptr)};
+			temp += off;
+			return reinterpret_cast<void *>(temp);
+		}
+
+		static inline void *script_sub(void *ptr, std::ptrdiff_t off) noexcept
+		{
+			unsigned char *temp{reinterpret_cast<unsigned char *>(ptr)};
+			temp -= off;
+			return reinterpret_cast<void *>(temp);
+		}
+
+		static inline generic_vtable_t script_get_vtable(generic_object_t *obj) noexcept
+		{
+			return vtable_from_object(obj);
+		}
+
+		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
+
+		struct mem_type final
+		{
+			mem_type() noexcept = default;
+			mem_type(const mem_type &) = delete;
+			mem_type &operator=(const mem_type &) = delete;
+			inline mem_type(mem_type &&other) noexcept
+			{ operator=(std::move(other)); }
+			inline mem_type &operator=(mem_type &&other) noexcept
+			{
+				type_ptr = other.type_ptr;
+				other.type_ptr = nullptr;
+				name = std::move(other.name);
+				table = other.table;
+				other.table = gsdk::INVALID_HSCRIPT;
+				return *this;
+			}
+
+			~mem_type() noexcept;
+
+			ffi_type *type_ptr;
+			std::string name;
+			gsdk::HSCRIPT table;
+		};
+
+		bool register_type(ffi_type *type_ptr, std::string_view name) noexcept;
+
+		std::vector<mem_type> types;
+		gsdk::HSCRIPT scope{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT types_table{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT vs_instance_{gsdk::INVALID_HSCRIPT};
+		gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
+	};
+
+	extern class memory_singleton memory_singleton;
+
+	extern singleton_class_desc_t<class memory_singleton> memory_desc;
+
 	struct memory_block final : public plugin::owned_instance
 	{
 	public:
@@ -105,6 +187,8 @@ namespace vmod
 		gsdk::HSCRIPT dtor_func{gsdk::INVALID_HSCRIPT};
 		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
 	};
+
+	extern class_desc_t<memory_block> mem_block_desc;
 
 	class dynamic_detour final : public plugin::owned_instance
 	{
@@ -182,4 +266,77 @@ namespace vmod
 
 		unsigned char old_bytes[1 + sizeof(std::uintptr_t)];
 	};
+
+	extern class_desc_t<class dynamic_detour> detour_desc;
+
+	class script_cif final : plugin::owned_instance
+	{
+	public:
+		~script_cif() noexcept override;
+
+		static bool bindings() noexcept;
+		static void unbindings() noexcept;
+
+	private:
+		friend class ffi_singleton;
+
+		inline script_cif(ffi_type *ret, std::vector<ffi_type *> &&args) noexcept
+			: cif_{}, arg_type_ptrs{std::move(args)}, ret_type_ptr{ret}
+		{
+		}
+
+		bool initialize(generic_func_t func_, ffi_abi abi) noexcept;
+
+		script_variant_t script_call(const script_variant_t *va_args, std::size_t num_args, ...) noexcept;
+
+		ffi_cif cif_;
+
+		std::vector<ffi_type *> arg_type_ptrs;
+		ffi_type *ret_type_ptr;
+
+		std::unique_ptr<unsigned char[]> ret_storage;
+		std::vector<std::unique_ptr<unsigned char[]>> args_storage;
+		std::vector<void *> args_storage_ptrs;
+
+		generic_func_t func;
+		gsdk::HSCRIPT instance;
+	};
+
+	extern class_desc_t<script_cif> cif_desc;
+
+	class ffi_singleton final : public gsdk::ISquirrelMetamethodDelegate
+	{
+	public:
+		inline ~ffi_singleton() noexcept override
+		{
+		}
+
+		bool bindings() noexcept;
+		void unbindings() noexcept;
+
+		static ffi_singleton &instance() noexcept;
+
+	private:
+		friend class vmod;
+
+		static gsdk::HSCRIPT script_create_cif(generic_func_t func, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept;
+
+		static dynamic_detour *script_create_detour_shared(ffi_type *ret, gsdk::HSCRIPT args) noexcept;
+
+		static gsdk::HSCRIPT script_create_detour_member(generic_mfp_t old_func, gsdk::HSCRIPT new_func, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept;
+
+		static gsdk::HSCRIPT script_create_detour_static(generic_func_t old_func, gsdk::HSCRIPT new_func, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept;
+
+		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
+
+		gsdk::HSCRIPT scope{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT types_table{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT abi_table{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT vs_instance_{gsdk::INVALID_HSCRIPT};
+		gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
+	};
+
+	extern class ffi_singleton ffi_singleton;
+
+	extern singleton_class_desc_t<class ffi_singleton> ffi_singleton_desc;
 }

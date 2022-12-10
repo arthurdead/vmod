@@ -26,7 +26,7 @@ namespace vmod
 	inline void value_to_variant(gsdk::ScriptVariant_t &var, T &&value) noexcept
 	{
 		var.m_type = static_cast<short>(__type_to_field_impl<std::decay_t<T>>());
-		var.m_flags = 0;
+		var.m_flags = gsdk::SV_NOFLAGS;
 		initialize_variant_value(var, std::forward<T>(value));
 	}
 }
@@ -35,10 +35,9 @@ namespace vmod
 {
 	inline void null_variant(gsdk::ScriptVariant_t &var) noexcept
 	{
-		std::memset(var.unk1, 0, sizeof(gsdk::ScriptVariant_t::unk1));
 		var.m_type = gsdk::FIELD_VOID;
-		var.m_hScript = nullptr;
-		var.m_flags = 0;
+		var.m_ulonglong = 0;
+		var.m_flags = gsdk::SV_NOFLAGS;
 	}
 
 	extern void free_variant_hscript(gsdk::ScriptVariant_t &var) noexcept;
@@ -49,9 +48,8 @@ namespace vmod
 		inline script_variant_t() noexcept
 		{
 			m_type = gsdk::FIELD_VOID;
-			m_hScript = gsdk::INVALID_HSCRIPT;
-			m_flags = 0;
-			std::memset(unk1, 0, sizeof(unk1));
+			m_ulonglong = 0;
+			m_flags = gsdk::SV_NOFLAGS;
 		}
 
 		inline ~script_variant_t() noexcept
@@ -63,10 +61,9 @@ namespace vmod
 		inline script_variant_t &operator=(script_variant_t &&other) noexcept
 		{
 			m_type = other.m_type;
-			m_hScript = other.m_hScript;
+			m_ulonglong = other.m_ulonglong;
 			m_flags = other.m_flags;
-			std::memcpy(unk1, other.unk1, sizeof(unk1));
-			std::memset(other.unk1, 0, sizeof(unk1));
+			other.m_flags = gsdk::SV_NOFLAGS;
 			return *this;
 		}
 
@@ -75,10 +72,7 @@ namespace vmod
 
 		template <typename T>
 		inline script_variant_t(T &&value) noexcept
-		{
-			std::memset(unk1, 0, sizeof(unk1));
-			value_to_variant<T>(*this, std::forward<T>(value));
-		}
+		{ value_to_variant<T>(*this, std::forward<T>(value)); }
 
 		template <typename T>
 		inline script_variant_t &operator=(T &&value) noexcept
@@ -119,6 +113,18 @@ namespace vmod
 					case gsdk::FIELD_VECTOR: {
 						delete m_pVector;
 					} break;
+					case gsdk::FIELD_VECTOR2D: {
+						//delete m_pVector2D;
+					} break;
+					case gsdk::FIELD_QANGLE: {
+						delete m_pQAngle;
+					} break;
+					case gsdk::FIELD_QUATERNION: {
+						//delete m_pQuaternion;
+					} break;
+					case gsdk::FIELD_UTLSTRINGTOKEN: {
+						//delete m_pUtlStringToken;
+					} break;
 					case gsdk::FIELD_CSTRING: {
 						std::free(const_cast<char *>(m_pszString));
 					} break;
@@ -126,7 +132,7 @@ namespace vmod
 						free_variant_hscript(*this);
 					} break;
 					default: {
-						std::free(m_hScript);
+						std::free(reinterpret_cast<void *>(m_ulonglong));
 					} break;
 				}
 				m_flags &= ~gsdk::SV_FREE;
@@ -148,8 +154,8 @@ namespace vmod
 	{
 		script_variant_t temp_var;
 		temp_var.m_type = var.m_type;
-		temp_var.m_flags = 0;
-		temp_var.m_hScript = var.m_hScript;
+		temp_var.m_flags = gsdk::SV_NOFLAGS;
+		temp_var.m_ulonglong = var.m_ulonglong;
 		return temp_var;
 	}
 
@@ -200,7 +206,7 @@ namespace vmod
 		func_desc_t(M, std::string_view) = delete;
 
 		template <typename T>
-		friend class class_desc_t;
+		friend class base_class_desc_t;
 		template <typename T>
 		friend class singleton_class_desc_t;
 
@@ -314,9 +320,29 @@ namespace vmod
 	template <typename T>
 	class singleton_instance_helper final : public instance_helper<T>
 	{
+		class has_instance
+		{
+			template <typename C>
+			static std::true_type test(decltype(&C::instance));
+			template <typename C>
+			static std::false_type test(...);
+
+		public:
+			static constexpr bool value{std::is_same_v<decltype(test<T>(nullptr)), std::true_type>};
+		};
+
 	public:
 		static inline T &instance() noexcept
-		{ return T::instance(); }
+		{
+			if constexpr(has_instance::value) {
+				return T::instance();
+			} else {
+				#pragma GCC diagnostic push
+				#pragma GCC diagnostic ignored "-Wnull-dereference"
+				return *static_cast<T *>(nullptr);
+				#pragma GCC diagnostic pop
+			}
+		}
 
 		inline void *GetProxied([[maybe_unused]] void *ptr) noexcept override final
 		{ return static_cast<T *>(&singleton_instance_helper<T>::instance()); }
@@ -331,27 +357,28 @@ namespace vmod
 		}
 	};
 
+	struct extra_class_desc_t final
+	{
+		std::string doc_class_name;
+		bool singleton;
+		std::string doc_singleton_name;
+	};
+
 	template <typename T>
-	class alignas(gsdk::ScriptClassDesc_t) class_desc_t : public gsdk::ScriptClassDesc_t
+	class base_class_desc_t : public gsdk::ScriptClassDesc_t
 	{
 	public:
-		class_desc_t() = delete;
-		class_desc_t(const class_desc_t &) = delete;
-		class_desc_t &operator=(const class_desc_t &) = delete;
+		base_class_desc_t() = delete;
+		base_class_desc_t(const base_class_desc_t &) = delete;
+		base_class_desc_t &operator=(const base_class_desc_t &) = delete;
 
-		inline class_desc_t(class_desc_t &&other) noexcept
+		inline base_class_desc_t(base_class_desc_t &&other) noexcept
 			: gsdk::ScriptClassDesc_t{}
 		{ operator=(std::move(other)); }
 
-		class_desc_t &operator=(class_desc_t &&other) noexcept;
+		base_class_desc_t &operator=(base_class_desc_t &&other) noexcept;
 
-		class_desc_t(std::string_view name) noexcept;
-
-		inline class_desc_t &operator=(instance_helper<T> &helper) noexcept
-		{
-			pHelper = &helper;
-			return *this;
-		}
+		base_class_desc_t(std::string_view name) noexcept;
 
 		template <typename R, typename ...Args>
 		inline func_desc_t &func(R(*func)(Args...), std::string_view name, std::string_view script_name) noexcept
@@ -389,29 +416,59 @@ namespace vmod
 		inline func_desc_t &func(R(T::*func_)(Args..., ...) const, std::string_view name, std::string_view script_name) noexcept
 		{ return func<R, Args...>(reinterpret_cast<R(T::*)(Args..., ...)>(func_), name, script_name); }
 
+		inline const extra_class_desc_t &extra() const noexcept
+		{ return extra_; }
+
+		inline base_class_desc_t &doc_class_name(std::string_view name) noexcept
+		{
+			extra_.doc_class_name = name;
+			return *this;
+		}
+
+	protected:
+		extra_class_desc_t extra_;
+	};
+
+	template <typename T>
+	class class_desc_t final : public base_class_desc_t<T>
+	{
+	public:
+		inline class_desc_t(std::string_view name) noexcept
+			: base_class_desc_t<T>{name}
+		{
+			this->pHelper = &instance_helper<T>::singleton();
+			this->extra_.singleton = true;
+		}
+
+		inline class_desc_t &operator=(instance_helper<T> &helper) noexcept
+		{
+			this->pHelper = &helper;
+			return *this;
+		}
+
 		inline class_desc_t &dtor(void(*func)(T *)) noexcept
 		{
-			m_pfnDestruct = reinterpret_cast<void(*)(void *)>(func);
+			this->m_pfnDestruct = reinterpret_cast<void(*)(void *)>(func);
 			return *this;
 		}
 
 		inline class_desc_t &dtor() noexcept
 		{
 			static_assert(std::is_destructible_v<T>);
-			m_pfnDestruct = static_cast<void(*)(void *)>(destruct);
+			this->m_pfnDestruct = static_cast<void(*)(void *)>(destruct);
 			return *this;
 		}
 
 		inline class_desc_t &ctor(T *(*func)()) noexcept
 		{
-			m_pfnConstruct = reinterpret_cast<void *(*)()>(func);
+			this->m_pfnConstruct = reinterpret_cast<void *(*)()>(func);
 			return *this;
 		}
 
 		inline class_desc_t &ctor() noexcept
 		{
 			static_assert(std::is_default_constructible_v<T>);
-			m_pfnConstruct = static_cast<void *(*)()>(construct);
+			this->m_pfnConstruct = static_cast<void *(*)()>(construct);
 			return *this;
 		}
 
@@ -422,23 +479,18 @@ namespace vmod
 		{ delete reinterpret_cast<T *>(ptr); }
 	};
 
-	static_assert(sizeof(class_desc_t<empty_class>) == sizeof(gsdk::ScriptClassDesc_t));
-	static_assert(alignof(class_desc_t<empty_class>) == alignof(gsdk::ScriptClassDesc_t));
-
 	template <typename T>
-	class singleton_class_desc_t : public class_desc_t<T>
+	class singleton_class_desc_t final : public base_class_desc_t<T>
 	{
 	public:
-		using class_desc_t<T>::class_desc_t;
-		using class_desc_t<T>::operator=;
+		using base_class_desc_t<T>::base_class_desc_t;
+		using base_class_desc_t<T>::operator=;
 
 		inline singleton_class_desc_t(std::string_view name) noexcept
-			: class_desc_t<T>{name}
+			: base_class_desc_t<T>{name}
 		{
 			this->pHelper = &singleton_instance_helper<T>::singleton();
 		}
-
-		class_desc_t<T> &operator=(instance_helper<T> &helper) noexcept = delete;
 
 		inline singleton_class_desc_t<T> &operator=(singleton_instance_helper<T> &helper) noexcept
 		{
@@ -446,15 +498,10 @@ namespace vmod
 			return *this;
 		}
 
-		class_desc_t<T> &dtor(void(*func)(T *)) noexcept = delete;
-		class_desc_t<T> &dtor() noexcept = delete;
-		class_desc_t<T> &ctor(T *(*func)()) noexcept = delete;
-		class_desc_t<T> &ctor() noexcept = delete;
-
 		template <typename ...Args>
 		inline func_desc_t &func(Args &&...args) noexcept
 		{
-			func_desc_t &temp{class_desc_t<T>::func(std::forward<Args>(args)...)};
+			func_desc_t &temp{base_class_desc_t<T>::func(std::forward<Args>(args)...)};
 			using F = std::tuple_element_t<0, std::tuple<Args...>>;
 			if constexpr(function_is_member_v<F>) {
 				using R = function_return_t<F>;
@@ -468,7 +515,7 @@ namespace vmod
 		template <typename F, typename R, typename ...Args>
 		void make_singleton(func_desc_t &desc, std::type_identity<std::tuple<Args...>>) noexcept
 		{
-			desc.m_flags &= ~static_cast<unsigned>(gsdk::SF_MEMBER_FUNC);
+			desc.m_flags &= ~gsdk::SF_MEMBER_FUNC;
 
 			if constexpr(function_is_va_v<F>) {
 				desc.m_pfnBinding = static_cast<gsdk::ScriptBindingFunc_t>(func_desc_t::binding_member_singleton_va<R, T, Args...>);
@@ -477,9 +524,6 @@ namespace vmod
 			}
 		}
 	};
-
-	static_assert(sizeof(singleton_class_desc_t<empty_class>) == sizeof(gsdk::ScriptClassDesc_t));
-	static_assert(alignof(singleton_class_desc_t<empty_class>) == alignof(gsdk::ScriptClassDesc_t));
 }
 
 #include "vscript.tpp"

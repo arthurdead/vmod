@@ -1,12 +1,13 @@
 namespace vmod
 {
 	template <typename T>
-	class_desc_t<T>::class_desc_t(std::string_view name) noexcept
+	base_class_desc_t<T>::base_class_desc_t(std::string_view name) noexcept
+		: gsdk::ScriptClassDesc_t{}
 	{
 		m_pfnConstruct = nullptr;
 		m_pfnDestruct = nullptr;
-		pHelper = &instance_helper<T>::singleton();
-		m_pNextDesc = nullptr;
+		pHelper = nullptr;
+		m_pNextDesc = reinterpret_cast<ScriptClassDesc_t *>(0xbebebebe);
 		m_pBaseDesc = nullptr;
 		m_pszClassname = demangle<T>().c_str();
 		m_pszScriptName = name.data();
@@ -14,7 +15,7 @@ namespace vmod
 	}
 
 	template <typename T>
-	class_desc_t<T> &class_desc_t<T>::operator=(class_desc_t &&other) noexcept
+	base_class_desc_t<T> &base_class_desc_t<T>::operator=(base_class_desc_t &&other) noexcept
 	{
 		m_pszScriptName = other.m_pszScriptName;
 		other.m_pszScriptName = nullptr;
@@ -81,7 +82,7 @@ namespace vmod
 	bool func_desc_t::binding_member_singleton(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept
 	{
 		if(!obj) {
-			obj = &C::instance();
+			obj = &singleton_instance_helper<C>::instance();
 		}
 
 		return binding_member<R, C, Args...>(binding_func, adjustor, obj, args_var, num_args, ret_var);
@@ -193,7 +194,7 @@ namespace vmod
 	bool func_desc_t::binding_member_singleton_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept
 	{
 		if(!obj) {
-			obj = &C::instance();
+			obj = &singleton_instance_helper<C>::instance();
 		}
 
 		return binding_member_va<R, C, Args...>(binding_func, adjustor, obj, args_var, num_args, ret_var);

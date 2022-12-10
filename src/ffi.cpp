@@ -115,250 +115,190 @@ namespace vmod
 		}
 	}
 
-	class memory_singleton final : public gsdk::ISquirrelMetamethodDelegate
+	void memory_singleton::unbindings() noexcept
 	{
-	public:
-		bool bindings() noexcept;
+		memory_block::unbindings();
 
-		static memory_singleton &instance() noexcept;
+		gsdk::IScriptVM *vm{vmod.vm()};
 
-		void unbindings() noexcept
-		{
-			memory_block::unbindings();
+		types.clear();
 
-			gsdk::IScriptVM *vm{vmod.vm()};
-
-			types.clear();
-
-			if(get_impl) {
-				vm->DestroySquirrelMetamethod_Get(get_impl);
-			}
-
-			if(vs_instance_ && vs_instance_ != gsdk::INVALID_HSCRIPT) {
-				vm->RemoveInstance(vs_instance_);
-			}
-
-			if(types_table && types_table != gsdk::INVALID_HSCRIPT) {
-				vm->ReleaseTable(types_table);
-			}
-
-			if(vm->ValueExists(scope, "types")) {
-				vm->ClearValue(scope, "types");
-			}
-
-			if(scope && scope != gsdk::INVALID_HSCRIPT) {
-				vm->ReleaseScope(scope);
-			}
-
-			gsdk::HSCRIPT vmod_scope{vmod.scope()};
-			if(vm->ValueExists(vmod_scope, "mem")) {
-				vm->ClearValue(vmod_scope, "mem");
-			}
+		if(get_impl) {
+			vm->DestroySquirrelMetamethod_Get(get_impl);
 		}
 
-	private:
-		static gsdk::HSCRIPT script_allocate(std::size_t size) noexcept
-		{
-			memory_block *block{new memory_block{size}};
-
-			if(!block->initialize()) {
-				delete block;
-				return nullptr;
-			}
-
-			block->set_plugin();
-
-			return block->instance;
+		if(vs_instance_ && vs_instance_ != gsdk::INVALID_HSCRIPT) {
+			vm->RemoveInstance(vs_instance_);
 		}
 
-		static gsdk::HSCRIPT script_allocate_aligned(std::size_t align, std::size_t size) noexcept
-		{
-			memory_block *block{new memory_block{static_cast<std::align_val_t>(align), size}};
-
-			if(!block->initialize()) {
-				delete block;
-				return nullptr;
-			}
-
-			block->set_plugin();
-
-			return block->instance;
+		if(types_table && types_table != gsdk::INVALID_HSCRIPT) {
+			vm->ReleaseTable(types_table);
 		}
 
-		static gsdk::HSCRIPT script_allocate_type(gsdk::HSCRIPT type) noexcept
-		{
-			gsdk::IScriptVM *vm{vmod.vm()};
-
-			script_variant_t type_id;
-			if(!vm->GetValue(type, "__internal_ptr__", &type_id)) {
-				vm->RaiseException("vmod: invalid type");
-				return {};
-			}
-
-			ffi_type *type_ptr{type_id.get<ffi_type *>()};
-
-			memory_block *block{new memory_block{static_cast<std::align_val_t>(type_ptr->alignment), type_ptr->size}};
-
-			if(!block->initialize()) {
-				delete block;
-				return nullptr;
-			}
-
-			block->set_plugin();
-
-			return block->instance;
+		if(vm->ValueExists(scope, "types")) {
+			vm->ClearValue(scope, "types");
 		}
 
-		static gsdk::HSCRIPT script_allocate_zero(std::size_t num, std::size_t size) noexcept
-		{
-			memory_block *block{new memory_block{num, size}};
-
-			if(!block->initialize()) {
-				delete block;
-				return nullptr;
-			}
-
-			block->set_plugin();
-
-			return block->instance;
+		if(scope && scope != gsdk::INVALID_HSCRIPT) {
+			vm->ReleaseScope(scope);
 		}
 
-		static script_variant_t script_read(void *ptr, gsdk::HSCRIPT type) noexcept
-		{
-			gsdk::IScriptVM *vm{vmod.vm()};
+		gsdk::HSCRIPT vmod_scope{vmod.scope()};
+		if(vm->ValueExists(vmod_scope, "mem")) {
+			vm->ClearValue(vmod_scope, "mem");
+		}
+	}
 
-			script_variant_t type_id;
-			if(!vm->GetValue(type, "__internal_ptr__", &type_id)) {
-				vm->RaiseException("vmod: invalid type");
-				return {};
-			}
+	gsdk::HSCRIPT memory_singleton::script_allocate(std::size_t size) noexcept
+	{
+		memory_block *block{new memory_block{size}};
 
-			ffi_type *type_ptr{type_id.get<ffi_type *>()};
-
-			script_variant_t ret_var;
-			ffi_ptr_to_script_var(type_ptr, ptr, ret_var);
-			return ret_var;
+		if(!block->initialize()) {
+			delete block;
+			return nullptr;
 		}
 
-		static void script_write(void *ptr, gsdk::HSCRIPT type, script_variant_t arg_var) noexcept
-		{
-			gsdk::IScriptVM *vm{vmod.vm()};
+		block->set_plugin();
 
-			script_variant_t type_id;
-			if(!vm->GetValue(type, "__internal_ptr__", &type_id)) {
-				vm->RaiseException("vmod: invalid type");
-				return;
-			}
+		return block->instance;
+	}
 
-			ffi_type *type_ptr{type_id.get<ffi_type *>()};
+	gsdk::HSCRIPT memory_singleton::script_allocate_aligned(std::size_t align, std::size_t size) noexcept
+	{
+		memory_block *block{new memory_block{static_cast<std::align_val_t>(align), size}};
 
-			script_var_to_ffi_ptr(type_ptr, ptr, arg_var);
+		if(!block->initialize()) {
+			delete block;
+			return nullptr;
 		}
 
-		static inline void *script_add(void *ptr, std::ptrdiff_t off) noexcept
-		{
-			unsigned char *temp{reinterpret_cast<unsigned char *>(ptr)};
-			temp += off;
-			return reinterpret_cast<void *>(temp);
+		block->set_plugin();
+
+		return block->instance;
+	}
+
+	gsdk::HSCRIPT memory_singleton::script_allocate_type(gsdk::HSCRIPT type) noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		script_variant_t type_id;
+		if(!vm->GetValue(type, "__internal_ptr__", &type_id)) {
+			vm->RaiseException("vmod: invalid type");
+			return {};
 		}
 
-		static inline void *script_sub(void *ptr, std::ptrdiff_t off) noexcept
-		{
-			unsigned char *temp{reinterpret_cast<unsigned char *>(ptr)};
-			temp -= off;
-			return reinterpret_cast<void *>(temp);
+		ffi_type *type_ptr{type_id.get<ffi_type *>()};
+
+		memory_block *block{new memory_block{static_cast<std::align_val_t>(type_ptr->alignment), type_ptr->size}};
+
+		if(!block->initialize()) {
+			delete block;
+			return nullptr;
 		}
 
-		static inline generic_vtable_t script_get_vtable(generic_object_t *obj) noexcept
-		{
-			return vtable_from_object(obj);
+		block->set_plugin();
+
+		return block->instance;
+	}
+
+	gsdk::HSCRIPT memory_singleton::script_allocate_zero(std::size_t num, std::size_t size) noexcept
+	{
+		memory_block *block{new memory_block{num, size}};
+
+		if(!block->initialize()) {
+			delete block;
+			return nullptr;
 		}
 
-		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
+		block->set_plugin();
 
-		struct mem_type final
-		{
-			mem_type() noexcept = default;
-			mem_type(const mem_type &) = delete;
-			mem_type &operator=(const mem_type &) = delete;
-			inline mem_type(mem_type &&other) noexcept
-			{ operator=(std::move(other)); }
-			inline mem_type &operator=(mem_type &&other) noexcept
-			{
-				type_ptr = other.type_ptr;
-				other.type_ptr = nullptr;
-				name = std::move(other.name);
-				table = other.table;
-				other.table = gsdk::INVALID_HSCRIPT;
-				return *this;
-			}
+		return block->instance;
+	}
 
-			~mem_type() noexcept;
+	script_variant_t memory_singleton::script_read(void *ptr, gsdk::HSCRIPT type) noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
 
-			ffi_type *type_ptr;
-			std::string name;
-			gsdk::HSCRIPT table;
-		};
-
-		bool register_type(ffi_type *type_ptr, std::string_view name) noexcept
-		{
-			using namespace std::literals::string_view_literals;
-
-			gsdk::IScriptVM *vm{vmod.vm()};
-
-			gsdk::HSCRIPT type_table{vm->CreateTable()};
-			if(!type_table || type_table == gsdk::INVALID_HSCRIPT) {
-				error("vmod: failed to create type '%s' table\n", name.data());
-				return false;
-			}
-
-			mem_type type;
-			type.table = type_table;
-			type.type_ptr = type_ptr;
-			type.name = name;
-			types.emplace_back(std::move(type));
-
-			if(!vm->SetValue(type_table, "size", script_variant_t{type_ptr->size})) {
-				error("vmod: failed to set type '%s' size value\n", name.data());
-				return false;
-			}
-
-			if(!vm->SetValue(type_table, "alignment", script_variant_t{type_ptr->alignment})) {
-				error("vmod: failed to set type '%s' alignment value\n", name.data());
-				return false;
-			}
-
-			if(!vm->SetValue(type_table, "id", script_variant_t{type_ptr->type})) {
-				error("vmod: failed to set type '%s' id value\n", name.data());
-				return false;
-			}
-
-			if(!vm->SetValue(type_table, "__internal_ptr__", script_variant_t{type_ptr})) {
-				error("vmod: failed to set type '%s' internal ptr value\n", name.data());
-				return false;
-			}
-
-			if(!vm->SetValue(type_table, "name", script_variant_t{name})) {
-				error("vmod: failed to set type '%s' name value\n", name.data());
-				return false;
-			}
-
-			if(!vm->SetValue(types_table, name.data(), type_table)) {
-				error("vmod: failed to set type '%s' name value\n", name.data());
-				return false;
-			}
-
-			return true;
+		script_variant_t type_id;
+		if(!vm->GetValue(type, "__internal_ptr__", &type_id)) {
+			vm->RaiseException("vmod: invalid type");
+			return {};
 		}
 
-		std::vector<mem_type> types;
-		gsdk::HSCRIPT scope{gsdk::INVALID_HSCRIPT};
-		gsdk::HSCRIPT types_table{gsdk::INVALID_HSCRIPT};
-		gsdk::HSCRIPT vs_instance_{gsdk::INVALID_HSCRIPT};
-		gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
-	};
+		ffi_type *type_ptr{type_id.get<ffi_type *>()};
 
-	static class memory_singleton memory_singleton;
+		script_variant_t ret_var;
+		ffi_ptr_to_script_var(type_ptr, ptr, ret_var);
+		return ret_var;
+	}
+
+	void memory_singleton::script_write(void *ptr, gsdk::HSCRIPT type, script_variant_t arg_var) noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		script_variant_t type_id;
+		if(!vm->GetValue(type, "__internal_ptr__", &type_id)) {
+			vm->RaiseException("vmod: invalid type");
+			return;
+		}
+
+		ffi_type *type_ptr{type_id.get<ffi_type *>()};
+
+		script_var_to_ffi_ptr(type_ptr, ptr, arg_var);
+	}
+
+	bool memory_singleton::register_type(ffi_type *type_ptr, std::string_view name) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		gsdk::HSCRIPT type_table{vm->CreateTable()};
+		if(!type_table || type_table == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create type '%s' table\n", name.data());
+			return false;
+		}
+
+		mem_type type;
+		type.table = type_table;
+		type.type_ptr = type_ptr;
+		type.name = name;
+		types.emplace_back(std::move(type));
+
+		if(!vm->SetValue(type_table, "size", script_variant_t{type_ptr->size})) {
+			error("vmod: failed to set type '%s' size value\n", name.data());
+			return false;
+		}
+
+		if(!vm->SetValue(type_table, "alignment", script_variant_t{type_ptr->alignment})) {
+			error("vmod: failed to set type '%s' alignment value\n", name.data());
+			return false;
+		}
+
+		if(!vm->SetValue(type_table, "id", script_variant_t{type_ptr->type})) {
+			error("vmod: failed to set type '%s' id value\n", name.data());
+			return false;
+		}
+
+		if(!vm->SetValue(type_table, "__internal_ptr__", script_variant_t{type_ptr})) {
+			error("vmod: failed to set type '%s' internal ptr value\n", name.data());
+			return false;
+		}
+
+		if(!vm->SetValue(type_table, "name", script_variant_t{name})) {
+			error("vmod: failed to set type '%s' name value\n", name.data());
+			return false;
+		}
+
+		if(!vm->SetValue(types_table, name.data(), type_table)) {
+			error("vmod: failed to set type '%s' name value\n", name.data());
+			return false;
+		}
+
+		return true;
+	}
+
+	class memory_singleton memory_singleton;
 
 	memory_singleton::mem_type::~mem_type() noexcept
 	{
@@ -382,12 +322,12 @@ namespace vmod
 		return vmod.vm()->GetValue(vs_instance_, name.c_str(), &value);
 	}
 
-	static singleton_class_desc_t<class memory_singleton> memory_desc{"__vmod_memory_singleton_class"};
+	singleton_class_desc_t<class memory_singleton> memory_desc{"__vmod_memory_singleton_class"};
 
 	inline class memory_singleton &memory_singleton::instance() noexcept
 	{ return ::vmod::memory_singleton; }
 
-	static class_desc_t<memory_block> mem_block_desc{"__vmod_memory_block_class"};
+	class_desc_t<memory_block> mem_block_desc{"__vmod_memory_block_class"};
 
 	bool memory_singleton::bindings() noexcept
 	{
@@ -580,6 +520,7 @@ namespace vmod
 		mem_block_desc.func(&memory_block::script_ptr, "__script_ptr"sv, "get_ptr"sv);
 		mem_block_desc.func(&memory_block::script_get_size, "__script_get_size"sv, "get_size"sv);
 		mem_block_desc.dtor();
+		mem_block_desc.doc_class_name("memory_block"sv);
 
 		if(!vm->RegisterClass(&mem_block_desc)) {
 			error("vmod: failed to register memory block script class\n"sv);
@@ -631,59 +572,28 @@ namespace vmod
 		return true;
 	}
 
-	class script_cif final : plugin::owned_instance
+	script_variant_t script_cif::script_call(const script_variant_t *va_args, std::size_t num_args, ...) noexcept
 	{
-	public:
-		~script_cif() noexcept override;
-
-		static bool bindings() noexcept;
-		static void unbindings() noexcept;
-
-	private:
-		friend class ffi_singleton;
-
-		inline script_cif(ffi_type *ret, std::vector<ffi_type *> &&args) noexcept
-			: cif_{}, arg_type_ptrs{std::move(args)}, ret_type_ptr{ret}
-		{
+		if(num_args != arg_type_ptrs.size()) {
+			vmod.vm()->RaiseException("wrong number of parameters");
+			return {};
 		}
 
-		bool initialize(generic_func_t func_, ffi_abi abi) noexcept;
+		for(std::size_t i{0}; i < num_args; ++i) {
+			ffi_type *arg_type{arg_type_ptrs[i]};
+			const script_variant_t &arg_var{va_args[i]};
+			std::unique_ptr<unsigned char[]> &arg_ptr{args_storage[i]};
 
-		script_variant_t script_call(const script_variant_t *va_args, std::size_t num_args, ...) noexcept
-		{
-			if(num_args != arg_type_ptrs.size()) {
-				vmod.vm()->RaiseException("wrong number of parameters");
-				return {};
-			}
-
-			for(std::size_t i{0}; i < num_args; ++i) {
-				ffi_type *arg_type{arg_type_ptrs[i]};
-				const script_variant_t &arg_var{va_args[i]};
-				std::unique_ptr<unsigned char[]> &arg_ptr{args_storage[i]};
-
-				script_var_to_ffi_ptr(arg_type, reinterpret_cast<void *>(arg_ptr.get()), arg_var);
-			}
-
-			ffi_call(&cif_, reinterpret_cast<void(*)()>(func), reinterpret_cast<void *>(ret_storage.get()), const_cast<void **>(args_storage_ptrs.data()));
-
-			script_variant_t ret_var;
-			ffi_ptr_to_script_var(ret_type_ptr, reinterpret_cast<void *>(ret_storage.get()), ret_var);
-
-			return ret_var;
+			script_var_to_ffi_ptr(arg_type, reinterpret_cast<void *>(arg_ptr.get()), arg_var);
 		}
 
-		ffi_cif cif_;
+		ffi_call(&cif_, reinterpret_cast<void(*)()>(func), reinterpret_cast<void *>(ret_storage.get()), const_cast<void **>(args_storage_ptrs.data()));
 
-		std::vector<ffi_type *> arg_type_ptrs;
-		ffi_type *ret_type_ptr;
+		script_variant_t ret_var;
+		ffi_ptr_to_script_var(ret_type_ptr, reinterpret_cast<void *>(ret_storage.get()), ret_var);
 
-		std::unique_ptr<unsigned char[]> ret_storage;
-		std::vector<std::unique_ptr<unsigned char[]>> args_storage;
-		std::vector<void *> args_storage_ptrs;
-
-		generic_func_t func;
-		gsdk::HSCRIPT instance;
-	};
+		return ret_var;
+	}
 
 	script_cif::~script_cif() noexcept
 	{
@@ -692,7 +602,7 @@ namespace vmod
 		}
 	}
 
-	static class_desc_t<script_cif> cif_desc{"__vmod_ffi_cif_class"};
+	class_desc_t<script_cif> cif_desc{"__vmod_ffi_cif_class"};
 
 	bool script_cif::bindings() noexcept
 	{
@@ -702,6 +612,7 @@ namespace vmod
 
 		cif_desc.func(&script_cif::script_call, "__script_call"sv, "call"sv);
 		cif_desc.dtor();
+		cif_desc.doc_class_name("cif"sv);
 
 		if(!vm->RegisterClass(&cif_desc)) {
 			error("vmod: failed to register cif script class\n"sv);
@@ -752,121 +663,99 @@ namespace vmod
 		return true;
 	}
 
-	class ffi_singleton final : public gsdk::ISquirrelMetamethodDelegate
+	gsdk::HSCRIPT ffi_singleton::script_create_cif(generic_func_t func, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept
 	{
-	public:
-		inline ~ffi_singleton() noexcept override
-		{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		ffi_type *ret_ptr{ret};
+
+		std::vector<ffi_type *> args_ptrs;
+
+		int num_args{vm->GetArrayCount(args)};
+		for(int i{0}; i < num_args; ++i) {
+			script_variant_t value;
+			vm->GetArrayValue(args, i, &value);
+
+			ffi_type *arg_ptr{value.get<ffi_type *>()};
+
+			args_ptrs.emplace_back(arg_ptr);
 		}
 
-		bool bindings() noexcept;
-		void unbindings() noexcept;
-
-		static ffi_singleton &instance() noexcept;
-
-	private:
-		static gsdk::HSCRIPT script_create_cif(generic_func_t func, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept
-		{
-			gsdk::IScriptVM *vm{vmod.vm()};
-
-			ffi_type *ret_ptr{ret};
-
-			std::vector<ffi_type *> args_ptrs;
-
-			int num_args{vm->GetArrayCount(args)};
-			for(int i{0}; i < num_args; ++i) {
-				script_variant_t value;
-				vm->GetArrayValue(args, i, &value);
-
-				ffi_type *arg_ptr{value.get<ffi_type *>()};
-
-				args_ptrs.emplace_back(arg_ptr);
-			}
-
-			script_cif *cif{new script_cif{ret_ptr, std::move(args_ptrs)}};
-			if(!cif->initialize(func, abi)) {
-				delete cif;
-				vm->RaiseException("vmod: failed to register ffi cif instance");
-				return nullptr;
-			}
-
-			cif->set_plugin();
-
-			return cif->instance;
+		script_cif *cif{new script_cif{ret_ptr, std::move(args_ptrs)}};
+		if(!cif->initialize(func, abi)) {
+			delete cif;
+			vm->RaiseException("vmod: failed to register ffi cif instance");
+			return nullptr;
 		}
 
-		static dynamic_detour *script_create_detour_shared(ffi_type *ret, gsdk::HSCRIPT args) noexcept
-		{
-			gsdk::IScriptVM *vm{vmod.vm()};
+		cif->set_plugin();
 
-			ffi_type *ret_ptr{ret};
+		return cif->instance;
+	}
 
-			std::vector<ffi_type *> args_ptrs;
+	dynamic_detour *ffi_singleton::script_create_detour_shared(ffi_type *ret, gsdk::HSCRIPT args) noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
 
-			int num_args{vm->GetArrayCount(args)};
-			for(int i{0}; i < num_args; ++i) {
-				script_variant_t value;
-				vm->GetArrayValue(args, i, &value);
+		ffi_type *ret_ptr{ret};
 
-				ffi_type *arg_ptr{value.get<ffi_type *>()};
+		std::vector<ffi_type *> args_ptrs;
 
-				args_ptrs.emplace_back(arg_ptr);
-			}
+		int num_args{vm->GetArrayCount(args)};
+		for(int i{0}; i < num_args; ++i) {
+			script_variant_t value;
+			vm->GetArrayValue(args, i, &value);
 
-			dynamic_detour *det{new dynamic_detour{ret_ptr, std::move(args_ptrs)}};
-			return det;
+			ffi_type *arg_ptr{value.get<ffi_type *>()};
+
+			args_ptrs.emplace_back(arg_ptr);
 		}
 
-		static gsdk::HSCRIPT script_create_detour_member(generic_mfp_t old_func, gsdk::HSCRIPT new_func, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept
-		{
-			gsdk::IScriptVM *vm{vmod.vm()};
+		dynamic_detour *det{new dynamic_detour{ret_ptr, std::move(args_ptrs)}};
+		return det;
+	}
 
-			dynamic_detour *det{script_create_detour_shared(ret, args)};
-			if(!det) {
-				return nullptr;
-			}
+	gsdk::HSCRIPT ffi_singleton::script_create_detour_member(generic_mfp_t old_func, gsdk::HSCRIPT new_func, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
 
-			if(!det->initialize(old_func, new_func, abi)) {
-				delete det;
-				vm->RaiseException("vmod: failed to register detour instance");
-				return nullptr;
-			}
-
-			det->set_plugin();
-
-			return det->instance;
+		dynamic_detour *det{script_create_detour_shared(ret, args)};
+		if(!det) {
+			return nullptr;
 		}
 
-		static gsdk::HSCRIPT script_create_detour_static(generic_func_t old_func, gsdk::HSCRIPT new_func, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept
-		{
-			gsdk::IScriptVM *vm{vmod.vm()};
-
-			dynamic_detour *det{script_create_detour_shared(ret, args)};
-			if(!det) {
-				return nullptr;
-			}
-
-			if(!det->initialize(old_func, new_func, abi)) {
-				delete det;
-				vm->RaiseException("vmod: failed to register detour instance");
-				return nullptr;
-			}
-
-			det->set_plugin();
-
-			return det->instance;
+		if(!det->initialize(old_func, new_func, abi)) {
+			delete det;
+			vm->RaiseException("vmod: failed to register detour instance");
+			return nullptr;
 		}
 
-		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
+		det->set_plugin();
 
-		gsdk::HSCRIPT scope{gsdk::INVALID_HSCRIPT};
-		gsdk::HSCRIPT types_table{gsdk::INVALID_HSCRIPT};
-		gsdk::HSCRIPT abi_table{gsdk::INVALID_HSCRIPT};
-		gsdk::HSCRIPT vs_instance_{gsdk::INVALID_HSCRIPT};
-		gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
-	};
+		return det->instance;
+	}
 
-	static class ffi_singleton ffi_singleton;
+	gsdk::HSCRIPT ffi_singleton::script_create_detour_static(generic_func_t old_func, gsdk::HSCRIPT new_func, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		dynamic_detour *det{script_create_detour_shared(ret, args)};
+		if(!det) {
+			return nullptr;
+		}
+
+		if(!det->initialize(old_func, new_func, abi)) {
+			delete det;
+			vm->RaiseException("vmod: failed to register detour instance");
+			return nullptr;
+		}
+
+		det->set_plugin();
+
+		return det->instance;
+	}
+
+	class ffi_singleton ffi_singleton;
 
 	inline class ffi_singleton &ffi_singleton::instance() noexcept
 	{ return ::vmod::ffi_singleton; }
@@ -878,7 +767,7 @@ namespace vmod
 		return vmod.vm()->GetValue(vs_instance_, name.c_str(), &value);
 	}
 
-	static singleton_class_desc_t<class ffi_singleton> ffi_singleton_desc{"__vmod_ffi_singleton_class"};
+	singleton_class_desc_t<class ffi_singleton> ffi_singleton_desc{"__vmod_ffi_singleton_class"};
 
 	bool ffi_singleton::bindings() noexcept
 	{
@@ -1155,7 +1044,7 @@ namespace vmod
 		ffi_singleton.unbindings();
 	}
 
-	static class_desc_t<class dynamic_detour> detour_desc{"__vmod_detour_class"};
+	class_desc_t<class dynamic_detour> detour_desc{"__vmod_detour_class"};
 
 	bool dynamic_detour::bindings() noexcept
 	{
@@ -1168,6 +1057,7 @@ namespace vmod
 		detour_desc.func(&dynamic_detour::script_disable, "__script_disable"sv, "disable"sv);
 		detour_desc.func(&dynamic_detour::script_delete, "__script_delete"sv, "free"sv);
 		detour_desc.dtor();
+		detour_desc.doc_class_name("detour"sv);
 
 		if(!vm->RegisterClass(&detour_desc)) {
 			error("vmod: failed to register detour script class\n"sv);

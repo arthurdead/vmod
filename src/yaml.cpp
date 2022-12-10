@@ -7,7 +7,7 @@
 
 namespace vmod
 {
-	static class_desc_t<yaml> yaml_desc{"__vmod_yaml_class"};
+	class_desc_t<yaml> yaml_desc{"__vmod_yaml_class"};
 
 	gsdk::HSCRIPT yaml::script_get_document(std::size_t i) noexcept
 	{
@@ -18,43 +18,29 @@ namespace vmod
 		return documents[i]->root_object;
 	}
 
-	class yaml_singleton final
+	gsdk::HSCRIPT yaml_singleton::script_load(std::filesystem::path &&path_) noexcept
 	{
-	public:
-		~yaml_singleton() noexcept;
-
-		bool bindings() noexcept;
-		void unbindings() noexcept;
-
-		static yaml_singleton &instance() noexcept;
-
-	private:
-		static gsdk::HSCRIPT script_load(std::filesystem::path &&path_) noexcept
-		{
-			if(!path_.is_absolute()) {
-				path_ = std::filesystem::current_path() / path_;
-			}
-
-			yaml *temp_yaml{new yaml};
-
-			if(!temp_yaml->initialize(std::move(path_))) {
-				delete temp_yaml;
-				return nullptr;
-			}
-
-			temp_yaml->set_plugin();
-
-			return temp_yaml->instance;
+		if(!path_.is_absolute()) {
+			path_ = std::filesystem::current_path() / path_;
 		}
 
-		gsdk::HSCRIPT vs_instance_;
-	};
+		yaml *temp_yaml{new yaml};
+
+		if(!temp_yaml->initialize(std::move(path_))) {
+			delete temp_yaml;
+			return nullptr;
+		}
+
+		temp_yaml->set_plugin();
+
+		return temp_yaml->instance;
+	}
 
 	yaml_singleton::~yaml_singleton() noexcept
 	{
 	}
 
-	static singleton_class_desc_t<yaml_singleton> yaml_singleton_desc{"__vmod_yaml_singleton_class"};
+	singleton_class_desc_t<yaml_singleton> yaml_singleton_desc{"__vmod_yaml_singleton_class"};
 
 	static class yaml_singleton yaml_singleton;
 
@@ -99,6 +85,7 @@ namespace vmod
 		yaml_desc.func(&yaml::script_get_document, "__script_get_document"sv, "get_document"sv);
 		yaml_desc.func(&yaml::script_delete, "__script_delete"sv, "free"sv);
 		yaml_desc.dtor();
+		yaml_desc.doc_class_name("yaml"sv);
 
 		if(!vmod.vm()->RegisterClass(&yaml_desc)) {
 			error("vmod: failed to register yaml script class\n"sv);

@@ -6,6 +6,7 @@
 #include "../mathlib/vector.hpp"
 #include "../tier1/utlvector.hpp"
 #include "../server/datamap.hpp"
+#include "../string_t.hpp"
 #include <cstring>
 
 #include <squirrel.h>
@@ -35,6 +36,7 @@ namespace gsdk
 {
 	class CUtlBuffer;
 	class CUtlString;
+	class CUtlStringToken;
 
 	class IScriptVM;
 
@@ -102,8 +104,9 @@ namespace gsdk
 		CUtlVector<ScriptDataType_t> m_Parameters;
 	};
 
-	enum SVFlags_t : int
+	enum SVFlags_t : short
 	{
+		SV_NOFLAGS = 0,
 		SV_FREE = 0x01,
 	};
 
@@ -112,7 +115,18 @@ namespace gsdk
 		FIELD_TYPEUNKNOWN = FIELD_TYPECOUNT,
 		FIELD_CSTRING,
 		FIELD_HSCRIPT,
-		FIELD_VARIANT
+		FIELD_VARIANT,
+		FIELD_UINT64,
+		FIELD_DOUBLE,
+		FIELD_POSITIVEINTEGER_OR_NULL,
+		FIELD_HSCRIPT_NEW_INSTANCE,
+		FIELD_UINT,
+		FIELD_UTLSTRINGTOKEN,
+		FIELD_QANGLE,
+
+		FIELD_INTEGER64,
+		FIELD_VECTOR4D,
+		FIELD_RESOURCE
 	};
 
 	using HSCRIPT = HSQOBJECT *;
@@ -143,39 +157,54 @@ namespace gsdk
 
 		inline CVariantBase &operator=(CVariantBase &&other) noexcept
 		{
-			m_hScript = other.m_hScript;
-			other.m_hScript = nullptr;
-			std::memcpy(unk1, other.unk1, sizeof(unk1));
-			std::memset(other.unk1, 0, sizeof(unk1));
+			m_ulonglong = other.m_ulonglong;
+			other.m_ulonglong = 0;
 			m_type = other.m_type;
 			m_flags = other.m_flags;
-			other.m_flags = 0;
+			other.m_flags = SV_NOFLAGS;
 			return *this;
 		}
 
 		union
 		{
 			int m_int;
-			float m_float;
-			const char *m_pszString;
-			const Vector *m_pVector;
+			unsigned int m_uint;
+			short m_short;
+			unsigned short m_ushort;
 			char m_char;
+			unsigned char m_uchar;
 			bool m_bool;
+			long m_long;
+			unsigned long m_ulong;
+			long long m_longlong;
+			unsigned long long m_ulonglong;
+			float m_float;
+			double m_double;
+			//long double m_longdouble;
+			string_t m_tstring;
+			const char *m_pszString;
+			CUtlStringToken *m_pUtlStringToken;
+			const Vector *m_pVector;
+			const Quaternion *m_pQuaternion;
+			const Vector2D *m_pVector2D;
+			const QAngle *m_pQAngle;
+			void *m_EHandle;
 			HSCRIPT m_hScript;
 		};
 
-		char unk1[sizeof(int)];
 		short m_type;
 		short m_flags;
 	};
 
 	using ScriptVariant_t = CVariantBase<CVariantDefaultAllocator>;
 
+	static_assert(sizeof(ScriptVariant_t) == (sizeof(unsigned long long) + (sizeof(short) * 2)));
+
 	using ScriptFunctionBindingStorageType_t = void *;
 
 	using ScriptBindingFunc_t = bool(*)(ScriptFunctionBindingStorageType_t, int, void *, const ScriptVariant_t *, int, ScriptVariant_t *);
 
-	enum ScriptFuncBindingFlags_t : int
+	enum ScriptFuncBindingFlags_t : unsigned int
 	{
 		SF_MEMBER_FUNC = 0x01,
 	};
@@ -354,7 +383,7 @@ namespace gsdk
 		{
 			ScriptVariant_t var;
 			var.m_type = FIELD_HSCRIPT;
-			var.m_flags = 0;
+			var.m_flags = SV_NOFLAGS;
 			var.m_hScript = object;
 			return SetValue(scope, name, var);
 		}
@@ -372,7 +401,7 @@ namespace gsdk
 		{
 			ScriptVariant_t var;
 			var.m_type = FIELD_HSCRIPT;
-			var.m_flags = 0;
+			var.m_flags = SV_NOFLAGS;
 			var.m_hScript = table;
 			ReleaseValue(var);
 		}
@@ -380,7 +409,7 @@ namespace gsdk
 		{
 			ScriptVariant_t var;
 			var.m_type = FIELD_HSCRIPT;
-			var.m_flags = 0;
+			var.m_flags = SV_NOFLAGS;
 			var.m_hScript = array;
 			ReleaseValue(var);
 		}
@@ -409,7 +438,7 @@ namespace gsdk
 		{
 			ScriptVariant_t var;
 			var.m_type = FIELD_HSCRIPT;
-			var.m_flags = 0;
+			var.m_flags = SV_NOFLAGS;
 			var.m_hScript = object;
 			ReleaseValue(var);
 		}
@@ -417,7 +446,7 @@ namespace gsdk
 		{
 			ScriptVariant_t var;
 			var.m_type = FIELD_HSCRIPT;
-			var.m_flags = 0;
+			var.m_flags = SV_NOFLAGS;
 			var.m_hScript = object;
 			ReleaseValue(var);
 		}

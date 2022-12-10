@@ -79,9 +79,25 @@ namespace vmod
 		void recreate_script_stringtables() noexcept;
 		void stringtables_removed() noexcept;
 
-		bool write_func(const gsdk::ScriptFunctionBinding_t *func, bool global, std::string_view ident, std::string &file, bool respect_hide) const noexcept;
+		bool write_func(const gsdk::ScriptFunctionBinding_t *func, bool global, std::size_t ident, std::string &file, bool respect_hide) const noexcept;
+		bool write_class(const gsdk::ScriptClassDesc_t *desc, bool global, std::size_t ident, std::string &file, bool respect_hide) const noexcept;
 		void write_docs(const std::filesystem::path &dir, const std::vector<const gsdk::ScriptClassDesc_t *> &vec, bool respect_hide) const noexcept;
 		void write_docs(const std::filesystem::path &dir, const std::vector<const gsdk::ScriptFunctionBinding_t *> &vec, bool respect_hide) const noexcept;
+		void write_vmod_docs(const std::filesystem::path &dir) const noexcept;
+		void write_strtables_docs(const std::filesystem::path &dir) const noexcept;
+		void write_syms_docs(const std::filesystem::path &dir) const noexcept;
+		void write_yaml_docs(const std::filesystem::path &dir) const noexcept;
+		void write_fs_docs(const std::filesystem::path &dir) const noexcept;
+		void write_cvar_docs(const std::filesystem::path &dir) const noexcept;
+		enum class write_enum_how : unsigned char
+		{
+			flags,
+			name,
+			normal
+		};
+		void write_enum_table(std::string &file, std::size_t depth, gsdk::HSCRIPT enum_table, write_enum_how how) const noexcept;
+		void write_mem_docs(const std::filesystem::path &dir) const noexcept;
+		void write_ffi_docs(const std::filesystem::path &dir) const noexcept;
 
 		bool is_map_loaded;
 		bool is_map_active;

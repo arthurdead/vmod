@@ -77,4 +77,23 @@ namespace vmod
 
 		gsdk::HSCRIPT instance;
 	};
+
+	class yaml_singleton final
+	{
+	public:
+		~yaml_singleton() noexcept;
+
+		bool bindings() noexcept;
+		void unbindings() noexcept;
+
+		static yaml_singleton &instance() noexcept;
+
+	private:
+		static gsdk::HSCRIPT script_load(std::filesystem::path &&path_) noexcept;
+
+		gsdk::HSCRIPT vs_instance_;
+	};
+
+	extern class_desc_t<yaml> yaml_desc;
+	extern singleton_class_desc_t<yaml_singleton> yaml_singleton_desc;
 }

@@ -93,11 +93,13 @@ namespace vmod
 		return vm_->GetValue(vs_instance_, name.c_str(), &value);
 	}
 
-	static class server_symbols_singleton final {
-	public:
-		~server_symbols_singleton() noexcept;
+	class lib_symbols_singleton
+	{
+	protected:
+		lib_symbols_singleton() noexcept = default;
 
-		static server_symbols_singleton &instance() noexcept;
+	public:
+		virtual ~lib_symbols_singleton() noexcept;
 
 	private:
 		friend class vmod;
@@ -179,8 +181,10 @@ namespace vmod
 			gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
 		};
 
-		static inline class_desc_t<script_qual_it_t> qual_it_desc{"qual_it"};
-		static inline class_desc_t<script_name_it_t> name_it_desc{"name_it"};
+		static inline class_desc_t<script_qual_it_t> qual_it_desc{"__vmod_sym_qual_it_class"};
+		static inline class_desc_t<script_name_it_t> name_it_desc{"__vmod_sym_name_it_class"};
+
+		virtual const symbol_cache &get_syms() const noexcept = 0;
 
 		gsdk::HSCRIPT script_lookup(std::string_view name) const noexcept
 		{
@@ -188,7 +192,7 @@ namespace vmod
 
 			std::string name_tmp{name};
 
-			const symbol_cache &syms{vmod.server_lib.symbols()};
+			const symbol_cache &syms{get_syms()};
 
 			auto it{syms.find(name_tmp)};
 			if(it == syms.end()) {
@@ -204,7 +208,7 @@ namespace vmod
 
 			std::string name_tmp{name};
 
-			const symbol_cache::qualification_info &syms{vmod.server_lib.symbols().global()};
+			const symbol_cache::qualification_info &syms{get_syms().global()};
 
 			auto it{syms.find(name_tmp)};
 			if(it == syms.end()) {
@@ -214,26 +218,74 @@ namespace vmod
 			return script_lookup_shared(it);
 		}
 
-		bool bindings() noexcept;
+		static bool bindings() noexcept;
+		static void unbindings() noexcept;
 
-		inline void unbindings() noexcept
+		void unregister() noexcept
 		{
 			if(vs_instance_ && vs_instance_ != gsdk::INVALID_HSCRIPT) {
 				vmod.vm()->RemoveInstance(vs_instance_);
 			}
 		}
 
+	protected:
 		gsdk::HSCRIPT vs_instance_{gsdk::INVALID_HSCRIPT};
-	} server_symbols_singleton;
+	};
 
-	server_symbols_singleton::~server_symbols_singleton() {}
+	lib_symbols_singleton::~lib_symbols_singleton() noexcept
+	{
+		
+	}
 
-	static singleton_class_desc_t<class server_symbols_singleton> server_symbols_desc{"server_symbols"};
+	static singleton_class_desc_t<class lib_symbols_singleton> lib_symbols_desc{"__vmod_lib_symbols_class"};
+
+	class server_symbols_singleton final : public lib_symbols_singleton
+	{
+	public:
+		inline server_symbols_singleton() noexcept
+		{
+		}
+
+		~server_symbols_singleton() noexcept override;
+
+		const symbol_cache &get_syms() const noexcept override;
+
+		static server_symbols_singleton &instance() noexcept;
+
+		bool register_() noexcept
+		{
+			using namespace std::literals::string_view_literals;
+
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			vs_instance_ = vm->RegisterInstance(&lib_symbols_desc, this);
+			if(!vs_instance_ || vs_instance_ == gsdk::INVALID_HSCRIPT) {
+				error("vmod: failed to create server symbols instance\n"sv);
+				return false;
+			}
+
+			vm->SetInstanceUniqeId(vs_instance_, "__vmod_server_symbols_singleton");
+
+			if(!vm->SetValue(vmod.symbols_table(), "sv", vs_instance_)) {
+				error("vmod: failed to set server symbols table value\n"sv);
+				return false;
+			}
+
+			return true;
+		}
+	};
+
+	server_symbols_singleton::~server_symbols_singleton() noexcept {}
+
+	const symbol_cache &server_symbols_singleton::get_syms() const noexcept
+	{ return vmod.server_lib.symbols(); }
+
+	static class server_symbols_singleton server_symbols_singleton;
 
 	inline class server_symbols_singleton &server_symbols_singleton::instance() noexcept
 	{ return ::vmod::server_symbols_singleton; }
 
-	gsdk::HSCRIPT server_symbols_singleton::script_lookup_shared(symbol_cache::const_iterator it) noexcept
+	gsdk::HSCRIPT lib_symbols_singleton::script_lookup_shared(symbol_cache::const_iterator it) noexcept
 	{
 		script_qual_it_t *script_it{new script_qual_it_t};
 		script_it->it_ = it;
@@ -252,7 +304,7 @@ namespace vmod
 		return script_it->instance;
 	}
 
-	gsdk::HSCRIPT server_symbols_singleton::script_lookup_shared(symbol_cache::qualification_info::const_iterator it) noexcept
+	gsdk::HSCRIPT lib_symbols_singleton::script_lookup_shared(symbol_cache::qualification_info::const_iterator it) noexcept
 	{
 		script_name_it_t *script_it{new script_name_it_t};
 		script_it->it_ = it;
@@ -271,30 +323,23 @@ namespace vmod
 		return script_it->instance;
 	}
 
-	bool server_symbols_singleton::bindings() noexcept
+	void lib_symbols_singleton::unbindings() noexcept
+	{
+		server_symbols_singleton.unregister();
+	}
+
+	bool lib_symbols_singleton::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		server_symbols_desc.func(&server_symbols_singleton::script_lookup, "__script_lookup"sv, "lookup"sv);
-		server_symbols_desc.func(&server_symbols_singleton::script_lookup_global, "__script_lookup_global"sv, "lookup_global"sv);
+		lib_symbols_desc.func(&lib_symbols_singleton::script_lookup, "__script_lookup"sv, "lookup"sv);
+		lib_symbols_desc.func(&lib_symbols_singleton::script_lookup_global, "__script_lookup_global"sv, "lookup_global"sv);
+		lib_symbols_desc.doc_class_name("symbol_cache"sv);
 
-		if(!vm->RegisterClass(&server_symbols_desc)) {
-			error("vmod: failed to register server symbols script class\n"sv);
-			return false;
-		}
-
-		vs_instance_ = vm->RegisterInstance(&server_symbols_desc, &::vmod::server_symbols_singleton);
-		if(!vs_instance_ || vs_instance_ == gsdk::INVALID_HSCRIPT) {
-			error("vmod: failed to create server symbols instance\n"sv);
-			return false;
-		}
-
-		vm->SetInstanceUniqeId(vs_instance_, "__vmod_server_symbols_singleton");
-
-		if(!vm->SetValue(vmod.symbols_table(), "sv", vs_instance_)) {
-			error("vmod: failed to set server symbols table value\n"sv);
+		if(!vm->RegisterClass(&lib_symbols_desc)) {
+			error("vmod: failed to register lib symbols script class\n"sv);
 			return false;
 		}
 
@@ -302,6 +347,7 @@ namespace vmod
 		qual_it_desc.func(&script_qual_it_t::script_lookup, "__script_lookup"sv, "lookup"sv);
 		qual_it_desc.func(&script_qual_it_t::script_delete, "__script_delete"sv, "free"sv);
 		qual_it_desc.dtor();
+		qual_it_desc.doc_class_name("symbol_qualifier"sv);
 
 		if(!vm->RegisterClass(&qual_it_desc)) {
 			error("vmod: failed to register symbol qualification iterator script class\n"sv);
@@ -316,9 +362,14 @@ namespace vmod
 		name_it_desc.func(&script_name_it_t::script_lookup, "__script_lookup"sv, "lookup"sv);
 		name_it_desc.func(&script_name_it_t::script_delete, "__script_delete"sv, "free"sv);
 		name_it_desc.dtor();
+		name_it_desc.doc_class_name("symbol_name"sv);
 
 		if(!vm->RegisterClass(&name_it_desc)) {
 			error("vmod: failed to register symbol name iterator script class\n"sv);
+			return false;
+		}
+
+		if(!server_symbols_singleton.register_()) {
 			return false;
 		}
 
@@ -626,6 +677,8 @@ namespace vmod
 		void unbindings() noexcept;
 
 	private:
+		friend class vmod;
+
 		class script_cvar final : public plugin::owned_instance
 		{
 		public:
@@ -831,6 +884,7 @@ namespace vmod
 		script_cvar_desc.func(&script_cvar::script_get_value_bool, "__script_get_value_bool"sv, "get_bool"sv);
 		script_cvar_desc.func(&script_cvar::script_delete, "__script_delete"sv, "free"sv);
 		script_cvar_desc.dtor();
+		script_cvar_desc.doc_class_name("convar"sv);
 
 		if(!vm->RegisterClass(&script_cvar_desc)) {
 			error("vmod: failed to register vmod cvar script class\n"sv);
@@ -1071,6 +1125,7 @@ namespace vmod
 		stringtable_desc.func(&script_stringtable::script_num_strings, "__script_num_strings"sv, "num"sv);
 		stringtable_desc.func(&script_stringtable::script_get_string, "__script_get_string"sv, "get"sv);
 		stringtable_desc.func(&script_stringtable::script_add_string, "__script_add_string"sv, "add"sv);
+		stringtable_desc.doc_class_name("string_table"sv);
 
 		if(!vm_->RegisterClass(&stringtable_desc)) {
 			error("vmod: failed to register stringtable script class\n"sv);
@@ -2246,7 +2301,8 @@ namespace vmod
 	std::string_view __vmod_typeof(gsdk::HSCRIPT object) noexcept
 	{ return vmod.typeof_(object); }
 
-	static constexpr std::string_view doc_ident{"\t"};
+	static inline void ident(std::string &file, std::size_t num) noexcept
+	{ file.insert(file.end(), num, '\t'); }
 
 	static std::string_view datatype_to_str(gsdk::ScriptDataType_t type) noexcept
 	{
@@ -2255,16 +2311,30 @@ namespace vmod
 		switch(type) {
 			case gsdk::FIELD_VOID:
 			return "void"sv;
+			case gsdk::FIELD_CHARACTER:
+			return "char"sv;
+			case gsdk::FIELD_SHORT:
+			case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
 			case gsdk::FIELD_INTEGER:
+			case gsdk::FIELD_UINT:
+			case gsdk::FIELD_INTEGER64:
+			case gsdk::FIELD_UINT64:
 			return "int"sv;
+			case gsdk::FIELD_DOUBLE:
 			case gsdk::FIELD_FLOAT:
 			return "float"sv;
 			case gsdk::FIELD_BOOLEAN:
 			return "bool"sv;
+			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
 			case gsdk::FIELD_HSCRIPT:
 			return "handle"sv;
 			case gsdk::FIELD_VECTOR:
 			return "Vector"sv;
+			case gsdk::FIELD_QANGLE:
+			return "QAngle"sv;
+			case gsdk::FIELD_QUATERNION:
+			return "Quaternion"sv;
+			case gsdk::FIELD_STRING:
 			case gsdk::FIELD_CSTRING:
 			return "string"sv;
 			case gsdk::FIELD_VARIANT:
@@ -2274,7 +2344,21 @@ namespace vmod
 		}
 	}
 
-	bool vmod::write_func(const gsdk::ScriptFunctionBinding_t *func, bool global, std::string_view ident, std::string &file, bool respect_hide) const noexcept
+	static std::string_view get_func_desc_desc(const gsdk::ScriptFuncDescriptor_t *desc) noexcept
+	{
+		if(desc->m_pszDescription[0] == '#') {
+			const char *ptr{desc->m_pszDescription};
+			while(*ptr != ':') {
+				++ptr;
+			}
+			++ptr;
+			return ptr;
+		} else {
+			return desc->m_pszDescription;
+		}
+	}
+
+	bool vmod::write_func(const gsdk::ScriptFunctionBinding_t *func, bool global, std::size_t depth, std::string &file, bool respect_hide) const noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -2286,16 +2370,16 @@ namespace vmod
 			}
 		}
 
-		if(func_desc.m_pszDescription) {
-			file += ident;
+		if(func_desc.m_pszDescription && func_desc.m_pszDescription[0] != '\0' && func_desc.m_pszDescription[0] != '@') {
+			ident(file, depth);
 			file += "//"sv;
-			file += func_desc.m_pszDescription;
+			file += get_func_desc_desc(&func_desc);
 			file += '\n';
 		}
 
-		file += ident;
+		ident(file, depth);
 
-		if(!global) {
+		if(global) {
 			if(!(func->m_flags & gsdk::SF_MEMBER_FUNC)) {
 				file += "static "sv;
 			}
@@ -2318,7 +2402,78 @@ namespace vmod
 				file.erase(file.end()-2, file.end());
 			}
 		}
-		file += ")\n\n"sv;
+		file += ");\n\n"sv;
+
+		return true;
+	}
+
+	static std::string_view get_class_desc_name(const gsdk::ScriptClassDesc_t *desc) noexcept
+	{
+		if(desc->m_pNextDesc == reinterpret_cast<const gsdk::ScriptClassDesc_t *>(0xbebebebe)) {
+			const extra_class_desc_t &extra{reinterpret_cast<const base_class_desc_t<empty_class> *>(desc)->extra()};
+			if(!extra.doc_class_name.empty()) {
+				return extra.doc_class_name;
+			}
+		}
+
+		return desc->m_pszScriptName;
+	}
+
+	static std::string_view get_class_desc_desc(const gsdk::ScriptClassDesc_t *desc) noexcept
+	{
+		if(desc->m_pszDescription[0] == '!') {
+			return desc->m_pszDescription + 1;
+		} else {
+			return desc->m_pszDescription;
+		}
+	}
+
+	bool vmod::write_class(const gsdk::ScriptClassDesc_t *desc, bool global, std::size_t depth, std::string &file, bool respect_hide) const noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		if(respect_hide) {
+			if(desc->m_pszDescription && desc->m_pszDescription[0] == '@') {
+				return false;
+			}
+		}
+
+		if(global) {
+			if(desc->m_pszDescription && desc->m_pszDescription[0] != '\0' && desc->m_pszDescription[0] != '@') {
+				ident(file, depth);
+				file += "//"sv;
+				file += get_class_desc_desc(desc);
+				file += '\n';
+			}
+
+			ident(file, depth);
+			file += "class "sv;
+			file += get_class_desc_name(desc);
+
+			if(desc->m_pBaseDesc) {
+				file += " : "sv;
+				file += get_class_desc_name(desc->m_pBaseDesc);
+			}
+
+			file += '\n';
+			ident(file, depth);
+			file += "{\n"sv;
+		}
+
+		std::size_t written{0};
+		for(std::size_t i{0}; i < desc->m_FunctionBindings.size(); ++i) {
+			if(write_func(&desc->m_FunctionBindings[i], global, global ? depth+1 : depth, file, respect_hide)) {
+				++written;
+			}
+		}
+		if(written > 0) {
+			file.erase(file.end()-1, file.end());
+		}
+
+		if(global) {
+			ident(file, depth);
+			file += "};"sv;
+		}
 
 		return true;
 	}
@@ -2328,52 +2483,13 @@ namespace vmod
 		using namespace std::literals::string_view_literals;
 
 		for(const gsdk::ScriptClassDesc_t *desc : vec) {
-			if(respect_hide) {
-				if(desc->m_pszDescription && desc->m_pszDescription[0] == '@') {
-					continue;
-				}
-			}
-
 			std::string file;
-
-			file += "class "sv;
-			file += desc->m_pszScriptName;
-
-			if(desc->m_pBaseDesc) {
-				file += " : "sv;
-				file += desc->m_pBaseDesc->m_pszScriptName;
+			if(!write_class(desc, true, 0, file, respect_hide)) {
+				continue;
 			}
-
-			file += "\n{\n"sv;
-
-			bool singleton{false};
-
-			if(desc->m_pszDescription) {
-				file += doc_ident;
-				file += "//"sv;
-				singleton = (desc->m_pszDescription[0] == '!');
-				if(singleton) {
-					file += desc->m_pszDescription + 1;
-				} else {
-					file += desc->m_pszDescription;
-				}
-				file += "\n\n"sv;
-			}
-
-			std::size_t written{0};
-			for(std::size_t i{0}; i < desc->m_FunctionBindings.size(); ++i) {
-				if(write_func(&desc->m_FunctionBindings[i], false, doc_ident, file, respect_hide)) {
-					++written;
-				}
-			}
-			if(written > 0) {
-				file.erase(file.end()-1, file.end());
-			}
-
-			file += "}\n"sv;
 
 			std::filesystem::path doc_path{dir};
-			doc_path /= desc->m_pszScriptName;
+			doc_path /= get_class_desc_name(desc);
 			doc_path.replace_extension(".txt"sv);
 
 			write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
@@ -2388,7 +2504,7 @@ namespace vmod
 
 		std::size_t written{0};
 		for(const gsdk::ScriptFunctionBinding_t *desc : vec) {
-			if(write_func(desc, true, {}, file, respect_hide)) {
+			if(write_func(desc, false, 0, file, respect_hide)) {
 				++written;
 			}
 		}
@@ -2401,6 +2517,376 @@ namespace vmod
 		doc_path.replace_extension(".txt"sv);
 
 		write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+	}
+
+	void vmod::write_syms_docs(const std::filesystem::path &dir) const noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		std::string file;
+
+		file += "namespace syms\n{\n"sv;
+
+		write_class(&lib_symbols_desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		write_class(&lib_symbols_singleton::qual_it_desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		write_class(&lib_symbols_singleton::name_it_desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		ident(file, 1);
+		file += get_class_desc_name(&lib_symbols_desc);
+		file += " sv;"sv;
+
+		file += "\n}"sv;
+
+		std::filesystem::path doc_path{dir};
+		doc_path /= "syms"sv;
+		doc_path.replace_extension(".txt"sv);
+
+		write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+	}
+
+	void vmod::write_strtables_docs(const std::filesystem::path &dir) const noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		std::string file;
+
+		file += "namespace strtables\n{\n"sv;
+
+		write_class(&stringtable_desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		for(const auto &it : script_stringtables) {
+			ident(file, 1);
+			file += get_class_desc_name(&stringtable_desc);
+			file += ' ';
+			file += it.first;
+			file += ";\n"sv;
+		}
+		if(!script_stringtables.empty()) {
+			file.erase(file.end()-1, file.end());
+		}
+
+		file += '}';
+
+		std::filesystem::path doc_path{dir};
+		doc_path /= "strtables"sv;
+		doc_path.replace_extension(".txt"sv);
+
+		write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+	}
+
+	void vmod::write_yaml_docs(const std::filesystem::path &dir) const noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		std::string file;
+
+		file += "namespace yaml\n{\n"sv;
+
+		write_class(&yaml_desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		write_class(&yaml_singleton_desc, false, 1, file, false);
+
+		file += '}';
+
+		std::filesystem::path doc_path{dir};
+		doc_path /= "yaml"sv;
+		doc_path.replace_extension(".txt"sv);
+
+		write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+	}
+
+	void vmod::write_fs_docs(const std::filesystem::path &dir) const noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		std::string file;
+
+		file += "namespace fs\n{\n"sv;
+
+		write_class(&filesystem_singleton_desc, false, 1, file, false);
+		file += '\n';
+
+		ident(file, 1);
+		file += "string game_dir;\n"sv;
+
+		file += '}';
+
+		std::filesystem::path doc_path{dir};
+		doc_path /= "fs"sv;
+		doc_path.replace_extension(".txt"sv);
+
+		write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+	}
+
+	void vmod::write_cvar_docs(const std::filesystem::path &dir) const noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		std::string file;
+
+		file += "namespace cvar\n{\n"sv;
+
+		write_class(&cvar_singleton::script_cvar_desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		ident(file, 1);
+		file += "enum class flags\n"sv;
+		ident(file, 1);
+		file += "{\n"sv;
+		write_enum_table(file, 2, ::vmod::cvar_singleton.flags_table, write_enum_how::flags);
+		ident(file, 1);
+		file += "};\n\n"sv;
+
+		write_class(&cvar_singleton_desc, false, 1, file, false);
+
+		file += '}';
+
+		std::filesystem::path doc_path{dir};
+		doc_path /= "cvar"sv;
+		doc_path.replace_extension(".txt"sv);
+
+		write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+	}
+
+	void vmod::write_mem_docs(const std::filesystem::path &dir) const noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		std::string file;
+
+		file += "namespace mem\n{\n"sv;
+
+		write_class(&mem_block_desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		write_class(&memory_desc, false, 1, file, false);
+
+		file += '\n';
+
+		ident(file, 1);
+		file += "namespace types\n"sv;
+		ident(file, 1);
+		file += "{\n"sv;
+		ident(file, 2);
+		file += "struct type\n"sv;
+		ident(file, 2);
+		file += "{\n"sv;
+		ident(file, 3);
+		file += "int size;\n"sv;
+		ident(file, 3);
+		file += "int alignment;\n"sv;
+		ident(file, 3);
+		file += "int id;\n"sv;
+		ident(file, 3);
+		file += "string name;\n"sv;
+		ident(file, 2);
+		file += "};\n\n"sv;
+		for(const memory_singleton::mem_type &type : memory_singleton.types) {
+			ident(file, 2);
+			file += "type "sv;
+			file += type.name;
+			file += ";\n"sv;
+		}
+		ident(file, 1);
+		file += "}\n}"sv;
+
+		std::filesystem::path doc_path{dir};
+		doc_path /= "mem"sv;
+		doc_path.replace_extension(".txt"sv);
+
+		write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+	}
+
+	void vmod::write_ffi_docs(const std::filesystem::path &dir) const noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		std::string file;
+
+		file += "namespace ffi\n{\n"sv;
+
+		write_class(&detour_desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		write_class(&cif_desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		write_class(&ffi_singleton_desc, false, 1, file, false);
+
+		file += '\n';
+
+		ident(file, 1);
+		file += "enum class types\n"sv;
+		ident(file, 1);
+		file += "{\n"sv;
+		write_enum_table(file, 2, ::vmod::ffi_singleton.types_table, write_enum_how::name);
+		ident(file, 1);
+		file += "};\n\n"sv;
+
+		ident(file, 1);
+		file += "enum class abi\n"sv;
+		ident(file, 1);
+		file += "{\n"sv;
+		write_enum_table(file, 2, ::vmod::ffi_singleton.abi_table, write_enum_how::normal);
+		ident(file, 1);
+		file += "};\n}"sv;
+
+		std::filesystem::path doc_path{dir};
+		doc_path /= "ffi"sv;
+		doc_path.replace_extension(".txt"sv);
+
+		write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+	}
+
+	void vmod::write_vmod_docs(const std::filesystem::path &dir) const noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		std::string file;
+
+		file += "namespace vmod\n{\n"sv;
+		write_class(&vmod_desc, false, 1, file, false);
+		file += '\n';
+
+		ident(file, 1);
+		file += "string root_dir;\n\n"sv;
+
+		ident(file, 1);
+		file += "namespace plugins\n"sv;
+		ident(file, 1);
+		file += "{\n"sv;
+		ident(file, 1);
+		file += "}\n\n"sv;
+
+		ident(file, 1);
+		file += "namespace syms;\n\n"sv;
+		write_syms_docs(dir);
+
+		ident(file, 1);
+		file += "namespace yaml;\n\n"sv;
+		write_yaml_docs(dir);
+
+		ident(file, 1);
+		file += "namespace ffi;\n\n"sv;
+		write_ffi_docs(dir);
+
+		ident(file, 1);
+		file += "namespace fs;\n\n"sv;
+		write_fs_docs(dir);
+
+		ident(file, 1);
+		file += "namespace cvar;\n\n"sv;
+		write_cvar_docs(dir);
+
+		ident(file, 1);
+		file += "namespace mem;\n\n"sv;
+		write_mem_docs(dir);
+
+		ident(file, 1);
+		file += "namespace strtables;\n"sv;
+		write_strtables_docs(dir);
+
+		file += '}';
+
+		std::filesystem::path doc_path{dir};
+		doc_path /= "vmod"sv;
+		doc_path.replace_extension(".txt"sv);
+
+		write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+	}
+
+	void vmod::write_enum_table(std::string &file, std::size_t depth, gsdk::HSCRIPT enum_table, write_enum_how how) const noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		std::unordered_map<int, std::string> bit_str_map;
+
+		int num2{vm_->GetNumTableEntries(enum_table)};
+		for(int j{0}, it2{0}; j < num2 && it2 != -1; ++j) {
+			script_variant_t key2;
+			script_variant_t value2;
+			it2 = vm_->GetKeyValue(enum_table, it2, &key2, &value2);
+
+			std::string_view value_name{key2.get<std::string_view>()};
+
+			ident(file, depth);
+			file += value_name;
+			if(how != write_enum_how::name) {
+				file += " = "sv;
+			}
+
+			if(how == write_enum_how::flags) {
+				unsigned int val{value2.get<unsigned int>()};
+
+				std::vector<int> bits;
+
+				for(int k{0}; val; val >>= 1, ++k) {
+					if(val & 1) {
+						bits.emplace_back(k);
+					}
+				}
+
+				std::size_t num_bits{bits.size()};
+
+				if(num_bits > 0) {
+					std::string temp_bit_str;
+
+					if(num_bits > 1) {
+						file += '(';
+					}
+					for(int bit : bits) {
+						auto name_it{bit_str_map.find(bit)};
+						if(name_it != bit_str_map.end()) {
+							file += name_it->second;
+							file += '|';
+						} else {
+							file += "(1 << "sv;
+
+							temp_bit_str.resize(6);
+
+							char *begin{temp_bit_str.data()};
+							char *end{temp_bit_str.data() + 6};
+
+							std::to_chars_result tc_res{std::to_chars(begin, end, bit)};
+							tc_res.ptr[0] = '\0';
+
+							file += begin;
+							file += ")|"sv;
+						}
+					}
+					file.pop_back();
+					if(num_bits > 1) {
+						file += ')';
+					}
+
+					if(num_bits == 1) {
+						bit_str_map.emplace(bits[0], value_name);
+					}
+				} else {
+					file += value2.get<std::string_view>();
+				}
+			} else if(how == write_enum_how::normal) {
+				file += value2.get<std::string_view>();
+			}
+
+			if(j < num2-1) {
+				file += ',';
+			}
+
+			if(how == write_enum_how::flags) {
+				file += " //"sv;
+				file += value2.get<std::string_view>();
+			}
+
+			file += '\n';
+		}
 	}
 
 	bool vmod::load_late() noexcept
@@ -2436,86 +2922,16 @@ namespace vmod
 					file += enum_name;
 					file += "\n{\n"sv;
 
-					std::unordered_map<int, std::string> bit_str_map;
-
 					gsdk::HSCRIPT enum_table{value.get<gsdk::HSCRIPT>()};
-					int num2{vm_->GetNumTableEntries(enum_table)};
-					for(int j{0}, it2{0}; j < num2 && it2 != -1; ++j) {
-						script_variant_t key2;
-						script_variant_t value2;
-						it2 = vm_->GetKeyValue(enum_table, it2, &key2, &value2);
+					write_enum_table(file, 1, enum_table, enum_name[0] == 'F' ? write_enum_how::flags : write_enum_how::normal);
 
-						std::string_view value_name{key2.get<std::string_view>()};
+					file += '}';
 
-						file += doc_ident;
-						file += value_name;
-						file += " = "sv;
-
-						if(enum_name[0] == 'F') {
-							unsigned int val{value2.get<unsigned int>()};
-
-							std::vector<int> bits;
-
-							for(int k{0}; val; val >>= 1, ++k) {
-								if(val & 1) {
-									bits.emplace_back(k);
-								}
-							}
-
-							std::size_t num_bits{bits.size()};
-
-							if(num_bits > 0) {
-								std::string temp_bit_str;
-
-								if(num_bits > 1) {
-									file += '(';
-								}
-								for(int bit : bits) {
-									auto name_it{bit_str_map.find(bit)};
-									if(name_it != bit_str_map.end()) {
-										file += name_it->second;
-										file += '|';
-									} else {
-										file += "(1 << "sv;
-
-										temp_bit_str.resize(6);
-
-										char *begin{temp_bit_str.data()};
-										char *end{temp_bit_str.data() + 6};
-
-										std::to_chars_result tc_res{std::to_chars(begin, end, bit)};
-										tc_res.ptr[0] = '\0';
-
-										file += begin;
-										file += ")|"sv;
-									}
-								}
-								file.pop_back();
-								if(num_bits > 1) {
-									file += ')';
-								}
-
-								if(num_bits == 1) {
-									bit_str_map.emplace(bits[0], value_name);
-								}
-							} else {
-								file += value2.get<std::string_view>();
-							}
-						} else {
-							file += value2.get<std::string_view>();
-						}
-
-						file += ',';
-
-						if(enum_name[0] == 'F') {
-							file += " //"sv;
-							file += value2.get<std::string_view>();
-						}
-
-						file += '\n';
+					if(enum_name[0] == 'E' || enum_name[0] == 'F') {
+						file += ';';
 					}
 
-					file += "}\n\n"sv;
+					file += "\n\n"sv;
 				}
 				if(num > 0) {
 					file.erase(file.end()-1, file.end());
@@ -2529,8 +2945,7 @@ namespace vmod
 			}
 
 			std::filesystem::path vmod_docs{root_dir/"docs"sv/"vmod"sv};
-			write_docs(vmod_docs, vmod_vscript_class_bindings, true);
-			write_docs(vmod_docs, vmod_vscript_func_bindings, true);
+			write_vmod_docs(vmod_docs);
 		}
 
 		vmod_refresh_plugins();
