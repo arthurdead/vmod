@@ -1581,25 +1581,26 @@ namespace vmod
 	static std::vector<const gsdk::ScriptFunctionBinding_t *> game_vscript_func_bindings;
 	static std::vector<const gsdk::ScriptClassDesc_t *> game_vscript_class_bindings;
 
-	static std::vector<const gsdk::ScriptFunctionBinding_t *> vmod_vscript_func_bindings;
-	static std::vector<const gsdk::ScriptClassDesc_t *> vmod_vscript_class_bindings;
-
 	static void (gsdk::IScriptVM::*RegisterFunction_original)(gsdk::ScriptFunctionBinding_t *);
 	static void RegisterFunction_detour_callback(gsdk::IScriptVM *vm, gsdk::ScriptFunctionBinding_t *func)
 	{
 		(vm->*RegisterFunction_original)(func);
-		std::vector<const gsdk::ScriptFunctionBinding_t *> &vec{vscript_server_init_called ? vmod_vscript_func_bindings : game_vscript_func_bindings};
-		vec.emplace_back(func);
+		if(!vscript_server_init_called) {
+			std::vector<const gsdk::ScriptFunctionBinding_t *> &vec{game_vscript_func_bindings};
+			vec.emplace_back(func);
+		}
 	}
 
 	static bool (gsdk::IScriptVM::*RegisterClass_original)(gsdk::ScriptClassDesc_t *);
 	static bool RegisterClass_detour_callback(gsdk::IScriptVM *vm, gsdk::ScriptClassDesc_t *desc)
 	{
 		bool ret{(vm->*RegisterClass_original)(desc)};
-		std::vector<const gsdk::ScriptClassDesc_t *> &vec{vscript_server_init_called ? vmod_vscript_class_bindings : game_vscript_class_bindings};
-		auto it{std::find(vec.begin(), vec.end(), desc)};
-		if(it == vec.end()) {
-			vec.emplace_back(desc);
+		if(!vscript_server_init_called) {
+			std::vector<const gsdk::ScriptClassDesc_t *> &vec{game_vscript_class_bindings};
+			auto it{std::find(vec.begin(), vec.end(), desc)};
+			if(it == vec.end()) {
+				vec.emplace_back(desc);
+			}
 		}
 		return ret;
 	}
@@ -1608,10 +1609,12 @@ namespace vmod
 	static gsdk::HSCRIPT RegisterInstance_detour_callback(gsdk::IScriptVM *vm, gsdk::ScriptClassDesc_t *desc, void *ptr)
 	{
 		gsdk::HSCRIPT ret{(vm->*RegisterInstance_original)(desc, ptr)};
-		std::vector<const gsdk::ScriptClassDesc_t *> &vec{vscript_server_init_called ? vmod_vscript_class_bindings : game_vscript_class_bindings};
-		auto it{std::find(vec.begin(), vec.end(), desc)};
-		if(it == vec.end()) {
-			vec.emplace_back(desc);
+		if(!vscript_server_init_called) {
+			std::vector<const gsdk::ScriptClassDesc_t *> &vec{game_vscript_class_bindings};
+			auto it{std::find(vec.begin(), vec.end(), desc)};
+			if(it == vec.end()) {
+				vec.emplace_back(desc);
+			}
 		}
 		return ret;
 	}
