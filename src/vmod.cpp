@@ -2346,10 +2346,17 @@ namespace vmod
 
 			file += "\n{\n"sv;
 
+			bool singleton{false};
+
 			if(desc->m_pszDescription) {
 				file += doc_ident;
 				file += "//"sv;
-				file += desc->m_pszDescription;
+				singleton = (desc->m_pszDescription[0] == '!');
+				if(singleton) {
+					file += desc->m_pszDescription + 1;
+				} else {
+					file += desc->m_pszDescription;
+				}
 				file += "\n\n"sv;
 			}
 
