@@ -4,7 +4,13 @@
 
 namespace gsdk
 {
-	struct Color;
+	struct Color
+	{
+		unsigned char r;
+		unsigned char g;
+		unsigned char b;
+		unsigned char a;
+	};
 
 	enum SpewType_t : int
 	{
@@ -25,6 +31,10 @@ namespace gsdk
 
 	using SpewOutputFunc_t = SpewRetval_t(*)(SpewType_t, const char *);
 }
+
+extern "C" __attribute__((__visibility__("default"))) const char * __attribute__((__cdecl__)) GetSpewOutputGroup();
+extern "C" __attribute__((__visibility__("default"))) int __attribute__((__cdecl__)) GetSpewOutputLevel();
+extern "C" __attribute__((__visibility__("default"))) const gsdk::Color * __attribute__((__cdecl__)) GetSpewOutputColor();
 
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) SpewOutputFunc(gsdk::SpewOutputFunc_t);
 extern "C" __attribute__((__visibility__("default"))) gsdk::SpewOutputFunc_t __attribute__((__cdecl__)) GetSpewOutputFunc();

@@ -62,24 +62,6 @@ namespace vmod
 {
 	class vmod vmod;
 
-	static void vscript_output(const char *txt)
-	{
-		using namespace std::literals::string_view_literals;
-
-		info("%s"sv, txt);
-	}
-
-	static gsdk::ScriptErrorFunc_t server_vs_error_cb;
-
-	static bool vscript_error_output(gsdk::ScriptErrorLevel_t lvl, const char *txt)
-	{
-		using namespace std::literals::string_view_literals;
-
-		bool ret{server_vs_error_cb(lvl, txt)};
-
-		return ret;
-	}
-
 	gsdk::HSCRIPT vmod::script_find_plugin(std::string_view name) noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -1145,32 +1127,82 @@ namespace vmod
 
 	static bool in_vscript_server_init;
 	static bool in_vscript_print;
+	static bool in_vscript_error;
+
+	static void vscript_output(const char *txt)
+	{
+		using namespace std::literals::string_view_literals;
+
+		info("%s"sv, txt);
+	}
+
+	static gsdk::ScriptErrorFunc_t server_vs_error_cb;
+	static bool vscript_error_output(gsdk::ScriptErrorLevel_t lvl, const char *txt)
+	{
+		using namespace std::literals::string_view_literals;
+
+		in_vscript_error = true;
+		bool ret{server_vs_error_cb(lvl, txt)};
+		in_vscript_error = false;
+
+		return ret;
+	}
 
 	static gsdk::SpewOutputFunc_t old_spew;
 	static gsdk::SpewRetval_t new_spew(gsdk::SpewType_t type, const char *str)
 	{
-		switch(type) {
-			case gsdk::SPEW_LOG: {
-				if(in_vscript_server_init || in_vscript_print) {
+		if(in_vscript_error || in_vscript_print || in_vscript_server_init) {
+			switch(type) {
+				case gsdk::SPEW_LOG: {
 					return gsdk::SPEW_CONTINUE;
 				}
-			} break;
-		#if 0
-			case gsdk::SPEW_WARNING: {
-				if(in_vscript_print) {
-					return gsdk::SPEW_CONTINUE;
-				}
-			} break;
-			case gsdk::SPEW_MESSAGE: {
-				if(in_vscript_print) {
-					return gsdk::SPEW_CONTINUE;
-				}
-			} break;
-		#endif
-			default: break;
+				case gsdk::SPEW_WARNING: {
+					if(in_vscript_print) {
+						return gsdk::SPEW_CONTINUE;
+					}
+				} break;
+				default: break;
+			}
 		}
 
-		return old_spew(type, str);
+		const gsdk::Color *clr{GetSpewOutputColor()};
+
+		if(!clr || (clr && (clr->r == 255 && clr->g == 255 && clr->b == 255))) {
+			switch(type) {
+				case gsdk::SPEW_MESSAGE: {
+					if(in_vscript_error) {
+						clr = &error_clr;
+					} else {
+						clr = &print_clr;
+					}
+				} break;
+				case gsdk::SPEW_WARNING: {
+					clr = &warning_clr;
+				} break;
+				case gsdk::SPEW_ASSERT: {
+					clr = &error_clr;
+				} break;
+				case gsdk::SPEW_ERROR: {
+					clr = &error_clr;
+				} break;
+				case gsdk::SPEW_LOG: {
+					clr = &info_clr;
+				} break;
+				default: break;
+			}
+		}
+
+		if(clr) {
+			std::printf("\033[38;2;%hhu;%hhu;%hhum", clr->r, clr->g, clr->b);
+			std::fflush(stdout);
+		}
+
+		gsdk::SpewRetval_t ret{old_spew(type, str)};
+
+		std::fputs("\033[0m", stdout);
+		std::fflush(stdout);
+
+		return ret;
 	}
 
 	static bool vscript_server_init_called;
@@ -1269,6 +1301,7 @@ namespace vmod
 		va_end(varg_list);
 	}
 
+	static char __vscript_errorfunc_buffer[2048];
 	static detour<decltype(ErrorFunc)> ErrorFunc_detour;
 	static void ErrorFunc_detour_callback(HSQUIRRELVM m_hVM, const SQChar *s, ...)
 	{
@@ -1278,13 +1311,13 @@ namespace vmod
 		#pragma clang diagnostic push
 		#pragma clang diagnostic ignored "-Wformat-nonliteral"
 	#endif
-		std::vsnprintf(__vscript_printfunc_buffer, sizeof(__vscript_printfunc_buffer), s, varg_list);
+		std::vsnprintf(__vscript_errorfunc_buffer, sizeof(__vscript_errorfunc_buffer), s, varg_list);
 	#ifdef __clang__
 		#pragma clang diagnostic pop
 	#endif
-		in_vscript_print = true;
-		ErrorFunc_detour(m_hVM, "%s", __vscript_printfunc_buffer);
-		in_vscript_print = false;
+		in_vscript_error = true;
+		ErrorFunc_detour(m_hVM, "%s", __vscript_errorfunc_buffer);
+		in_vscript_error = false;
 		va_end(varg_list);
 	}
 
@@ -1324,13 +1357,6 @@ namespace vmod
 		}
 
 		return sq_setparamscheck_detour(v, nparamscheck, typemask);
-	}
-
-	static bool (gsdk::IScriptVM::*RaiseException_original)(const char *);
-	static bool RaiseException_detour_callback(gsdk::IScriptVM *vm, const char *str)
-	{
-		error("%s\n", str);
-		return (vm->*RaiseException_original)(str);
 	}
 
 	static void (gsdk::IServerGameDLL::*CreateNetworkStringTables_original)();
@@ -1413,7 +1439,6 @@ namespace vmod
 		DestroyVM_original = swap_vfunc(vsmgr, &gsdk::IScriptManager::DestroyVM, DestroyVM_detour_callback);
 
 		Run_original = swap_vfunc(vm_, static_cast<decltype(Run_original)>(&gsdk::IScriptVM::Run), Run_detour_callback);
-		RaiseException_original = swap_vfunc(vm_, &gsdk::IScriptVM::RaiseException, RaiseException_detour_callback);
 		SetErrorCallback_original = swap_vfunc(vm_, &gsdk::IScriptVM::SetErrorCallback, SetErrorCallback_detour_callback);
 
 		CreateNetworkStringTables_original = swap_vfunc(gamedll, &gsdk::IServerGameDLL::CreateNetworkStringTables, CreateNetworkStringTables_detour_callback);
@@ -1470,12 +1495,15 @@ namespace vmod
 			return false;
 		}
 
+		old_spew = GetSpewOutputFunc();
+		SpewOutputFunc(new_spew);
+
 		std::string_view engine_lib_name{"bin/engine.so"sv};
 		if(dedicated) {
 			engine_lib_name = "bin/engine_srv.so"sv;
 		}
 		if(!engine_lib.load(engine_lib_name)) {
-			std::cout << "\033[0;31m"sv << "vmod: failed to open engine library: '"sv << engine_lib.error_string() << "'\n"sv << "\033[0m"sv;
+			error("vmod: failed to open engine library: '%s'\n", engine_lib.error_string().c_str());
 			return false;
 		}
 
@@ -1865,9 +1893,6 @@ namespace vmod
 
 			plugins_loaded = true;
 		});
-
-		old_spew = GetSpewOutputFunc();
-		SpewOutputFunc(new_spew);
 
 		if(!VScriptServerInit_detour_callback()) {
 			error("vmod: VScriptServerInit failed\n"sv);

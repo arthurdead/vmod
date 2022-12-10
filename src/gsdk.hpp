@@ -12,6 +12,7 @@
 #include "gsdk/filesystem/filesystem.hpp"
 #include "gsdk/vstdlib/convar.hpp"
 #include "gsdk/vscript/vscript.hpp"
+#include "gsdk/tier0/dbg.hpp"
 #include "symbol_cache.hpp"
 
 namespace vmod
@@ -27,20 +28,31 @@ namespace vmod
 	extern gsdk::IEntityFactoryDictionary *entityfactorydict;
 	extern gsdk::IServerNetworkStringTableContainer *sv_stringtables;
 
-	template <typename ...Args>
-	void print(std::string_view fmt, Args &&...args);
+	constexpr gsdk::Color print_clr{255, 255, 255, 255};
+	constexpr gsdk::Color success_clr{0, 255, 0, 255};
+	constexpr gsdk::Color info_clr{0, 150, 150, 255};
+	constexpr gsdk::Color warning_clr{255, 255, 0, 255};
+	constexpr gsdk::Color error_clr{255, 0, 0, 255};
 
 	template <typename ...Args>
-	void success(std::string_view fmt, Args &&...args) noexcept;
+	inline void print(std::string_view fmt, Args &&...args) noexcept
+	{ ConColorMsg(0, print_clr, fmt.data(), std::forward<Args>(args)...); }
 
 	template <typename ...Args>
-	void info(std::string_view fmt, Args &&...args) noexcept;
+	inline void success(std::string_view fmt, Args &&...args) noexcept
+	{ ConColorMsg(0, success_clr, fmt.data(), std::forward<Args>(args)...); }
 
 	template <typename ...Args>
-	void warning(std::string_view fmt, Args &&...args) noexcept;
+	inline void info(std::string_view fmt, Args &&...args) noexcept
+	{ ConColorMsg(0, info_clr, fmt.data(), std::forward<Args>(args)...); }
 
 	template <typename ...Args>
-	void error(std::string_view fmt, Args &&...args) noexcept;
+	inline void warning(std::string_view fmt, Args &&...args) noexcept
+	{ ConColorMsg(0, warning_clr, fmt.data(), std::forward<Args>(args)...); }
+
+	template <typename ...Args>
+	inline void error(std::string_view fmt, Args &&...args) noexcept
+	{ ConColorMsg(0, error_clr, fmt.data(), std::forward<Args>(args)...); }
 
 	class gsdk_library
 	{
