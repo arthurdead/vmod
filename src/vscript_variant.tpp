@@ -238,7 +238,7 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<unsigned long>() noexcept
 	{
-	#if __LONG_WIDTH__ == 4
+	#if __LONG_WIDTH__ == 32
 		return gsdk::FIELD_UINT;
 	#else
 		return gsdk::FIELD_UINT64;
@@ -253,7 +253,7 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<long>() noexcept
 	{
-	#if __LONG_WIDTH__ == 4
+	#if __LONG_WIDTH__ == 32
 		return gsdk::FIELD_INTEGER;
 	#else
 		return gsdk::FIELD_INTEGER64;
