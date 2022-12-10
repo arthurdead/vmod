@@ -147,6 +147,9 @@ namespace gsdk
 		int GetInt() const noexcept;
 		bool GetBool() const noexcept;
 		const char *GetString() const noexcept;
+		const char *InternalGetString() const noexcept;
+		std::size_t GetStringLength() const noexcept;
+		std::size_t InternalGetStringLength() const noexcept;
 
 		bool IsCommand() const override final;
 		void CreateBase(const char *name, const char *help = nullptr, int flags = FCVAR_NONE) override final;

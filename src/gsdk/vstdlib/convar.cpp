@@ -416,6 +416,15 @@ namespace gsdk
 		return (m_nValue > 0);
 	}
 
+	const char *ConVar::InternalGetString() const noexcept
+	{
+		if(m_pParent && m_pParent != this) {
+			return m_pParent->ConVar::InternalGetString();
+		}
+
+		return m_pszString;
+	}
+
 	const char *ConVar::GetString() const noexcept
 	{
 		if(m_pParent && m_pParent != this) {
@@ -426,6 +435,28 @@ namespace gsdk
 			return m_pszString;
 		} else {
 			return "";
+		}
+	}
+
+	std::size_t ConVar::InternalGetStringLength() const noexcept
+	{
+		if(m_pParent && m_pParent != this) {
+			return m_pParent->ConVar::InternalGetStringLength();
+		}
+
+		return static_cast<std::size_t>(m_StringLength);
+	}
+
+	std::size_t ConVar::GetStringLength() const noexcept
+	{
+		if(m_pParent && m_pParent != this) {
+			return m_pParent->ConVar::GetStringLength();
+		}
+
+		if(!ConCommandBase::IsFlagSet(FCVAR_NEVER_AS_STRING)) {
+			return static_cast<std::size_t>(m_StringLength);
+		} else {
+			return 0;
 		}
 	}
 }

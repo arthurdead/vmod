@@ -676,6 +676,37 @@ namespace vmod
 				}
 			}
 
+			inline script_variant_t script_get_value() const noexcept
+			{
+				const char *str{var->InternalGetString()};
+				std::size_t len{var->InternalGetStringLength()};
+
+				if(std::strncmp(str, "true", len) == 0) {
+					return true;
+				} else if(std::strncmp(str, "false", len) == 0) {
+					return false;
+				} else {
+					bool is_float{false};
+
+					for(std::size_t i{0}; i < len; ++i) {
+						if(str[i] == '.') {
+							is_float = true;
+							continue;
+						}
+
+						if(!std::isdigit(str[i])) {
+							return std::string_view{str};
+						}
+					}
+
+					if(is_float) {
+						return var->GetFloat();
+					} else {
+						return var->GetInt();
+					}
+				}
+			}
+
 			gsdk::ConVar *var;
 			bool free_var;
 			gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
@@ -793,11 +824,11 @@ namespace vmod
 		script_cvar_desc.func(&script_cvar::script_set_value_float, "__script_set_value_float"sv, "set_float"sv);
 		script_cvar_desc.func(&script_cvar::script_set_value_int, "__script_set_value_int"sv, "set_int"sv);
 		script_cvar_desc.func(&script_cvar::script_set_value_bool, "__script_set_value_bool"sv, "set_bool"sv);
+		script_cvar_desc.func(&script_cvar::script_get_value, "__script_script_get_value"sv, "get"sv);
 		script_cvar_desc.func(&script_cvar::script_get_value_string, "__script_get_value_string"sv, "get_string"sv);
 		script_cvar_desc.func(&script_cvar::script_get_value_float, "__script_get_value_float"sv, "get_float"sv);
 		script_cvar_desc.func(&script_cvar::script_get_value_int, "__script_get_value_int"sv, "get_int"sv);
 		script_cvar_desc.func(&script_cvar::script_get_value_bool, "__script_get_value_bool"sv, "get_bool"sv);
-
 		script_cvar_desc.func(&script_cvar::script_delete, "__script_delete"sv, "free"sv);
 		script_cvar_desc.dtor();
 
