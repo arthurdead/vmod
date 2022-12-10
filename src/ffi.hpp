@@ -4,6 +4,7 @@
 #include <cstdint>
 #include "vscript.hpp"
 #include "hacking.hpp"
+#include "plugin.hpp"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-W#warnings"
@@ -48,7 +49,7 @@ namespace vmod
 	extern bool ffi_bindings() noexcept;
 	extern void ffi_unbindings() noexcept;
 
-	struct memory_block final
+	struct memory_block final : public plugin::owned_instance
 	{
 	public:
 		memory_block() = delete;
@@ -57,7 +58,7 @@ namespace vmod
 		memory_block(memory_block &&) = delete;
 		memory_block &operator=(memory_block &&) = delete;
 
-		~memory_block() noexcept;
+		~memory_block() noexcept override;
 
 	private:
 		friend class memory_singleton;
@@ -105,7 +106,7 @@ namespace vmod
 		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
 	};
 
-	class dynamic_detour
+	class dynamic_detour final : public plugin::owned_instance
 	{
 	public:
 		inline dynamic_detour(ffi_type *ret, std::vector<ffi_type *> &&args) noexcept
@@ -113,7 +114,7 @@ namespace vmod
 		{
 		}
 
-		~dynamic_detour() noexcept;
+		~dynamic_detour() noexcept override;
 
 		bool initialize(generic_func_t old_func_, gsdk::HSCRIPT new_func_, ffi_abi abi) noexcept;
 		bool initialize(generic_mfp_t old_func_, gsdk::HSCRIPT new_func_, ffi_abi abi) noexcept;

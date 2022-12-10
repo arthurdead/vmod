@@ -248,7 +248,7 @@ namespace gsdk
 			if(m_pszString) {
 				m_pszString = reinterpret_cast<char *>(std::realloc(m_pszString, len+1));
 			} else {
-				m_pszString = new char[len+1];
+				m_pszString = reinterpret_cast<char *>(std::malloc(len+1));
 			}
 
 			std::strncpy(m_pszString, value, len);
@@ -258,14 +258,28 @@ namespace gsdk
 			ClearString();
 		}
 
-		const char *begin{value};
-		const char *end{value + len};
+		if(std::strcmp(value, "true") == 0) {
+			m_fValue = 1.0f;
+			ConVar::ClampValue(m_fValue);
 
-		std::from_chars(begin, end, m_fValue);
-		ConVar::ClampValue(m_fValue);
+			m_nValue = 1;
+			ConVar::ClampValue(m_nValue);
+		} else if(std::strcmp(value, "false") == 0) {
+			m_fValue = 0.0f;
+			ConVar::ClampValue(m_fValue);
 
-		std::from_chars(begin, end, m_nValue);
-		ConVar::ClampValue(m_nValue);
+			m_nValue = 0;
+			ConVar::ClampValue(m_nValue);
+		} else {
+			const char *begin{value};
+			const char *end{value + len};
+
+			std::from_chars(begin, end, m_fValue);
+			ConVar::ClampValue(m_fValue);
+
+			std::from_chars(begin, end, m_nValue);
+			ConVar::ClampValue(m_nValue);
+		}
 	}
 
 	void ConVar::InternalSetFloatValue(float value, bool force)
@@ -280,7 +294,7 @@ namespace gsdk
 			if(m_pszString) {
 				m_pszString = reinterpret_cast<char *>(std::realloc(m_pszString, len+1));
 			} else {
-				m_pszString = new char[len+1];
+				m_pszString = reinterpret_cast<char *>(std::malloc(len+1));
 			}
 
 			char *begin{m_pszString};
@@ -301,6 +315,35 @@ namespace gsdk
 		ConVar::ClampValue(m_nValue);
 	}
 
+	void ConVar::SetValue(bool value) noexcept
+	{
+		if(m_pParent && m_pParent != this) {
+			m_pParent->ConVar::SetValue(value);
+		}
+
+		if(!ConCommandBase::IsFlagSet(FCVAR_NEVER_AS_STRING)) {
+			std::size_t len{value ? 4u : 5u};
+
+			if(m_pszString) {
+				m_pszString = reinterpret_cast<char *>(std::realloc(m_pszString, len+1));
+			} else {
+				m_pszString = reinterpret_cast<char *>(std::malloc(len+1));
+			}
+
+			std::strncpy(m_pszString, value ? "true" : "false", len);
+			m_pszString[len] = '\0';
+			m_StringLength = static_cast<int>(len);
+		} else {
+			ClearString();
+		}
+
+		m_fValue = value ? 1.0f : 0.0f;
+		ConVar::ClampValue(m_fValue);
+
+		m_nValue = value ? 1 : 0;
+		ConVar::ClampValue(m_nValue);
+	}
+
 	void ConVar::InternalSetIntValue(int value)
 	{
 		if(m_pParent && m_pParent != this) {
@@ -313,7 +356,7 @@ namespace gsdk
 			if(m_pszString) {
 				m_pszString = reinterpret_cast<char *>(std::realloc(m_pszString, len+1));
 			} else {
-				m_pszString = new char[len+1];
+				m_pszString = reinterpret_cast<char *>(std::malloc(len+1));
 			}
 
 			char *begin{m_pszString};
@@ -342,7 +385,47 @@ namespace gsdk
 	ConVar::~ConVar()
 	{
 		if(m_pszString) {
-			delete[] m_pszString;
+			free(m_pszString);
+		}
+	}
+
+	float ConVar::GetFloat() const noexcept
+	{
+		if(m_pParent && m_pParent != this) {
+			return m_pParent->ConVar::GetFloat();
+		}
+
+		return m_fValue;
+	}
+
+	int ConVar::GetInt() const noexcept
+	{
+		if(m_pParent && m_pParent != this) {
+			return m_pParent->ConVar::GetInt();
+		}
+
+		return m_nValue;
+	}
+
+	bool ConVar::GetBool() const noexcept
+	{
+		if(m_pParent && m_pParent != this) {
+			return m_pParent->ConVar::GetBool();
+		}
+
+		return (m_nValue > 0);
+	}
+
+	const char *ConVar::GetString() const noexcept
+	{
+		if(m_pParent && m_pParent != this) {
+			return m_pParent->ConVar::GetString();
+		}
+
+		if(!ConCommandBase::IsFlagSet(FCVAR_NEVER_AS_STRING)) {
+			return m_pszString;
+		} else {
+			return "";
 		}
 	}
 }

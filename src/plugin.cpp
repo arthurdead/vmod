@@ -322,9 +322,46 @@ namespace vmod
 		unwatch();
 	}
 
+	plugin::owned_instance::~owned_instance() noexcept
+	{
+		if(!owner) {
+			return;
+		}
+
+		if(!owner->deleting_instances) {
+			std::vector<owned_instance *> &instances{owner->owned_instances};
+
+			auto it{std::find(instances.begin(), instances.end(), this)};
+			if(it != instances.end()) {
+				instances.erase(it);
+			}
+		}
+	}
+
+	void plugin::owned_instance::plugin_unloaded() noexcept
+	{ delete this; }
+
+	void plugin::owned_instance::set_plugin() noexcept
+	{
+		owner = assumed_currently_running;
+
+		if(owner) {
+			owner->owned_instances.emplace_back(this);
+		}
+	}
+
 	void plugin::unload() noexcept
 	{
 		plugin_unloaded();
+
+		if(!owned_instances.empty()) {
+			deleting_instances = true;
+			for(owned_instance *it : owned_instances) {
+				it->plugin_unloaded();
+			}
+			owned_instances.clear();
+			deleting_instances = false;
+		}
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 

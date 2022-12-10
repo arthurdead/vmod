@@ -626,25 +626,55 @@ namespace vmod
 		void unbindings() noexcept;
 
 	private:
-		class script_cvar final
+		class script_cvar final : public plugin::owned_instance
 		{
 		public:
-			inline ~script_cvar() noexcept
-			{
-				if(free_var) {
-					delete var;
-				}
-
-				if(instance && instance != gsdk::INVALID_HSCRIPT) {
-					vmod.vm()->RemoveInstance(instance);
-				}
-			}
+			~script_cvar() noexcept override;
 
 		private:
 			friend class cvar_singleton;
 
 			inline void script_delete() noexcept
 			{ delete this; }
+
+			inline int script_get_value_int() const noexcept
+			{ return var->ConVar::GetInt(); }
+			inline float script_get_value_float() const noexcept
+			{ return var->ConVar::GetFloat(); }
+			inline std::string_view script_get_value_string() const noexcept
+			{ return var->ConVar::GetString(); }
+			inline bool script_get_value_bool() const noexcept
+			{ return var->ConVar::GetBool(); }
+
+			inline void script_set_value_int(int value) const noexcept
+			{ var->ConVar::SetValue(value); }
+			inline void script_set_value_float(float value) const noexcept
+			{ var->ConVar::SetValue(value); }
+			inline void script_set_value_string(std::string_view value) const noexcept
+			{ var->ConVar::SetValue(value.data()); }
+			inline void script_set_value_bool(bool value) const noexcept
+			{ var->ConVar::SetValue(value); }
+
+			inline void script_set_value(script_variant_t value) const noexcept
+			{
+				switch(value.m_type) {
+					case gsdk::FIELD_CSTRING:
+					var->ConVar::SetValue(value.m_pszString);
+					break;
+					case gsdk::FIELD_INTEGER:
+					var->ConVar::SetValue(value.m_int);
+					break;
+					case gsdk::FIELD_FLOAT:
+					var->ConVar::SetValue(value.m_float);
+					break;
+					case gsdk::FIELD_BOOLEAN:
+					var->ConVar::SetValue(value.m_bool);
+					break;
+					default:
+					vmod.vm()->RaiseException("vmod: invalid type");
+					break;
+				}
+			}
 
 			gsdk::ConVar *var;
 			bool free_var;
@@ -678,6 +708,35 @@ namespace vmod
 			svar->free_var = true;
 			svar->instance = cvar_instance;
 
+			svar->set_plugin();
+
+			return svar->instance;
+		}
+
+		static gsdk::HSCRIPT script_find_cvar(std::string_view name) noexcept
+		{
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			gsdk::ConVar *var{cvar->FindVar(name.data())};
+			if(!var) {
+				return nullptr;
+			}
+
+			script_cvar *svar{new script_cvar};
+
+			gsdk::HSCRIPT cvar_instance{vm->RegisterInstance(&script_cvar_desc, svar)};
+			if(!cvar_instance || cvar_instance == gsdk::INVALID_HSCRIPT) {
+				delete svar;
+				vm->RaiseException("vmod: failed to register instance");
+				return nullptr;
+			}
+
+			svar->var = var;
+			svar->free_var = false;
+			svar->instance = cvar_instance;
+
+			svar->set_plugin();
+
 			return svar->instance;
 		}
 
@@ -704,6 +763,17 @@ namespace vmod
 	inline class cvar_singleton &cvar_singleton::instance() noexcept
 	{ return ::vmod::cvar_singleton; }
 
+	cvar_singleton::script_cvar::~script_cvar() noexcept
+	{
+		if(free_var) {
+			delete var;
+		}
+
+		if(instance && instance != gsdk::INVALID_HSCRIPT) {
+			vmod.vm()->RemoveInstance(instance);
+		}
+	}
+
 	bool cvar_singleton::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -711,11 +781,22 @@ namespace vmod
 		gsdk::IScriptVM *vm{vmod.vm()};
 
 		cvar_singleton_desc.func(&cvar_singleton::script_create_cvar, "__script_create_cvar"sv, "create_var"sv);
+		cvar_singleton_desc.func(&cvar_singleton::script_find_cvar, "__script_find_cvar"sv, "find_var"sv);
 
 		if(!vm->RegisterClass(&cvar_singleton_desc)) {
 			error("vmod: failed to register vmod cvar singleton script class\n"sv);
 			return false;
 		}
+
+		script_cvar_desc.func(&script_cvar::script_set_value, "__script_script_set_value"sv, "set"sv);
+		script_cvar_desc.func(&script_cvar::script_set_value_string, "__script_set_value_string"sv, "set_string"sv);
+		script_cvar_desc.func(&script_cvar::script_set_value_float, "__script_set_value_float"sv, "set_float"sv);
+		script_cvar_desc.func(&script_cvar::script_set_value_int, "__script_set_value_int"sv, "set_int"sv);
+		script_cvar_desc.func(&script_cvar::script_set_value_bool, "__script_set_value_bool"sv, "set_bool"sv);
+		script_cvar_desc.func(&script_cvar::script_get_value_string, "__script_get_value_string"sv, "get_string"sv);
+		script_cvar_desc.func(&script_cvar::script_get_value_float, "__script_get_value_float"sv, "get_float"sv);
+		script_cvar_desc.func(&script_cvar::script_get_value_int, "__script_get_value_int"sv, "get_int"sv);
+		script_cvar_desc.func(&script_cvar::script_get_value_bool, "__script_get_value_bool"sv, "get_bool"sv);
 
 		script_cvar_desc.func(&script_cvar::script_delete, "__script_delete"sv, "free"sv);
 		script_cvar_desc.dtor();

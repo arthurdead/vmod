@@ -2,6 +2,7 @@
 
 #include <yaml.h>
 #include "vscript.hpp"
+#include "plugin.hpp"
 #include <filesystem>
 #include <vector>
 #include <stack>
@@ -9,12 +10,12 @@
 
 namespace vmod
 {
-	class yaml final
+	class yaml final : plugin::owned_instance
 	{
 		friend class vmod;
 
 	public:
-		~yaml() noexcept;
+		~yaml() noexcept override;
 		yaml() noexcept = default;
 
 	private:

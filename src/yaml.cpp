@@ -42,6 +42,8 @@ namespace vmod
 				return nullptr;
 			}
 
+			temp_yaml->set_plugin();
+
 			return temp_yaml->instance;
 		}
 

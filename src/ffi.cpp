@@ -166,6 +166,8 @@ namespace vmod
 				return nullptr;
 			}
 
+			block->set_plugin();
+
 			return block->instance;
 		}
 
@@ -177,6 +179,8 @@ namespace vmod
 				delete block;
 				return nullptr;
 			}
+
+			block->set_plugin();
 
 			return block->instance;
 		}
@@ -200,6 +204,8 @@ namespace vmod
 				return nullptr;
 			}
 
+			block->set_plugin();
+
 			return block->instance;
 		}
 
@@ -211,6 +217,8 @@ namespace vmod
 				delete block;
 				return nullptr;
 			}
+
+			block->set_plugin();
 
 			return block->instance;
 		}
@@ -623,15 +631,10 @@ namespace vmod
 		return true;
 	}
 
-	class script_cif final
+	class script_cif final : plugin::owned_instance
 	{
 	public:
-		inline ~script_cif() noexcept
-		{
-			if(instance && instance != gsdk::INVALID_HSCRIPT) {
-				vmod.vm()->RemoveInstance(instance);
-			}
-		}
+		~script_cif() noexcept override;
 
 		static bool bindings() noexcept;
 		static void unbindings() noexcept;
@@ -681,6 +684,13 @@ namespace vmod
 		generic_func_t func;
 		gsdk::HSCRIPT instance;
 	};
+
+	script_cif::~script_cif() noexcept
+	{
+		if(instance && instance != gsdk::INVALID_HSCRIPT) {
+			vmod.vm()->RemoveInstance(instance);
+		}
+	}
 
 	static class_desc_t<script_cif> cif_desc{"__vmod_ffi_cif_class"};
 
@@ -780,6 +790,8 @@ namespace vmod
 				return nullptr;
 			}
 
+			cif->set_plugin();
+
 			return cif->instance;
 		}
 
@@ -820,6 +832,8 @@ namespace vmod
 				return nullptr;
 			}
 
+			det->set_plugin();
+
 			return det->instance;
 		}
 
@@ -837,6 +851,8 @@ namespace vmod
 				vm->RaiseException("vmod: failed to register detour instance");
 				return nullptr;
 			}
+
+			det->set_plugin();
 
 			return det->instance;
 		}

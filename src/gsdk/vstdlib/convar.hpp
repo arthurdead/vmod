@@ -139,8 +139,14 @@ namespace gsdk
 		void SetValue(const char *value) override final;
 		void SetValue(float value) override final;
 		void SetValue(int value) override final;
+		void SetValue(bool value) noexcept;
 		const char *GetName() const override final;
 		bool IsFlagSet(int flags) const override final;
+
+		float GetFloat() const noexcept;
+		int GetInt() const noexcept;
+		bool GetBool() const noexcept;
+		const char *GetString() const noexcept;
 
 		bool IsCommand() const override final;
 		void CreateBase(const char *name, const char *help = nullptr, int flags = FCVAR_NONE) override final;

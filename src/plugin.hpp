@@ -118,6 +118,18 @@ namespace vmod
 		inline function lookup_function(std::string_view func_name) noexcept
 		{ return {*this, func_name}; }
 
+		class owned_instance
+		{
+		public:
+			virtual ~owned_instance() noexcept;
+			virtual void plugin_unloaded() noexcept;
+
+			void set_plugin() noexcept;
+
+		private:
+			plugin *owner;
+		};
+
 	private:
 		static bool bindings() noexcept;
 		static void unbindings() noexcept;
@@ -159,6 +171,9 @@ namespace vmod
 		gsdk::HSCRIPT values_table;
 
 		std::unordered_map<std::string, gsdk::HSCRIPT> function_cache;
+
+		std::vector<owned_instance *> owned_instances;
+		bool deleting_instances;
 
 		typed_function<void()> map_active;
 		typed_function<void(std::string_view)> map_loaded;
