@@ -2567,9 +2567,6 @@ namespace vmod
 			file += it.first;
 			file += ";\n"sv;
 		}
-		if(!script_stringtables.empty()) {
-			file.erase(file.end()-1, file.end());
-		}
 
 		file += '}';
 
