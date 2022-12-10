@@ -7,7 +7,7 @@
 
 namespace vmod
 {
-	static class_desc_t<plugin> plugin_desc{"__vmod_plugin_class"};
+	class_desc_t<plugin> plugin_desc{"__vmod_plugin_class"};
 
 	plugin *plugin::assumed_currently_running;
 	plugin *plugin::scope_assume_current::old_running;
@@ -73,6 +73,7 @@ namespace vmod
 
 		plugin_desc.func(&plugin::script_lookup_function, "__script_lookup_function"sv, "lookup_function"sv);
 		plugin_desc.func(&plugin::script_lookup_value, "__script_lookup_value"sv, "lookup_value"sv);
+		plugin_desc.doc_class_name("plugin"sv);
 
 		if(!vmod.vm()->RegisterClass(&plugin_desc)) {
 			error("vmod: failed to register plugin script class\n"sv);

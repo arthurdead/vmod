@@ -183,6 +183,8 @@ namespace vmod
 		typed_function<void()> all_plugins_loaded;
 		typed_function<void()> string_tables_created;
 	};
+
+	extern class_desc_t<plugin> plugin_desc;
 }
 
 #include "plugin.tpp"

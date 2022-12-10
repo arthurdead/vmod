@@ -2755,6 +2755,9 @@ namespace vmod
 		ident(file, 1);
 		file += "string root_dir;\n\n"sv;
 
+		write_class(&plugin_desc, true, 1, file, false);
+		file += "\n\n"sv;
+
 		ident(file, 1);
 		file += "namespace plugins\n"sv;
 		ident(file, 1);
