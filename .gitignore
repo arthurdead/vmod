@@ -4,5 +4,8 @@ subprojects/libyaml.wrap
 subprojects/yaml-?.?.?/
 subprojects/binutils-?.??/
 subprojects/squirrel/
+subprojects/squirrel*/
+subprojects/quirrel/
 *.sublime-workspace
 *.sublime-project
+src/vm/

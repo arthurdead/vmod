@@ -99,10 +99,46 @@ libyaml = subproject('libyaml',
 	required: true
 )
 
-squirrel = subproject('squirrel',
-	default_options: thirdparty_default_options_cpp,
-	required: true
-)
+custom_vm = false
+
+if custom_vm
+	vm_lib = static_library('vm',
+		files(
+			join_paths('src','vm','vscript_squirrel.cpp')
+			#join_paths('src','vm','vscript_bindings_math.cpp'),
+			#join_paths('src','vm','vscript_bindings_base.cpp')
+		),
+		gnu_symbol_visibility: 'inlineshidden',
+		implicit_include_directories: true,
+		cpp_args: cpp_args
+	)
+
+	vm_dep = declare_dependency(
+		link_with: vm_lib,
+		compile_args: ['-D__VMOD_USING_CUSTOM_VM']
+	)
+endif
+
+if custom_vm
+	use_quirrel = true
+
+	if use_quirrel
+		squirrel = subproject('quirrel',
+			default_options: thirdparty_default_options_cpp,
+			required: true
+		)
+	else
+		squirrel = subproject('squirrel',
+			default_options: thirdparty_default_options_cpp,
+			required: true
+		)
+	endif
+else
+	squirrel = subproject('squirrel_304',
+		default_options: thirdparty_default_options_cpp,
+		required: true
+	)
+endif
 
 dependencies = [
 	dependency('threads'),
@@ -114,6 +150,10 @@ dependencies = [
 	squirrel.get_variable('squirrel_dep'),
 	squirrel.get_variable('squirrel_internal_dep')
 ]
+
+if custom_vm
+	dependencies += [vm_dep]
+endif
 
 vmod_base_script_src = files('src/vmod_base.nut')
 

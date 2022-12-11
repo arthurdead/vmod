@@ -1107,6 +1107,9 @@ namespace vmod
 		using namespace std::literals::string_literals;
 
 		vmod_desc.func(&vmod::script_find_plugin, "script_find_plugin"sv, "find_plugin"sv);
+		vmod_desc.func(&vmod::script_is_map_active, "script_is_map_active"sv, "is_map_active"sv);
+		vmod_desc.func(&vmod::script_is_map_loaded, "script_is_map_loaded"sv, "is_map_loaded"sv);
+		vmod_desc.func(&vmod::script_are_stringtables_created, "script_are_stringtables_created"sv, "are_stringtables_created"sv);
 
 		if(!vm_->RegisterClass(&vmod_desc)) {
 			error("vmod: failed to register vmod script class\n"sv);
@@ -3033,7 +3036,7 @@ namespace vmod
 		is_map_active = false;
 	}
 
-	void vmod::game_frame([[maybe_unused]] bool) noexcept
+	void vmod::game_frame(bool simulating) noexcept
 	{
 	#if 0
 		vm_->Frame(sv_globals->frametime);
@@ -3044,16 +3047,12 @@ namespace vmod
 				continue;
 			}
 
-			pl->game_frame();
+			pl->game_frame(simulating);
 		}
 	}
 
 	void vmod::unload() noexcept
 	{
-		if(old_spew) {
-			SpewOutputFunc(old_spew);
-		}
-
 		vmod_unload_plugins();
 
 		if(vm_) {
@@ -3117,6 +3116,10 @@ namespace vmod
 			if(*g_pScriptVM == vm_) {
 				*g_pScriptVM = nullptr;
 			}
+		}
+
+		if(old_spew) {
+			SpewOutputFunc(old_spew);
 		}
 	}
 }

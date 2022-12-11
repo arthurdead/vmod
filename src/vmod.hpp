@@ -69,6 +69,12 @@ namespace vmod
 		void map_active() noexcept;
 
 		gsdk::HSCRIPT script_find_plugin(std::string_view name) noexcept;
+		inline bool script_is_map_loaded() const noexcept
+		{ return is_map_loaded; }
+		inline bool script_is_map_active() const noexcept
+		{ return is_map_active; }
+		inline bool script_are_stringtables_created() const noexcept
+		{ return are_string_tables_created; }
 
 		bool binding_mods() noexcept;
 		bool bindings() noexcept;

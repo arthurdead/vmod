@@ -51,6 +51,8 @@ namespace vmod
 			return all_plugins_loaded.func;
 		} else if(func_name == "string_tables_created"sv) {
 			return string_tables_created.func;
+		} else if(func_name == "game_frame"sv) {
+			return game_frame_.func;
 		}
 
 		gsdk::IScriptVM *vm{vmod.vm()};
@@ -152,6 +154,7 @@ namespace vmod
 		plugin_unloaded = std::move(other.plugin_unloaded);
 		all_plugins_loaded = std::move(other.all_plugins_loaded);
 		string_tables_created = std::move(other.string_tables_created);
+		game_frame_ = std::move(other.game_frame_);
 
 		return *this;
 	}
@@ -273,6 +276,7 @@ namespace vmod
 			plugin_unloaded = lookup_function("plugin_unloaded"sv);
 			all_plugins_loaded = lookup_function("all_plugins_loaded"sv);
 			string_tables_created = lookup_function("string_tables_created"sv);
+			game_frame_ = lookup_function("game_frame"sv);
 
 			plugin_loaded();
 
@@ -507,13 +511,16 @@ namespace vmod
 		}
 	}
 
-	void plugin::game_frame() noexcept
+	void plugin::game_frame(bool simulating) noexcept
 	{
 		if(inotify_fd != -1) {
 			inotify_event event;
 			if(read(inotify_fd, &event, sizeof(inotify_event)) == sizeof(inotify_event)) {
 				reload();
+				return;
 			}
 		}
+
+		game_frame_(simulating);
 	}
 }

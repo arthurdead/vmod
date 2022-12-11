@@ -1,0 +1,9 @@
+[wrap-git]
+directory = quirrel
+url = https://github.com/GaijinEntertainment/quirrel.git
+revision = master
+depth = 1
+patch_directory = squirrel
+
+[provide]
+dependency_names = quirrel

@@ -1,5 +1,5 @@
 [wrap-git]
-directory = squirrel
+directory = squirrel_304
 url = https://github.com/pfalcon-mirrors/squirrel-lang.git
 revision = squirrel3
 depth = 1

@@ -16,6 +16,8 @@ project('squirrel', 'cpp',
 	],
 )
 
+cpp_internal_args = ['-DSQ_VAR_TRACE_ENABLED=0']
+
 squirrel_lib = static_library('squirrel',
 	files(
 		join_paths('squirrel','sqapi.cpp'),
@@ -31,7 +33,9 @@ squirrel_lib = static_library('squirrel',
 		join_paths('squirrel','sqtable.cpp'),
 		join_paths('squirrel','sqvm.cpp')
 	),
+	cpp_args: cpp_internal_args,
 	gnu_symbol_visibility: 'inlineshidden',
+	
 	include_directories:
 		include_directories(
 			'include'
@@ -43,4 +47,7 @@ squirrel_dep = declare_dependency(
 	include_directories: include_directories('include')
 )
 
-squirrel_internal_dep = declare_dependency(include_directories: include_directories('squirrel'))
+squirrel_internal_dep = declare_dependency(
+	include_directories: include_directories('squirrel'),
+	compile_args: cpp_internal_args
+)

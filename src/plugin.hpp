@@ -152,7 +152,7 @@ namespace vmod
 		gsdk::HSCRIPT script_lookup_function(std::string_view func_name) noexcept;
 		script_variant_t script_lookup_value(std::string_view val_name) noexcept;
 
-		void game_frame() noexcept;
+		void game_frame(bool simulating) noexcept;
 
 		void watch() noexcept;
 		void unwatch() noexcept;
@@ -182,6 +182,7 @@ namespace vmod
 		typed_function<void()> plugin_unloaded;
 		typed_function<void()> all_plugins_loaded;
 		typed_function<void()> string_tables_created;
+		typed_function<void(bool)> game_frame_;
 	};
 
 	extern class_desc_t<plugin> plugin_desc;

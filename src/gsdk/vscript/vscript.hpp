@@ -23,6 +23,7 @@
 #pragma GCC diagnostic ignored "-Wextra-semi"
 #pragma GCC diagnostic ignored "-Wshadow-field"
 #pragma GCC diagnostic ignored "-Wdeprecated-copy-with-user-provided-copy"
+#pragma GCC diagnostic ignored "-Wdocumentation"
 #include <sqvm.h>
 #include <sqobject.h>
 #include <sqstate.h>
