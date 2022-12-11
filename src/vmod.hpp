@@ -7,13 +7,15 @@
 #include <unordered_map>
 #include "gsdk.hpp"
 #include "convar.hpp"
-#include "vscript.hpp"
+#include "gsdk/vscript/vscript.hpp"
 
 namespace vmod
 {
 	class plugin;
 
 	class script_variant_t;
+
+	class script_stringtable;
 
 	class vmod final : public gsdk::ISquirrelMetamethodDelegate
 	{
@@ -132,40 +134,6 @@ namespace vmod
 		gsdk::HSCRIPT plugins_table_{gsdk::INVALID_HSCRIPT};
 
 		gsdk::HSCRIPT symbols_table_{gsdk::INVALID_HSCRIPT};
-
-		class script_stringtable final
-		{
-		public:
-			~script_stringtable() noexcept;
-
-			script_stringtable(const script_stringtable &) noexcept = delete;
-			script_stringtable &operator=(const script_stringtable &) noexcept = delete;
-			inline script_stringtable(script_stringtable &&other) noexcept
-			{ operator=(std::move(other)); }
-			inline script_stringtable &operator=(script_stringtable &&other) noexcept
-			{
-				instance = other.instance;
-				other.instance = gsdk::INVALID_HSCRIPT;
-				table = other.table;
-				other.table = nullptr;
-				return *this;
-			}
-
-			std::size_t script_find_index(std::string_view name) const noexcept;
-			std::size_t script_num_strings() const noexcept;
-			std::string_view script_get_string(std::size_t i) const noexcept;
-			std::size_t script_add_string(std::string_view name, ssize_t bytes, const void *data) noexcept;
-
-		private:
-			friend class vmod;
-
-			script_stringtable() noexcept = default;
-
-			gsdk::INetworkStringTable *table;
-			gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
-		};
-
-		static class_desc_t<vmod::script_stringtable> stringtable_desc;
 
 		gsdk::HSCRIPT stringtable_table{gsdk::INVALID_HSCRIPT};
 		std::unordered_map<std::string, std::unique_ptr<script_stringtable>> script_stringtables;

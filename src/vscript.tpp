@@ -1,5 +1,7 @@
 namespace vmod
 {
+	extern void __vmod_raiseexception(const char *str) noexcept;
+
 	template <typename T>
 	base_class_desc_t<T>::base_class_desc_t(std::string_view name) noexcept
 		: gsdk::ScriptClassDesc_t{}
@@ -36,6 +38,23 @@ namespace vmod
 		return *this;
 	}
 
+	static inline short fixup_var_field(short field) noexcept
+	{
+		switch(field) {
+			case gsdk::FIELD_UINT:
+			case gsdk::FIELD_UINT64:
+			return gsdk::FIELD_INTEGER;
+			default:
+			return field;
+		}
+	}
+
+	static inline gsdk::ScriptVariant_t &fixup_var(gsdk::ScriptVariant_t &var) noexcept
+	{
+		var.m_type = fixup_var_field(var.m_type);
+		return var;
+	}
+
 	template <typename R, typename ...Args>
 	void func_desc_t::initialize_shared(std::string_view name, std::string_view script_name, bool va)
 	{
@@ -45,7 +64,7 @@ namespace vmod
 		m_desc.m_pszScriptName = script_name.data();
 
 		m_desc.m_ReturnType = __type_to_field_impl<std::decay_t<R>>();
-		(m_desc.m_Parameters.emplace_back(__type_to_field_impl<std::decay_t<Args>>()), ...);
+		(m_desc.m_Parameters.emplace_back(fixup_var_field(__type_to_field_impl<std::decay_t<Args>>())), ...);
 
 		if(va) {
 			m_flags |= SF_VA_FUNC;
@@ -82,7 +101,12 @@ namespace vmod
 	bool func_desc_t::binding_member_singleton(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept
 	{
 		if(!obj) {
-			obj = &singleton_instance_helper<C>::instance();
+			if constexpr(singleton_instance_helper<C>::instance_func_available_v) {
+				obj = &singleton_instance_helper<C>::instance();
+			} else {
+				__vmod_raiseexception("vmod: missing this");
+				return false;
+			}
 		}
 
 		return binding_member<R, C, Args...>(binding_func, adjustor, obj, args_var, num_args, ret_var);
@@ -94,21 +118,25 @@ namespace vmod
 		constexpr std::size_t num_required_args{sizeof...(Args)};
 
 		if(!obj) {
+			__vmod_raiseexception("vmod: missing this");
 			return false;
 		}
 
 		if(num_required_args > 0) {
 			if(!args_var || num_args != static_cast<int>(num_required_args)) {
+				__vmod_raiseexception("wrong number of parameters");
 				return false;
 			}
 		} else {
 			if(/*args_var ||*/ num_args != 0) {
+				__vmod_raiseexception("wrong number of parameters");
 				return false;
 			}
 		}
 
 		if constexpr(std::is_void_v<R>) {
 			if(ret_var) {
+				__vmod_raiseexception("vmod: function is void");
 				return false;
 			}
 
@@ -123,6 +151,7 @@ namespace vmod
 					R ret_val{call_member<R, C, Args...>(reinterpret_cast<R(__attribute__((__thiscall__)) *)(C *, Args...)>(binding_func), static_cast<std::size_t>(adjustor), obj, args_var)};
 					value_to_variant<R>(*ret_var, std::forward<R>(ret_val));
 				}
+				fixup_var(*ret_var);
 			}
 		}
 
@@ -135,21 +164,25 @@ namespace vmod
 		constexpr std::size_t num_required_args{sizeof...(Args)};
 
 		if(obj || adjustor != 0) {
+			__vmod_raiseexception("vmod: static function");
 			return false;
 		}
 
 		if(num_required_args > 0) {
 			if(!args_var || num_args != num_required_args) {
+				__vmod_raiseexception("wrong number of parameters");
 				return false;
 			}
 		} else {
 			if(/*args_var ||*/ num_args != 0) {
+				__vmod_raiseexception("wrong number of parameters");
 				return false;
 			}
 		}
 
 		if constexpr(std::is_void_v<R>) {
 			if(ret_var) {
+				__vmod_raiseexception("vmod: function is void");
 				return false;
 			}
 
@@ -164,6 +197,7 @@ namespace vmod
 					R ret_val{call<R, Args...>(reinterpret_cast<R(*)(Args...)>(binding_func), args_var)};
 					value_to_variant<R>(*ret_var, std::forward<R>(ret_val));
 				}
+				fixup_var(*ret_var);
 			}
 		}
 
@@ -194,7 +228,12 @@ namespace vmod
 	bool func_desc_t::binding_member_singleton_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept
 	{
 		if(!obj) {
-			obj = &singleton_instance_helper<C>::instance();
+			if constexpr(singleton_instance_helper<C>::instance_func_available_v) {
+				obj = &singleton_instance_helper<C>::instance();
+			} else {
+				__vmod_raiseexception("vmod: missing this");
+				return false;
+			}
 		}
 
 		return binding_member_va<R, C, Args...>(binding_func, adjustor, obj, args_var, num_args, ret_var);
@@ -206,6 +245,7 @@ namespace vmod
 		constexpr std::size_t num_required_args{sizeof...(Args) - 2};
 
 		if(!obj) {
+			__vmod_raiseexception("vmod: missing this");
 			return false;
 		}
 
@@ -223,12 +263,14 @@ namespace vmod
 
 		if(num_required_args > 0) {
 			if(!args_var || num_args < static_cast<int>(num_required_args)) {
+				__vmod_raiseexception("wrong number of parameters");
 				return false;
 			}
 		}
 
 		if constexpr(std::is_void_v<R>) {
 			if(ret_var) {
+				__vmod_raiseexception("vmod: function is void");
 				return false;
 			}
 
@@ -243,6 +285,7 @@ namespace vmod
 					R ret_val{call_member_va<R, C, Args...>(reinterpret_cast<R(*)(C *, Args..., ...)>(binding_func), static_cast<std::size_t>(adjustor), obj, args_var, args_var_va, num_va)};
 					value_to_variant<R>(*ret_var, std::forward<R>(ret_val));
 				}
+				fixup_var(*ret_var);
 			}
 		}
 
@@ -255,6 +298,7 @@ namespace vmod
 		constexpr std::size_t num_required_args{sizeof...(Args) - 2};
 
 		if(obj || adjustor != 0) {
+			__vmod_raiseexception("vmod: static function");
 			return false;
 		}
 
@@ -272,12 +316,14 @@ namespace vmod
 
 		if(num_required_args > 0) {
 			if(!args_var || num_args < static_cast<int>(num_required_args)) {
+				__vmod_raiseexception("wrong number of parameters");
 				return false;
 			}
 		}
 
 		if constexpr(std::is_void_v<R>) {
 			if(ret_var) {
+				__vmod_raiseexception("vmod: function is void");
 				return false;
 			}
 
@@ -292,6 +338,7 @@ namespace vmod
 					R ret_val{call_va<R, Args...>(reinterpret_cast<R(*)(Args..., ...)>(binding_func), args_var, args_var_va, num_va)};
 					value_to_variant<R>(*ret_var, std::forward<R>(ret_val));
 				}
+				fixup_var(*ret_var);
 			}
 		}
 

@@ -320,7 +320,8 @@ namespace vmod
 	template <typename T>
 	class singleton_instance_helper final : public instance_helper<T>
 	{
-		class has_instance
+	public:
+		class instance_func_available
 		{
 			template <typename C>
 			static std::true_type test(decltype(&C::instance));
@@ -331,24 +332,28 @@ namespace vmod
 			static constexpr bool value{std::is_same_v<decltype(test<T>(nullptr)), std::true_type>};
 		};
 
-	public:
+		static constexpr bool instance_func_available_v{instance_func_available::value};
+
 		static inline T &instance() noexcept
+		{ return T::instance(); }
+
+		inline void *GetProxied([[maybe_unused]] void *ptr) noexcept override final
 		{
-			if constexpr(has_instance::value) {
-				return T::instance();
+			if constexpr(instance_func_available_v) {
+				return static_cast<T *>(&singleton_instance_helper<T>::instance());
 			} else {
-				#pragma GCC diagnostic push
-				#pragma GCC diagnostic ignored "-Wnull-dereference"
-				return *static_cast<T *>(nullptr);
-				#pragma GCC diagnostic pop
+				return ptr;
 			}
 		}
 
-		inline void *GetProxied([[maybe_unused]] void *ptr) noexcept override final
-		{ return static_cast<T *>(&singleton_instance_helper<T>::instance()); }
-
 		inline void *BindOnRead([[maybe_unused]] gsdk::HSCRIPT instance_, [[maybe_unused]] void *ptr, [[maybe_unused]] const char *id) noexcept override final
-		{ return static_cast<T *>(&singleton_instance_helper<T>::instance()); }
+		{
+			if constexpr(instance_func_available_v) {
+				return static_cast<T *>(&singleton_instance_helper<T>::instance());
+			} else {
+				return ptr;
+			}
+		}
 
 		static inline singleton_instance_helper &singleton() noexcept
 		{
@@ -515,7 +520,9 @@ namespace vmod
 		template <typename F, typename R, typename ...Args>
 		void make_singleton(func_desc_t &desc, std::type_identity<std::tuple<Args...>>) noexcept
 		{
-			desc.m_flags &= ~gsdk::SF_MEMBER_FUNC;
+			if constexpr(singleton_instance_helper<T>::instance_func_available_v) {
+				desc.m_flags &= ~gsdk::SF_MEMBER_FUNC;
+			}
 
 			if constexpr(function_is_va_v<F>) {
 				desc.m_pfnBinding = static_cast<gsdk::ScriptBindingFunc_t>(func_desc_t::binding_member_singleton_va<R, T, Args...>);

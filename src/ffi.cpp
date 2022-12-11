@@ -335,15 +335,15 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		memory_desc.func(&memory_singleton::script_allocate, "__script_allocate"sv, "allocate"sv);
-		memory_desc.func(&memory_singleton::script_allocate_aligned, "__script_allocate_aligned"sv, "allocate_aligned"sv);
-		memory_desc.func(&memory_singleton::script_allocate_zero, "__script_allocate_zero"sv, "allocate_zero"sv);
-		memory_desc.func(&memory_singleton::script_allocate_type, "__script_allocate_type"sv, "allocate_type"sv);
-		memory_desc.func(&memory_singleton::script_read, "__script_read"sv, "read"sv);
-		memory_desc.func(&memory_singleton::script_write, "__script_write"sv, "write"sv);
-		memory_desc.func(&memory_singleton::script_add, "__script_add"sv, "add"sv);
-		memory_desc.func(&memory_singleton::script_sub, "__script_sub"sv, "sub"sv);
-		memory_desc.func(&memory_singleton::script_get_vtable, "__script_get_vtable"sv, "get_vtable"sv);
+		memory_desc.func(&memory_singleton::script_allocate, "script_allocate"sv, "allocate"sv);
+		memory_desc.func(&memory_singleton::script_allocate_aligned, "script_allocate_aligned"sv, "allocate_aligned"sv);
+		memory_desc.func(&memory_singleton::script_allocate_zero, "script_allocate_zero"sv, "allocate_zero"sv);
+		memory_desc.func(&memory_singleton::script_allocate_type, "script_allocate_type"sv, "allocate_type"sv);
+		memory_desc.func(&memory_singleton::script_read, "script_read"sv, "read"sv);
+		memory_desc.func(&memory_singleton::script_write, "script_write"sv, "write"sv);
+		memory_desc.func(&memory_singleton::script_add, "script_add"sv, "add"sv);
+		memory_desc.func(&memory_singleton::script_sub, "script_sub"sv, "sub"sv);
+		memory_desc.func(&memory_singleton::script_get_vtable, "script_get_vtable"sv, "get_vtable"sv);
 
 		if(!vm->RegisterClass(&memory_desc)) {
 			error("vmod: failed to register memory singleton script class\n"sv);
@@ -513,12 +513,12 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		mem_block_desc.func(&memory_block::script_set_dtor_func, "__script_set_dtor_func"sv, "hook_free"sv);
-		mem_block_desc.func(&memory_block::script_disown, "__script_disown"sv, "disown"sv);
-		mem_block_desc.func(&memory_block::script_delete, "__script_delete"sv, "free"sv);
-		mem_block_desc.func(&memory_block::script_ptr_as_int, "__script_ptr_as_int"sv, "get_ptr_as_int"sv);
-		mem_block_desc.func(&memory_block::script_ptr, "__script_ptr"sv, "get_ptr"sv);
-		mem_block_desc.func(&memory_block::script_get_size, "__script_get_size"sv, "get_size"sv);
+		mem_block_desc.func(&memory_block::script_set_dtor_func, "script_set_dtor_func"sv, "hook_free"sv);
+		mem_block_desc.func(&memory_block::script_disown, "script_disown"sv, "disown"sv);
+		mem_block_desc.func(&memory_block::script_delete, "script_delete"sv, "free"sv);
+		mem_block_desc.func(&memory_block::script_ptr_as_int, "script_ptr_as_int"sv, "get_ptr_as_int"sv);
+		mem_block_desc.func(&memory_block::script_ptr, "script_ptr"sv, "get_ptr"sv);
+		mem_block_desc.func(&memory_block::script_get_size, "script_get_size"sv, "get_size"sv);
 		mem_block_desc.dtor();
 		mem_block_desc.doc_class_name("memory_block"sv);
 
@@ -610,7 +610,7 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		cif_desc.func(&script_cif::script_call, "__script_call"sv, "call"sv);
+		cif_desc.func(&script_cif::script_call, "script_call"sv, "call"sv);
 		cif_desc.dtor();
 		cif_desc.doc_class_name("cif"sv);
 
@@ -667,6 +667,11 @@ namespace vmod
 	{
 		gsdk::IScriptVM *vm{vmod.vm()};
 
+		if(!func) {
+			vm->RaiseException("vmod: null function");
+			return nullptr;
+		}
+
 		ffi_type *ret_ptr{ret};
 
 		std::vector<ffi_type *> args_ptrs;
@@ -719,6 +724,11 @@ namespace vmod
 	{
 		gsdk::IScriptVM *vm{vmod.vm()};
 
+		if(!old_func) {
+			vm->RaiseException("vmod: null function");
+			return nullptr;
+		}
+
 		dynamic_detour *det{script_create_detour_shared(ret, args)};
 		if(!det) {
 			return nullptr;
@@ -738,6 +748,11 @@ namespace vmod
 	gsdk::HSCRIPT ffi_singleton::script_create_detour_static(generic_func_t old_func, gsdk::HSCRIPT new_func, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept
 	{
 		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(!old_func) {
+			vm->RaiseException("vmod: null function");
+			return nullptr;
+		}
 
 		dynamic_detour *det{script_create_detour_shared(ret, args)};
 		if(!det) {
@@ -775,9 +790,9 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		ffi_singleton_desc.func(&ffi_singleton::script_create_cif, "__script_create_cif"sv, "cif"sv);
-		ffi_singleton_desc.func(&ffi_singleton::script_create_detour_static, "__script_create_detour_static"sv, "detour_static"sv);
-		ffi_singleton_desc.func(&ffi_singleton::script_create_detour_member, "__script_create_detour_member"sv, "detour_member"sv);
+		ffi_singleton_desc.func(&ffi_singleton::script_create_cif, "script_create_cif"sv, "cif"sv);
+		ffi_singleton_desc.func(&ffi_singleton::script_create_detour_static, "script_create_detour_static"sv, "detour_static"sv);
+		ffi_singleton_desc.func(&ffi_singleton::script_create_detour_member, "script_create_detour_member"sv, "detour_member"sv);
 
 		if(!vm->RegisterClass(&ffi_singleton_desc)) {
 			error("vmod: failed to register ffi script class\n"sv);
@@ -1052,10 +1067,10 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		detour_desc.func(&dynamic_detour::script_call, "__script_call"sv, "call"sv);
-		detour_desc.func(&dynamic_detour::script_enable, "__script_enable"sv, "enable"sv);
-		detour_desc.func(&dynamic_detour::script_disable, "__script_disable"sv, "disable"sv);
-		detour_desc.func(&dynamic_detour::script_delete, "__script_delete"sv, "free"sv);
+		detour_desc.func(&dynamic_detour::script_call, "script_call"sv, "call"sv);
+		detour_desc.func(&dynamic_detour::script_enable, "script_enable"sv, "enable"sv);
+		detour_desc.func(&dynamic_detour::script_disable, "script_disable"sv, "disable"sv);
+		detour_desc.func(&dynamic_detour::script_delete, "script_delete"sv, "free"sv);
 		detour_desc.dtor();
 		detour_desc.doc_class_name("detour"sv);
 
@@ -1197,8 +1212,6 @@ namespace vmod
 
 	bool dynamic_detour::initialize(generic_func_t old_func_, gsdk::HSCRIPT new_func_, ffi_abi abi) noexcept
 	{
-		gsdk::IScriptVM *vm{vmod.vm()};
-
 		if(!initialize_shared(new_func_, abi)) {
 			return false;
 		}
@@ -1213,8 +1226,6 @@ namespace vmod
 
 	bool dynamic_detour::initialize(generic_mfp_t old_func_, gsdk::HSCRIPT new_func_, ffi_abi abi) noexcept
 	{
-		gsdk::IScriptVM *vm{vmod.vm()};
-
 		arg_type_ptrs.insert(arg_type_ptrs.begin(), &ffi_type_pointer);
 
 		if(!initialize_shared(new_func_, abi)) {

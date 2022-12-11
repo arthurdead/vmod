@@ -53,7 +53,7 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		yaml_singleton_desc.func(&yaml_singleton::script_load, "__script_load"sv, "load"sv);
+		yaml_singleton_desc.func(&yaml_singleton::script_load, "script_load"sv, "load"sv);
 
 		if(!vm->RegisterClass(&yaml_singleton_desc)) {
 			error("vmod: failed to register yaml singleton script class\n"sv);
@@ -81,9 +81,9 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
-		yaml_desc.func(&yaml::script_num_documents, "__script_num_documents"sv, "num_documents"sv);
-		yaml_desc.func(&yaml::script_get_document, "__script_get_document"sv, "get_document"sv);
-		yaml_desc.func(&yaml::script_delete, "__script_delete"sv, "free"sv);
+		yaml_desc.func(&yaml::script_num_documents, "script_num_documents"sv, "num_documents"sv);
+		yaml_desc.func(&yaml::script_get_document, "script_get_document"sv, "get_document"sv);
+		yaml_desc.func(&yaml::script_delete, "script_delete"sv, "free"sv);
 		yaml_desc.dtor();
 		yaml_desc.doc_class_name("yaml"sv);
 

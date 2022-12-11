@@ -1,5 +1,6 @@
 #include "vmod.hpp"
 #include "symbol_cache.hpp"
+#include "vscript.hpp"
 #include "gsdk/engine/vsp.hpp"
 #include "gsdk/tier0/dbg.hpp"
 #include <cstring>
@@ -252,7 +253,7 @@ namespace vmod
 
 		static server_symbols_singleton &instance() noexcept;
 
-		bool register_() noexcept
+		bool register_instance() noexcept
 		{
 			using namespace std::literals::string_view_literals;
 
@@ -334,8 +335,8 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		lib_symbols_desc.func(&lib_symbols_singleton::script_lookup, "__script_lookup"sv, "lookup"sv);
-		lib_symbols_desc.func(&lib_symbols_singleton::script_lookup_global, "__script_lookup_global"sv, "lookup_global"sv);
+		lib_symbols_desc.func(&lib_symbols_singleton::script_lookup, "script_lookup"sv, "lookup"sv);
+		lib_symbols_desc.func(&lib_symbols_singleton::script_lookup_global, "script_lookup_global"sv, "lookup_global"sv);
 		lib_symbols_desc.doc_class_name("symbol_cache"sv);
 
 		if(!vm->RegisterClass(&lib_symbols_desc)) {
@@ -343,9 +344,9 @@ namespace vmod
 			return false;
 		}
 
-		qual_it_desc.func(&script_qual_it_t::script_name, "__script_name"sv, "get_name"sv);
-		qual_it_desc.func(&script_qual_it_t::script_lookup, "__script_lookup"sv, "lookup"sv);
-		qual_it_desc.func(&script_qual_it_t::script_delete, "__script_delete"sv, "free"sv);
+		qual_it_desc.func(&script_qual_it_t::script_name, "script_name"sv, "name"sv);
+		qual_it_desc.func(&script_qual_it_t::script_lookup, "script_lookup"sv, "lookup"sv);
+		qual_it_desc.func(&script_qual_it_t::script_delete, "script_delete"sv, "free"sv);
 		qual_it_desc.dtor();
 		qual_it_desc.doc_class_name("symbol_qualifier"sv);
 
@@ -354,13 +355,13 @@ namespace vmod
 			return false;
 		}
 
-		name_it_desc.func(&script_name_it_t::script_name, "__script_name"sv, "get_name"sv);
-		name_it_desc.func(&script_name_it_t::script_addr, "__script_addr"sv, "get_addr"sv);
-		name_it_desc.func(&script_name_it_t::script_func, "__script_func"sv, "get_func"sv);
-		name_it_desc.func(&script_name_it_t::script_mfp, "__script_mfp"sv, "get_mfp"sv);
-		name_it_desc.func(&script_name_it_t::script_size, "__script_size"sv, "get_size"sv);
-		name_it_desc.func(&script_name_it_t::script_lookup, "__script_lookup"sv, "lookup"sv);
-		name_it_desc.func(&script_name_it_t::script_delete, "__script_delete"sv, "free"sv);
+		name_it_desc.func(&script_name_it_t::script_name, "script_name"sv, "name"sv);
+		name_it_desc.func(&script_name_it_t::script_addr, "script_addr"sv, "addr"sv);
+		name_it_desc.func(&script_name_it_t::script_func, "script_func"sv, "func"sv);
+		name_it_desc.func(&script_name_it_t::script_mfp, "script_mfp"sv, "mfp"sv);
+		name_it_desc.func(&script_name_it_t::script_size, "script_size"sv, "size"sv);
+		name_it_desc.func(&script_name_it_t::script_lookup, "script_lookup"sv, "lookup"sv);
+		name_it_desc.func(&script_name_it_t::script_delete, "script_delete"sv, "free"sv);
 		name_it_desc.dtor();
 		name_it_desc.doc_class_name("symbol_name"sv);
 
@@ -369,7 +370,7 @@ namespace vmod
 			return false;
 		}
 
-		if(!server_symbols_singleton.register_()) {
+		if(!server_symbols_singleton.register_instance()) {
 			return false;
 		}
 
@@ -456,8 +457,8 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		filesystem_singleton_desc.func(&filesystem_singleton::script_join_paths, "__script_join_paths"sv, "join_paths"sv);
-		filesystem_singleton_desc.func(&filesystem_singleton::script_glob, "__script_glob"sv, "glob"sv);
+		filesystem_singleton_desc.func(&filesystem_singleton::script_join_paths, "script_join_paths"sv, "join_paths"sv);
+		filesystem_singleton_desc.func(&filesystem_singleton::script_glob, "script_glob"sv, "glob"sv);
 
 		if(!vm->RegisterClass(&filesystem_singleton_desc)) {
 			error("vmod: failed to register vmod filesystem script class\n"sv);
@@ -524,7 +525,39 @@ namespace vmod
 		}
 	}
 
-	class_desc_t<vmod::script_stringtable> vmod::stringtable_desc{"__vmod_stringtable_class"};
+	class script_stringtable final
+	{
+	public:
+		~script_stringtable() noexcept;
+
+		script_stringtable(const script_stringtable &) noexcept = delete;
+		script_stringtable &operator=(const script_stringtable &) noexcept = delete;
+		inline script_stringtable(script_stringtable &&other) noexcept
+		{ operator=(std::move(other)); }
+		inline script_stringtable &operator=(script_stringtable &&other) noexcept
+		{
+			instance = other.instance;
+			other.instance = gsdk::INVALID_HSCRIPT;
+			table = other.table;
+			other.table = nullptr;
+			return *this;
+		}
+
+		std::size_t script_find_index(std::string_view name) const noexcept;
+		std::size_t script_num_strings() const noexcept;
+		std::string_view script_get_string(std::size_t i) const noexcept;
+		std::size_t script_add_string(std::string_view name, ssize_t bytes, const void *data) noexcept;
+
+	private:
+		friend class vmod;
+
+		script_stringtable() noexcept = default;
+
+		gsdk::INetworkStringTable *table;
+		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+	};
+
+	static class_desc_t<script_stringtable> stringtable_desc{"__vmod_stringtable_class"};
 
 	static gsdk::INetworkStringTable *m_pDownloadableFileTable;
 	static gsdk::INetworkStringTable *m_pModelPrecacheTable;
@@ -539,7 +572,7 @@ namespace vmod
 	static gsdk::INetworkStringTable *g_pStringTableInfoPanel;
 	static gsdk::INetworkStringTable *g_pStringTableClientSideChoreoScenes;
 
-	std::size_t vmod::script_stringtable::script_find_index(std::string_view name) const noexcept
+	std::size_t script_stringtable::script_find_index(std::string_view name) const noexcept
 	{
 		gsdk::IScriptVM *vm{::vmod::vmod.vm()};
 
@@ -551,7 +584,7 @@ namespace vmod
 		return static_cast<std::size_t>(table->FindStringIndex(name.data()));
 	}
 
-	std::size_t vmod::script_stringtable::script_num_strings() const noexcept
+	std::size_t script_stringtable::script_num_strings() const noexcept
 	{
 		gsdk::IScriptVM *vm{::vmod::vmod.vm()};
 
@@ -563,7 +596,7 @@ namespace vmod
 		return static_cast<std::size_t>(table->GetNumStrings());
 	}
 
-	std::string_view vmod::script_stringtable::script_get_string(std::size_t i) const noexcept
+	std::string_view script_stringtable::script_get_string(std::size_t i) const noexcept
 	{
 		gsdk::IScriptVM *vm{::vmod::vmod.vm()};
 
@@ -575,7 +608,7 @@ namespace vmod
 		return table->GetString(static_cast<int>(i));
 	}
 
-	std::size_t vmod::script_stringtable::script_add_string(std::string_view name, ssize_t bytes, const void *data) noexcept
+	std::size_t script_stringtable::script_add_string(std::string_view name, ssize_t bytes, const void *data) noexcept
 	{
 		gsdk::IScriptVM *vm{::vmod::vmod.vm()};
 
@@ -587,7 +620,7 @@ namespace vmod
 		return static_cast<std::size_t>(table->AddString(true, name.data(), static_cast<ssize_t>(bytes), data));
 	}
 
-	vmod::script_stringtable::~script_stringtable() noexcept
+	script_stringtable::~script_stringtable() noexcept
 	{
 		if(instance && instance != gsdk::INVALID_HSCRIPT) {
 			::vmod::vmod.vm()->RemoveInstance(instance);
@@ -864,25 +897,25 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		cvar_singleton_desc.func(&cvar_singleton::script_create_cvar, "__script_create_cvar"sv, "create_var"sv);
-		cvar_singleton_desc.func(&cvar_singleton::script_find_cvar, "__script_find_cvar"sv, "find_var"sv);
+		cvar_singleton_desc.func(&cvar_singleton::script_create_cvar, "script_create_cvar"sv, "create_var"sv);
+		cvar_singleton_desc.func(&cvar_singleton::script_find_cvar, "script_find_cvar"sv, "find_var"sv);
 
 		if(!vm->RegisterClass(&cvar_singleton_desc)) {
 			error("vmod: failed to register vmod cvar singleton script class\n"sv);
 			return false;
 		}
 
-		script_cvar_desc.func(&script_cvar::script_set_value, "__script_script_set_value"sv, "set"sv);
-		script_cvar_desc.func(&script_cvar::script_set_value_string, "__script_set_value_string"sv, "set_string"sv);
-		script_cvar_desc.func(&script_cvar::script_set_value_float, "__script_set_value_float"sv, "set_float"sv);
-		script_cvar_desc.func(&script_cvar::script_set_value_int, "__script_set_value_int"sv, "set_int"sv);
-		script_cvar_desc.func(&script_cvar::script_set_value_bool, "__script_set_value_bool"sv, "set_bool"sv);
-		script_cvar_desc.func(&script_cvar::script_get_value, "__script_script_get_value"sv, "get"sv);
-		script_cvar_desc.func(&script_cvar::script_get_value_string, "__script_get_value_string"sv, "get_string"sv);
-		script_cvar_desc.func(&script_cvar::script_get_value_float, "__script_get_value_float"sv, "get_float"sv);
-		script_cvar_desc.func(&script_cvar::script_get_value_int, "__script_get_value_int"sv, "get_int"sv);
-		script_cvar_desc.func(&script_cvar::script_get_value_bool, "__script_get_value_bool"sv, "get_bool"sv);
-		script_cvar_desc.func(&script_cvar::script_delete, "__script_delete"sv, "free"sv);
+		script_cvar_desc.func(&script_cvar::script_set_value, "script_script_set_value"sv, "set"sv);
+		script_cvar_desc.func(&script_cvar::script_set_value_string, "script_set_value_string"sv, "set_string"sv);
+		script_cvar_desc.func(&script_cvar::script_set_value_float, "script_set_value_float"sv, "set_float"sv);
+		script_cvar_desc.func(&script_cvar::script_set_value_int, "script_set_value_int"sv, "set_int"sv);
+		script_cvar_desc.func(&script_cvar::script_set_value_bool, "script_set_value_bool"sv, "set_bool"sv);
+		script_cvar_desc.func(&script_cvar::script_get_value, "script_script_get_value"sv, "get"sv);
+		script_cvar_desc.func(&script_cvar::script_get_value_string, "script_get_value_string"sv, "get_string"sv);
+		script_cvar_desc.func(&script_cvar::script_get_value_float, "script_get_value_float"sv, "get_float"sv);
+		script_cvar_desc.func(&script_cvar::script_get_value_int, "script_get_value_int"sv, "get_int"sv);
+		script_cvar_desc.func(&script_cvar::script_get_value_bool, "script_get_value_bool"sv, "get_bool"sv);
+		script_cvar_desc.func(&script_cvar::script_delete, "script_delete"sv, "free"sv);
 		script_cvar_desc.dtor();
 		script_cvar_desc.doc_class_name("convar"sv);
 
@@ -1073,7 +1106,7 @@ namespace vmod
 		using namespace std::literals::string_view_literals;
 		using namespace std::literals::string_literals;
 
-		vmod_desc.func(&vmod::script_find_plugin, "__script_find_plugin"sv, "find_plugin"sv);
+		vmod_desc.func(&vmod::script_find_plugin, "script_find_plugin"sv, "find_plugin"sv);
 
 		if(!vm_->RegisterClass(&vmod_desc)) {
 			error("vmod: failed to register vmod script class\n"sv);
@@ -1121,10 +1154,10 @@ namespace vmod
 			return false;
 		}
 
-		stringtable_desc.func(&script_stringtable::script_find_index, "__script_find_index"sv, "find"sv);
-		stringtable_desc.func(&script_stringtable::script_num_strings, "__script_num_strings"sv, "num"sv);
-		stringtable_desc.func(&script_stringtable::script_get_string, "__script_get_string"sv, "get"sv);
-		stringtable_desc.func(&script_stringtable::script_add_string, "__script_add_string"sv, "add"sv);
+		stringtable_desc.func(&script_stringtable::script_find_index, "script_find_index"sv, "find"sv);
+		stringtable_desc.func(&script_stringtable::script_num_strings, "script_num_strings"sv, "num"sv);
+		stringtable_desc.func(&script_stringtable::script_get_string, "script_get_string"sv, "get"sv);
+		stringtable_desc.func(&script_stringtable::script_add_string, "script_add_string"sv, "add"sv);
 		stringtable_desc.doc_class_name("string_table"sv);
 
 		if(!vm_->RegisterClass(&stringtable_desc)) {
@@ -2303,6 +2336,8 @@ namespace vmod
 	{ return vmod.to_string(object); }
 	std::string_view __vmod_typeof(gsdk::HSCRIPT object) noexcept
 	{ return vmod.typeof_(object); }
+	void __vmod_raiseexception(const char *str) noexcept
+	{ vmod.vm()->RaiseException(str); }
 
 	static inline void ident(std::string &file, std::size_t num) noexcept
 	{ file.insert(file.end(), num, '\t'); }

@@ -71,8 +71,8 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
-		plugin_desc.func(&plugin::script_lookup_function, "__script_lookup_function"sv, "lookup_function"sv);
-		plugin_desc.func(&plugin::script_lookup_value, "__script_lookup_value"sv, "lookup_value"sv);
+		plugin_desc.func(&plugin::script_lookup_function, "script_lookup_function"sv, "lookup_function"sv);
+		plugin_desc.func(&plugin::script_lookup_value, "script_lookup_value"sv, "lookup_value"sv);
 		plugin_desc.doc_class_name("plugin"sv);
 
 		if(!vmod.vm()->RegisterClass(&plugin_desc)) {

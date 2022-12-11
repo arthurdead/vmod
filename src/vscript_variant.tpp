@@ -505,6 +505,7 @@ namespace vmod
 	inline void *variant_to_value<void *>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
+			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_UINT64:
 			return reinterpret_cast<void *>(var.m_ulonglong);
 			default: return {};
@@ -529,6 +530,7 @@ namespace vmod
 	inline generic_func_t variant_to_value<generic_func_t>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
+			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_UINT64:
 			return reinterpret_cast<generic_func_t>(var.m_ulonglong);
 			default: return {};
@@ -547,6 +549,7 @@ namespace vmod
 	inline generic_mfp_t variant_to_value<generic_mfp_t>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
+			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_UINT64: {
 				generic_internal_mfp_t internal{static_cast<std::uint64_t>(var.m_ulonglong)};
 				return internal.func;
@@ -564,6 +567,7 @@ namespace vmod
 	inline generic_vtable_t variant_to_value<generic_vtable_t>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
+			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_UINT64:
 			return reinterpret_cast<generic_vtable_t>(var.m_ulonglong);
 			default: return {};
@@ -579,6 +583,7 @@ namespace vmod
 	inline generic_object_t *variant_to_value<generic_object_t *>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
+			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_UINT64:
 			return reinterpret_cast<generic_object_t *>(var.m_ulonglong);
 			default: return {};
