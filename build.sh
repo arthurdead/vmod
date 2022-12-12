@@ -40,7 +40,7 @@ if [[ ! -f 'subprojects/libyaml.wrap' ]]; then
 fi
 
 if [[ ! -d 'builddir' ]]; then
-	meson setup --fatal-meson-warnings --backend=ninja --cross-file $script_dir'/x86-linux-gnu' -Dsrcds=$srcds 'builddir'
+	meson setup --backend=ninja --cross-file $script_dir'/x86-linux-gnu' -Dsrcds=$srcds 'builddir'
 	if [[ $? != 0 ]]; then
 		exit 1
 	fi

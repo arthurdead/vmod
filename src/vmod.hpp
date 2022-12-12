@@ -8,6 +8,7 @@
 #include "gsdk.hpp"
 #include "convar.hpp"
 #include "gsdk/vscript/vscript.hpp"
+#include "preprocessor.hpp"
 
 namespace vmod
 {
@@ -53,11 +54,19 @@ namespace vmod
 		inline const std::filesystem::path &game_dir() const noexcept
 		{ return game_dir_; }
 
+		inline squirrel_preprocessor &preprocessor() noexcept
+		{ return pp; }
+
+		inline const std::filesystem::path &root_dir() const noexcept
+		{ return root_dir_; }
+
 		static vmod &instance() noexcept;
 
 	private:
 		static void CreateNetworkStringTables_detour_callback(gsdk::IServerGameDLL *dll);
 		static void RemoveAllTables_detour_callback(gsdk::IServerNetworkStringTableContainer *cont);
+
+		friend class squirrel_preprocessor;
 
 		bool load_late() noexcept;
 		bool load() noexcept;
@@ -107,13 +116,15 @@ namespace vmod
 		void write_mem_docs(const std::filesystem::path &dir) const noexcept;
 		void write_ffi_docs(const std::filesystem::path &dir) const noexcept;
 
+		void load_plugins(const std::filesystem::path &dir) noexcept;
+
 		bool is_map_loaded;
 		bool is_map_active;
 		bool are_string_tables_created;
 
 		std::filesystem::path game_dir_;
 		std::filesystem::path plugins_dir;
-		std::filesystem::path root_dir;
+		std::filesystem::path root_dir_;
 
 		gsdk::CVarDLLIdentifier_t cvar_dll_id_{gsdk::INVALID_CVAR_DLL_IDENTIFIER};
 
@@ -159,6 +170,10 @@ namespace vmod
 		gsdk::HSCRIPT to_bool_func{gsdk::INVALID_HSCRIPT};
 		gsdk::HSCRIPT typeof_func{gsdk::INVALID_HSCRIPT};
 		gsdk::HSCRIPT funcisg_func{gsdk::INVALID_HSCRIPT};
+
+		squirrel_preprocessor pp;
+
+		std::vector<std::filesystem::path> added_paths;
 
 		std::vector<std::unique_ptr<plugin>> plugins;
 		bool plugins_loaded;

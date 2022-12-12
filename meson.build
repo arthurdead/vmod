@@ -44,7 +44,8 @@ if compiler.get_id() == 'clang'
 		'-Wno-error=unused-private-field',
 		'-Wno-error=unused-local-typedef',
 		'-Wno-error=missing-variable-declarations',
-		'-Wno-error=old-style-cast'
+		'-Wno-error=old-style-cast',
+		'-Wno-error=weak-vtables'
 	]
 
 	cpp_args += [
@@ -145,11 +146,14 @@ dependencies = [
 	dependency('dl'),
 	dependency('libelf'),
 	dependency('libffi'),
+	dependency('llvm'),
 	libyaml.get_variable('yaml_dep'),
 	libiberty.get_variable('iberty_dep'),
 	squirrel.get_variable('squirrel_dep'),
 	squirrel.get_variable('squirrel_internal_dep')
 ]
+
+link_args += ['-lclang','-lclang-cpp']
 
 if custom_vm
 	dependencies += [vm_dep]
@@ -204,6 +208,7 @@ lib = shared_library('vmod',
 	files(
 		join_paths('src','vmod.cpp'),
 		join_paths('src','filesystem.cpp'),
+		join_paths('src','preprocessor.cpp'),
 		join_paths('src','plugin.cpp'),
 		join_paths('src','convar.cpp'),
 		join_paths('src','gsdk.cpp'),

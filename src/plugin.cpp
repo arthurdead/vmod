@@ -93,7 +93,6 @@ namespace vmod
 	plugin::plugin(std::filesystem::path &&path_) noexcept
 		: path{std::move(path_)},
 		inotify_fd{-1},
-		watch_d{-1},
 		instance_{gsdk::INVALID_HSCRIPT},
 		script{gsdk::INVALID_HSCRIPT},
 		private_scope_{gsdk::INVALID_HSCRIPT},
@@ -101,6 +100,7 @@ namespace vmod
 		functions_table{gsdk::INVALID_HSCRIPT},
 		values_table{gsdk::INVALID_HSCRIPT}
 	{
+		//TODO!!!! handle nested path
 		std::filesystem::path filename{path.filename()};
 		filename.replace_extension();
 
@@ -144,8 +144,7 @@ namespace vmod
 		inotify_fd = other.inotify_fd;
 		other.inotify_fd = -1;
 
-		watch_d = other.watch_d;
-		other.watch_d = -1;
+		watch_ds = std::move(other.watch_ds);
 
 		map_active = std::move(other.map_active);
 		map_loaded = std::move(other.map_loaded);
@@ -170,9 +169,18 @@ namespace vmod
 		gsdk::IScriptVM *vm{vmod.vm()};
 
 		{
-			std::unique_ptr<unsigned char[]> script_data{read_file(path)};
+			std::size_t size;
+			std::unique_ptr<unsigned char[]> script_data{read_file(path, size)};
 
-			script = vm->CompileScript(reinterpret_cast<const char *>(script_data.get()), path.c_str());
+			std::string new_script_data{reinterpret_cast<const char *>(script_data.get()), size};
+
+			squirrel_preprocessor &pp{vmod.preprocessor()};
+			if(!pp.preprocess(new_script_data, path, incs)) {
+				error("vmod: plugin '%s' failed to preprocess\n"sv, path.c_str());
+				return false;
+			}
+
+			script = vm->CompileScript(reinterpret_cast<const char *>(new_script_data.c_str()), path.c_str());
 		}
 
 		if(script == gsdk::INVALID_HSCRIPT) {
@@ -304,18 +312,21 @@ namespace vmod
 
 		inotify_fd = inotify_init1(IN_NONBLOCK);
 		if(inotify_fd != -1) {
-			watch_d = inotify_add_watch(inotify_fd, path.c_str(), IN_MODIFY);
+			watch_ds.emplace_back(inotify_add_watch(inotify_fd, path.c_str(), IN_MODIFY));
+
+			for(const std::filesystem::path &inc : incs) {
+				watch_ds.emplace_back(inotify_add_watch(inotify_fd, inc.c_str(), IN_MODIFY));
+			}
 		}
 	}
 
 	void plugin::unwatch() noexcept
 	{
 		if(inotify_fd != -1) {
-			if(watch_d != -1) {
-				inotify_rm_watch(inotify_fd, watch_d);
-				watch_d = -1;
+			for(int it : watch_ds) {
+				inotify_rm_watch(inotify_fd, it);
 			}
-
+			watch_ds.clear();
 			close(inotify_fd);
 			inotify_fd = -1;
 		}
@@ -418,6 +429,10 @@ namespace vmod
 		if(script && script != gsdk::INVALID_HSCRIPT) {
 			vm->ReleaseScript(script);
 			script = gsdk::INVALID_HSCRIPT;
+		}
+
+		if(!incs.empty()) {
+			incs.clear();
 		}
 
 		if(private_scope_ && private_scope_ != gsdk::INVALID_HSCRIPT) {

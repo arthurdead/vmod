@@ -71,7 +71,14 @@ namespace vmod
 		if(!path.is_absolute()) {
 			path = (plugins_dir/path);
 		}
-		path.replace_extension(scripts_extension);
+		if(!path.has_extension()) {
+			path.replace_extension(scripts_extension);
+		}
+
+		if(path.extension() != scripts_extension) {
+			vm_->RaiseException("vmod: invalid extension");
+			return nullptr;
+		}
 
 		for(auto it{plugins.begin()}; it != plugins.end(); ++it) {
 			const std::filesystem::path &pl_path{static_cast<std::filesystem::path>(*(*it))};
@@ -1232,7 +1239,7 @@ namespace vmod
 			return false;
 		}
 
-		if(!vm_->SetValue(scope_, "root_dir", root_dir.c_str())) {
+		if(!vm_->SetValue(scope_, "root_dir", root_dir_.c_str())) {
 			error("vmod: failed to set root dir value\n"sv);
 			return false;
 		}
@@ -1761,13 +1768,17 @@ namespace vmod
 			game_dir_ = gamedir;
 		}
 
-		root_dir = game_dir_;
-		root_dir /= "addons/vmod"sv;
+		root_dir_ = game_dir_;
+		root_dir_ /= "addons/vmod"sv;
 
-		plugins_dir = root_dir;
+		if(!pp.initialize()) {
+			return false;
+		}
+
+		plugins_dir = root_dir_;
 		plugins_dir /= "plugins"sv;
 
-		base_script_path = root_dir;
+		base_script_path = root_dir_;
 		base_script_path /= "base/vmod_base"sv;
 		base_script_path.replace_extension(scripts_extension);
 
@@ -1984,10 +1995,10 @@ namespace vmod
 		vm_->SetErrorCallback(vscript_error_output);
 
 		if(g_Script_init) {
-			write_file(root_dir/"internal_scripts"sv/"init.nut"sv, g_Script_init, std::strlen(reinterpret_cast<const char *>(g_Script_init)+1));
+			write_file(root_dir_/"internal_scripts"sv/"init.nut"sv, g_Script_init, std::strlen(reinterpret_cast<const char *>(g_Script_init)+1));
 		}
 
-		write_file(root_dir/"internal_scripts"sv/"vscript_server.nut"sv, g_Script_vscript_server, std::strlen(reinterpret_cast<const char *>(g_Script_vscript_server)+1));
+		write_file(root_dir_/"internal_scripts"sv/"vscript_server.nut"sv, g_Script_vscript_server, std::strlen(reinterpret_cast<const char *>(g_Script_vscript_server)+1));
 
 		if(!detours()) {
 			return false;
@@ -2028,6 +2039,11 @@ namespace vmod
 
 			plugins.clear();
 
+			for(const std::filesystem::path &it : added_paths) {
+				filesystem->RemoveSearchPath(it.c_str(), "GAME");
+			}
+			added_paths.clear();
+
 			plugins_loaded = false;
 		});
 
@@ -2041,7 +2057,14 @@ namespace vmod
 			if(!path.is_absolute()) {
 				path = (plugins_dir/path);
 			}
-			path.replace_extension(scripts_extension);
+			if(!path.has_extension()) {
+				path.replace_extension(scripts_extension);
+			}
+
+			if(path.extension() != scripts_extension) {
+				error("vmod: invalid extension\n");
+				return;
+			}
 
 			for(auto it{plugins.begin()}; it != plugins.end(); ++it) {
 				const std::filesystem::path &pl_path{static_cast<std::filesystem::path>(*(*it))};
@@ -2066,7 +2089,14 @@ namespace vmod
 			if(!path.is_absolute()) {
 				path = (plugins_dir/path);
 			}
-			path.replace_extension(scripts_extension);
+			if(!path.has_extension()) {
+				path.replace_extension(scripts_extension);
+			}
+
+			if(path.extension() != scripts_extension) {
+				error("vmod: invalid extension\n");
+				return;
+			}
 
 			for(const auto &pl : plugins) {
 				const std::filesystem::path &pl_path{static_cast<std::filesystem::path>(*pl)};
@@ -2112,23 +2142,9 @@ namespace vmod
 		});
 
 		vmod_refresh_plugins.initialize("vmod_refresh_plugins"sv, [this](const gsdk::CCommand &) noexcept -> void {
-			plugins.clear();
+			vmod_unload_plugins();
 
-			for(const auto &file : std::filesystem::directory_iterator{plugins_dir}) {
-				if(!file.is_regular_file()) {
-					continue;
-				}
-
-				std::filesystem::path path{file.path()};
-				if(path.extension() != scripts_extension) {
-					continue;
-				}
-
-				plugin *pl{new plugin{std::move(path)}};
-				pl->load();
-
-				plugins.emplace_back(pl);
-			}
+			load_plugins(plugins_dir);
 
 			for(const auto &pl : plugins) {
 				if(!*pl) {
@@ -2255,6 +2271,45 @@ namespace vmod
 		}
 
 		return true;
+	}
+
+	void vmod::load_plugins(const std::filesystem::path &dir) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		for(const auto &file : std::filesystem::directory_iterator{dir}) {
+			if(file.is_directory()) {
+				std::filesystem::path path{file.path()};
+				std::filesystem::path name{path.filename()};
+
+				if(name == "disabled"sv ||
+					name == "optional"sv ||
+					name == "include"sv) {
+					continue;
+				}
+
+				if(name == "assets"sv) {
+					filesystem->AddSearchPath(path.c_str(), "GAME");
+					added_paths.emplace_back(std::move(path));
+					continue;
+				}
+
+				load_plugins(path);
+				continue;
+			} else if(!file.is_regular_file()) {
+				continue;
+			}
+
+			std::filesystem::path path{file.path()};
+			if(path.extension() != scripts_extension) {
+				continue;
+			}
+
+			plugin *pl{new plugin{std::move(path)}};
+			pl->load();
+
+			plugins.emplace_back(pl);
+		}
 	}
 
 	static script_variant_t call_to_func(gsdk::HSCRIPT func, gsdk::HSCRIPT value) noexcept
@@ -2939,7 +2994,7 @@ namespace vmod
 		}
 
 		{
-			std::filesystem::path game_docs{root_dir/"docs"sv/"game"sv};
+			std::filesystem::path game_docs{root_dir_/"docs"sv/"game"sv};
 			write_docs(game_docs, game_vscript_class_bindings, false);
 			write_docs(game_docs, game_vscript_func_bindings, false);
 
@@ -2985,7 +3040,7 @@ namespace vmod
 				write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
 			}
 
-			std::filesystem::path vmod_docs{root_dir/"docs"sv/"vmod"sv};
+			std::filesystem::path vmod_docs{root_dir_/"docs"sv/"vmod"sv};
 			write_vmod_docs(vmod_docs);
 		}
 

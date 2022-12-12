@@ -158,8 +158,9 @@ namespace vmod
 		void unwatch() noexcept;
 
 		std::filesystem::path path;
+		std::vector<std::filesystem::path> incs;
 		int inotify_fd;
-		int watch_d;
+		std::vector<int> watch_ds;
 
 		std::string name;
 
