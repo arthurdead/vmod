@@ -25,6 +25,7 @@ namespace vmod
 		using namespace std::literals::string_view_literals;
 
 		switch(var.m_type) {
+			case gsdk::FIELD_INTERVAL:
 			case gsdk::FIELD_FLOAT: {
 				return var.m_float > 0.0f;
 			}
@@ -34,6 +35,12 @@ namespace vmod
 			case gsdk::FIELD_STRING: {
 				const char *m_pszString{gsdk::STRING(var.m_tstring)};
 
+				if(std::strcmp(m_pszString, "true") == 0) {
+					return true;
+				} else if(std::strcmp(m_pszString, "false") == 0) {
+					return false;
+				}
+
 				const char *begin{m_pszString};
 				const char *end{m_pszString + std::strlen(m_pszString)};
 
@@ -42,6 +49,12 @@ namespace vmod
 				return ret > 0;
 			}
 			case gsdk::FIELD_CSTRING: {
+				if(std::strcmp(var.m_pszString, "true") == 0) {
+					return true;
+				} else if(std::strcmp(var.m_pszString, "false") == 0) {
+					return false;
+				}
+
 				const char *begin{var.m_pszString};
 				const char *end{var.m_pszString + std::strlen(var.m_pszString)};
 
@@ -85,6 +98,8 @@ namespace vmod
 		using namespace std::literals::string_view_literals;
 
 		switch(var.m_type) {
+			case gsdk::FIELD_TIME:
+			case gsdk::FIELD_INTERVAL:
 			case gsdk::FIELD_FLOAT: {
 				return static_cast<T>(var.m_float);
 			}
@@ -94,6 +109,12 @@ namespace vmod
 			case gsdk::FIELD_STRING: {
 				const char *m_pszString{gsdk::STRING(var.m_tstring)};
 
+				if(std::strcmp(m_pszString, "true") == 0) {
+					return static_cast<T>(1.0f);
+				} else if(std::strcmp(m_pszString, "false") == 0) {
+					return static_cast<T>(0.0f);
+				}
+
 				const char *begin{m_pszString};
 				const char *end{m_pszString + std::strlen(m_pszString)};
 
@@ -102,6 +123,12 @@ namespace vmod
 				return ret;
 			}
 			case gsdk::FIELD_CSTRING: {
+				if(std::strcmp(var.m_pszString, "true") == 0) {
+					return static_cast<T>(1.0f);
+				} else if(std::strcmp(var.m_pszString, "false") == 0) {
+					return static_cast<T>(0.0f);
+				}
+
 				const char *begin{var.m_pszString};
 				const char *end{var.m_pszString + std::strlen(var.m_pszString)};
 
@@ -116,6 +143,7 @@ namespace vmod
 				return static_cast<T>(var.m_short);
 			}
 			case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
+			case gsdk::FIELD_TICK:
 			case gsdk::FIELD_INTEGER: {
 				return static_cast<T>(var.m_int);
 			}
@@ -145,6 +173,8 @@ namespace vmod
 		using namespace std::literals::string_view_literals;
 
 		switch(var.m_type) {
+			case gsdk::FIELD_INTERVAL:
+			case gsdk::FIELD_TIME:
 			case gsdk::FIELD_FLOAT: {
 				return static_cast<T>(var.m_float);
 			}
@@ -154,6 +184,12 @@ namespace vmod
 			case gsdk::FIELD_STRING: {
 				const char *m_pszString{gsdk::STRING(var.m_tstring)};
 
+				if(std::strcmp(m_pszString, "true") == 0) {
+					return static_cast<T>(1);
+				} else if(std::strcmp(m_pszString, "false") == 0) {
+					return static_cast<T>(0);
+				}
+
 				const char *begin{m_pszString};
 				const char *end{m_pszString + std::strlen(m_pszString)};
 
@@ -162,6 +198,12 @@ namespace vmod
 				return ret;
 			}
 			case gsdk::FIELD_CSTRING: {
+				if(std::strcmp(var.m_pszString, "true") == 0) {
+					return static_cast<T>(1);
+				} else if(std::strcmp(var.m_pszString, "false") == 0) {
+					return static_cast<T>(0);
+				}
+
 				const char *begin{var.m_pszString};
 				const char *end{var.m_pszString + std::strlen(var.m_pszString)};
 
@@ -349,6 +391,8 @@ namespace vmod
 		constexpr std::size_t buffers_size{sizeof(__vscript_variant_to_value_buffer) / 5};
 
 		switch(var.m_type) {
+			case gsdk::FIELD_INTERVAL:
+			case gsdk::FIELD_TIME:
 			case gsdk::FIELD_FLOAT: {
 				char *begin{__vscript_variant_to_value_buffer};
 				char *end{__vscript_variant_to_value_buffer + buffers_size};
@@ -368,10 +412,15 @@ namespace vmod
 			case gsdk::FIELD_STRING: {
 				return gsdk::STRING(var.m_tstring);
 			}
+			case gsdk::FIELD_MODELNAME:
+			case gsdk::FIELD_SOUNDNAME:
 			case gsdk::FIELD_CSTRING: {
 				return var.m_pszString;
 			}
 			case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
+			case gsdk::FIELD_MODELINDEX:
+			case gsdk::FIELD_MATERIALINDEX:
+			case gsdk::FIELD_TICK:
 			case gsdk::FIELD_INTEGER: {
 				char *begin{__vscript_variant_to_value_buffer};
 				char *end{__vscript_variant_to_value_buffer + buffers_size};
@@ -489,6 +538,8 @@ namespace vmod
 			case gsdk::FIELD_STRING: {
 				return gsdk::STRING(var.m_tstring);
 			}
+			case gsdk::FIELD_MODELNAME:
+			case gsdk::FIELD_SOUNDNAME:
 			case gsdk::FIELD_CSTRING: {
 				return var.m_pszString;
 			}

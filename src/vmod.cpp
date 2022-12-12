@@ -2400,6 +2400,117 @@ namespace vmod
 	static inline void ident(std::string &file, std::size_t num) noexcept
 	{ file.insert(file.end(), num, '\t'); }
 
+	static std::string_view datatype_to_raw_str(gsdk::ScriptDataType_t type) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		static std::string temp_buffer;
+
+		switch(type) {
+			case gsdk::FIELD_VOID:
+			return "FIELD_VOID"sv;
+			case gsdk::FIELD_FLOAT:
+			return "FIELD_FLOAT"sv;
+			case gsdk::FIELD_STRING:
+			return "FIELD_STRING"sv;
+			case gsdk::FIELD_VECTOR:
+			return "FIELD_VECTOR"sv;
+			case gsdk::FIELD_QUATERNION:
+			return "FIELD_QUATERNION"sv;
+			case gsdk::FIELD_INTEGER:
+			return "FIELD_INTEGER"sv;
+			case gsdk::FIELD_BOOLEAN:
+			return "FIELD_BOOLEAN"sv;
+			case gsdk::FIELD_SHORT:
+			return "FIELD_SHORT"sv;
+			case gsdk::FIELD_CHARACTER:
+			return "FIELD_CHARACTER"sv;
+			case gsdk::FIELD_COLOR32:
+			return "FIELD_COLOR32"sv;
+			case gsdk::FIELD_EMBEDDED:
+			return "FIELD_EMBEDDED"sv;
+			case gsdk::FIELD_CUSTOM:
+			return "FIELD_CUSTOM"sv;
+			case gsdk::FIELD_CLASSPTR:
+			return "FIELD_CLASSPTR"sv;
+			case gsdk::FIELD_EHANDLE:
+			return "FIELD_EHANDLE"sv;
+			case gsdk::FIELD_EDICT:
+			return "FIELD_EDICT"sv;
+			case gsdk::FIELD_POSITION_VECTOR:
+			return "FIELD_POSITION_VECTOR"sv;
+			case gsdk::FIELD_TIME:
+			return "FIELD_TIME"sv;
+			case gsdk::FIELD_TICK:
+			return "FIELD_TICK"sv;
+			case gsdk::FIELD_MODELNAME:
+			return "FIELD_MODELNAME"sv;
+			case gsdk::FIELD_SOUNDNAME:
+			return "FIELD_SOUNDNAME"sv;
+			case gsdk::FIELD_INPUT:
+			return "FIELD_INPUT"sv;
+			case gsdk::FIELD_FUNCTION:
+			return "FIELD_FUNCTION"sv;
+			case gsdk::FIELD_VMATRIX:
+			return "FIELD_VMATRIX"sv;
+			case gsdk::FIELD_VMATRIX_WORLDSPACE:
+			return "FIELD_VMATRIX_WORLDSPACE"sv;
+			case gsdk::FIELD_MATRIX3X4_WORLDSPACE:
+			return "FIELD_MATRIX3X4_WORLDSPACE"sv;
+			case gsdk::FIELD_INTERVAL:
+			return "FIELD_INTERVAL"sv;
+			case gsdk::FIELD_MODELINDEX:
+			return "FIELD_MODELINDEX"sv;
+			case gsdk::FIELD_MATERIALINDEX:
+			return "FIELD_MATERIALINDEX"sv;
+			case gsdk::FIELD_VECTOR2D:
+			return "FIELD_VECTOR2D"sv;
+			//case gsdk::FIELD_TYPECOUNT:
+			//return "FIELD_TYPECOUNT"sv;
+			case gsdk::FIELD_TYPEUNKNOWN:
+			return "FIELD_TYPEUNKNOWN"sv;
+			case gsdk::FIELD_CSTRING:
+			return "FIELD_CSTRING"sv;
+			case gsdk::FIELD_HSCRIPT:
+			return "FIELD_HSCRIPT"sv;
+			case gsdk::FIELD_VARIANT:
+			return "FIELD_VARIANT"sv;
+			case gsdk::FIELD_UINT64:
+			return "FIELD_UINT64"sv;
+			case gsdk::FIELD_DOUBLE:
+			return "FIELD_DOUBLE"sv;
+			case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
+			return "FIELD_POSITIVEINTEGER_OR_NULL"sv;
+			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
+			return "FIELD_HSCRIPT_NEW_INSTANCE"sv;
+			case gsdk::FIELD_UINT:
+			return "FIELD_UINT"sv;
+			case gsdk::FIELD_UTLSTRINGTOKEN:
+			return "FIELD_UTLSTRINGTOKEN"sv;
+			case gsdk::FIELD_QANGLE:
+			return "FIELD_QANGLE"sv;
+			case gsdk::FIELD_INTEGER64:
+			return "FIELD_INTEGER64"sv;
+			case gsdk::FIELD_VECTOR4D:
+			return "FIELD_VECTOR4D"sv;
+			case gsdk::FIELD_RESOURCE:
+			return "FIELD_RESOURCE"sv;
+			default: {
+				temp_buffer = "<<unknown: "sv;
+
+				temp_buffer.reserve(temp_buffer.length() + 6);
+
+				char *begin{temp_buffer.data() + temp_buffer.length()};
+				char *end{begin + 6};
+
+				std::to_chars_result tc_res{std::to_chars(begin, end, type)};
+				tc_res.ptr[0] = '\0';
+
+				return temp_buffer.data();
+			}
+		}
+	}
+
 	static std::string_view datatype_to_str(gsdk::ScriptDataType_t type) noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -2415,9 +2526,14 @@ namespace vmod
 			case gsdk::FIELD_UINT:
 			case gsdk::FIELD_INTEGER64:
 			case gsdk::FIELD_UINT64:
+			case gsdk::FIELD_MODELINDEX:
+			case gsdk::FIELD_MATERIALINDEX:
+			case gsdk::FIELD_TICK:
 			return "int"sv;
 			case gsdk::FIELD_DOUBLE:
 			case gsdk::FIELD_FLOAT:
+			case gsdk::FIELD_INTERVAL:
+			case gsdk::FIELD_TIME:
 			return "float"sv;
 			case gsdk::FIELD_BOOLEAN:
 			return "bool"sv;
@@ -2435,11 +2551,19 @@ namespace vmod
 			return "Quaternion"sv;
 			case gsdk::FIELD_STRING:
 			case gsdk::FIELD_CSTRING:
+			case gsdk::FIELD_MODELNAME:
+			case gsdk::FIELD_SOUNDNAME:
 			return "string"sv;
 			case gsdk::FIELD_VARIANT:
 			return "variant"sv;
+			case gsdk::FIELD_EHANDLE:
+			return "ehandle"sv;
+			case gsdk::FIELD_EDICT:
+			return "edict"sv;
+			case gsdk::FIELD_TYPEUNKNOWN:
+			return "unknown"sv;
 			default:
-			return "<<unknown>>"sv;
+			return datatype_to_raw_str(type);
 		}
 	}
 
@@ -2450,7 +2574,7 @@ namespace vmod
 		std::time_t time{std::time(nullptr)};
 
 		char timestr[256];
-		std::strftime(timestr, sizeof(timestr), "//Generated on %Y-%m-%d %H:%M:%S\n\n", std::gmtime(&time));
+		std::strftime(timestr, sizeof(timestr), "//Generated on %Y-%m-%d %H:%M:%S UTC\n\n", std::gmtime(&time));
 
 		file += timestr;
 	}
@@ -2954,67 +3078,82 @@ namespace vmod
 				file += " = "sv;
 			}
 
-			if(how == write_enum_how::flags) {
-				unsigned int val{value2.get<unsigned int>()};
+			std::string_view value_str;
+			if(value2.m_type == gsdk::FIELD_VOID) {
+				value_str = "void"sv;
+			} else {
+				value_str = value2.get<std::string_view>();
+			}
 
-				std::vector<int> bits;
-
-				for(int k{0}; val; val >>= 1, ++k) {
-					if(val & 1) {
-						bits.emplace_back(k);
-					}
+			if(value2.m_type == gsdk::FIELD_VOID) {
+				if(how != write_enum_how::name) {
+					file += value_str;
 				}
+			} else {
+				if(how == write_enum_how::flags) {
+					unsigned int val{value2.get<unsigned int>()};
 
-				std::size_t num_bits{bits.size()};
+					std::vector<int> bits;
 
-				if(num_bits > 0) {
-					std::string temp_bit_str;
-
-					if(num_bits > 1) {
-						file += '(';
-					}
-					for(int bit : bits) {
-						auto name_it{bit_str_map.find(bit)};
-						if(name_it != bit_str_map.end()) {
-							file += name_it->second;
-							file += '|';
-						} else {
-							file += "(1 << "sv;
-
-							temp_bit_str.resize(6);
-
-							char *begin{temp_bit_str.data()};
-							char *end{temp_bit_str.data() + 6};
-
-							std::to_chars_result tc_res{std::to_chars(begin, end, bit)};
-							tc_res.ptr[0] = '\0';
-
-							file += begin;
-							file += ")|"sv;
+					for(int k{0}; val; val >>= 1, ++k) {
+						if(val & 1) {
+							bits.emplace_back(k);
 						}
 					}
-					file.pop_back();
-					if(num_bits > 1) {
-						file += ')';
-					}
 
-					if(num_bits == 1) {
-						bit_str_map.emplace(bits[0], value_name);
+					std::size_t num_bits{bits.size()};
+
+					if(num_bits > 0) {
+						std::string temp_bit_str;
+
+						if(num_bits > 1) {
+							file += '(';
+						}
+						for(int bit : bits) {
+							auto name_it{bit_str_map.find(bit)};
+							if(name_it != bit_str_map.end()) {
+								file += name_it->second;
+								file += '|';
+							} else {
+								file += "(1 << "sv;
+
+								temp_bit_str.resize(6);
+
+								char *begin{temp_bit_str.data()};
+								char *end{temp_bit_str.data() + 6};
+
+								std::to_chars_result tc_res{std::to_chars(begin, end, bit)};
+								tc_res.ptr[0] = '\0';
+
+								file += begin;
+								file += ")|"sv;
+							}
+						}
+						file.pop_back();
+						if(num_bits > 1) {
+							file += ')';
+						}
+
+						if(num_bits == 1) {
+							bit_str_map.emplace(bits[0], value_name);
+						}
+					} else {
+						file += value_str;
 					}
-				} else {
-					file += value2.get<std::string_view>();
+				} else if(how == write_enum_how::normal) {
+					file += value_str;
 				}
-			} else if(how == write_enum_how::normal) {
-				file += value2.get<std::string_view>();
 			}
 
 			if(j < num2-1) {
 				file += ',';
 			}
 
-			if(how == write_enum_how::flags) {
-				file += " //"sv;
-				file += value2.get<std::string_view>();
+			if(value2.m_type != gsdk::FIELD_VOID) {
+				if(how == write_enum_how::flags) {
+					file += " //"sv;
+					file += value_str;
+				}
 			}
 
 			file += '\n';
