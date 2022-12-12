@@ -2424,8 +2424,11 @@ namespace vmod
 			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
 			case gsdk::FIELD_HSCRIPT:
 			return "handle"sv;
+			case gsdk::FIELD_POSITION_VECTOR:
 			case gsdk::FIELD_VECTOR:
 			return "Vector"sv;
+			case gsdk::FIELD_VECTOR2D:
+			return "Vector2D"sv;
 			case gsdk::FIELD_QANGLE:
 			return "QAngle"sv;
 			case gsdk::FIELD_QUATERNION:
@@ -2438,6 +2441,18 @@ namespace vmod
 			default:
 			return "<<unknown>>"sv;
 		}
+	}
+
+	static void add_gen_date(std::string &file) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		std::time_t time{std::time(nullptr)};
+
+		char timestr[256];
+		std::strftime(timestr, sizeof(timestr), "//Generated on %Y-%m-%d %H:%M:%S\n\n", std::gmtime(&time));
+
+		file += timestr;
 	}
 
 	static std::string_view get_func_desc_desc(const gsdk::ScriptFuncDescriptor_t *desc) noexcept
@@ -2580,6 +2595,9 @@ namespace vmod
 
 		for(const gsdk::ScriptClassDesc_t *desc : vec) {
 			std::string file;
+
+			add_gen_date(file);
+
 			if(!write_class(desc, true, 0, file, respect_hide)) {
 				continue;
 			}
@@ -2597,6 +2615,8 @@ namespace vmod
 		using namespace std::literals::string_view_literals;
 
 		std::string file;
+
+		add_gen_date(file);
 
 		std::size_t written{0};
 		for(const gsdk::ScriptFunctionBinding_t *desc : vec) {
@@ -2620,6 +2640,8 @@ namespace vmod
 		using namespace std::literals::string_view_literals;
 
 		std::string file;
+
+		add_gen_date(file);
 
 		file += "namespace syms\n{\n"sv;
 
@@ -2651,6 +2673,8 @@ namespace vmod
 
 		std::string file;
 
+		add_gen_date(file);
+
 		file += "namespace strtables\n{\n"sv;
 
 		write_class(&stringtable_desc, true, 1, file, false);
@@ -2679,6 +2703,8 @@ namespace vmod
 
 		std::string file;
 
+		add_gen_date(file);
+
 		file += "namespace yaml\n{\n"sv;
 
 		write_class(&yaml_desc, true, 1, file, false);
@@ -2700,6 +2726,8 @@ namespace vmod
 		using namespace std::literals::string_view_literals;
 
 		std::string file;
+
+		add_gen_date(file);
 
 		file += "namespace fs\n{\n"sv;
 
@@ -2723,6 +2751,8 @@ namespace vmod
 		using namespace std::literals::string_view_literals;
 
 		std::string file;
+
+		add_gen_date(file);
 
 		file += "namespace cvar\n{\n"sv;
 
@@ -2753,6 +2783,8 @@ namespace vmod
 		using namespace std::literals::string_view_literals;
 
 		std::string file;
+
+		add_gen_date(file);
 
 		file += "namespace mem\n{\n"sv;
 
@@ -2803,6 +2835,8 @@ namespace vmod
 
 		std::string file;
 
+		add_gen_date(file);
+
 		file += "namespace ffi\n{\n"sv;
 
 		write_class(&detour_desc, true, 1, file, false);
@@ -2843,6 +2877,8 @@ namespace vmod
 		using namespace std::literals::string_view_literals;
 
 		std::string file;
+
+		add_gen_date(file);
 
 		file += "namespace vmod\n{\n"sv;
 		write_class(&vmod_desc, false, 1, file, false);
@@ -3001,6 +3037,8 @@ namespace vmod
 			gsdk::HSCRIPT const_table;
 			if(vm_->GetValue(nullptr, "Constants", &const_table)) {
 				std::string file;
+
+				add_gen_date(file);
 
 				int num{vm_->GetNumTableEntries(const_table)};
 				for(int i{0}, it{0}; i < num && it != -1; ++i) {

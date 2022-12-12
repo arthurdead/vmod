@@ -110,6 +110,8 @@ namespace vmod
 		{
 			if(m_flags & gsdk::SV_FREE) {
 				switch(m_type) {
+					case gsdk::FIELD_VOID: break;
+					case gsdk::FIELD_POSITION_VECTOR:
 					case gsdk::FIELD_VECTOR: {
 						delete m_pVector;
 					} break;
@@ -128,6 +130,7 @@ namespace vmod
 					case gsdk::FIELD_CSTRING: {
 						std::free(const_cast<char *>(m_pszString));
 					} break;
+					case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
 					case gsdk::FIELD_HSCRIPT: {
 						free_variant_hscript(*this);
 					} break;
