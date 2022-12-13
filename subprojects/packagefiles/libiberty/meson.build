@@ -11,7 +11,7 @@ project('libiberty', 'c',
 		'b_lundef=true',
 		'strip=true',
 		'c_std=gnu18'
-	],
+	]
 )
 
 c_args = [

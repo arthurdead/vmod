@@ -13,7 +13,7 @@ project('squirrel', 'cpp',
 		'cpp_std=gnu++17',
 		'cpp_eh=default',
 		'cpp_rtti=false'
-	],
+	]
 )
 
 cpp_internal_args = ['-DSQ_VAR_TRACE_ENABLED=0']
@@ -35,7 +35,6 @@ squirrel_lib = static_library('squirrel',
 	),
 	cpp_args: cpp_internal_args,
 	gnu_symbol_visibility: 'inlineshidden',
-	
 	include_directories:
 		include_directories(
 			'include'

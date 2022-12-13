@@ -68,4 +68,20 @@ namespace vmod
 
 		return *this;
 	}
+
+	template <typename T>
+	T ConVar::get() const noexcept
+	{
+		using decay_t = std::decay_t<T>;
+
+		if constexpr(std::is_same_v<decay_t, bool>) {
+			return gsdk::ConVar::GetBool();
+		} else if constexpr(std::is_integral_v<decay_t>) {
+			return static_cast<T>(gsdk::ConVar::GetInt());
+		} else if constexpr(std::is_floating_point_v<decay_t>) {
+			return static_cast<T>(gsdk::ConVar::GetFloat());
+		} else {
+			static_assert(false_t<T>::value);
+		}
+	}
 }

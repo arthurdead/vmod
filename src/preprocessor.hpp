@@ -8,6 +8,7 @@
 #include <string>
 #include <filesystem>
 #include <memory>
+#include "convar.hpp"
 
 namespace vmod
 {
@@ -83,6 +84,8 @@ namespace vmod
 		clang::Preprocessor pp;
 
 		bool fatal;
+
+		ConVar vmod_preproc_dump;
 
 		std::vector<std::filesystem::path> *curr_incs;
 		const std::filesystem::path *curr_path;

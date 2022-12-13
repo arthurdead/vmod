@@ -5,7 +5,6 @@
 #include "gsdk.hpp"
 #include "vmod.hpp"
 #include "filesystem.hpp"
-#include "convar.hpp"
 
 namespace vmod
 {
@@ -13,10 +12,12 @@ namespace vmod
 		: file_mgr{fs_opts},
 		diagcl{*this},
 		diageng{&diagids, &diagopts, &diagcl},
-		src_mgr{diageng, file_mgr},
+		src_mgr{diageng, file_mgr, true},
 		hdr_srch{std::make_shared<clang::HeaderSearchOptions>(), src_mgr, diageng, lang_opts, nullptr},
 		pp{std::make_shared<clang::PreprocessorOptions>(), diageng, lang_opts, src_mgr, hdr_srch, modul_ldr}
 	{
+		src_mgr.setAllFilesAreTransient(true);
+
 		clang::HeaderSearchOptions &hdr_srch_opts{hdr_srch.getHeaderSearchOpts()};
 		hdr_srch_opts.UseBuiltinIncludes = false;
 		hdr_srch_opts.UseStandardSystemIncludes = false;
@@ -28,6 +29,8 @@ namespace vmod
 	bool squirrel_preprocessor::initialize() noexcept
 	{
 		using namespace std::literals::string_view_literals;
+
+		vmod_preproc_dump.initialize("vmod_preproc_dump"sv, false);
 
 		clang::HeaderSearchOptions &hdr_srch_opts{hdr_srch.getHeaderSearchOpts()};
 
@@ -124,6 +127,7 @@ namespace vmod
 	void squirrel_preprocessor::pp_callbacks::InclusionDirective([[maybe_unused]] clang::SourceLocation, [[maybe_unused]] const clang::Token &, [[maybe_unused]] clang::StringRef, [[maybe_unused]] bool, [[maybe_unused]] clang::CharSourceRange, const clang::FileEntry *file, clang::StringRef search_path, clang::StringRef relative_path, [[maybe_unused]] const clang::Module *, [[maybe_unused]] clang::SrcMgr::CharacteristicKind)
 	{
 		if(!file) {
+			//pp.fatal = true;
 			return;
 		}
 
@@ -142,37 +146,51 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
-		llvm::Expected<clang::FileEntryRef> file_ref{file_mgr.getFileRef(path.native())};
+		llvm::Expected<clang::FileEntryRef> file_ref{file_mgr.getFileRef(path.native(), true, false)};
 		if(!file_ref) {
 			return false;
 		}
 
-		clang::FileID file_id{src_mgr.createFileID(*file_ref, clang::SourceLocation{}, clang::SrcMgr::CharacteristicKind::C_User)};
+		clang::FileID file_id{src_mgr.getOrCreateFileID(*file_ref, clang::SrcMgr::CharacteristicKind::C_User)};
 		src_mgr.setMainFileID(file_id);
+
+		pp.EnterMainSourceFile();
 
 		curr_incs = &incs;
 		curr_path = &path;
 
-		pp.EnterMainSourceFile();
-
-		std::string out_str;
-		out_str.reserve(str.length());
+		str.reserve(static_cast<std::size_t>(file_ref->getSize()));
 
 		struct scope_cleanup {
-			inline scope_cleanup(squirrel_preprocessor &pp_) noexcept
-				: pp{pp_}
+			inline scope_cleanup(squirrel_preprocessor &pp_, clang::FileEntryRef &file_, std::string &str_, const std::filesystem::path &path_) noexcept
+				: pp{pp_}, file{file_}, str{str_}, path{path_}
 			{}
 			inline ~scope_cleanup() noexcept {
-				pp.pp.EndSourceFile();
+				if(pp.vmod_preproc_dump.get<bool>()) {
+					std::filesystem::path pp_path{vmod.root_dir()};
+					pp_path /= "plugins_pp"sv;
+					pp_path /= path.filename();
+					pp_path.replace_extension(".nut.pp"sv);
 
+					write_file(pp_path, reinterpret_cast<const unsigned char *>(str.c_str()), str.length());
+				}
+
+				pp.pp.EndSourceFile();
+				file.closeFile();
+
+				pp.src_mgr.setMainFileID({});
+				pp.src_mgr.clearIDTables();
+
+				pp.fatal = false;
 				pp.curr_incs = nullptr;
 				pp.curr_path = nullptr;
-
-				pp.src_mgr.clearIDTables();
 			}
 			squirrel_preprocessor &pp;
+			clang::FileEntryRef &file;
+			std::string &str;
+			const std::filesystem::path &path;
 		};
-		scope_cleanup sclp{*this};
+		scope_cleanup sclp{*this, *file_ref, str, path};
 
 		{
 			clang::Token tok;
@@ -200,39 +218,26 @@ namespace vmod
 				}
 
 				if(tok.isAtStartOfLine()) {
-					out_str += '\n';
+					str += '\n';
 				} else if(tok.hasLeadingSpace()) {
-					out_str += ' ';
+					str += ' ';
 				}
 
 				clang::IdentifierInfo *idinfo{tok.getIdentifierInfo()};
 				if(idinfo) {
-					out_str += idinfo->getName();
+					str += idinfo->getName();
 				} else if(tok.isLiteral() && !tok.needsCleaning() && tok.getLiteralData()) {
-					out_str.append(tok.getLiteralData(), tok.getLength());
+					str.append(tok.getLiteralData(), tok.getLength());
 				} else if(tok.getLength() < std::size(__sqpp_temp_buff)) {
 					__sqpp_temp_buff[0] = '\0';
 					const char *tmp_buff{__sqpp_temp_buff};
 					std::size_t len{pp.getSpelling(tok, tmp_buff)};
-					out_str.append(tmp_buff, len);
+					str.append(tmp_buff, len);
 				} else {
-					out_str += pp.getSpelling(tok);
+					str += pp.getSpelling(tok);
 				}
 			} while(true);
 		}
-
-		str = std::move(out_str);
-
-	#if 0
-		{
-			std::filesystem::path pp_path{vmod.root_dir()};
-			pp_path /= "plugins_pp"sv;
-			pp_path /= path.filename();
-			pp_path.replace_extension(".nut.pp"sv);
-
-			write_file(pp_path, reinterpret_cast<const unsigned char *>(str.c_str()), str.length());
-		}
-	#endif
 
 		return true;
 	}

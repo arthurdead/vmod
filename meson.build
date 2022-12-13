@@ -153,7 +153,7 @@ dependencies = [
 	squirrel.get_variable('squirrel_internal_dep')
 ]
 
-link_args += ['-lclang','-lclang-cpp']
+link_args += ['-lclang-cpp']
 
 if custom_vm
 	dependencies += [vm_dep]

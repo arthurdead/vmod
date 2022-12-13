@@ -143,8 +143,7 @@ namespace gsdk
 		virtual const CCheckTransmitInfo *GetPrevCheckTransmitInfo(edict_t *) = 0;
 		virtual CSharedEdictChangeInfo *GetSharedEdictChangeInfo() = 0;
 		virtual void AllowImmediateEdictReuse() = 0;
-		virtual bool IsInternalBuild() = 0;
-		virtual IChangeInfoAccessor *GetChangeAccessor(const edict_t *) = 0;	
+		virtual IChangeInfoAccessor *GetChangeAccessor(const edict_t *) = 0;
 		virtual char const *GetMostRecentlyLoadedFileName() = 0;
 		virtual char const *GetSaveFileName() = 0;
 		virtual void MultiplayerEndGame() = 0;
@@ -152,7 +151,7 @@ namespace gsdk
 		virtual void CleanUpEntityClusterList(PVSInfo_t *) = 0;
 		virtual void SetAchievementMgr(IAchievementMgr *) =0;
 		virtual IAchievementMgr *GetAchievementMgr() = 0;
-		virtual int	GetAppID() = 0;
+		virtual int GetAppID() = 0;
 		virtual bool IsLowViolence() = 0;
 		virtual QueryCvarCookie_t StartQueryCvarValue(edict_t *, const char *) = 0;
 		virtual void InsertServerCommand(const char *) = 0;

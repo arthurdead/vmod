@@ -169,18 +169,15 @@ namespace vmod
 		gsdk::IScriptVM *vm{vmod.vm()};
 
 		{
-			std::size_t size;
-			std::unique_ptr<unsigned char[]> script_data{read_file(path, size)};
-
-			std::string new_script_data{reinterpret_cast<const char *>(script_data.get()), size};
+			std::string script_data;
 
 			squirrel_preprocessor &pp{vmod.preprocessor()};
-			if(!pp.preprocess(new_script_data, path, incs)) {
+			if(!pp.preprocess(script_data, path, incs)) {
 				error("vmod: plugin '%s' failed to preprocess\n"sv, path.c_str());
 				return false;
 			}
 
-			script = vm->CompileScript(reinterpret_cast<const char *>(new_script_data.c_str()), path.c_str());
+			script = vm->CompileScript(reinterpret_cast<const char *>(script_data.c_str()), path.c_str());
 		}
 
 		if(script == gsdk::INVALID_HSCRIPT) {

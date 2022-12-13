@@ -87,13 +87,15 @@ namespace vmod
 		template <typename T>
 		ConVar &set(T &&value) noexcept;
 
-		//TODO!!!!
 		template <typename T>
-		ConVar &get(T &&value) const noexcept = delete;
+		T get() const noexcept;
 
 		template <typename T>
 		inline ConVar &operator=(T &&value) noexcept
 		{ return set(std::forward<T>(value)); }
+
+		operator bool() const noexcept = delete;
+		bool operator!() const noexcept = delete;
 
 		template <typename T>
 		inline explicit operator T() const noexcept

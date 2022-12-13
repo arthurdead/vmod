@@ -1761,6 +1761,17 @@ namespace vmod
 			return false;
 		}
 
+		std::string_view vstdlib_lib_name{"bin/libvstdlib.so"sv};
+		if(sv_engine->IsDedicatedServer()) {
+			vstdlib_lib_name = "bin/libvstdlib_srv.so"sv;
+		}
+		if(!vstdlib_lib.load(vstdlib_lib_name)) {
+			error("vmod: failed to open vstdlib library: %s\n"sv, vstdlib_lib.error_string().c_str());
+			return false;
+		}
+
+		cvar_dll_id_ = cvar->AllocateDLLIdentifier();
+
 		{
 			char gamedir[PATH_MAX];
 			sv_engine->GetGameDir(gamedir, sizeof(gamedir));
@@ -1771,12 +1782,12 @@ namespace vmod
 		root_dir_ = game_dir_;
 		root_dir_ /= "addons/vmod"sv;
 
+		plugins_dir = root_dir_;
+		plugins_dir /= "plugins"sv;
+
 		if(!pp.initialize()) {
 			return false;
 		}
-
-		plugins_dir = root_dir_;
-		plugins_dir /= "plugins"sv;
 
 		base_script_path = root_dir_;
 		base_script_path /= "base/vmod_base"sv;
@@ -1853,15 +1864,6 @@ namespace vmod
 		auto sv_pHead_it{sv_GetDescList_it->second.find("pHead"s)};
 		if(sv_pHead_it == sv_GetDescList_it->second.end()) {
 			error("vmod: missing 'ScriptClassDesc_t::GetDescList()::pHead' symbol\n"sv);
-			return false;
-		}
-
-		std::string_view vstdlib_lib_name{"bin/libvstdlib.so"sv};
-		if(sv_engine->IsDedicatedServer()) {
-			vstdlib_lib_name = "bin/libvstdlib_srv.so"sv;
-		}
-		if(!vstdlib_lib.load(vstdlib_lib_name)) {
-			error("vmod: failed to open vstdlib library: %s\n"sv, vstdlib_lib.error_string().c_str());
 			return false;
 		}
 
@@ -2013,8 +2015,6 @@ namespace vmod
 			error("vmod: failed to create vmod scope\n"sv);
 			return false;
 		}
-
-		cvar_dll_id_ = cvar->AllocateDLLIdentifier();
 
 		vmod_reload_plugins.initialize("vmod_reload_plugins"sv, [this](const gsdk::CCommand &) noexcept -> void {
 			for(const auto &pl : plugins) {
@@ -2269,6 +2269,9 @@ namespace vmod
 		if(!get_func_from_base_script(funcisg_func, "__get_func_sig__"sv)) {
 			return false;
 		}
+
+		sv_engine->InsertServerCommand("exec vmod/load.cfg\n");
+		sv_engine->ServerExecute();
 
 		return true;
 	}
@@ -3167,6 +3170,9 @@ namespace vmod
 		if(!bindings()) {
 			return false;
 		}
+
+		sv_engine->InsertServerCommand("exec vmod/load_late.cfg\n");
+		sv_engine->ServerExecute();
 
 		{
 			std::filesystem::path game_docs{root_dir_/"docs"sv/"game"sv};
