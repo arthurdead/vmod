@@ -265,6 +265,8 @@ namespace vmod
 				}
 			}
 
+			running = true;
+
 			{
 				script_variant_t temp_var;
 				if(vm->GetValue(private_scope_, "VMOD_AUTO_RELOAD", &temp_var) && temp_var == true) {
@@ -428,6 +430,8 @@ namespace vmod
 			script = gsdk::INVALID_HSCRIPT;
 		}
 
+		running = false;
+
 		if(!incs.empty()) {
 			incs.clear();
 		}
@@ -528,9 +532,14 @@ namespace vmod
 		if(inotify_fd != -1) {
 			inotify_event event;
 			if(read(inotify_fd, &event, sizeof(inotify_event)) == sizeof(inotify_event)) {
-				reload();
-				return;
+				if(!reload()) {
+					return;
+				}
 			}
+		}
+
+		if(!running || script == gsdk::INVALID_HSCRIPT) {
+			return;
 		}
 
 		game_frame_(simulating);

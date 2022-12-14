@@ -3281,10 +3281,6 @@ namespace vmod
 	#endif
 
 		for(const auto &pl : plugins) {
-			if(!*pl) {
-				continue;
-			}
-
 			pl->game_frame(simulating);
 		}
 	}

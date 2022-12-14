@@ -38,9 +38,9 @@ namespace vmod
 		{ return instance_; }
 
 		inline operator bool() const noexcept
-		{ return script != gsdk::INVALID_HSCRIPT; }
+		{ return running && script != gsdk::INVALID_HSCRIPT; }
 		inline bool operator!() const noexcept
-		{ return script == gsdk::INVALID_HSCRIPT; }
+		{ return !running || script == gsdk::INVALID_HSCRIPT; }
 
 		class function
 		{
@@ -170,6 +170,8 @@ namespace vmod
 		gsdk::HSCRIPT public_scope_;
 		gsdk::HSCRIPT functions_table;
 		gsdk::HSCRIPT values_table;
+
+		bool running;
 
 		std::unordered_map<std::string, gsdk::HSCRIPT> function_cache;
 

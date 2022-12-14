@@ -1,10 +1,9 @@
 #pragma once
 
 #include <clang/Lex/Preprocessor.h>
-#include <clang/Serialization/PCHContainerOperations.h>
+#include <clang/Basic/FileSystemStatCache.h>
 #include <clang/Lex/PreprocessorOptions.h>
 #include <clang/Lex/HeaderSearchOptions.h>
-#include <clang/Basic/DiagnosticLex.h>
 #include <string>
 #include <filesystem>
 #include <memory>
@@ -21,6 +20,8 @@ namespace vmod
 
 	private:
 		friend class vmod;
+
+		bool initialize() noexcept;
 
 		class module_loader final : public clang::ModuleLoader
 		{
@@ -39,16 +40,9 @@ namespace vmod
 		{
 			friend class squirrel_preprocessor;
 
-			inline diagnostic_client(squirrel_preprocessor &pp_) noexcept
-				:pp{pp_}
-			{
-			}
-
 			~diagnostic_client() override;
 
 			void HandleDiagnostic(clang::DiagnosticsEngine::Level lvl, const clang::Diagnostic &info) override;
-
-			squirrel_preprocessor &pp;
 		};
 
 		class pp_callbacks final : public clang::PPCallbacks
@@ -56,7 +50,7 @@ namespace vmod
 			friend class squirrel_preprocessor;
 
 			inline pp_callbacks(squirrel_preprocessor &pp_) noexcept
-				:pp{pp_}
+				: pp{pp_}
 			{
 			}
 
@@ -69,21 +63,65 @@ namespace vmod
 			squirrel_preprocessor &pp;
 		};
 
-		bool initialize() noexcept;
+		class lang_options final : public clang::LangOptions
+		{
+			friend class squirrel_preprocessor;
 
-		clang::LangOptions lang_opts;
+			inline lang_options() noexcept
+			{
+				LangStd = clang::LangStandard::lang_gnucxx2b;
+				IsHeaderFile = true;
+			}
+		};
+
+		class diagnostic_options final : public clang::DiagnosticOptions
+		{
+			friend class squirrel_preprocessor;
+
+			inline diagnostic_options() noexcept
+			{
+				ShowNoteIncludeStack = true;
+				ShowCategories = 2;
+				ShowSourceRanges = true;
+				ShowColors = true;
+				UseANSIEscapeCodes = true;
+			}
+		};
+
+		class header_search_options final : public clang::HeaderSearchOptions
+		{
+			friend class squirrel_preprocessor;
+
+			inline header_search_options() noexcept
+			{
+				UseBuiltinIncludes = false;
+				UseStandardSystemIncludes = false;
+				UseStandardCXXIncludes = false;
+			}
+		};
+
+		class file_manager final : public clang::FileManager
+		{
+			friend class squirrel_preprocessor;
+
+			inline file_manager(const clang::FileSystemOptions &opts) noexcept
+				: clang::FileManager{opts, nullptr}
+			{
+				setStatCache(std::make_unique<clang::MemorizeStatCalls>());
+			}
+		};
+
+		lang_options lang_opts;
 		clang::FileSystemOptions fs_opts;
-		clang::FileManager file_mgr;
+		file_manager file_mgr;
 		clang::DiagnosticIDs diagids;
-		clang::DiagnosticOptions diagopts;
+		diagnostic_options diagopts;
 		diagnostic_client diagcl;
 		clang::DiagnosticsEngine diageng;
 		clang::SourceManager src_mgr;
 		clang::HeaderSearch hdr_srch;
 		module_loader modul_ldr;
 		clang::Preprocessor pp;
-
-		bool fatal;
 
 		ConVar vmod_preproc_dump;
 

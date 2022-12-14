@@ -1,7 +1,4 @@
 #include "preprocessor.hpp"
-#include <clang/Frontend/FrontendOptions.h>
-#include <clang/Frontend/PreprocessorOutputOptions.h>
-#include <clang/Frontend/Utils.h>
 #include "gsdk.hpp"
 #include "vmod.hpp"
 #include "filesystem.hpp"
@@ -10,19 +7,11 @@ namespace vmod
 {
 	squirrel_preprocessor::squirrel_preprocessor() noexcept
 		: file_mgr{fs_opts},
-		diagcl{*this},
 		diageng{&diagids, &diagopts, &diagcl},
-		src_mgr{diageng, file_mgr, true},
-		hdr_srch{std::make_shared<clang::HeaderSearchOptions>(), src_mgr, diageng, lang_opts, nullptr},
+		src_mgr{diageng, file_mgr},
+		hdr_srch{std::shared_ptr<header_search_options>{new header_search_options}, src_mgr, diageng, lang_opts, nullptr},
 		pp{std::make_shared<clang::PreprocessorOptions>(), diageng, lang_opts, src_mgr, hdr_srch, modul_ldr}
 	{
-		src_mgr.setAllFilesAreTransient(true);
-
-		clang::HeaderSearchOptions &hdr_srch_opts{hdr_srch.getHeaderSearchOpts()};
-		hdr_srch_opts.UseBuiltinIncludes = false;
-		hdr_srch_opts.UseStandardSystemIncludes = false;
-		hdr_srch_opts.UseStandardCXXIncludes = false;
-
 		pp.addPPCallbacks(std::unique_ptr<clang::PPCallbacks>{new pp_callbacks{*this}});
 	}
 
@@ -32,23 +21,30 @@ namespace vmod
 
 		vmod_preproc_dump.initialize("vmod_preproc_dump"sv, false);
 
-		clang::HeaderSearchOptions &hdr_srch_opts{hdr_srch.getHeaderSearchOpts()};
+		std::error_code err;
 
 		std::filesystem::path include_dir{vmod.root_dir()};
 		include_dir /= "include"sv;
-
-		std::error_code err;
 		std::filesystem::create_directories(include_dir, err);
+		llvm::Expected<clang::DirectoryEntryRef> dir_ref{file_mgr.getDirectoryRef(include_dir.native())};
+		if(!dir_ref) {
+			error("failed to get directory '%s' reference\n", include_dir.c_str());
+			return false;
+		}
 
-		hdr_srch_opts.AddPath(include_dir.native(), clang::frontend::IncludeDirGroup::Angled, false, true);
+		hdr_srch.AddSearchPath({*dir_ref, clang::SrcMgr::CharacteristicKind::C_User, false}, true);
 
 		include_dir = vmod.game_dir();
 		include_dir /= "scripts"sv;
 		include_dir /= "vscripts"sv;
-
 		std::filesystem::create_directories(include_dir, err);
+		dir_ref = file_mgr.getDirectoryRef(include_dir.native());
+		if(!dir_ref) {
+			error("failed to get directory '%s' reference\n", include_dir.c_str());
+			return false;
+		}
 
-		hdr_srch_opts.AddPath(include_dir.native(), clang::frontend::IncludeDirGroup::Angled, false, true);
+		hdr_srch.AddSearchPath({*dir_ref, clang::SrcMgr::CharacteristicKind::C_User, false}, true);
 
 		return true;
 	}
@@ -108,11 +104,9 @@ namespace vmod
 			} break;
 			case clang::DiagnosticsEngine::Level::Error: {
 				error("%s: error: %s\n"sv, loc_str.c_str(), __sqpp_err_temp_buff.c_str());
-				pp.fatal = true;
 			} break;
 			case clang::DiagnosticsEngine::Level::Fatal: {
 				error("%s: fatal error: %s\n"sv, loc_str.c_str(), __sqpp_err_temp_buff.c_str());
-				pp.fatal = true;
 			} break;
 		}
 	}
@@ -127,7 +121,6 @@ namespace vmod
 	void squirrel_preprocessor::pp_callbacks::InclusionDirective([[maybe_unused]] clang::SourceLocation, [[maybe_unused]] const clang::Token &, [[maybe_unused]] clang::StringRef, [[maybe_unused]] bool, [[maybe_unused]] clang::CharSourceRange, const clang::FileEntry *file, clang::StringRef search_path, clang::StringRef relative_path, [[maybe_unused]] const clang::Module *, [[maybe_unused]] clang::SrcMgr::CharacteristicKind)
 	{
 		if(!file) {
-			//pp.fatal = true;
 			return;
 		}
 
@@ -146,7 +139,7 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
-		llvm::Expected<clang::FileEntryRef> file_ref{file_mgr.getFileRef(path.native(), true, false)};
+		llvm::Expected<clang::FileEntryRef> file_ref{file_mgr.getFileRef(path.native())};
 		if(!file_ref) {
 			return false;
 		}
@@ -162,8 +155,8 @@ namespace vmod
 		str.reserve(static_cast<std::size_t>(file_ref->getSize()));
 
 		struct scope_cleanup {
-			inline scope_cleanup(squirrel_preprocessor &pp_, clang::FileEntryRef &file_, std::string &str_, const std::filesystem::path &path_) noexcept
-				: pp{pp_}, file{file_}, str{str_}, path{path_}
+			inline scope_cleanup(squirrel_preprocessor &pp_, std::string &str_, const std::filesystem::path &path_) noexcept
+				: pp{pp_}, str{str_}, path{path_}
 			{}
 			inline ~scope_cleanup() noexcept {
 				if(pp.vmod_preproc_dump.get<bool>()) {
@@ -176,68 +169,89 @@ namespace vmod
 				}
 
 				pp.pp.EndSourceFile();
-				file.closeFile();
 
-				pp.src_mgr.setMainFileID({});
-				pp.src_mgr.clearIDTables();
+				pp.diageng.Reset();
 
-				pp.fatal = false;
 				pp.curr_incs = nullptr;
 				pp.curr_path = nullptr;
 			}
 			squirrel_preprocessor &pp;
-			clang::FileEntryRef &file;
 			std::string &str;
 			const std::filesystem::path &path;
 		};
-		scope_cleanup sclp{*this, *file_ref, str, path};
+		scope_cleanup sclp{*this, str, path};
 
-		{
-			clang::Token tok;
+		clang::Token tok;
 
-			do {
-				pp.Lex(tok);
+		do {
+			pp.Lex(tok);
 
-				if(fatal) {
+			if(diageng.hasUnrecoverableErrorOccurred() ||
+				diageng.hasUncompilableErrorOccurred() ||
+				diageng.hasFatalErrorOccurred() ||
+				diageng.hasErrorOccurred()) {
+				return false;
+			}
+
+			if(tok.is(clang::tok::eof)) {
+				break;
+			}
+
+			if(tok.is(clang::tok::comment) ||
+				tok.is(clang::tok::eod) ||
+				tok.is(clang::tok::annot_module_include) ||
+				tok.is(clang::tok::annot_module_begin) ||
+				tok.is(clang::tok::annot_module_end) ||
+				tok.is(clang::tok::annot_header_unit) ||
+				tok.is(clang::tok::code_completion) ||
+				tok.isAnnotation()) {
+				continue;
+			}
+
+			if(tok.isAtStartOfLine()) {
+				str += '\n';
+			} else if(tok.hasLeadingSpace()) {
+				str += ' ';
+			}
+
+			clang::IdentifierInfo *idinfo{tok.getIdentifierInfo()};
+			if(idinfo) {
+				str += idinfo->getName();
+				continue;
+			}
+
+			std::size_t tok_len{static_cast<std::size_t>(tok.getLength())};
+
+			if(tok.isLiteral()) {
+				const char *tok_data{tok.getLiteralData()};
+				if(!tok.needsCleaning() && tok_data) {
+					str.append(tok_data, tok_len);
+					continue;
+				}
+			}
+
+			if(tok_len < std::size(__sqpp_temp_buff)) {
+				bool invalid;
+				__sqpp_temp_buff[0] = '\0';
+				const char *tmp_buff{__sqpp_temp_buff};
+				std::size_t len{static_cast<std::size_t>(pp.getSpelling(tok, tmp_buff, &invalid))};
+				if(invalid) {
+					error("vmod: invalid token spelling while preprocessing '%s'\n"sv, path.c_str());
 					return false;
 				}
 
-				if(tok.is(clang::tok::comment) ||
-					tok.is(clang::tok::eod) ||
-					tok.is(clang::tok::annot_module_include) ||
-					tok.is(clang::tok::annot_module_begin) ||
-					tok.is(clang::tok::annot_module_end) ||
-					tok.is(clang::tok::annot_header_unit) ||
-					tok.is(clang::tok::code_completion) ||
-					tok.isAnnotation()) {
-					continue;
+				str.append(tmp_buff, len);
+			} else {
+				bool invalid;
+				std::string tmp_buff{pp.getSpelling(tok, &invalid)};
+				if(invalid) {
+					error("vmod: invalid token spelling while preprocessing '%s'\n"sv, path.c_str());
+					return false;
 				}
 
-				if(tok.is(clang::tok::eof)) {
-					break;
-				}
-
-				if(tok.isAtStartOfLine()) {
-					str += '\n';
-				} else if(tok.hasLeadingSpace()) {
-					str += ' ';
-				}
-
-				clang::IdentifierInfo *idinfo{tok.getIdentifierInfo()};
-				if(idinfo) {
-					str += idinfo->getName();
-				} else if(tok.isLiteral() && !tok.needsCleaning() && tok.getLiteralData()) {
-					str.append(tok.getLiteralData(), tok.getLength());
-				} else if(tok.getLength() < std::size(__sqpp_temp_buff)) {
-					__sqpp_temp_buff[0] = '\0';
-					const char *tmp_buff{__sqpp_temp_buff};
-					std::size_t len{pp.getSpelling(tok, tmp_buff)};
-					str.append(tmp_buff, len);
-				} else {
-					str += pp.getSpelling(tok);
-				}
-			} while(true);
-		}
+				str += std::move(tmp_buff);
+			}
+		} while(true);
 
 		return true;
 	}
