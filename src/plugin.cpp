@@ -158,12 +158,12 @@ namespace vmod
 		return *this;
 	}
 
-	bool plugin::load() noexcept
+	plugin::load_status plugin::load() noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
 		if(script != gsdk::INVALID_HSCRIPT) {
-			return true;
+			return load_status::success;
 		}
 
 		gsdk::IScriptVM *vm{vmod.vm()};
@@ -174,7 +174,7 @@ namespace vmod
 			squirrel_preprocessor &pp{vmod.preprocessor()};
 			if(!pp.preprocess(script_data, path, incs)) {
 				error("vmod: plugin '%s' failed to preprocess\n"sv, path.c_str());
-				return false;
+				return load_status::error;
 			}
 
 			script = vm->CompileScript(reinterpret_cast<const char *>(script_data.c_str()), path.c_str());
@@ -182,7 +182,7 @@ namespace vmod
 
 		if(script == gsdk::INVALID_HSCRIPT) {
 			error("vmod: plugin '%s' failed to compile\n"sv, path.c_str());
-			return false;
+			return load_status::error;
 		} else {
 			std::string base_scope_name{"__vmod_plugin_"sv};
 			{
@@ -202,7 +202,7 @@ namespace vmod
 				private_scope_ = vm->CreateScope(scope_name.c_str(), nullptr);
 				if(!private_scope_ || private_scope_ == gsdk::INVALID_HSCRIPT) {
 					error("vmod: plugin '%s' failed to create private scope\n"sv, path.c_str());
-					return false;
+					return load_status::error;
 				}
 			}
 
@@ -213,14 +213,14 @@ namespace vmod
 				public_scope_ = vm->CreateScope(scope_name.c_str(), nullptr);
 				if(!public_scope_ || public_scope_ == gsdk::INVALID_HSCRIPT) {
 					error("vmod: plugin '%s' failed to create public scope\n"sv, path.c_str());
-					return false;
+					return load_status::error;
 				}
 			}
 
 			instance_ = vm->RegisterInstance(&plugin_desc, this);
 			if(!instance_ || instance_ == gsdk::INVALID_HSCRIPT) {
 				error("vmod: plugin '%s' failed to register its own instance\n"sv, path.c_str());
-				return false;
+				return load_status::error;
 			}
 
 			vm->SetInstanceUniqeId(instance_, path.c_str());
@@ -228,40 +228,49 @@ namespace vmod
 			functions_table = vm->CreateTable();
 			if(!functions_table || functions_table == gsdk::INVALID_HSCRIPT) {
 				error("vmod: plugin '%s' failed to create functions table\n"sv, path.c_str());
-				return false;
+				return load_status::error;
 			}
 
 			if(!vm->SetValue(public_scope_, "functions", functions_table)) {
 				error("vmod: plugin '%s' failed to set functions table value\n"sv, path.c_str());
-				return false;
+				return load_status::error;
 			}
 
 			values_table = vm->CreateTable();
 			if(!values_table || values_table == gsdk::INVALID_HSCRIPT) {
 				error("vmod: plugin '%s' failed to create values table\n"sv, path.c_str());
-				return false;
+				return load_status::error;
 			}
 
 			if(!vm->SetValue(public_scope_, "values", values_table)) {
 				error("vmod: plugin '%s' failed to set values table value\n"sv, path.c_str());
-				return false;
+				return load_status::error;
 			}
 
 			if(!vm->SetValue(public_scope_, "plugin", instance_)) {
 				error("vmod: plugin '%s' failed to set instance value\n"sv, path.c_str());
-				return false;
+				return load_status::error;
 			}
 
 			if(!vm->SetValue(vmod.plugins_table(), name.c_str(), public_scope_)) {
 				error("vmod: plugin '%s' failed to set value in plugins table\n"sv, path.c_str());
-				return false;
+				return load_status::error;
 			}
 
 			{
 				scope_assume_current sac{this};
 				if(vm->Run(script, private_scope_, false) == gsdk::SCRIPT_ERROR) {
 					error("vmod: plugin '%s' failed to run\n"sv, path.c_str());
-					return false;
+					return load_status::error;
+				}
+			}
+
+			{
+				script_variant_t temp_var;
+				if(vm->GetValue(private_scope_, "VMOD_DISABLED", &temp_var) && temp_var == true) {
+					unwatch();
+					unload();
+					return load_status::disabled;
 				}
 			}
 
@@ -300,7 +309,7 @@ namespace vmod
 			}
 		}
 
-		return true;
+		return load_status::success;
 	}
 
 	void plugin::watch() noexcept
@@ -532,7 +541,7 @@ namespace vmod
 		if(inotify_fd != -1) {
 			inotify_event event;
 			if(read(inotify_fd, &event, sizeof(inotify_event)) == sizeof(inotify_event)) {
-				if(!reload()) {
+				if(reload() != load_status::success) {
 					return;
 				}
 			}

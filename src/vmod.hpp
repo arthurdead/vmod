@@ -85,6 +85,15 @@ namespace vmod
 		inline bool script_are_stringtables_created() const noexcept
 		{ return are_string_tables_created; }
 
+		static void script_print(std::string_view str) noexcept
+		{ print("%s", str.data()); }
+		static void script_error(std::string_view str) noexcept
+		{ error("%s", str.data()); }
+		static void script_warning(std::string_view str) noexcept
+		{ warning("%s", str.data()); }
+		static void script_info(std::string_view str) noexcept
+		{ info("%s", str.data()); }
+
 		bool binding_mods() noexcept;
 		bool bindings() noexcept;
 		void unbindings() noexcept;

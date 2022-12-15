@@ -24,8 +24,15 @@ namespace vmod
 		plugin(std::filesystem::path &&path_) noexcept;
 		~plugin() noexcept;
 
-		bool load() noexcept;
-		inline bool reload() noexcept {
+		enum class load_status : unsigned char
+		{
+			error,
+			disabled,
+			success
+		};
+
+		load_status load() noexcept;
+		inline load_status reload() noexcept {
 			unload();
 			return load();
 		}

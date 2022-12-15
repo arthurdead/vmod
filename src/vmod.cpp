@@ -1117,6 +1117,10 @@ namespace vmod
 		vmod_desc.func(&vmod::script_is_map_active, "script_is_map_active"sv, "is_map_active"sv);
 		vmod_desc.func(&vmod::script_is_map_loaded, "script_is_map_loaded"sv, "is_map_loaded"sv);
 		vmod_desc.func(&vmod::script_are_stringtables_created, "script_are_stringtables_created"sv, "are_stringtables_created"sv);
+		vmod_desc.func(&vmod::script_print, "script_print"sv, "print"sv);
+		vmod_desc.func(&vmod::script_info, "script_info"sv, "info"sv);
+		vmod_desc.func(&vmod::script_error, "script_error"sv, "error"sv);
+		vmod_desc.func(&vmod::script_warning, "script_warning"sv, "warning"sv);
 
 		if(!vm_->RegisterClass(&vmod_desc)) {
 			error("vmod: failed to register vmod script class\n"sv);
@@ -2017,8 +2021,13 @@ namespace vmod
 		}
 
 		vmod_reload_plugins.initialize("vmod_reload_plugins"sv, [this](const gsdk::CCommand &) noexcept -> void {
-			for(const auto &pl : plugins) {
-				pl->reload();
+			auto it{plugins.begin()};
+			while(it != plugins.end()) {
+				if((*it)->reload() == plugin::load_status::disabled) {
+					it = plugins.erase(it);
+					continue;
+				}
+				++it;
 			}
 
 			if(plugins_loaded) {
@@ -2098,27 +2107,44 @@ namespace vmod
 				return;
 			}
 
-			for(const auto &pl : plugins) {
-				const std::filesystem::path &pl_path{static_cast<std::filesystem::path>(*pl)};
+			auto it{plugins.begin()};
+			while(it != plugins.end()) {
+				const std::filesystem::path &pl_path{static_cast<std::filesystem::path>(*(*it))};
 
 				if(pl_path == path) {
-					if(pl->reload()) {
-						success("vmod: plugin '%s' reloaded\n", path.c_str());
-						if(plugins_loaded) {
-							pl->all_plugins_loaded();
-						}
+					switch((*it)->reload()) {
+						case plugin::load_status::success: {
+							success("vmod: plugin '%s' reloaded\n", path.c_str());
+							if(plugins_loaded) {
+								(*it)->all_plugins_loaded();
+							}
+						} break;
+						case plugin::load_status::disabled: {
+							plugins.erase(it);
+						} break;
+						default: break;
 					}
 					return;
 				}
+
+				++it;
 			}
 
-			plugin &pl{*plugins.emplace_back(new plugin{std::move(path)})};
-			if(pl.load()) {
-				success("vmod: plugin '%s' loaded\n", static_cast<std::filesystem::path>(pl).c_str());
-				if(plugins_loaded) {
-					pl.all_plugins_loaded();
+			std::unique_ptr<plugin> pl{new plugin{std::move(path)}};
+			switch(pl->load()) {
+				case plugin::load_status::success: {
+					success("vmod: plugin '%s' loaded\n", static_cast<std::filesystem::path>(*pl).c_str());
+					if(plugins_loaded) {
+						pl->all_plugins_loaded();
+					}
+				} break;
+				case plugin::load_status::disabled: {
+					return;
 				}
+				default: break;
 			}
+
+			plugins.emplace_back(std::move(pl));
 		});
 
 		vmod_list_plugins.initialize("vmod_list_plugins"sv, [this](const gsdk::CCommand &args) noexcept -> void {
@@ -2308,10 +2334,12 @@ namespace vmod
 				continue;
 			}
 
-			plugin *pl{new plugin{std::move(path)}};
-			pl->load();
+			std::unique_ptr<plugin> pl{new plugin{std::move(path)}};
+			if(pl->load() == plugin::load_status::disabled) {
+				continue;
+			}
 
-			plugins.emplace_back(pl);
+			plugins.emplace_back(std::move(pl));
 		}
 	}
 

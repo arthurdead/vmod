@@ -3,160 +3,117 @@
 #include "vmod.hpp"
 #include "filesystem.hpp"
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#pragma GCC diagnostic ignored "-Wdeprecated-anon-enum-enum-conversion"
+#pragma GCC diagnostic ignored "-Wcomment"
+#include <tpp.h>
+#pragma GCC diagnostic pop
+
 namespace vmod
 {
+	squirrel_preprocessor *squirrel_preprocessor::current;
+
 	squirrel_preprocessor::squirrel_preprocessor() noexcept
-		: file_mgr{fs_opts},
-		diageng{&diagids, &diagopts, &diagcl},
-		src_mgr{diageng, file_mgr},
-		hdr_srch{std::shared_ptr<header_search_options>{new header_search_options}, src_mgr, diageng, lang_opts, nullptr},
-		pp{std::make_shared<clang::PreprocessorOptions>(), diageng, lang_opts, src_mgr, hdr_srch, modul_ldr}
 	{
-		pp.addPPCallbacks(std::unique_ptr<clang::PPCallbacks>{new pp_callbacks{*this}});
+		current = this;
 	}
 
+	static char __sqpp_temp_path_buff[PATH_MAX];
+	static char __sqpp_temp_msg_buff[4026];
 	bool squirrel_preprocessor::initialize() noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
 		vmod_preproc_dump.initialize("vmod_preproc_dump"sv, false);
 
+		if(!TPP_INITIALIZE()) {
+			return false;
+		}
+
+		TPPLexer_Current->l_flags = TPPLEXER_FLAG_WANTSPACE|TPPLEXER_FLAG_WANTLF|TPPLEXER_FLAG_MESSAGE_LOCATION;
+		TPPLexer_Current->l_callbacks.c_new_textfile =
+			[](TPPFile *file, [[maybe_unused]] int) noexcept -> int {
+				if(current->curr_incs) {
+					current->curr_incs->emplace_back(std::string{file->f_name, file->f_namesize});
+				}
+				return 1;
+			};
+		TPPLexer_Current->l_callbacks.c_unknown_file = nullptr;
+		TPPLexer_Current->l_callbacks.c_warn =
+			[](const char *fmt, va_list args) noexcept -> void {
+				#pragma GCC diagnostic push
+				#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+				std::vsnprintf(__sqpp_temp_msg_buff, sizeof(__sqpp_temp_msg_buff), fmt, args);
+				#pragma GCC diagnostic pop
+
+				constexpr std::size_t warn_begin_len{__builtin_strlen(TPP_WARNF_WARN_BEGIN)};
+				constexpr std::size_t err_begin_len{__builtin_strlen(TPP_WARNF_WARN_BEGIN)};
+
+				if(std::strncmp(__sqpp_temp_msg_buff, TPP_WARNF_WARN_BEGIN, warn_begin_len) == 0) {
+					current->print_state = print_state::warning;
+				} else if(std::strncmp(__sqpp_temp_msg_buff, TPP_WARNF_ERROR_BEGIN, err_begin_len) == 0) {
+					current->print_state = print_state::error;
+				}
+
+				switch(current->print_state) {
+					case print_state::unknown:
+					info("%s", __sqpp_temp_msg_buff);
+					break;
+					case print_state::warning:
+					warning("%s", __sqpp_temp_msg_buff);
+					break;
+					case print_state::error:
+					error("%s", __sqpp_temp_msg_buff);
+					break;
+				}
+			};
+		TPPLexer_Current->l_callbacks.c_message =
+			[](const char *fmt, va_list args) noexcept -> void {
+				#pragma GCC diagnostic push
+				#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+				std::vsnprintf(__sqpp_temp_msg_buff, sizeof(__sqpp_temp_msg_buff), fmt, args);
+				#pragma GCC diagnostic pop
+				info("%s", __sqpp_temp_msg_buff);
+			};
+
 		std::error_code err;
 
 		std::filesystem::path include_dir{vmod.root_dir()};
 		include_dir /= "include"sv;
-		std::filesystem::create_directories(include_dir, err);
-		llvm::Expected<clang::DirectoryEntryRef> dir_ref{file_mgr.getDirectoryRef(include_dir.native())};
-		if(!dir_ref) {
-			error("failed to get directory '%s' reference\n", include_dir.c_str());
-			return false;
-		}
-
-		hdr_srch.AddSearchPath({*dir_ref, clang::SrcMgr::CharacteristicKind::C_User, false}, true);
+		std::strncpy(__sqpp_temp_path_buff, include_dir.c_str(), include_dir.native().length());
+		TPPLexer_AddIncludePath(__sqpp_temp_path_buff, include_dir.native().length());
 
 		include_dir = vmod.game_dir();
 		include_dir /= "scripts"sv;
 		include_dir /= "vscripts"sv;
-		std::filesystem::create_directories(include_dir, err);
-		dir_ref = file_mgr.getDirectoryRef(include_dir.native());
-		if(!dir_ref) {
-			error("failed to get directory '%s' reference\n", include_dir.c_str());
-			return false;
-		}
-
-		hdr_srch.AddSearchPath({*dir_ref, clang::SrcMgr::CharacteristicKind::C_User, false}, true);
+		std::strncpy(__sqpp_temp_path_buff, include_dir.c_str(), include_dir.native().length());
+		TPPLexer_AddIncludePath(__sqpp_temp_path_buff, include_dir.native().length());
 
 		return true;
 	}
 
-	squirrel_preprocessor::module_loader::~module_loader()
-	{
-	}
-
-	clang::ModuleLoadResult squirrel_preprocessor::module_loader::loadModule([[maybe_unused]] clang::SourceLocation, [[maybe_unused]] clang::ModuleIdPath, [[maybe_unused]] clang::Module::NameVisibilityKind, [[maybe_unused]] bool)
-	{ return nullptr; }
-
-	void squirrel_preprocessor::module_loader::createModuleFromSource([[maybe_unused]] clang::SourceLocation, [[maybe_unused]] clang::StringRef, [[maybe_unused]] clang::StringRef)
-	{
-	}
-
-	void squirrel_preprocessor::module_loader::makeModuleVisible([[maybe_unused]] clang::Module *, [[maybe_unused]] clang::Module::NameVisibilityKind, [[maybe_unused]] clang::SourceLocation)
-	{
-	}
-
-	clang::GlobalModuleIndex *squirrel_preprocessor::module_loader::loadGlobalModuleIndex([[maybe_unused]] clang::SourceLocation)
-	{ return nullptr; }
-
-	bool squirrel_preprocessor::module_loader::lookupMissingImports([[maybe_unused]] clang::StringRef, [[maybe_unused]] clang::SourceLocation)
-	{ return false; }
-
-	squirrel_preprocessor::diagnostic_client::~diagnostic_client()
-	{
-	}
-
-	static clang::SmallString<4096> __sqpp_err_temp_buff;
-	void squirrel_preprocessor::diagnostic_client::HandleDiagnostic(clang::DiagnosticsEngine::Level lvl, const clang::Diagnostic &diaginfo)
-	{
-		using namespace std::literals::string_view_literals;
-
-		clang::DiagnosticConsumer::HandleDiagnostic(lvl, diaginfo);
-
-		__sqpp_err_temp_buff.resize_for_overwrite(0);
-		diaginfo.FormatDiagnostic(__sqpp_err_temp_buff);
-
-		const clang::SourceManager &srcmgr{diaginfo.getSourceManager()};
-
-		const clang::SourceLocation &loc{diaginfo.getLocation()};
-		std::string loc_str{loc.printToString(srcmgr)};
-
-		switch(lvl) {
-			case clang::DiagnosticsEngine::Level::Ignored: {
-				print("%s: %s\n"sv, loc_str.c_str(), __sqpp_err_temp_buff.c_str());
-			} break;
-			case clang::DiagnosticsEngine::Level::Note: {
-				info("%s: note: %s\n"sv, loc_str.c_str(), __sqpp_err_temp_buff.c_str());
-			} break;
-			case clang::DiagnosticsEngine::Level::Remark: {
-				info("%s: remark:%s\n"sv, loc_str.c_str(), __sqpp_err_temp_buff.c_str());
-			} break;
-			case clang::DiagnosticsEngine::Level::Warning: {
-				warning("%s: warning: %s\n"sv, loc_str.c_str(), __sqpp_err_temp_buff.c_str());
-			} break;
-			case clang::DiagnosticsEngine::Level::Error: {
-				error("%s: error: %s\n"sv, loc_str.c_str(), __sqpp_err_temp_buff.c_str());
-			} break;
-			case clang::DiagnosticsEngine::Level::Fatal: {
-				error("%s: fatal error: %s\n"sv, loc_str.c_str(), __sqpp_err_temp_buff.c_str());
-			} break;
-		}
-	}
-
-	squirrel_preprocessor::pp_callbacks::~pp_callbacks()
-	{
-	}
-
-	void squirrel_preprocessor::pp_callbacks::PragmaMark(clang::SourceLocation loc, clang::StringRef str)
-	{ pp.pp.Diag(loc, pp.diagids.getCustomDiagID(clang::DiagnosticIDs::Level::Remark, str)) << str; }
-
-	void squirrel_preprocessor::pp_callbacks::InclusionDirective([[maybe_unused]] clang::SourceLocation, [[maybe_unused]] const clang::Token &, [[maybe_unused]] clang::StringRef, [[maybe_unused]] bool, [[maybe_unused]] clang::CharSourceRange, const clang::FileEntry *file, clang::StringRef search_path, clang::StringRef relative_path, [[maybe_unused]] const clang::Module *, [[maybe_unused]] clang::SrcMgr::CharacteristicKind)
-	{
-		if(!file) {
-			return;
-		}
-
-		std::filesystem::path path{search_path.str()};
-		path /= relative_path.str();
-
-		if(!path.is_absolute() || !std::filesystem::exists(path)) {
-			return;
-		}
-
-		pp.curr_incs->emplace_back(path);
-	}
-
-	static char __sqpp_temp_buff[256];
 	bool squirrel_preprocessor::preprocess(std::string &str, const std::filesystem::path &path, std::vector<std::filesystem::path> &incs) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
-		llvm::Expected<clang::FileEntryRef> file_ref{file_mgr.getFileRef(path.native())};
-		if(!file_ref) {
+		std::strncpy(__sqpp_temp_path_buff, path.c_str(), path.native().length());
+		TPPFile *file{TPPLexer_OpenFile(TPPLEXER_OPENFILE_MODE_NORMAL, __sqpp_temp_path_buff, path.native().length(), nullptr)};
+		if(!file) {
+			error("failed to open file '%s'\n", path.c_str());
 			return false;
 		}
 
-		clang::FileID file_id{src_mgr.getOrCreateFileID(*file_ref, clang::SrcMgr::CharacteristicKind::C_User)};
-		src_mgr.setMainFileID(file_id);
-
-		pp.EnterMainSourceFile();
+		TPPLexer_PushFile(file);
 
 		curr_incs = &incs;
 		curr_path = &path;
 
-		str.reserve(static_cast<std::size_t>(file_ref->getSize()));
+		str.reserve(file->f_text->s_size);
 
 		struct scope_cleanup {
-			inline scope_cleanup(squirrel_preprocessor &pp_, std::string &str_, const std::filesystem::path &path_) noexcept
-				: pp{pp_}, str{str_}, path{path_}
+			inline scope_cleanup(squirrel_preprocessor &pp_, std::string &str_, const std::filesystem::path &path_, TPPFile *file_) noexcept
+				: pp{pp_}, str{str_}, path{path_}, file{file_}
 			{}
 			inline ~scope_cleanup() noexcept {
 				if(pp.vmod_preproc_dump.get<bool>()) {
@@ -168,9 +125,11 @@ namespace vmod
 					write_file(pp_path, reinterpret_cast<const unsigned char *>(str.c_str()), str.length());
 				}
 
-				pp.pp.EndSourceFile();
+				TPPLexer_PopFile();
 
-				pp.diageng.Reset();
+				TPPLexer_Reset(TPPLexer_Current, TPPLEXER_RESET_INCLUDE|TPPLEXER_RESET_EXTENSIONS|TPPLEXER_RESET_WARNINGS|TPPLEXER_RESET_KEYWORDS);
+
+				pp.print_state = print_state::unknown;
 
 				pp.curr_incs = nullptr;
 				pp.curr_path = nullptr;
@@ -178,81 +137,26 @@ namespace vmod
 			squirrel_preprocessor &pp;
 			std::string &str;
 			const std::filesystem::path &path;
+			TPPFile *file;
 		};
-		scope_cleanup sclp{*this, str, path};
+		scope_cleanup sclp{*this, str, path, file};
 
-		clang::Token tok;
+		while(TPPLexer_Yield() > 0) {
+			const char *tokstr{TPPLexer_Current->l_token.t_begin};
+			std::size_t toklen{static_cast<std::size_t>(TPPLexer_Current->l_token.t_end - tokstr)};
+			str.append(tokstr, toklen);
+		}
 
-		do {
-			pp.Lex(tok);
-
-			if(diageng.hasUnrecoverableErrorOccurred() ||
-				diageng.hasUncompilableErrorOccurred() ||
-				diageng.hasFatalErrorOccurred() ||
-				diageng.hasErrorOccurred()) {
-				return false;
-			}
-
-			if(tok.is(clang::tok::eof)) {
-				break;
-			}
-
-			if(tok.is(clang::tok::comment) ||
-				tok.is(clang::tok::eod) ||
-				tok.is(clang::tok::annot_module_include) ||
-				tok.is(clang::tok::annot_module_begin) ||
-				tok.is(clang::tok::annot_module_end) ||
-				tok.is(clang::tok::annot_header_unit) ||
-				tok.is(clang::tok::code_completion) ||
-				tok.isAnnotation()) {
-				continue;
-			}
-
-			if(tok.isAtStartOfLine()) {
-				str += '\n';
-			} else if(tok.hasLeadingSpace()) {
-				str += ' ';
-			}
-
-			clang::IdentifierInfo *idinfo{tok.getIdentifierInfo()};
-			if(idinfo) {
-				str += idinfo->getName();
-				continue;
-			}
-
-			std::size_t tok_len{static_cast<std::size_t>(tok.getLength())};
-
-			if(tok.isLiteral()) {
-				const char *tok_data{tok.getLiteralData()};
-				if(!tok.needsCleaning() && tok_data) {
-					str.append(tok_data, tok_len);
-					continue;
-				}
-			}
-
-			if(tok_len < std::size(__sqpp_temp_buff)) {
-				bool invalid;
-				__sqpp_temp_buff[0] = '\0';
-				const char *tmp_buff{__sqpp_temp_buff};
-				std::size_t len{static_cast<std::size_t>(pp.getSpelling(tok, tmp_buff, &invalid))};
-				if(invalid) {
-					error("vmod: invalid token spelling while preprocessing '%s'\n"sv, path.c_str());
-					return false;
-				}
-
-				str.append(tmp_buff, len);
-			} else {
-				bool invalid;
-				std::string tmp_buff{pp.getSpelling(tok, &invalid)};
-				if(invalid) {
-					error("vmod: invalid token spelling while preprocessing '%s'\n"sv, path.c_str());
-					return false;
-				}
-
-				str += std::move(tmp_buff);
-			}
-		} while(true);
+		if((TPPLexer_Current->l_flags & TPPLEXER_FLAG_ERROR) ||
+			(TPPLexer_Current->l_errorcount != 0)) {
+			return false;
+		}
 
 		return true;
+	}
+
+	squirrel_preprocessor::~squirrel_preprocessor() noexcept
+	{
+		TPP_FINALIZE();
 	}
 }

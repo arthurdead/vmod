@@ -1,0 +1,10 @@
+[wrap-git]
+directory = tpp
+url = https://github.com/GrieferAtWork/tpp.git
+revision = master
+depth = 1
+patch_directory = tpp
+diff_files = tpp/vmod_fixes.patch
+
+[provide]
+dependency_names = tpp

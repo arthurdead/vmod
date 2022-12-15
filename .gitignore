@@ -6,6 +6,7 @@ subprojects/binutils-?.??/
 subprojects/squirrel/
 subprojects/squirrel*/
 subprojects/quirrel/
+subprojects/tpp/
 *.sublime-workspace
 *.sublime-project
 src/vm/

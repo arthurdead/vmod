@@ -1,0 +1,139 @@
+diff --git a/src/tpp.c b/src/tpp.c
+index f409df3..0f12573 100644
+--- a/src/tpp.c
++++ b/src/tpp.c
+@@ -1579,6 +1579,12 @@ LOCAL char *tpp_rskip_wraplf(char const *iter, char const *begin) {
+ #endif /* !TPP_CONFIG_DYN_CALLBACK_UNKNOWN_FILE */
+ #endif /* !TPP_CONFIG_NO_CALLBACK_UNKNOWN_FILE */
+ 
++#define CALLBACK_WARN         (*CURRENT.l_callbacks.c_warn)
++#define HAVE_CALLBACK_WARN     (CURRENT.l_callbacks.c_warn)
++
++#define CALLBACK_MESSAGE         (*CURRENT.l_callbacks.c_message)
++#define HAVE_CALLBACK_MESSAGE     (CURRENT.l_callbacks.c_message)
++
+ #ifdef TPP_CONFIG_SET_API_ERROR
+ #ifdef TPP_CONFIG_SET_API_ERROR_BADALLOC
+ #define ERR_BAD_ALLOC(n_bytes) \
+@@ -7017,7 +7023,7 @@ TPPLexer_AddIncludePath(char *__restrict path, size_t pathsize) {
+ 	if (HAVE_EXTENSION_CANONICAL_HEADERS)
+ 		fix_filename(path, &pathsize);
+ 	/* Handle special case: empty path & remove trailing slashes. */
+-	while (pathsize && path[-1] == SEP)
++	while (pathsize && path[pathsize-1] == SEP)
+ 		--pathsize;
+ 	if unlikely(!pathsize) {
+ 		path = (char *)".";
+@@ -14276,10 +14282,40 @@ err:
+ 
+ /* Figure out how to output text from `#pragma message' */
+ #if !defined(TPP_PRAGMA_MESSAGE_PRINTF) && !defined(TPP_PRAGMA_MESSAGE_WRITE)
++PRIVATE int TPPCALL
++tpp_pragma_message_printf_impl(char const *format, ...) {
++	va_list args;
++	if (!format)
++		goto err; /* Prevent warnings... */
++	va_start(args, format);
++	CALLBACK_MESSAGE(format, args);
++	va_end(args);
++	return 1;
++err:
++	return 0;
++}
+ #define TPP_PRAGMA_MESSAGE_WRITE(err_label, str, length)  \
+-	fwrite((str), sizeof(char), (length), stderr)
++	{ \
++		if(HAVE_CALLBACK_MESSAGE) { \
++			do { \
++				if (!tpp_pragma_message_printf_impl("%.*s", (int)(unsigned int)(size_t)(length), (char const *)(str))) \
++					goto err_label; \
++			} while (FALSE); \
++		} else { \
++			fwrite((str), sizeof(char), (length), stderr); \
++		} \
++	}
+ #define TPP_PRAGMA_MESSAGE_PRINTF(err_label, printf_args) \
+-	printf printf_args
++	{ \
++		if(HAVE_CALLBACK_MESSAGE) { \
++			do { \
++				if (!tpp_pragma_message_printf_impl printf_args) \
++					goto err_label; \
++			} while (FALSE); \
++		} else { \
++			printf printf_args; \
++		} \
++	}
+ #elif !defined(TPP_PRAGMA_MESSAGE_PRINTF)
+ /* Implement `TPP_PRAGMA_MESSAGE_PRINTF()' via `TPP_PRAGMA_MESSAGE_WRITE()' */
+ #define TPP_PRAGMA_MESSAGE_PRINTF(err_label, printf_args) \
+@@ -15168,25 +15204,31 @@ PUBLIC int TPPCALL TPPLexer_UnsetErr(void) {
+ 
+ #if defined(TPP_WARNF)
+ #define WARNF TPP_WARNF
+-#elif TPP_CONFIG_DEBUG && defined(TPP_CONFIG_WIN32)
++#else
+ PRIVATE void TPPVCALL tpp_warnf(char const *fmt, ...) {
+-	char buffer[1024];
+-	va_list args;
+-	size_t bufsiz;
+-	va_start(args, fmt);
+-#ifdef _MSC_VER
+-	_vsnprintf(buffer, sizeof(buffer), fmt, args);
+-#else /* _MSC_VER */
+-	vsnprintf(buffer, sizeof(buffer), fmt, args);
+-#endif /* !_MSC_VER */
+-	va_end(args);
+-	bufsiz = strlen(buffer);
+-	fwrite(buffer, sizeof(char), bufsiz, stderr);
+-	OutputDebugStringA(buffer);
++	if(HAVE_CALLBACK_WARN) {
++		va_list args;
++		va_start(args, fmt);
++		CALLBACK_WARN(fmt, args);
++		va_end(args);
++	} else {
++		char buffer[1024];
++		va_list args;
++		va_start(args, fmt);
++	#ifdef _MSC_VER
++		_vsnprintf(buffer, sizeof(buffer), fmt, args);
++	#else /* _MSC_VER */
++		vsnprintf(buffer, sizeof(buffer), fmt, args);
++	#endif /* !_MSC_VER */
++		va_end(args);
++		size_t bufsiz = strlen(buffer);
++		fwrite(buffer, sizeof(char), bufsiz, stderr);
++	#if defined(TPP_CONFIG_DEBUG) && defined(TPP_CONFIG_WIN32)
++		OutputDebugStringA(buffer);
++	#endif
++	}
+ }
+ #define WARNF tpp_warnf
+-#else /* ... */
+-#define WARNF(...) fprintf(stderr, __VA_ARGS__)
+ #endif /* !... */
+ 
+ #define Q(x) TPP_WARNF_QUOTE_BEGIN x TPP_WARNF_QUOTE_END
+diff --git a/src/tpp.h b/src/tpp.h
+index 045a422..6ed5d07 100644
+--- a/src/tpp.h
++++ b/src/tpp.h
+@@ -315,6 +315,7 @@
+ #ifndef TPP_NO_INCLUDE_STDLIB_H
+ #include <stdlib.h>
+ #endif /* !TPP_NO_INCLUDE_STDLIB_H */
++#include <stdarg.h>
+ 
+ #ifdef _MSC_VER
+ #ifndef TPP_SYMARRAY_SIZE
+@@ -1211,6 +1212,9 @@ struct TPPCallbacks {
+ 	                                          size_t filename_size,
+ 	                                          struct TPPKeyword **pkeyword_entry);
+ #endif /* TPP_CONFIG_DYN_CALLBACK_UNKNOWN_FILE */
++
++	void (TPPCALL *c_warn)(char const *fmt, va_list args);
++	void (TPPCALL *c_message)(char const *fmt, va_list args);
+ };
+ #endif /* TPP_CONFIG_DYN_CALLBACKS */
+ 

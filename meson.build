@@ -100,6 +100,11 @@ libyaml = subproject('libyaml',
 	required: true
 )
 
+tpp = subproject('tpp',
+	default_options: thirdparty_default_options_c,
+	required: true
+)
+
 custom_vm = false
 
 if custom_vm
@@ -146,14 +151,12 @@ dependencies = [
 	dependency('dl'),
 	dependency('libelf'),
 	dependency('libffi'),
-	dependency('llvm'),
 	libyaml.get_variable('yaml_dep'),
 	libiberty.get_variable('iberty_dep'),
+	tpp.get_variable('tpp_dep'),
 	squirrel.get_variable('squirrel_dep'),
 	squirrel.get_variable('squirrel_internal_dep')
 ]
-
-link_args += ['-lclang-cpp']
 
 if custom_vm
 	dependencies += [vm_dep]
