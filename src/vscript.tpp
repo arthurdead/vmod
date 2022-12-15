@@ -38,23 +38,6 @@ namespace vmod
 		return *this;
 	}
 
-	static inline short fixup_var_field(short field) noexcept
-	{
-		switch(field) {
-			case gsdk::FIELD_UINT:
-			case gsdk::FIELD_UINT64:
-			return gsdk::FIELD_INTEGER;
-			default:
-			return field;
-		}
-	}
-
-	static inline gsdk::ScriptVariant_t &fixup_var(gsdk::ScriptVariant_t &var) noexcept
-	{
-		var.m_type = fixup_var_field(var.m_type);
-		return var;
-	}
-
 	template <typename R, typename ...Args>
 	void func_desc_t::initialize_shared(std::string_view name, std::string_view script_name, bool va)
 	{
@@ -64,7 +47,15 @@ namespace vmod
 		m_desc.m_pszScriptName = script_name.data();
 
 		m_desc.m_ReturnType = __type_to_field_impl<std::decay_t<R>>();
-		(m_desc.m_Parameters.emplace_back(fixup_var_field(__type_to_field_impl<std::decay_t<Args>>())), ...);
+		(m_desc.m_Parameters.emplace_back(gsdk::IScriptVM::fixup_var_field(__type_to_field_impl<std::decay_t<Args>>())), ...);
+
+		constexpr std::size_t num_args{sizeof...(Args)};
+		if constexpr(num_args > 0) {
+			using LA = std::tuple_element_t<num_args-1, std::tuple<Args...>>;
+			if constexpr(is_optional<LA>::value) {
+				m_flags |= SF_OPT_FUNC;
+			}
+		}
 
 		if(va) {
 			m_flags |= SF_VA_FUNC;
@@ -83,7 +74,7 @@ namespace vmod
 		if constexpr(sizeof...(Args) == 0) {
 			return (static_cast<C *>(obj)->*mfp_from_func<R, C, Args...>(binding_func, adjustor))();
 		} else {
-			return (static_cast<C *>(obj)->*mfp_from_func<R, C, Args...>(binding_func, adjustor))(variant_to_value<std::decay_t<Args>>(args_var[I])...);
+			return (static_cast<C *>(obj)->*mfp_from_func<R, C, Args...>(binding_func, adjustor))(__variant_to_value_impl<std::decay_t<Args>>(args_var[I])...);
 		}
 	}
 
@@ -93,12 +84,12 @@ namespace vmod
 		if constexpr(sizeof...(Args) == 0) {
 			return binding_func();
 		} else {
-			return binding_func(variant_to_value<std::decay_t<Args>>(args_var[I])...);
+			return binding_func(__variant_to_value_impl<std::decay_t<Args>>(args_var[I])...);
 		}
 	}
 
 	template <typename R, typename C, typename ...Args>
-	bool func_desc_t::binding_member_singleton(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept
+	bool func_desc_t::binding_member_singleton(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept
 	{
 		if(!obj) {
 			if constexpr(singleton_instance_helper<C>::instance_func_available_v) {
@@ -109,11 +100,11 @@ namespace vmod
 			}
 		}
 
-		return binding_member<R, C, Args...>(binding_func, adjustor, obj, args_var, num_args, ret_var);
+		return binding_member<R, C, Args...>(binding_func, obj, args_var, num_args, ret_var);
 	}
 
 	template <typename R, typename C, typename ...Args>
-	bool func_desc_t::binding_member(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept
+	bool func_desc_t::binding_member(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept
 	{
 		constexpr std::size_t num_required_args{sizeof...(Args)};
 
@@ -140,18 +131,18 @@ namespace vmod
 				return false;
 			}
 
-			call_member<R, C, Args...>(reinterpret_cast<R(__attribute__((__thiscall__)) *)(C *, Args...)>(binding_func), static_cast<std::size_t>(adjustor), obj, args_var);
+			call_member<R, C, Args...>(reinterpret_cast<R(__attribute__((__thiscall__)) *)(C *, Args...)>(binding_func.func), static_cast<std::size_t>(binding_func.adjustor), obj, args_var);
 		} else {
 			if(!ret_var) {
-				call_member<R, C, Args...>(reinterpret_cast<R(__attribute__((__thiscall__)) *)(C *, Args...)>(binding_func), static_cast<std::size_t>(adjustor), obj, args_var);
+				call_member<R, C, Args...>(reinterpret_cast<R(__attribute__((__thiscall__)) *)(C *, Args...)>(binding_func.func), static_cast<std::size_t>(binding_func.adjustor), obj, args_var);
 			} else {
 				if constexpr(std::is_same_v<R, script_variant_t>) {
-					*ret_var = call_member<R, C, Args...>(reinterpret_cast<R(__attribute__((__thiscall__)) *)(C *, Args...)>(binding_func), static_cast<std::size_t>(adjustor), obj, args_var);
+					*ret_var = call_member<R, C, Args...>(reinterpret_cast<R(__attribute__((__thiscall__)) *)(C *, Args...)>(binding_func.func), static_cast<std::size_t>(binding_func.adjustor), obj, args_var);
 				} else {
-					R ret_val{call_member<R, C, Args...>(reinterpret_cast<R(__attribute__((__thiscall__)) *)(C *, Args...)>(binding_func), static_cast<std::size_t>(adjustor), obj, args_var)};
+					R ret_val{call_member<R, C, Args...>(reinterpret_cast<R(__attribute__((__thiscall__)) *)(C *, Args...)>(binding_func.func), static_cast<std::size_t>(binding_func.adjustor), obj, args_var)};
 					value_to_variant<R>(*ret_var, std::forward<R>(ret_val));
 				}
-				fixup_var(*ret_var);
+				gsdk::IScriptVM::fixup_var(*ret_var);
 			}
 		}
 
@@ -159,11 +150,11 @@ namespace vmod
 	}
 
 	template <typename R, typename ...Args>
-	bool func_desc_t::binding(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept
+	bool func_desc_t::binding(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept
 	{
 		constexpr std::size_t num_required_args{sizeof...(Args)};
 
-		if(obj || adjustor != 0) {
+		if(obj) {
 			__vmod_raiseexception("vmod: static function");
 			return false;
 		}
@@ -186,18 +177,18 @@ namespace vmod
 				return false;
 			}
 
-			call<R, Args...>(reinterpret_cast<R(*)(Args...)>(binding_func), args_var);
+			call<R, Args...>(reinterpret_cast<R(*)(Args...)>(binding_func.func), args_var);
 		} else {
 			if(!ret_var) {
-				call<R, Args...>(reinterpret_cast<R(*)(Args...)>(binding_func), args_var);
+				call<R, Args...>(reinterpret_cast<R(*)(Args...)>(binding_func.func), args_var);
 			} else {
 				if constexpr(std::is_same_v<R, script_variant_t>) {
-					*ret_var = call<R, Args...>(reinterpret_cast<R(*)(Args...)>(binding_func), args_var);
+					*ret_var = call<R, Args...>(reinterpret_cast<R(*)(Args...)>(binding_func.func), args_var);
 				} else {
-					R ret_val{call<R, Args...>(reinterpret_cast<R(*)(Args...)>(binding_func), args_var)};
+					R ret_val{call<R, Args...>(reinterpret_cast<R(*)(Args...)>(binding_func.func), args_var)};
 					value_to_variant<R>(*ret_var, std::forward<R>(ret_val));
 				}
-				fixup_var(*ret_var);
+				gsdk::IScriptVM::fixup_var(*ret_var);
 			}
 		}
 
@@ -210,7 +201,7 @@ namespace vmod
 		if constexpr(sizeof...(Args) == 2) {
 			return (static_cast<C *>(obj)->*mfp_from_func<R, C, Args...>(binding_func, adjustor))(reinterpret_cast<const script_variant_t *>(args_var_va), num_va);
 		} else {
-			return (static_cast<C *>(obj)->*mfp_from_func<R, C, Args...>(binding_func, adjustor))(variant_to_value<std::decay_t<Args>>(args_var[I])..., reinterpret_cast<const script_variant_t *>(args_var_va), num_va);
+			return (static_cast<C *>(obj)->*mfp_from_func<R, C, Args...>(binding_func, adjustor))(__variant_to_value_impl<std::decay_t<Args>>(args_var[I])..., reinterpret_cast<const script_variant_t *>(args_var_va), num_va);
 		}
 	}
 
@@ -220,12 +211,12 @@ namespace vmod
 		if constexpr(sizeof...(Args) == 2) {
 			return binding_func(reinterpret_cast<const script_variant_t *>(args_var_va), num_va);
 		} else {
-			return binding_func(variant_to_value<std::decay_t<Args>>(args_var[I])..., reinterpret_cast<const script_variant_t *>(args_var_va), num_va);
+			return binding_func(__variant_to_value_impl<std::decay_t<Args>>(args_var[I])..., reinterpret_cast<const script_variant_t *>(args_var_va), num_va);
 		}
 	}
 
 	template <typename R, typename C, typename ...Args>
-	bool func_desc_t::binding_member_singleton_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept
+	bool func_desc_t::binding_member_singleton_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept
 	{
 		if(!obj) {
 			if constexpr(singleton_instance_helper<C>::instance_func_available_v) {
@@ -236,11 +227,11 @@ namespace vmod
 			}
 		}
 
-		return binding_member_va<R, C, Args...>(binding_func, adjustor, obj, args_var, num_args, ret_var);
+		return binding_member_va<R, C, Args...>(binding_func, obj, args_var, num_args, ret_var);
 	}
 
 	template <typename R, typename C, typename ...Args>
-	bool func_desc_t::binding_member_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept
+	bool func_desc_t::binding_member_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept
 	{
 		constexpr std::size_t num_required_args{sizeof...(Args) - 2};
 
@@ -274,18 +265,18 @@ namespace vmod
 				return false;
 			}
 
-			call_member_va<R, C, Args...>(reinterpret_cast<R(*)(C *, Args..., ...)>(binding_func), static_cast<std::size_t>(adjustor), obj, args_var, args_var_va, num_va);
+			call_member_va<R, C, Args...>(reinterpret_cast<R(*)(C *, Args..., ...)>(binding_func.func), static_cast<std::size_t>(binding_func.adjustor), obj, args_var, args_var_va, num_va);
 		} else {
 			if(!ret_var) {
-				call_member_va<R, C, Args...>(reinterpret_cast<R(*)(C *, Args..., ...)>(binding_func), static_cast<std::size_t>(adjustor), obj, args_var, args_var_va, num_va);
+				call_member_va<R, C, Args...>(reinterpret_cast<R(*)(C *, Args..., ...)>(binding_func.func), static_cast<std::size_t>(binding_func.adjustor), obj, args_var, args_var_va, num_va);
 			} else {
 				if constexpr(std::is_same_v<R, script_variant_t>) {
-					*ret_var = call_member_va<R, C, Args...>(reinterpret_cast<R(*)(C *, Args..., ...)>(binding_func), static_cast<std::size_t>(adjustor), obj, args_var, args_var_va, num_va);
+					*ret_var = call_member_va<R, C, Args...>(reinterpret_cast<R(*)(C *, Args..., ...)>(binding_func.func), static_cast<std::size_t>(binding_func.adjustor), obj, args_var, args_var_va, num_va);
 				} else {
-					R ret_val{call_member_va<R, C, Args...>(reinterpret_cast<R(*)(C *, Args..., ...)>(binding_func), static_cast<std::size_t>(adjustor), obj, args_var, args_var_va, num_va)};
+					R ret_val{call_member_va<R, C, Args...>(reinterpret_cast<R(*)(C *, Args..., ...)>(binding_func.func), static_cast<std::size_t>(binding_func.adjustor), obj, args_var, args_var_va, num_va)};
 					value_to_variant<R>(*ret_var, std::forward<R>(ret_val));
 				}
-				fixup_var(*ret_var);
+				gsdk::IScriptVM::fixup_var(*ret_var);
 			}
 		}
 
@@ -293,11 +284,11 @@ namespace vmod
 	}
 
 	template <typename R, typename ...Args>
-	bool func_desc_t::binding_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept
+	bool func_desc_t::binding_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept
 	{
 		constexpr std::size_t num_required_args{sizeof...(Args) - 2};
 
-		if(obj || adjustor != 0) {
+		if(obj) {
 			__vmod_raiseexception("vmod: static function");
 			return false;
 		}
@@ -327,18 +318,18 @@ namespace vmod
 				return false;
 			}
 
-			call_va<R, Args...>(reinterpret_cast<R(*)(Args..., ...)>(binding_func), args_var, args_var_va, num_va);
+			call_va<R, Args...>(reinterpret_cast<R(*)(Args..., ...)>(binding_func.func), args_var, args_var_va, num_va);
 		} else {
 			if(!ret_var) {
-				call_va<R, Args...>(reinterpret_cast<R(*)(Args..., ...)>(binding_func), args_var, args_var_va, num_va);
+				call_va<R, Args...>(reinterpret_cast<R(*)(Args..., ...)>(binding_func.func), args_var, args_var_va, num_va);
 			} else {
 				if constexpr(std::is_same_v<R, script_variant_t>) {
-					*ret_var = call_va<R, Args...>(reinterpret_cast<R(*)(Args..., ...)>(binding_func), args_var, args_var_va, num_va);
+					*ret_var = call_va<R, Args...>(reinterpret_cast<R(*)(Args..., ...)>(binding_func.func), args_var, args_var_va, num_va);
 				} else {
-					R ret_val{call_va<R, Args...>(reinterpret_cast<R(*)(Args..., ...)>(binding_func), args_var, args_var_va, num_va)};
+					R ret_val{call_va<R, Args...>(reinterpret_cast<R(*)(Args..., ...)>(binding_func.func), args_var, args_var_va, num_va)};
 					value_to_variant<R>(*ret_var, std::forward<R>(ret_val));
 				}
-				fixup_var(*ret_var);
+				gsdk::IScriptVM::fixup_var(*ret_var);
 			}
 		}
 
@@ -349,8 +340,8 @@ namespace vmod
 	void func_desc_t::initialize_member(R(C::*func)(Args...), std::string_view name, std::string_view script_name)
 	{
 		auto mfp{mfp_to_func<R, C, Args...>(func)};
-		m_pFunction = reinterpret_cast<void *>(mfp.first);
-		m_adjustor = static_cast<int>(mfp.second);
+		m_pFunction.func = reinterpret_cast<void *>(mfp.first);
+		m_pFunction.adjustor = static_cast<std::size_t>(mfp.second);
 		m_pfnBinding = static_cast<gsdk::ScriptBindingFunc_t>(binding_member<R, C, Args...>);
 		m_flags = gsdk::SF_MEMBER_FUNC;
 		initialize_shared<R, Args...>(name, script_name, false);
@@ -360,8 +351,8 @@ namespace vmod
 	void func_desc_t::initialize_member(R(C::*func)(Args..., ...), std::string_view name, std::string_view script_name)
 	{
 		auto mfp{mfp_to_func<R, C, Args...>(func)};
-		m_pFunction = reinterpret_cast<void *>(mfp.first);
-		m_adjustor = static_cast<int>(mfp.second);
+		m_pFunction.func = reinterpret_cast<void *>(mfp.first);
+		m_pFunction.adjustor = static_cast<std::size_t>(mfp.second);
 		m_pfnBinding = static_cast<gsdk::ScriptBindingFunc_t>(binding_member_va<R, C, Args...>);
 		m_flags = gsdk::SF_MEMBER_FUNC;
 		initialize_shared<R, Args...>(name, script_name, true);
@@ -370,8 +361,8 @@ namespace vmod
 	template <typename R, typename ...Args>
 	void func_desc_t::initialize_static(R(*func)(Args...), std::string_view name, std::string_view script_name)
 	{
-		m_pFunction = reinterpret_cast<void *>(func);
-		m_adjustor = 0;
+		m_pFunction.func = reinterpret_cast<void *>(func);
+		m_pFunction.adjustor = 0;
 		m_pfnBinding = static_cast<gsdk::ScriptBindingFunc_t>(binding<R, Args...>);
 		m_flags = 0;
 		initialize_shared<R, Args...>(name, script_name, false);
@@ -380,8 +371,8 @@ namespace vmod
 	template <typename R, typename ...Args>
 	void func_desc_t::initialize_static(R(*func)(Args..., ...), std::string_view name, std::string_view script_name)
 	{
-		m_pFunction = reinterpret_cast<void *>(func);
-		m_adjustor = 0;
+		m_pFunction.func = reinterpret_cast<void *>(func);
+		m_pFunction.adjustor = 0;
 		m_pfnBinding = static_cast<gsdk::ScriptBindingFunc_t>(binding_va<R, Args...>);
 		m_flags = 0;
 		initialize_shared<R, Args...>(name, script_name, true);

@@ -29,18 +29,32 @@ namespace vmod
 		return {};
 	}
 
-	static_assert(sizeof(ffi_type *) == sizeof(int));
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<ffi_type *>() noexcept
-	{ return gsdk::FIELD_INTEGER; }
+	{
+	#if __UINTPTR_WIDTH__ == 32
+		return gsdk::FIELD_UINT;
+	#elif __UINTPTR_WIDTH__ == 64
+		return gsdk::FIELD_UINT64;
+	#else
+		#error
+	#endif
+	}
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, ffi_type *value) noexcept
-	{ var.m_hScript = reinterpret_cast<gsdk::HSCRIPT>(value); }
+	{ var.m_ptr = reinterpret_cast<void *>(value); }
 	template <>
 	inline ffi_type *variant_to_value<ffi_type *>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
-			return reinterpret_cast<ffi_type *>(var.m_hScript);
+		#if __UINTPTR_WIDTH__ == 32
+			case gsdk::FIELD_UINT:
+		#elif __UINTPTR_WIDTH__ == 64
+			case gsdk::FIELD_UINT64:
+		#else
+			#error
+		#endif
+			return reinterpret_cast<ffi_type *>(var.m_ptr);
 		}
 
 		return {};
@@ -88,8 +102,13 @@ namespace vmod
 		}
 
 		static inline generic_vtable_t script_get_vtable(generic_object_t *obj) noexcept
+		{ return vtable_from_object(obj); }
+
+		static inline generic_plain_mfp_t script_get_vfunc(generic_object_t *obj, std::size_t index) noexcept
 		{
-			return vtable_from_object(obj);
+			generic_plain_mfp_t *vtable{vtable_from_object<generic_object_t>(obj)};
+			generic_plain_mfp_t vfunc{vtable[index]};
+			return vfunc;
 		}
 
 		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
@@ -167,14 +186,16 @@ namespace vmod
 
 		void script_set_dtor_func(gsdk::HSCRIPT func) noexcept;
 
-		inline void script_disown() noexcept
-		{ ptr = nullptr; }
+		inline void *script_release() noexcept
+		{
+			unsigned char *temp_ptr{ptr};
+			ptr = nullptr;
+			delete this;
+			return temp_ptr;
+		}
 
 		inline void script_delete() noexcept
 		{ delete this; }
-
-		inline std::uintptr_t script_ptr_as_int() noexcept
-		{ return reinterpret_cast<std::uintptr_t>(ptr); }
 
 		inline void *script_ptr() noexcept
 		{ return ptr; }
@@ -190,11 +211,38 @@ namespace vmod
 
 	extern class_desc_t<memory_block> mem_block_desc;
 
-	class dynamic_detour final : public plugin::owned_instance
+	struct cif
+	{
+		inline cif(ffi_type *ret, std::vector<ffi_type *> &&args) noexcept
+			: cif_{}, arg_type_ptrs{std::move(args)}, ret_type_ptr{ret}
+		{
+		}
+
+		~cif() noexcept;
+
+		bool initialize(ffi_abi abi) noexcept;
+
+		ffi_cif cif_;
+
+		std::vector<ffi_type *> arg_type_ptrs;
+		ffi_type *ret_type_ptr;
+
+		struct free_deleter
+		{
+			inline void operator()(unsigned char *ptr) noexcept
+			{ std::free(ptr); }
+		};
+
+		std::unique_ptr<unsigned char[], free_deleter> ret_storage;
+		std::vector<std::unique_ptr<unsigned char[], free_deleter>> args_storage;
+		std::vector<void *> args_storage_ptrs;
+	};
+
+	class dynamic_detour final : public cif, public plugin::owned_instance
 	{
 	public:
 		inline dynamic_detour(ffi_type *ret, std::vector<ffi_type *> &&args) noexcept
-			: cif_{}, arg_type_ptrs{std::move(args)}, ret_type_ptr{ret}
+			: cif{ret, std::move(args)}
 		{
 		}
 
@@ -247,15 +295,6 @@ namespace vmod
 
 		gsdk::HSCRIPT new_func;
 
-		ffi_cif cif_;
-
-		std::vector<ffi_type *> arg_type_ptrs;
-		ffi_type *ret_type_ptr;
-
-		std::unique_ptr<unsigned char[]> ret_storage;
-		std::vector<std::unique_ptr<unsigned char[]>> args_storage;
-		std::vector<void *> args_storage_ptrs;
-
 		ffi_closure *closure{nullptr};
 		generic_func_t closure_func;
 
@@ -269,7 +308,7 @@ namespace vmod
 
 	extern class_desc_t<class dynamic_detour> detour_desc;
 
-	class script_cif final : plugin::owned_instance
+	class script_cif final : public cif, public plugin::owned_instance
 	{
 	public:
 		~script_cif() noexcept override;
@@ -281,24 +320,23 @@ namespace vmod
 		friend class ffi_singleton;
 
 		inline script_cif(ffi_type *ret, std::vector<ffi_type *> &&args) noexcept
-			: cif_{}, arg_type_ptrs{std::move(args)}, ret_type_ptr{ret}
+			: cif{ret, std::move(args)}
 		{
 		}
 
-		bool initialize(generic_func_t func_, ffi_abi abi) noexcept;
+		bool initialize(ffi_abi abi) noexcept;
 
 		script_variant_t script_call(const script_variant_t *va_args, std::size_t num_args, ...) noexcept;
 
-		ffi_cif cif_;
+		inline void script_set_func(generic_func_t func_) noexcept
+		{ func = func_; }
+		inline void script_set_mfp(generic_mfp_t func_) noexcept
+		{ mfp = func_; }
 
-		std::vector<ffi_type *> arg_type_ptrs;
-		ffi_type *ret_type_ptr;
-
-		std::unique_ptr<unsigned char[]> ret_storage;
-		std::vector<std::unique_ptr<unsigned char[]>> args_storage;
-		std::vector<void *> args_storage_ptrs;
-
-		generic_func_t func;
+		union {
+			generic_func_t func;
+			generic_internal_mfp_t mfp;
+		};
 		gsdk::HSCRIPT instance;
 	};
 
@@ -319,12 +357,12 @@ namespace vmod
 	private:
 		friend class vmod;
 
-		static gsdk::HSCRIPT script_create_cif(generic_func_t func, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept;
+		static bool script_create_cif_shared(std::vector<ffi_type *> &args_ptrs, gsdk::HSCRIPT args) noexcept;
+		static gsdk::HSCRIPT script_create_static_cif(ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept;
+		static gsdk::HSCRIPT script_create_member_cif(ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept;
 
 		static dynamic_detour *script_create_detour_shared(ffi_type *ret, gsdk::HSCRIPT args) noexcept;
-
 		static gsdk::HSCRIPT script_create_detour_member(generic_mfp_t old_func, gsdk::HSCRIPT new_func, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept;
-
 		static gsdk::HSCRIPT script_create_detour_static(generic_func_t old_func, gsdk::HSCRIPT new_func, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept;
 
 		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;

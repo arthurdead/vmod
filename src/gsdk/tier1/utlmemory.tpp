@@ -7,7 +7,6 @@ namespace gsdk
 	void CUtlMemory<T>::resize(std::size_t num) noexcept
 	{
 		m_nAllocationCount = static_cast<int>(num);
-		m_nGrowSize = static_cast<int>(sizeof(T) * num);
 
 		if(num == 0) {
 			std::free(m_pMemory);
@@ -24,8 +23,8 @@ namespace gsdk
 	template <typename T>
 	CUtlMemory<T>::~CUtlMemory() noexcept
 	{
-		if(m_nGrowSize > 0) {
-			std::size_t num{static_cast<std::size_t>(m_nAllocationCount)};
+		std::size_t num{static_cast<std::size_t>(m_nAllocationCount)};
+		if(num > 0) {
 			for(std::size_t i{0}; i < num; ++i) {
 				m_pMemory[i].~T();
 			}

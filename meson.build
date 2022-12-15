@@ -45,7 +45,8 @@ if compiler.get_id() == 'clang'
 		'-Wno-error=unused-local-typedef',
 		'-Wno-error=missing-variable-declarations',
 		'-Wno-error=old-style-cast',
-		'-Wno-error=weak-vtables'
+		'-Wno-error=weak-vtables',
+		'-Wno-error=cast-function-type'
 	]
 
 	cpp_args += [

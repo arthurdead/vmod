@@ -274,6 +274,30 @@ namespace vmod
 		{
 		}
 
+		inline mfp_internal_t &operator=(std::uint64_t value_) noexcept
+		{
+			value = value_;
+			return *this;
+		}
+
+		inline mfp_internal_t &operator=(R(C::*func_)(Args...)) noexcept
+		{
+			func = func_;
+			return *this;
+		}
+
+		inline mfp_internal_t &operator=(R(__attribute__((__thiscall__)) *addr_)(C *, Args...)) noexcept
+		{
+			addr = addr_;
+			adjustor = 0;
+			return *this;
+		}
+
+		inline operator bool() const noexcept
+		{ return func; }
+		inline bool operator!() const noexcept
+		{ return !func; }
+
 		std::uint64_t value;
 		struct {
 			R(__attribute__((__thiscall__)) *addr)(C *, Args...);
@@ -309,6 +333,30 @@ namespace vmod
 			: addr{addr_}, adjustor{adjustor_}
 		{
 		}
+
+		inline mfp_internal_va_t &operator=(std::uint64_t value_) noexcept
+		{
+			value = value_;
+			return *this;
+		}
+
+		inline mfp_internal_va_t &operator=(R(C::*func_)(Args..., ...)) noexcept
+		{
+			func = func_;
+			return *this;
+		}
+
+		inline mfp_internal_va_t &operator=(R(*addr_)(C *, Args..., ...)) noexcept
+		{
+			addr = addr_;
+			adjustor = 0;
+			return *this;
+		}
+
+		inline operator bool() const noexcept
+		{ return func; }
+		inline bool operator!() const noexcept
+		{ return !func; }
 
 		std::uint64_t value;
 		struct {
@@ -388,10 +436,6 @@ namespace vmod
 		}
 		return ((addr_value-1) / sizeof(generic_plain_mfp_t));
 	}
-
-	template <typename C>
-	inline generic_plain_mfp_t *vtable_from_addr(void *addr) noexcept
-	{ return reinterpret_cast<generic_plain_mfp_t *>(addr); }
 
 	template <typename C>
 	inline generic_plain_mfp_t *vtable_from_object(C *ptr) noexcept

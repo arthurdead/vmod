@@ -5,6 +5,7 @@
 #include <utility>
 #include "hacking.hpp"
 #include <cstring>
+#include <optional>
 
 namespace vmod
 {
@@ -183,7 +184,8 @@ namespace vmod
 		inline void initialize(R(*func)(Args..., ...), std::string_view name, std::string_view script_name) noexcept
 		{ initialize_static<R, Args...>(func, name, script_name); }
 
-		static constexpr int SF_VA_FUNC{(1 << 1)};
+		static constexpr int SF_VA_FUNC{1 << 1};
+		static constexpr int SF_OPT_FUNC{1 << 2};
 
 	private:
 		func_desc_t(const func_desc_t &) = delete;
@@ -197,10 +199,7 @@ namespace vmod
 			m_desc = std::move(other.m_desc);
 			m_pfnBinding = other.m_pfnBinding;
 			other.m_pfnBinding = nullptr;
-			m_pFunction = other.m_pFunction;
-			other.m_pFunction = nullptr;
-			m_adjustor = other.m_adjustor;
-			other.m_adjustor = 0;
+			m_pFunction = std::move(other.m_pFunction);
 			m_flags = other.m_flags;
 			return *this;
 		}
@@ -245,22 +244,22 @@ namespace vmod
 		void initialize_shared(std::string_view name, std::string_view script_name, bool va);
 
 		template <typename R, typename C, typename ...Args>
-		static bool binding_member_singleton(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
+		static bool binding_member_singleton(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
 
 		template <typename R, typename C, typename ...Args>
-		static bool binding_member_singleton_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
+		static bool binding_member_singleton_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
 
 		template <typename R, typename C, typename ...Args>
-		static bool binding_member(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
+		static bool binding_member(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
 
 		template <typename R, typename C, typename ...Args>
-		static bool binding_member_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
+		static bool binding_member_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
 
 		template <typename R, typename ...Args>
-		static bool binding(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
+		static bool binding(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
 
 		template <typename R, typename ...Args>
-		static bool binding_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, int adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
+		static bool binding_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
 
 		template <typename R, typename C, typename ...Args, std::size_t ...I>
 		static R call_member_impl(R(__attribute__((__thiscall__)) *binding_func)(C *, Args...), std::size_t adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, std::index_sequence<I...>) noexcept;

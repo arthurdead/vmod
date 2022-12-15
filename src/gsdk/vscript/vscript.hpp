@@ -29,6 +29,7 @@
 #include <sqstate.h>
 #include <squserdata.h>
 #include <sqtable.h>
+#include <sqarray.h>
 #include <sqclass.h>
 #undef type
 #pragma GCC diagnostic pop
@@ -191,6 +192,7 @@ namespace gsdk
 			const QAngle *m_pQAngle;
 			void *m_EHandle;
 			HSCRIPT m_hScript;
+			void *m_ptr;
 		};
 
 		short m_type;
@@ -201,9 +203,51 @@ namespace gsdk
 
 	static_assert(sizeof(ScriptVariant_t) == (sizeof(unsigned long long) + (sizeof(short) * 2)));
 
-	using ScriptFunctionBindingStorageType_t = void *;
+	struct ScriptFunctionBindingStorageType_t
+	{
+		void *func;
+		std::size_t adjustor;
+		char unk1[sizeof(unsigned long long)];
+	};
 
-	using ScriptBindingFunc_t = bool(*)(ScriptFunctionBindingStorageType_t, int, void *, const ScriptVariant_t *, int, ScriptVariant_t *);
+	static_assert(std::is_trivial_v<ScriptFunctionBindingStorageType_t>);
+	static_assert(sizeof(ScriptFunctionBindingStorageType_t) == (sizeof(unsigned long long) * 2));
+
+	using ScriptBindingFunc_t = bool(*)(ScriptFunctionBindingStorageType_t, void *, const ScriptVariant_t *, int, ScriptVariant_t *);
+
+	struct alignas(ScriptFunctionBindingStorageType_t) CScriptFunctionBindingStorageType : public ScriptFunctionBindingStorageType_t
+	{
+		inline CScriptFunctionBindingStorageType() noexcept
+		{
+			std::memset(unk1, 0, sizeof(unk1));
+		}
+
+		CScriptFunctionBindingStorageType(const CScriptFunctionBindingStorageType &other) noexcept
+		{ operator=(other); }
+
+		inline CScriptFunctionBindingStorageType &operator=(const CScriptFunctionBindingStorageType &other) noexcept
+		{
+			func = other.func;
+			adjustor = other.adjustor;
+			std::memcpy(unk1, other.unk1, sizeof(unk1));
+			return *this;
+		}
+
+		CScriptFunctionBindingStorageType(CScriptFunctionBindingStorageType &&other) noexcept
+		{ operator=(std::move(other)); }
+
+		inline CScriptFunctionBindingStorageType &operator=(CScriptFunctionBindingStorageType &&other) noexcept
+		{
+			func = other.func;
+			adjustor = other.adjustor;
+			std::memmove(unk1, other.unk1, sizeof(unk1));
+			std::memset(other.unk1, 0, sizeof(unk1));
+			return *this;
+		}
+	};
+
+	static_assert(sizeof(CScriptFunctionBindingStorageType) == sizeof(ScriptFunctionBindingStorageType_t));
+	static_assert(alignof(CScriptFunctionBindingStorageType) == alignof(ScriptFunctionBindingStorageType_t));
 
 	enum ScriptFuncBindingFlags_t : unsigned int
 	{
@@ -229,18 +273,14 @@ namespace gsdk
 			m_desc = std::move(other.m_desc);
 			m_pfnBinding = other.m_pfnBinding;
 			other.m_pfnBinding = nullptr;
-			m_pFunction = other.m_pFunction;
-			other.m_pFunction = nullptr;
-			m_adjustor = other.m_adjustor;
-			other.m_adjustor = 0;
+			m_pFunction = std::move(other.m_pFunction);
 			m_flags = other.m_flags;
 			return *this;
 		}
 
 		ScriptFuncDescriptor_t m_desc;
 		ScriptBindingFunc_t m_pfnBinding;
-		ScriptFunctionBindingStorageType_t m_pFunction;
-		int m_adjustor;
+		CScriptFunctionBindingStorageType m_pFunction;
 		unsigned m_flags;
 	};
 
@@ -311,6 +351,25 @@ namespace gsdk
 	class IScriptVM
 	{
 	public:
+		static inline short fixup_var_field(short field) noexcept
+		{
+			switch(field) {
+				case FIELD_CLASSPTR:
+				case FIELD_FUNCTION:
+				case FIELD_UINT:
+				case FIELD_UINT64:
+				return FIELD_INTEGER;
+				default:
+				return field;
+			}
+		}
+
+		static inline ScriptVariant_t &fixup_var(ScriptVariant_t &var) noexcept
+		{
+			var.m_type = fixup_var_field(var.m_type);
+			return var;
+		}
+
 		virtual bool Init() = 0;
 		virtual void Shutdown() = 0;
 		virtual bool ConnectDebugger() = 0;
@@ -373,7 +432,17 @@ namespace gsdk
 		virtual bool GenerateUniqueKey(const char *, char *, int) = 0;
 		virtual bool ValueExists(HSCRIPT, const char *) = 0;
 		virtual bool SetValue(HSCRIPT, const char *, const char *) = 0;
-		virtual bool SetValue(HSCRIPT, const char *, const ScriptVariant_t &) = 0;
+	private:
+		virtual bool SetValue_impl(HSCRIPT, const char *, const ScriptVariant_t &) = 0;
+	public:
+		inline bool SetValue(HSCRIPT scope, const char *name, const ScriptVariant_t &var)
+		{
+			ScriptVariant_t temp;
+			temp.m_type = fixup_var_field(var.m_type);
+			temp.m_flags = var.m_flags & ~SV_FREE;
+			temp.m_ulonglong = var.m_ulonglong;
+			return SetValue_impl(scope, name, temp);
+		}
 		inline bool SetValue(HSCRIPT scope, const char *name, ScriptVariant_t &&var) noexcept
 		{
 			bool ret{SetValue(scope, name, static_cast<const ScriptVariant_t &>(var))};
@@ -386,7 +455,7 @@ namespace gsdk
 			var.m_type = FIELD_HSCRIPT;
 			var.m_flags = SV_NOFLAGS;
 			var.m_hScript = object;
-			return SetValue(scope, name, var);
+			return SetValue(scope, name, static_cast<const ScriptVariant_t &>(var));
 		}
 	private:
 		virtual void CreateTable_impl(ScriptVariant_t &) = 0;
@@ -417,15 +486,21 @@ namespace gsdk
 		virtual int GetNumTableEntries(HSCRIPT) = 0;
 		int GetArrayCount(HSCRIPT);
 		virtual int GetKeyValue(HSCRIPT, int, ScriptVariant_t *, ScriptVariant_t *) = 0;
-		inline void GetArrayValue(HSCRIPT array, int i, ScriptVariant_t *value)
+		inline int GetArrayValue(HSCRIPT array, int it, ScriptVariant_t *value)
 		{
 			ScriptVariant_t tmp;
-			GetKeyValue(array, i, &tmp, value);
+			tmp.m_type = FIELD_VOID;
+			tmp.m_flags = SV_NOFLAGS;
+			tmp.m_ulonglong = 0;
+			return GetKeyValue(array, it, &tmp, value);
 		}
 		virtual bool GetValue(HSCRIPT, const char *, ScriptVariant_t *) = 0;
 		bool GetValue(HSCRIPT scope, const char *name, HSCRIPT *object) noexcept
 		{
 			ScriptVariant_t tmp;
+			tmp.m_type = FIELD_VOID;
+			tmp.m_flags = SV_NOFLAGS;
+			tmp.m_ulonglong = 0;
 			bool ret{GetValue(scope, name, &tmp)};
 			if(tmp.m_type == FIELD_HSCRIPT) {
 				*object = tmp.m_hScript;

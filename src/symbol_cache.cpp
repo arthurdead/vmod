@@ -38,29 +38,29 @@ namespace vmod
 
 	void symbol_cache::qualification_info::name_info::resolve(void *base) noexcept
 	{
-		mfp_.addr = reinterpret_cast<generic_plain_mfp_t>(static_cast<unsigned char *>(base) + offset);
+		mfp_.addr = reinterpret_cast<generic_plain_mfp_t>(static_cast<unsigned char *>(base) + offset_);
 		mfp_.adjustor = 0;
 	}
 
 	void symbol_cache::class_info::ctor_info::resolve(void *base) noexcept
 	{
-		generic_plain_mfp_t temp{reinterpret_cast<generic_plain_mfp_t>(static_cast<unsigned char *>(base) + offset)};
-		mfp_ = mfp_from_func<void, empty_class>(temp);
+		generic_plain_mfp_t temp{reinterpret_cast<generic_plain_mfp_t>(static_cast<unsigned char *>(base) + offset_)};
+		mfp_ = mfp_from_func<void, generic_object_t>(temp);
 	}
 
 	void symbol_cache::class_info::dtor_info::resolve(void *base) noexcept
 	{
-		generic_plain_mfp_t temp{reinterpret_cast<generic_plain_mfp_t>(static_cast<unsigned char *>(base) + offset)};
-		mfp_ = mfp_from_func<void, empty_class>(temp);
+		generic_plain_mfp_t temp{reinterpret_cast<generic_plain_mfp_t>(static_cast<unsigned char *>(base) + offset_)};
+		mfp_ = mfp_from_func<void, generic_object_t>(temp);
 	}
 
 	void symbol_cache::class_info::vtable_info::resolve(void *base) noexcept
-	{ vtable = vtable_from_addr<empty_class>(static_cast<unsigned char *>(base) + offset); }
+	{ prefix = reinterpret_cast<__cxxabiv1::vtable_prefix *>(static_cast<unsigned char *>(base) + offset); }
 
 	void symbol_cache::qualification_info::resolve(void *base) noexcept
 	{
 		for(auto &it : names) {
-			it.second.resolve(base);
+			it.second->resolve(base);
 		}
 	}
 
@@ -69,20 +69,12 @@ namespace vmod
 		qualification_info::resolve(base);
 
 		vtable.resolve(base);
-
-		for(ctor_info &info : ctors) {
-			info.resolve(base);
-		}
-
-		for(dtor_info &info : dtors) {
-			info.resolve(base);
-		}
 	}
 
 	void symbol_cache::resolve(void *base) noexcept
 	{
 		for(auto &it : qualifications) {
-			it.second.resolve(base);
+			it.second->resolve(base);
 		}
 	}
 
@@ -184,6 +176,32 @@ namespace vmod
 
 		elf_end(elf);
 
+		for(auto &it : qualifications) {
+			class_info *info{dynamic_cast<class_info *>(it.second.get())};
+			if(info) {
+				std::size_t vtable_size{info->vtable.size_};
+				if(vtable_size == 0) {
+					continue;
+				}
+
+				info->vtable.funcs.resize(vtable_size, info->names.end());
+
+				generic_vtable_t vtable{reinterpret_cast<generic_vtable_t>(const_cast<void **>(&info->vtable.prefix->origin))};
+				for(std::size_t i{0}; i < vtable_size; ++i) {
+					generic_plain_mfp_t func{vtable[i]};
+					std::ptrdiff_t off{reinterpret_cast<std::ptrdiff_t>(func) - reinterpret_cast<std::ptrdiff_t>(base)};
+					auto map_it{offset_map.find(off)};
+					if(map_it != offset_map.end()) {
+						auto func_it{map_it->second};
+						func_it->second->vindex = i;
+						info->vtable.funcs[i] = func_it;
+					}
+				}
+			}
+		}
+
+		offset_map.clear();
+
 		return true;
 	}
 
@@ -192,16 +210,17 @@ namespace vmod
 		using namespace std::literals::string_view_literals;
 
 		if(!component) {
-			qualification_info::name_info info;
-			info.offset = static_cast<std::ptrdiff_t>(sym.st_value);
-			info.size_ = static_cast<std::size_t>(sym.st_size);
-			info.resolve(base);
+			std::unique_ptr<qualification_info::name_info> info{new qualification_info::name_info};
+			info->offset_ = static_cast<std::ptrdiff_t>(sym.st_value);
+			info->size_ = static_cast<std::size_t>(sym.st_size);
+			info->resolve(base);
 			name_it = global_qual.names.emplace(name_mangled, std::move(info)).first;
 			qual_it = qualifications.end();
 			return true;
 		}
 
 		switch(component->type) {
+			case DEMANGLE_COMPONENT_VTABLE:
 			case DEMANGLE_COMPONENT_LOCAL_NAME:
 			case DEMANGLE_COMPONENT_NAME:
 			case DEMANGLE_COMPONENT_TYPED_NAME: break;
@@ -217,7 +236,56 @@ namespace vmod
 
 		constexpr std::size_t guessed_name_length{256};
 
+		//TODO!!!!!! move this elsewhere
+		static constexpr auto ignored_qual{
+			[](std::string_view name) noexcept -> bool {
+				if(name.starts_with("GCSDK"sv) ||
+					name == "CRTime"sv ||
+					name.starts_with("CryptoPP"sv) ||
+					name == "CCrypto"sv ||
+					name.starts_with("google::protobuf"sv) ||
+					name.starts_with("CMsgGC_"sv) ||
+					name.starts_with("CMsg"sv)) {
+					return true;
+				}
+				return false;
+			}
+		};
+
 		switch(component->type) {
+			case DEMANGLE_COMPONENT_VTABLE: {
+				unmangled_buffer = cplus_demangle_print(base_demangle_flags, component->u.s_binary.left, guessed_name_length, &allocated);
+				if(!unmangled_buffer) {
+					name_it = global_qual.names.end();
+					qual_it = qualifications.end();
+					return false;
+				}
+
+				std::string qual_name{unmangled_buffer};
+				std::free(unmangled_buffer);
+
+				if(ignored_qual(qual_name)) {
+					name_it = global_qual.names.end();
+					qual_it = qualifications.end();
+					return false;
+				}
+
+				auto this_qual_it{qualifications.find(qual_name)};
+				if(this_qual_it == qualifications.end()) {
+					this_qual_it = qualifications.emplace(std::move(qual_name), new class_info{}).first;
+				}
+
+				class_info *info{dynamic_cast<class_info *>(this_qual_it->second.get())};
+				if(info) {
+					info->vtable.offset = static_cast<std::ptrdiff_t>(sym.st_value);
+					info->vtable.size_ = ((static_cast<std::size_t>(sym.st_size) - (sizeof(__cxxabiv1::vtable_prefix) - sizeof(const void *))) / sizeof(generic_plain_mfp_t));
+					info->vtable.resolve(base);
+				}
+
+				name_it = global_qual.names.end();
+				qual_it = this_qual_it;
+				return false;
+			}
 			case DEMANGLE_COMPONENT_LOCAL_NAME: {
 				switch(component->u.s_binary.left->type) {
 					case DEMANGLE_COMPONENT_TYPED_NAME: {
@@ -244,12 +312,12 @@ namespace vmod
 								return false;
 							}
 
-							qualification_info::name_info info;
-							info.offset = static_cast<std::ptrdiff_t>(sym.st_value);
-							info.size_ = static_cast<std::size_t>(sym.st_size);
-							info.resolve(base);
+							std::unique_ptr<qualification_info::name_info> info{new qualification_info::name_info};
+							info->offset_ = static_cast<std::ptrdiff_t>(sym.st_value);
+							info->size_ = static_cast<std::size_t>(sym.st_size);
+							info->resolve(base);
 
-							name_it = tmp_name_it->second.names.emplace(std::move(local_name), std::move(info)).first;
+							name_it = tmp_name_it->second->names.emplace(std::move(local_name), std::move(info)).first;
 							qual_it = tmp_qual_it;
 							return true;
 						} else {
@@ -276,10 +344,10 @@ namespace vmod
 				std::string name_unmangled{unmangled_buffer};
 				std::free(unmangled_buffer);
 
-				qualification_info::name_info info;
-				info.offset = static_cast<std::ptrdiff_t>(sym.st_value);
-				info.size_ = static_cast<std::size_t>(sym.st_size);
-				info.resolve(base);
+				std::unique_ptr<qualification_info::name_info> info{new qualification_info::name_info};
+				info->offset_ = static_cast<std::ptrdiff_t>(sym.st_value);
+				info->size_ = static_cast<std::size_t>(sym.st_size);
+				info->resolve(base);
 
 				name_it = global_qual.names.emplace(std::move(name_unmangled), std::move(info)).first;
 				qual_it = qualifications.end();
@@ -300,12 +368,7 @@ namespace vmod
 								std::string qual_name{unmangled_buffer};
 								std::free(unmangled_buffer);
 
-								//TODO!!!!!! move this elsewhere
-								if(qual_name == "GCSDK"sv ||
-									qual_name == "CRTime"sv ||
-									qual_name.starts_with("CryptoPP"sv) ||
-									qual_name == "CCrypto"sv ||
-									qual_name.starts_with("google::protobuf"sv)) {
+								if(ignored_qual(qual_name)) {
 									name_it = global_qual.names.end();
 									qual_it = qualifications.end();
 									return false;
@@ -331,18 +394,83 @@ namespace vmod
 								func_name += unmangled_buffer;
 								std::free(unmangled_buffer);
 
+								std::unique_ptr<qualification_info::name_info> info;
+
 								auto this_qual_it{qualifications.find(qual_name)};
 								if(this_qual_it == qualifications.end()) {
-									this_qual_it = qualifications.emplace(std::move(qual_name), qualification_info{}).first;
+									this_qual_it = qualifications.emplace(std::move(qual_name), new class_info{}).first;
 								}
 
-								qualification_info::name_info info;
-								info.offset = static_cast<std::ptrdiff_t>(sym.st_value);
-								info.size_ = static_cast<std::size_t>(sym.st_size);
-								info.resolve(base);
+								switch(component->u.s_binary.left->u.s_binary.right->type) {
+									case DEMANGLE_COMPONENT_CTOR: {
+										gnu_v3_ctor_kinds kind{component->u.s_binary.left->u.s_binary.right->u.s_ctor.kind};
+										switch(kind) {
+											case gnu_v3_complete_object_ctor: {
+												func_name += " (complete)"sv;
+											} break;
+											case gnu_v3_base_object_ctor: {
+												func_name += " (base)"sv;
+											} break;
+											case gnu_v3_complete_object_allocating_ctor: {
+												func_name += " (complete allocating)"sv;
+											} break;
+											case gnu_v3_unified_ctor: {
+												func_name += " (unified)"sv;
+											} break;
+											case gnu_v3_object_ctor_group: {
+												func_name += " (group)"sv;
+											} break;
+										}
 
-								name_it = this_qual_it->second.names.insert_or_assign(std::move(func_name), std::move(info)).first;
+										class_info::ctor_info *ctor_info{new class_info::ctor_info};
+										ctor_info->kind = kind;
+
+										info.reset(ctor_info);
+									} break;
+									case DEMANGLE_COMPONENT_DTOR: {
+										gnu_v3_dtor_kinds kind{component->u.s_binary.left->u.s_binary.right->u.s_dtor.kind};
+										switch(kind) {
+											case gnu_v3_deleting_dtor: {
+												func_name += " (deleting)"sv;
+											} break;
+											case gnu_v3_complete_object_dtor: {
+												func_name += " (complete)"sv;
+											} break;
+											case gnu_v3_base_object_dtor: {
+												func_name += " (base)"sv;
+											} break;
+											case gnu_v3_unified_dtor: {
+												func_name += " (unified)"sv;
+											} break;
+											case gnu_v3_object_dtor_group: {
+												func_name += " (group)"sv;
+											} break;
+										}
+
+										class_info::dtor_info *dtor_info{new class_info::dtor_info};
+										dtor_info->kind = kind;
+
+										info.reset(dtor_info);
+									} break;
+									default: {
+										qualification_info::name_info *name_info{new qualification_info::name_info};
+
+										info.reset(name_info);
+									} break;
+								}
+
+								std::ptrdiff_t offset{static_cast<std::ptrdiff_t>(sym.st_value)};
+								info->offset_ = offset;
+								info->size_ = static_cast<std::size_t>(sym.st_size);
+								info->resolve(base);
+
+								name_it = this_qual_it->second->names.insert_or_assign(std::move(func_name), std::move(info)).first;
 								qual_it = this_qual_it;
+
+								if(dynamic_cast<class_info::ctor_info *>(info.get()) == nullptr) {
+									offset_map.emplace(offset, name_it);
+								}
+
 								return true;
 							}
 							case DEMANGLE_COMPONENT_NAME: {
@@ -356,10 +484,10 @@ namespace vmod
 								std::string func_name{unmangled_buffer};
 								std::free(unmangled_buffer);
 
-								qualification_info::name_info info;
-								info.offset = static_cast<std::ptrdiff_t>(sym.st_value);
-								info.size_ = static_cast<std::size_t>(sym.st_size);
-								info.resolve(base);
+								std::unique_ptr<qualification_info::name_info> info{new qualification_info::name_info};
+								info->offset_ = static_cast<std::ptrdiff_t>(sym.st_value);
+								info->size_ = static_cast<std::size_t>(sym.st_size);
+								info->resolve(base);
 
 								name_it = global_qual.names.insert_or_assign(std::move(func_name), std::move(info)).first;
 								qual_it = qualifications.end();

@@ -348,12 +348,12 @@ namespace vmod
 
 	plugin::owned_instance::~owned_instance() noexcept
 	{
-		if(!owner) {
+		if(!owner_) {
 			return;
 		}
 
-		if(!owner->deleting_instances) {
-			std::vector<owned_instance *> &instances{owner->owned_instances};
+		if(!owner_->deleting_instances) {
+			std::vector<owned_instance *> &instances{owner_->owned_instances};
 
 			auto it{std::find(instances.begin(), instances.end(), this)};
 			if(it != instances.end()) {
@@ -367,10 +367,10 @@ namespace vmod
 
 	void plugin::owned_instance::set_plugin() noexcept
 	{
-		owner = assumed_currently_running;
+		owner_ = assumed_currently_running;
 
-		if(owner) {
-			owner->owned_instances.emplace_back(this);
+		if(owner_) {
+			owner_->owned_instances.emplace_back(this);
 		}
 	}
 

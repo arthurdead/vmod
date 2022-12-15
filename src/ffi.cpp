@@ -344,6 +344,7 @@ namespace vmod
 		memory_desc.func(&memory_singleton::script_add, "script_add"sv, "add"sv);
 		memory_desc.func(&memory_singleton::script_sub, "script_sub"sv, "sub"sv);
 		memory_desc.func(&memory_singleton::script_get_vtable, "script_get_vtable"sv, "get_vtable"sv);
+		memory_desc.func(&memory_singleton::script_get_vfunc, "script_get_vfunc"sv, "get_vfunc"sv);
 
 		if(!vm->RegisterClass(&memory_desc)) {
 			error("vmod: failed to register memory singleton script class\n"sv);
@@ -514,11 +515,10 @@ namespace vmod
 		gsdk::IScriptVM *vm{vmod.vm()};
 
 		mem_block_desc.func(&memory_block::script_set_dtor_func, "script_set_dtor_func"sv, "hook_free"sv);
-		mem_block_desc.func(&memory_block::script_disown, "script_disown"sv, "disown"sv);
+		mem_block_desc.func(&memory_block::script_release, "script_release"sv, "release"sv);
 		mem_block_desc.func(&memory_block::script_delete, "script_delete"sv, "free"sv);
-		mem_block_desc.func(&memory_block::script_ptr_as_int, "script_ptr_as_int"sv, "get_ptr_as_int"sv);
-		mem_block_desc.func(&memory_block::script_ptr, "script_ptr"sv, "get_ptr"sv);
-		mem_block_desc.func(&memory_block::script_get_size, "script_get_size"sv, "get_size"sv);
+		mem_block_desc.func(&memory_block::script_ptr, "script_ptr"sv, "ptr"sv);
+		mem_block_desc.func(&memory_block::script_get_size, "script_get_size"sv, "size"sv);
 		mem_block_desc.dtor();
 		mem_block_desc.doc_class_name("memory_block"sv);
 
@@ -574,6 +574,11 @@ namespace vmod
 
 	script_variant_t script_cif::script_call(const script_variant_t *va_args, std::size_t num_args, ...) noexcept
 	{
+		if(!mfp) {
+			vmod.vm()->RaiseException("vmod: null function");
+			return {};
+		}
+
 		if(num_args != arg_type_ptrs.size()) {
 			vmod.vm()->RaiseException("wrong number of parameters");
 			return {};
@@ -582,12 +587,12 @@ namespace vmod
 		for(std::size_t i{0}; i < num_args; ++i) {
 			ffi_type *arg_type{arg_type_ptrs[i]};
 			const script_variant_t &arg_var{va_args[i]};
-			std::unique_ptr<unsigned char[]> &arg_ptr{args_storage[i]};
+			auto &arg_ptr{args_storage[i]};
 
 			script_var_to_ffi_ptr(arg_type, reinterpret_cast<void *>(arg_ptr.get()), arg_var);
 		}
 
-		ffi_call(&cif_, reinterpret_cast<void(*)()>(func), reinterpret_cast<void *>(ret_storage.get()), const_cast<void **>(args_storage_ptrs.data()));
+		ffi_call(&cif_, reinterpret_cast<void(*)()>(mfp.addr), reinterpret_cast<void *>(ret_storage.get()), const_cast<void **>(args_storage_ptrs.data()));
 
 		script_variant_t ret_var;
 		ffi_ptr_to_script_var(ret_type_ptr, reinterpret_cast<void *>(ret_storage.get()), ret_var);
@@ -611,6 +616,8 @@ namespace vmod
 		gsdk::IScriptVM *vm{vmod.vm()};
 
 		cif_desc.func(&script_cif::script_call, "script_call"sv, "call"sv);
+		cif_desc.func(&script_cif::script_set_func, "script_set_func"sv, "set_func"sv);
+		cif_desc.func(&script_cif::script_set_mfp, "script_set_mfp"sv, "set_mfp"sv);
 		cif_desc.dtor();
 		cif_desc.doc_class_name("cif"sv);
 
@@ -627,13 +634,41 @@ namespace vmod
 
 	}
 
-	bool script_cif::initialize(generic_func_t func_, ffi_abi abi) noexcept
+	bool cif::initialize(ffi_abi abi) noexcept
+	{
+		if(ffi_prep_cif(&cif_, abi, arg_type_ptrs.size(), ret_type_ptr, const_cast<ffi_type **>(arg_type_ptrs.data())) != FFI_OK) {
+			return false;
+		}
+
+		for(ffi_type *arg_type_ptr : arg_type_ptrs) {
+			auto &arg_ptr{args_storage.emplace_back()};
+			arg_ptr.reset(reinterpret_cast<unsigned char *>(std::aligned_alloc(arg_type_ptr->alignment, arg_type_ptr->size)));
+		}
+
+		for(auto &ptr : args_storage) {
+			args_storage_ptrs.emplace_back(ptr.get());
+		}
+
+		if(ret_type_ptr != &ffi_type_void) {
+			ret_storage.reset(reinterpret_cast<unsigned char *>(std::aligned_alloc(ret_type_ptr->alignment, ret_type_ptr->size)));
+		}
+
+		return true;
+	}
+
+	cif::~cif() noexcept
+	{
+		
+	}
+
+	bool script_cif::initialize(ffi_abi abi) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		if(ffi_prep_cif(&cif_, abi, arg_type_ptrs.size(), ret_type_ptr, const_cast<ffi_type **>(arg_type_ptrs.data())) != FFI_OK) {
+		if(!cif::initialize(abi)) {
+			vm->RaiseException("vmod: failed to create cif");
 			return false;
 		}
 
@@ -645,49 +680,62 @@ namespace vmod
 
 		//vm->SetInstanceUniqeId
 
-		func = func_;
-
-		for(ffi_type *arg_type_ptr : arg_type_ptrs) {
-			std::unique_ptr<unsigned char[]> &arg_ptr{args_storage.emplace_back()};
-			arg_ptr.reset(reinterpret_cast<unsigned char *>(std::aligned_alloc(arg_type_ptr->alignment, arg_type_ptr->size)));
-		}
-
-		for(std::unique_ptr<unsigned char[]> &ptr : args_storage) {
-			args_storage_ptrs.emplace_back(ptr.get());
-		}
-
-		if(ret_type_ptr != &ffi_type_void) {
-			ret_storage.reset(reinterpret_cast<unsigned char *>(std::aligned_alloc(ret_type_ptr->alignment, ret_type_ptr->size)));
-		}
-
 		return true;
 	}
 
-	gsdk::HSCRIPT ffi_singleton::script_create_cif(generic_func_t func, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept
+	bool ffi_singleton::script_create_cif_shared(std::vector<ffi_type *> &args_ptrs, gsdk::HSCRIPT args) noexcept
 	{
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		if(!func) {
-			vm->RaiseException("vmod: null function");
-			return nullptr;
-		}
-
-		ffi_type *ret_ptr{ret};
-
-		std::vector<ffi_type *> args_ptrs;
-
 		int num_args{vm->GetArrayCount(args)};
-		for(int i{0}; i < num_args; ++i) {
+		for(int i{0}, it{0}; it != -1 && i < num_args; ++i) {
 			script_variant_t value;
-			vm->GetArrayValue(args, i, &value);
+			it = vm->GetArrayValue(args, it, &value);
 
 			ffi_type *arg_ptr{value.get<ffi_type *>()};
 
 			args_ptrs.emplace_back(arg_ptr);
 		}
 
+		return true;
+	}
+
+	gsdk::HSCRIPT ffi_singleton::script_create_static_cif(ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		ffi_type *ret_ptr{ret};
+		std::vector<ffi_type *> args_ptrs;
+		if(!script_create_cif_shared(args_ptrs, args)) {
+			return nullptr;
+		}
+
 		script_cif *cif{new script_cif{ret_ptr, std::move(args_ptrs)}};
-		if(!cif->initialize(func, abi)) {
+		if(!cif->initialize(abi)) {
+			delete cif;
+			vm->RaiseException("vmod: failed to register ffi cif instance");
+			return nullptr;
+		}
+
+		cif->set_plugin();
+
+		return cif->instance;
+	}
+
+	gsdk::HSCRIPT ffi_singleton::script_create_member_cif(ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		ffi_type *ret_ptr{ret};
+		std::vector<ffi_type *> args_ptrs;
+		if(!script_create_cif_shared(args_ptrs, args)) {
+			return nullptr;
+		}
+
+		args_ptrs.insert(args_ptrs.begin(), &ffi_type_pointer);
+
+		script_cif *cif{new script_cif{ret_ptr, std::move(args_ptrs)}};
+		if(!cif->initialize(abi)) {
 			delete cif;
 			vm->RaiseException("vmod: failed to register ffi cif instance");
 			return nullptr;
@@ -707,9 +755,9 @@ namespace vmod
 		std::vector<ffi_type *> args_ptrs;
 
 		int num_args{vm->GetArrayCount(args)};
-		for(int i{0}; i < num_args; ++i) {
+		for(int i{0}, it{0}; it != -1 && i < num_args; ++i) {
 			script_variant_t value;
-			vm->GetArrayValue(args, i, &value);
+			it = vm->GetArrayValue(args, it, &value);
 
 			ffi_type *arg_ptr{value.get<ffi_type *>()};
 
@@ -790,7 +838,8 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		ffi_singleton_desc.func(&ffi_singleton::script_create_cif, "script_create_cif"sv, "cif"sv);
+		ffi_singleton_desc.func(&ffi_singleton::script_create_static_cif, "script_create_static_cif"sv, "cif_static"sv);
+		ffi_singleton_desc.func(&ffi_singleton::script_create_member_cif, "script_create_member_cif"sv, "cif_member"sv);
 		ffi_singleton_desc.func(&ffi_singleton::script_create_detour_static, "script_create_detour_static"sv, "detour_static"sv);
 		ffi_singleton_desc.func(&ffi_singleton::script_create_detour_member, "script_create_detour_member"sv, "detour_member"sv);
 
@@ -1118,7 +1167,7 @@ namespace vmod
 		for(std::size_t i{0}; i < num_args; ++i) {
 			ffi_type *arg_type{arg_type_ptrs[i]};
 			const script_variant_t &arg_var{va_args[i]};
-			std::unique_ptr<unsigned char[]> &arg_ptr{args_storage[i]};
+			auto &arg_ptr{args_storage[i]};
 
 			script_var_to_ffi_ptr(arg_type, reinterpret_cast<void *>(arg_ptr.get()), arg_var);
 		}
@@ -1134,7 +1183,7 @@ namespace vmod
 		return ret_var;
 	}
 
-	void dynamic_detour::closure_binding(ffi_cif *cif_, void *ret, void *args[], void *userptr) noexcept
+	void dynamic_detour::closure_binding(ffi_cif *closure_cif, void *ret, void *args[], void *userptr) noexcept
 	{
 		std::vector<script_variant_t> sargs;
 
@@ -1142,8 +1191,8 @@ namespace vmod
 
 		sargs.emplace_back(det->instance);
 
-		for(std::size_t i{0}; i < cif_->nargs; ++i) {
-			ffi_type *arg_type_ptr{cif_->arg_types[i]};
+		for(std::size_t i{0}; i < closure_cif->nargs; ++i) {
+			ffi_type *arg_type_ptr{closure_cif->arg_types[i]};
 			script_variant_t &arg_var{sargs.emplace_back()};
 
 			ffi_ptr_to_script_var(arg_type_ptr, args[i], arg_var);
@@ -1151,8 +1200,7 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		//TODO!!!! get scope of function
-		gsdk::HSCRIPT scope{nullptr};
+		gsdk::HSCRIPT scope{det->owner_scope()};
 
 		script_variant_t ret_var;
 		if(vm->ExecuteFunction(det->new_func, sargs.data(), static_cast<int>(sargs.size()), ((det->ret_type_ptr == &ffi_type_void) ? nullptr : &ret_var), scope, true) == gsdk::SCRIPT_ERROR) {
@@ -1170,17 +1218,17 @@ namespace vmod
 
 		closure = static_cast<ffi_closure *>(ffi_closure_alloc(sizeof(ffi_closure), reinterpret_cast<void **>(&closure_func)));
 		if(!closure) {
-			vm->RaiseException("vmod:: failed to allocate detour closure");
+			vm->RaiseException("vmod: failed to allocate detour closure");
 			return false;
 		}
 
-		if(ffi_prep_cif(&cif_, abi, arg_type_ptrs.size(), ret_type_ptr, const_cast<ffi_type **>(arg_type_ptrs.data())) != FFI_OK) {
-			vm->RaiseException("vmod:: failed to create detour cif");
+		if(!cif::initialize(abi)) {
+			vm->RaiseException("vmod: failed to create detour cif");
 			return false;
 		}
 
 		if(ffi_prep_closure_loc(closure, &cif_, closure_binding, this, reinterpret_cast<void *>(closure_func)) != FFI_OK) {
-			vm->RaiseException("vmod:: failed to prepare detour closure");
+			vm->RaiseException("vmod: failed to prepare detour closure");
 			return false;
 		}
 
@@ -1191,19 +1239,6 @@ namespace vmod
 		}
 
 		//vm->SetInstanceUniqeId
-
-		for(ffi_type *arg_type_ptr : arg_type_ptrs) {
-			std::unique_ptr<unsigned char[]> &arg_ptr{args_storage.emplace_back()};
-			arg_ptr.reset(reinterpret_cast<unsigned char *>(std::aligned_alloc(arg_type_ptr->alignment, arg_type_ptr->size)));
-		}
-
-		for(std::unique_ptr<unsigned char[]> &ptr : args_storage) {
-			args_storage_ptrs.emplace_back(ptr.get());
-		}
-
-		if(ret_type_ptr != &ffi_type_void) {
-			ret_storage.reset(reinterpret_cast<unsigned char *>(std::aligned_alloc(ret_type_ptr->alignment, ret_type_ptr->size)));
-		}
 
 		new_func = vm->ReferenceObject(new_func_);
 

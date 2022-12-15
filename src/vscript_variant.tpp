@@ -1,6 +1,7 @@
 #include "type_traits.hpp"
 #include <filesystem>
 #include <charconv>
+#include "gsdk/server/baseentity.hpp"
 
 namespace vmod
 {
@@ -282,8 +283,10 @@ namespace vmod
 	{
 	#if __LONG_WIDTH__ == 32
 		return gsdk::FIELD_UINT;
-	#else
+	#elif __LONG_WIDTH__ == 64
 		return gsdk::FIELD_UINT64;
+	#else
+		#error
 	#endif
 	}
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, unsigned long value) noexcept
@@ -297,8 +300,10 @@ namespace vmod
 	{
 	#if __LONG_WIDTH__ == 32
 		return gsdk::FIELD_INTEGER;
-	#else
+	#elif __LONG_WIDTH__ == 64
 		return gsdk::FIELD_INTEGER64;
+	#else
+		#error
 	#endif
 	}
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, long value) noexcept
@@ -549,16 +554,30 @@ namespace vmod
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<void *>() noexcept
-	{ return gsdk::FIELD_UINT64; }
+	{
+	#if __UINTPTR_WIDTH__ == 32
+		return gsdk::FIELD_UINT;
+	#elif __UINTPTR_WIDTH__ == 64
+		return gsdk::FIELD_UINT64;
+	#else
+		#error
+	#endif
+	}
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, void *value) noexcept
-	{ var.m_ulonglong = reinterpret_cast<unsigned long long>(value); }
+	{ var.m_ptr = value; }
 	template <>
 	inline void *variant_to_value<void *>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
+		#if __UINTPTR_WIDTH__ == 32
+			case gsdk::FIELD_UINT:
+		#elif __UINTPTR_WIDTH__ == 64
 			case gsdk::FIELD_UINT64:
-			return reinterpret_cast<void *>(var.m_ulonglong);
+		#else
+			#error
+		#endif
+			return var.m_ptr;
 			default: return {};
 		}
 	}
@@ -574,23 +593,23 @@ namespace vmod
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<generic_func_t>() noexcept
-	{ return gsdk::FIELD_UINT64; }
+	{ return gsdk::FIELD_FUNCTION; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, generic_func_t value) noexcept
-	{ var.m_ulonglong = reinterpret_cast<unsigned long long>(value); }
+	{ var.m_ptr = reinterpret_cast<void *>(value); }
 	template <>
 	inline generic_func_t variant_to_value<generic_func_t>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
-			case gsdk::FIELD_UINT64:
-			return reinterpret_cast<generic_func_t>(var.m_ulonglong);
+			case gsdk::FIELD_FUNCTION:
+			return reinterpret_cast<generic_func_t>(var.m_ptr);
 			default: return {};
 		}
 	}
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<generic_mfp_t>() noexcept
-	{ return gsdk::FIELD_UINT64; }
+	{ return gsdk::FIELD_FUNCTION; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, generic_mfp_t value) noexcept
 	{
 		generic_internal_mfp_t internal{value};
@@ -601,7 +620,7 @@ namespace vmod
 	{
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
-			case gsdk::FIELD_UINT64: {
+			case gsdk::FIELD_FUNCTION: {
 				generic_internal_mfp_t internal{static_cast<std::uint64_t>(var.m_ulonglong)};
 				return internal.func;
 			}
@@ -611,32 +630,77 @@ namespace vmod
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<generic_vtable_t>() noexcept
-	{ return gsdk::FIELD_UINT64; }
+	{
+	#if __UINTPTR_WIDTH__ == 32
+		return gsdk::FIELD_UINT;
+	#elif __UINTPTR_WIDTH__ == 64
+		return gsdk::FIELD_UINT64;
+	#else
+		#error
+	#endif
+	}
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, generic_vtable_t value) noexcept
-	{ var.m_ulonglong = reinterpret_cast<unsigned long long>(value); }
+	{ var.m_ptr = reinterpret_cast<void *>(value); }
 	template <>
 	inline generic_vtable_t variant_to_value<generic_vtable_t>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
+		#if __UINTPTR_WIDTH__ == 32
+			case gsdk::FIELD_UINT:
+		#elif __UINTPTR_WIDTH__ == 64
 			case gsdk::FIELD_UINT64:
-			return reinterpret_cast<generic_vtable_t>(var.m_ulonglong);
+		#else
+			#error
+		#endif
+			return reinterpret_cast<generic_vtable_t>(var.m_ptr);
+			default: return {};
+		}
+	}
+
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field<generic_plain_mfp_t>() noexcept
+	{ return gsdk::FIELD_FUNCTION; }
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, generic_plain_mfp_t value) noexcept
+	{ var.m_ptr = reinterpret_cast<void *>(value); }
+	template <>
+	inline generic_plain_mfp_t variant_to_value<generic_plain_mfp_t>(const gsdk::ScriptVariant_t &var) noexcept
+	{
+		switch(var.m_type) {
+			case gsdk::FIELD_INTEGER:
+			case gsdk::FIELD_FUNCTION:
+			return reinterpret_cast<generic_plain_mfp_t>(var.m_ptr);
 			default: return {};
 		}
 	}
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<generic_object_t *>() noexcept
-	{ return gsdk::FIELD_UINT64; }
+	{ return gsdk::FIELD_CLASSPTR; }
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, generic_object_t *value) noexcept
-	{ var.m_ulonglong = reinterpret_cast<unsigned long long>(value); }
+	{ var.m_ptr = reinterpret_cast<void *>(value); }
 	template <>
 	inline generic_object_t *variant_to_value<generic_object_t *>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
-			case gsdk::FIELD_UINT64:
-			return reinterpret_cast<generic_object_t *>(var.m_ulonglong);
+			case gsdk::FIELD_CLASSPTR:
+			return reinterpret_cast<generic_object_t *>(var.m_ptr);
+			default: return {};
+		}
+	}
+
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field<gsdk::CBaseEntity *>() noexcept
+	{ return gsdk::FIELD_HSCRIPT; }
+	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, gsdk::CBaseEntity *value) noexcept
+	{ var.m_hScript = nullptr; }
+	template <>
+	inline gsdk::CBaseEntity *variant_to_value<gsdk::CBaseEntity *>(const gsdk::ScriptVariant_t &var) noexcept
+	{
+		switch(var.m_type) {
+			case gsdk::FIELD_HSCRIPT:
+			return nullptr;
 			default: return {};
 		}
 	}
@@ -651,6 +715,45 @@ namespace vmod
 	{
 	};
 
+	template <typename T, typename = void>
+	struct variant_to_value_specialized : std::false_type
+	{
+	};
+
+	template <typename T>
+	struct variant_to_value_specialized<T, decltype(variant_to_value<T>(std::declval<gsdk::ScriptVariant_t>()), void())> : std::true_type
+	{
+	};
+
+	template <typename T>
+	struct is_optional : std::false_type
+	{
+	};
+
+	template <typename T>
+	struct is_optional<std::optional<T>> : std::true_type
+	{
+		using type = T;
+	};
+
+	template <typename T>
+	std::remove_reference_t<T> __variant_to_value_impl(const gsdk::ScriptVariant_t &var) noexcept
+	{
+		if constexpr(variant_to_value_specialized<T>::value) {
+			return variant_to_value<T>(var);
+		} else if constexpr(std::is_enum_v<T>) {
+			return variant_to_value<std::underlying_type_t<T>>(var);
+		} else if constexpr(is_optional<T>::value) {
+			if(var.m_type == gsdk::FIELD_VOID) {
+				return std::nullopt;
+			}
+
+			return __variant_to_value_impl<typename is_optional<T>::type>(var);
+		} else {
+			static_assert(false_t<T>::value);
+		}
+	}
+
 	template <typename T>
 	constexpr gsdk::ScriptDataType_t __type_to_field_impl() noexcept
 	{
@@ -658,6 +761,8 @@ namespace vmod
 			return type_to_field<T>();
 		} else if constexpr(std::is_enum_v<T>) {
 			return type_to_field<std::underlying_type_t<T>>();
+		} else if constexpr(is_optional<T>::value) {
+			return __type_to_field_impl<typename is_optional<T>::type>();
 		} else {
 			static_assert(false_t<T>::value);
 		}

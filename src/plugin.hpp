@@ -43,6 +43,8 @@ namespace vmod
 
 		inline gsdk::HSCRIPT instance() noexcept
 		{ return instance_; }
+		inline gsdk::HSCRIPT private_scope() noexcept
+		{ return private_scope_; }
 
 		inline operator bool() const noexcept
 		{ return running && script != gsdk::INVALID_HSCRIPT; }
@@ -133,8 +135,14 @@ namespace vmod
 
 			void set_plugin() noexcept;
 
+		protected:
+			inline plugin *owner() noexcept
+			{ return owner_; }
+			inline gsdk::HSCRIPT owner_scope() noexcept
+			{ return owner_ ? owner_->private_scope_ : nullptr; }
+
 		private:
-			plugin *owner;
+			plugin *owner_;
 		};
 
 	private:

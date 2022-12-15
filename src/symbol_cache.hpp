@@ -47,7 +47,7 @@ namespace vmod
 			struct name_info;
 
 		private:
-			using names_t = std::unordered_map<std::string, name_info>;
+			using names_t = std::unordered_map<std::string, std::unique_ptr<name_info>>;
 
 		public:
 			struct name_info
@@ -78,6 +78,9 @@ namespace vmod
 				inline std::size_t size() const noexcept
 				{ return size_; }
 
+				inline std::size_t virtual_index() const noexcept
+				{ return vindex; }
+
 				using const_iterator = names_t::const_iterator;
 
 				inline const_iterator find(const std::string &name) const noexcept
@@ -98,7 +101,8 @@ namespace vmod
 
 				virtual void resolve(void *base) noexcept;
 
-				std::ptrdiff_t offset;
+				std::ptrdiff_t offset_;
+				std::size_t vindex;
 				std::size_t size_;
 				union {
 					void *addr_;
@@ -136,6 +140,8 @@ namespace vmod
 		struct class_info final : qualification_info
 		{
 		private:
+			friend class symbol_cache;
+
 			void resolve(void *base) noexcept override;
 
 			struct vtable_info final
@@ -146,8 +152,9 @@ namespace vmod
 				void resolve(void *base) noexcept;
 
 				std::ptrdiff_t offset;
-				std::vector<name_info> funcs;
-				generic_vtable_t vtable;
+				std::size_t size_;
+				__cxxabiv1::vtable_prefix *prefix;
+				std::vector<names_t::const_iterator> funcs;
 			};
 
 			struct ctor_info final : name_info
@@ -155,7 +162,11 @@ namespace vmod
 			private:
 				friend class symbol_cache;
 
+				using kind_t = gnu_v3_ctor_kinds;
+
 				void resolve(void *base) noexcept override;
+
+				kind_t kind;
 			};
 
 			struct dtor_info final : name_info
@@ -163,16 +174,18 @@ namespace vmod
 			private:
 				friend class symbol_cache;
 
+				using kind_t = gnu_v3_dtor_kinds;
+
 				void resolve(void *base) noexcept override;
+
+				kind_t kind;
 			};
 
 			vtable_info vtable;
-			std::vector<ctor_info> ctors;
-			std::vector<dtor_info> dtors;
 		};
 
 	private:
-		using qualifications_t = std::unordered_map<std::string, qualification_info>;
+		using qualifications_t = std::unordered_map<std::string, std::unique_ptr<qualification_info>>;
 
 	public:
 		using const_iterator = qualifications_t::const_iterator;
@@ -199,6 +212,8 @@ namespace vmod
 		bool read_elf(int fd, void *base) noexcept;
 
 		bool handle_component(std::string_view name_mangled, int base_demangle_flags, demangle_component *component, qualifications_t::iterator &qual_it, qualification_info::names_t::iterator &name_it, GElf_Sym &&sym, void *base) noexcept;
+
+		std::unordered_map<std::ptrdiff_t, qualification_info::names_t::const_iterator> offset_map;
 
 		qualifications_t qualifications;
 		qualification_info global_qual;

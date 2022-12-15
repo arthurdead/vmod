@@ -172,4 +172,15 @@ namespace gsdk
 		virtual const char *GetCannonicalName(const char *) = 0;
 	};
 	#pragma GCC diagnostic pop
+
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
+	class IEntityFactory
+	{
+	public:
+		virtual IServerNetworkable *Create(const char *) = 0;
+		virtual void Destroy(IServerNetworkable *) = 0;
+		virtual size_t GetEntitySize() = 0;
+	};
+	#pragma GCC diagnostic pop
 }

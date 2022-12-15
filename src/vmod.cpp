@@ -130,8 +130,8 @@ namespace vmod
 
 				std::string name_tmp{name};
 
-				auto tmp_it{it_->second.find(name_tmp)};
-				if(tmp_it == it_->second.end()) {
+				auto tmp_it{it_->second->find(name_tmp)};
+				if(tmp_it == it_->second->end()) {
 					return nullptr;
 				}
 
@@ -163,8 +163,8 @@ namespace vmod
 
 				std::string name_tmp{name};
 
-				auto tmp_it{it_->second.find(name_tmp)};
-				if(tmp_it == it_->second.end()) {
+				auto tmp_it{it_->second->find(name_tmp)};
+				if(tmp_it == it_->second->end()) {
 					return nullptr;
 				}
 
@@ -174,13 +174,15 @@ namespace vmod
 			inline std::string_view script_name() const noexcept
 			{ return it_->first; }
 			inline void *script_addr() const noexcept
-			{ return it_->second.addr<void *>(); }
+			{ return it_->second->addr<void *>(); }
 			inline generic_func_t script_func() const noexcept
-			{ return it_->second.func<generic_func_t>(); }
+			{ return it_->second->func<generic_func_t>(); }
 			inline generic_mfp_t script_mfp() const noexcept
-			{ return it_->second.mfp<generic_mfp_t>(); }
+			{ return it_->second->mfp<generic_mfp_t>(); }
 			inline std::size_t script_size() const noexcept
-			{ return it_->second.size(); }
+			{ return it_->second->size(); }
+			inline std::size_t script_vindex() const noexcept
+			{ return it_->second->virtual_index(); }
 
 			inline void script_delete() noexcept
 			{ delete this; }
@@ -367,6 +369,7 @@ namespace vmod
 		name_it_desc.func(&script_name_it_t::script_func, "script_func"sv, "func"sv);
 		name_it_desc.func(&script_name_it_t::script_mfp, "script_mfp"sv, "mfp"sv);
 		name_it_desc.func(&script_name_it_t::script_size, "script_size"sv, "size"sv);
+		name_it_desc.func(&script_name_it_t::script_vindex, "script_vindex"sv, "vidx"sv);
 		name_it_desc.func(&script_name_it_t::script_lookup, "script_lookup"sv, "lookup"sv);
 		name_it_desc.func(&script_name_it_t::script_delete, "script_delete"sv, "free"sv);
 		name_it_desc.dtor();
@@ -918,10 +921,10 @@ namespace vmod
 		script_cvar_desc.func(&script_cvar::script_set_value_int, "script_set_value_int"sv, "set_int"sv);
 		script_cvar_desc.func(&script_cvar::script_set_value_bool, "script_set_value_bool"sv, "set_bool"sv);
 		script_cvar_desc.func(&script_cvar::script_get_value, "script_script_get_value"sv, "get"sv);
-		script_cvar_desc.func(&script_cvar::script_get_value_string, "script_get_value_string"sv, "get_string"sv);
-		script_cvar_desc.func(&script_cvar::script_get_value_float, "script_get_value_float"sv, "get_float"sv);
-		script_cvar_desc.func(&script_cvar::script_get_value_int, "script_get_value_int"sv, "get_int"sv);
-		script_cvar_desc.func(&script_cvar::script_get_value_bool, "script_get_value_bool"sv, "get_bool"sv);
+		script_cvar_desc.func(&script_cvar::script_get_value_string, "script_get_value_string"sv, "string"sv);
+		script_cvar_desc.func(&script_cvar::script_get_value_float, "script_get_value_float"sv, "float"sv);
+		script_cvar_desc.func(&script_cvar::script_get_value_int, "script_get_value_int"sv, "int"sv);
+		script_cvar_desc.func(&script_cvar::script_get_value_bool, "script_get_value_bool"sv, "bool"sv);
 		script_cvar_desc.func(&script_cvar::script_delete, "script_delete"sv, "free"sv);
 		script_cvar_desc.dtor();
 		script_cvar_desc.doc_class_name("convar"sv);
@@ -1108,6 +1111,278 @@ namespace vmod
 		}
 	}
 
+	class entities_singleton : public gsdk::ISquirrelMetamethodDelegate
+	{
+	public:
+		~entities_singleton() noexcept override;
+
+		static entities_singleton &instance() noexcept;
+
+		bool bindings() noexcept;
+		void unbindings() noexcept;
+
+	private:
+		friend class vmod;
+
+		class script_factory_impl final : public gsdk::IEntityFactory, public plugin::owned_instance
+		{
+		public:
+			~script_factory_impl() noexcept override;
+
+			gsdk::IServerNetworkable *Create(const char *classname) override;
+			void Destroy(gsdk::IServerNetworkable *net) override;
+			size_t GetEntitySize() override;
+
+			inline std::size_t script_size() noexcept
+			{ return GetEntitySize(); }
+
+			std::size_t size;
+			gsdk::HSCRIPT func;
+			gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+		};
+
+		static inline class_desc_t<script_factory_impl> script_factory_impl_desc{"__vmod_script_entity_factory_impl_class"};
+
+		class script_factory final : public plugin::owned_instance
+		{
+		public:
+			~script_factory() noexcept override;
+
+		private:
+			friend class entities_singleton;
+
+			inline void script_delete() noexcept
+			{ delete this; }
+
+			inline std::size_t script_size() const noexcept
+			{ return factory->GetEntitySize(); }
+
+			gsdk::IEntityFactory *factory;
+			bool free_factory;
+			gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+		};
+
+		static inline class_desc_t<script_factory> script_factory_desc{"__vmod_script_entity_factory_class"};
+
+		static gsdk::HSCRIPT script_find_factory(std::string_view name) noexcept
+		{
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			gsdk::IEntityFactory *factory{entityfactorydict->FindFactory(name.data())};
+			if(!factory) {
+				return nullptr;
+			}
+
+			script_factory *sfac{new script_factory};
+
+			gsdk::HSCRIPT factory_instance{vm->RegisterInstance(&script_factory_desc, sfac)};
+			if(!factory_instance || factory_instance == gsdk::INVALID_HSCRIPT) {
+				delete sfac;
+				vm->RaiseException("vmod: failed to register instance");
+				return nullptr;
+			}
+
+			sfac->factory = factory;
+			sfac->free_factory = false;
+			sfac->instance = factory_instance;
+
+			sfac->set_plugin();
+
+			return sfac->instance;
+		}
+
+		static gsdk::HSCRIPT script_create_factory(std::string_view name, gsdk::HSCRIPT func, std::size_t size) noexcept
+		{
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			gsdk::IEntityFactory *factory{entityfactorydict->FindFactory(name.data())};
+			if(factory) {
+				vm->RaiseException("vmod: name already in use");
+				return nullptr;
+			}
+
+			script_factory_impl *sfac{new script_factory_impl};
+
+			gsdk::HSCRIPT factory_instance{vm->RegisterInstance(&script_factory_impl_desc, sfac)};
+			if(!factory_instance || factory_instance == gsdk::INVALID_HSCRIPT) {
+				delete sfac;
+				vm->RaiseException("vmod: failed to register instance");
+				return nullptr;
+			}
+
+			sfac->func = vm->ReferenceObject(func);
+			sfac->size = size;
+			sfac->instance = factory_instance;
+
+			sfac->set_plugin();
+
+			return sfac->instance;
+		}
+
+		static gsdk::HSCRIPT script_from_ptr(gsdk::CBaseEntity *ptr) noexcept
+		{
+			return nullptr;
+		}
+
+		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
+
+		gsdk::HSCRIPT vs_instance_{gsdk::INVALID_HSCRIPT};
+		gsdk::HSCRIPT scope{gsdk::INVALID_HSCRIPT};
+		gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
+	};
+
+	bool entities_singleton::Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value)
+	{
+		return vmod.vm()->GetValue(vs_instance_, name.c_str(), &value);
+	}
+
+	entities_singleton::~entities_singleton() {}
+
+	static class entities_singleton entities_singleton;
+
+	static singleton_class_desc_t<class entities_singleton> entities_singleton_desc{"__vmod_entities_singleton_class"};
+
+	inline class entities_singleton &entities_singleton::instance() noexcept
+	{ return ::vmod::entities_singleton; }
+
+	entities_singleton::script_factory_impl::~script_factory_impl() noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(instance && instance != gsdk::INVALID_HSCRIPT) {
+			vm->RemoveInstance(instance);
+		}
+
+		if(func && func != gsdk::INVALID_HSCRIPT) {
+			vm->ReleaseFunction(func);
+		}
+	}
+
+	gsdk::IServerNetworkable *entities_singleton::script_factory_impl::Create(const char *classname)
+	{
+		if(func && func != gsdk::INVALID_HSCRIPT) {
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			gsdk::HSCRIPT pl_scope{owner_scope()};
+
+			script_variant_t args[]{instance, classname};
+			script_variant_t ret_var;
+			if(vm->ExecuteFunction(func, args, sizeof(args), &ret_var, pl_scope, true) == gsdk::SCRIPT_ERROR) {
+				return nullptr;
+			}
+
+			if(ret_var.m_type != gsdk::FIELD_INTEGER) {
+				return nullptr;
+			}
+
+			return reinterpret_cast<gsdk::IServerNetworkable *>(ret_var.m_ulonglong);
+		}
+
+		return nullptr;
+	}
+
+	void entities_singleton::script_factory_impl::Destroy(gsdk::IServerNetworkable *net)
+	{
+
+	}
+
+	size_t entities_singleton::script_factory_impl::GetEntitySize()
+	{ return size; }
+
+	entities_singleton::script_factory::~script_factory() noexcept
+	{
+		if(free_factory) {
+			script_factory_impl *impl{dynamic_cast<script_factory_impl *>(factory)};
+			if(impl != nullptr) {
+				delete impl;
+			}
+		}
+
+		if(instance && instance != gsdk::INVALID_HSCRIPT) {
+			vmod.vm()->RemoveInstance(instance);
+		}
+	}
+
+	bool entities_singleton::bindings() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		entities_singleton_desc.func(&entities_singleton::script_from_ptr, "script_from_ptr"sv, "from_ptr"sv);
+		entities_singleton_desc.func(&entities_singleton::script_find_factory, "script_find_factory"sv, "find_factory"sv);
+		entities_singleton_desc.func(&entities_singleton::script_create_factory, "script_create_factory"sv, "create_factory"sv);
+
+		if(!vm->RegisterClass(&entities_singleton_desc)) {
+			error("vmod: failed to register vmod entities singleton script class\n"sv);
+			return false;
+		}
+
+		script_factory_impl_desc.func(&script_factory_impl::script_size, "script_size"sv, "size"sv);
+
+		if(!vm->RegisterClass(&script_factory_impl_desc)) {
+			error("vmod: failed to register entity factory impl script class\n"sv);
+			return false;
+		}
+
+		script_factory_desc.func(&script_factory::script_size, "script_size"sv, "size"sv);
+
+		if(!vm->RegisterClass(&script_factory_desc)) {
+			error("vmod: failed to register entity factory script class\n"sv);
+			return false;
+		}
+
+		vs_instance_ = vm->RegisterInstance(&entities_singleton_desc, this);
+		if(!vs_instance_ || vs_instance_ == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create vmod entities singleton instance\n"sv);
+			return false;
+		}
+
+		vm->SetInstanceUniqeId(vs_instance_, "__vmod_entities_singleton");
+
+		scope = vm->CreateScope("__vmod_entities_scope", nullptr);
+		if(!scope || scope == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create entities scope\n"sv);
+			return false;
+		}
+
+		gsdk::HSCRIPT vmod_scope{vmod.scope()};
+		if(!vm->SetValue(vmod_scope, "ent", scope)) {
+			error("vmod: failed to set entities scope value\n"sv);
+			return false;
+		}
+
+		get_impl = vm->MakeSquirrelMetamethod_Get(vmod_scope, "ent", this, false);
+		if(!get_impl) {
+			error("vmod: failed to create entities _get metamethod\n"sv);
+			return false;
+		}
+
+		return true;
+	}
+
+	void entities_singleton::unbindings() noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(vs_instance_ && vs_instance_ != gsdk::INVALID_HSCRIPT) {
+			vm->RemoveInstance(vs_instance_);
+		}
+
+		if(get_impl) {
+			vm->DestroySquirrelMetamethod_Get(get_impl);
+		}
+
+		if(scope && scope != gsdk::INVALID_HSCRIPT) {
+			vm->ReleaseScope(scope);
+		}
+
+		gsdk::HSCRIPT vmod_scope{vmod.scope()};
+		if(vm->ValueExists(vmod_scope, "ent")) {
+			vm->ClearValue(vmod_scope, "ent");
+		}
+	}
+
 	bool vmod::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -1237,6 +1512,10 @@ namespace vmod
 			return false;
 		}
 
+		if(!entities_singleton.bindings()) {
+			return false;
+		}
+
 		get_impl = vm_->MakeSquirrelMetamethod_Get(nullptr, "vmod", this, false);
 		if(!get_impl) {
 			error("vmod: failed to create vmod _get metamethod\n"sv);
@@ -1279,6 +1558,8 @@ namespace vmod
 		filesystem_singleton.unbindings();
 
 		cvar_singleton.unbindings();
+
+		entities_singleton.unbindings();
 
 		ffi_unbindings();
 
@@ -1565,11 +1846,20 @@ namespace vmod
 	static detour<decltype(sq_setparamscheck)> sq_setparamscheck_detour;
 	static SQRESULT sq_setparamscheck_detour_callback(HSQUIRRELVM v, SQInteger nparamscheck, const SQChar *typemask)
 	{
-		if(current_binding && (current_binding->m_flags & func_desc_t::SF_VA_FUNC)) {
-			nparamscheck = -nparamscheck;
+		using namespace std::literals::string_view_literals;
+
+		std::string temp_typemask{typemask};
+
+		if(current_binding) {
+			if(current_binding->m_flags & func_desc_t::SF_VA_FUNC) {
+				nparamscheck = -nparamscheck;
+			} else if(current_binding->m_flags & func_desc_t::SF_OPT_FUNC) {
+				nparamscheck = -(nparamscheck-1);
+				temp_typemask += "|o"sv;
+			}
 		}
 
-		return sq_setparamscheck_detour(v, nparamscheck, typemask);
+		return sq_setparamscheck_detour(v, nparamscheck, temp_typemask.c_str());
 	}
 
 	static void (gsdk::IServerGameDLL::*CreateNetworkStringTables_original)();
@@ -1847,8 +2137,8 @@ namespace vmod
 			return false;
 		}
 
-		auto RegisterScriptFunctions_it{CTFGameRules_it->second.find("RegisterScriptFunctions()"s)};
-		if(RegisterScriptFunctions_it == CTFGameRules_it->second.end()) {
+		auto RegisterScriptFunctions_it{CTFGameRules_it->second->find("RegisterScriptFunctions()"s)};
+		if(RegisterScriptFunctions_it == CTFGameRules_it->second->end()) {
 			error("vmod: missing 'CTFGameRules::RegisterScriptFunctions()' symbol\n"sv);
 			return false;
 		}
@@ -1859,14 +2149,14 @@ namespace vmod
 			return false;
 		}
 
-		auto sv_GetDescList_it{sv_ScriptClassDesc_t_it->second.find("GetDescList()"s)};
-		if(sv_GetDescList_it == sv_ScriptClassDesc_t_it->second.end()) {
+		auto sv_GetDescList_it{sv_ScriptClassDesc_t_it->second->find("GetDescList()"s)};
+		if(sv_GetDescList_it == sv_ScriptClassDesc_t_it->second->end()) {
 			error("vmod: missing 'ScriptClassDesc_t::GetDescList()' symbol\n"sv);
 			return false;
 		}
 
-		auto sv_pHead_it{sv_GetDescList_it->second.find("pHead"s)};
-		if(sv_pHead_it == sv_GetDescList_it->second.end()) {
+		auto sv_pHead_it{sv_GetDescList_it->second->find("pHead"s)};
+		if(sv_pHead_it == sv_GetDescList_it->second->end()) {
 			error("vmod: missing 'ScriptClassDesc_t::GetDescList()::pHead' symbol\n"sv);
 			return false;
 		}
@@ -1896,7 +2186,7 @@ namespace vmod
 		}
 
 		{
-			SQInteger game_sq_ver{sq_getversion_it->second.func<decltype(::sq_getversion)>()()};
+			SQInteger game_sq_ver{sq_getversion_it->second->func<decltype(::sq_getversion)>()()};
 			SQInteger curr_sq_ver{::sq_getversion()};
 
 			if(curr_sq_ver != SQUIRREL_VERSION_NUMBER) {
@@ -1946,56 +2236,56 @@ namespace vmod
 			return false;
 		}
 
-		auto CreateArray_it{CSquirrelVM_it->second.find("CreateArray(CVariantBase<CVariantDefaultAllocator>&)"s)};
-		if(CreateArray_it == CSquirrelVM_it->second.end()) {
+		auto CreateArray_it{CSquirrelVM_it->second->find("CreateArray(CVariantBase<CVariantDefaultAllocator>&)"s)};
+		if(CreateArray_it == CSquirrelVM_it->second->end()) {
 			error("vmod: missing 'CSquirrelVM::CreateArray(CVariantBase<CVariantDefaultAllocator>&)' symbol\n"sv);
 			return false;
 		}
 
-		auto GetArrayCount_it{CSquirrelVM_it->second.find("GetArrayCount(HSCRIPT__*)"s)};
-		if(GetArrayCount_it == CSquirrelVM_it->second.end()) {
+		auto GetArrayCount_it{CSquirrelVM_it->second->find("GetArrayCount(HSCRIPT__*)"s)};
+		if(GetArrayCount_it == CSquirrelVM_it->second->end()) {
 			error("vmod: missing 'CSquirrelVM::GetArrayCount(HSCRIPT__*)' symbol\n"sv);
 			return false;
 		}
 
-		auto PrintFunc_it{CSquirrelVM_it->second.find("PrintFunc(SQVM*, char const*, ...)"s)};
-		if(PrintFunc_it == CSquirrelVM_it->second.end()) {
+		auto PrintFunc_it{CSquirrelVM_it->second->find("PrintFunc(SQVM*, char const*, ...)"s)};
+		if(PrintFunc_it == CSquirrelVM_it->second->end()) {
 			error("vmod: missing 'CSquirrelVM::PrintFunc(SQVM*, char const*, ...)' symbol\n"sv);
 			return false;
 		}
 
-		auto ErrorFunc_it{CSquirrelVM_it->second.find("ErrorFunc(SQVM*, char const*, ...)"s)};
-		if(ErrorFunc_it == CSquirrelVM_it->second.end()) {
+		auto ErrorFunc_it{CSquirrelVM_it->second->find("ErrorFunc(SQVM*, char const*, ...)"s)};
+		if(ErrorFunc_it == CSquirrelVM_it->second->end()) {
 			error("vmod: missing 'CSquirrelVM::ErrorFunc(SQVM*, char const*, ...)' symbol\n"sv);
 			return false;
 		}
 
-		auto RegisterFunctionGuts_it{CSquirrelVM_it->second.find("RegisterFunctionGuts(ScriptFunctionBinding_t*, ScriptClassDesc_t*)"s)};
-		if(RegisterFunctionGuts_it == CSquirrelVM_it->second.end()) {
+		auto RegisterFunctionGuts_it{CSquirrelVM_it->second->find("RegisterFunctionGuts(ScriptFunctionBinding_t*, ScriptClassDesc_t*)"s)};
+		if(RegisterFunctionGuts_it == CSquirrelVM_it->second->end()) {
 			error("vmod: missing 'CSquirrelVM::RegisterFunctionGuts(ScriptFunctionBinding_t*, ScriptClassDesc_t*)' symbol\n"sv);
 			return false;
 		}
 
 		if(g_Script_init_it != vscript_global_qual.end()) {
-			g_Script_init = g_Script_init_it->second.addr<const unsigned char *>();
+			g_Script_init = g_Script_init_it->second->addr<const unsigned char *>();
 		}
 
-		RegisterScriptFunctions = RegisterScriptFunctions_it->second.mfp<decltype(RegisterScriptFunctions)>();
-		VScriptServerInit = VScriptServerInit_it->second.func<decltype(VScriptServerInit)>();
-		VScriptServerTerm = VScriptServerTerm_it->second.func<decltype(VScriptServerTerm)>();
-		VScriptRunScript = VScriptRunScript_it->second.func<decltype(VScriptRunScript)>();
-		g_Script_vscript_server = g_Script_vscript_server_it->second.addr<const unsigned char *>();
-		g_pScriptVM = g_pScriptVM_it->second.addr<gsdk::IScriptVM **>();
+		RegisterScriptFunctions = RegisterScriptFunctions_it->second->mfp<decltype(RegisterScriptFunctions)>();
+		VScriptServerInit = VScriptServerInit_it->second->func<decltype(VScriptServerInit)>();
+		VScriptServerTerm = VScriptServerTerm_it->second->func<decltype(VScriptServerTerm)>();
+		VScriptRunScript = VScriptRunScript_it->second->func<decltype(VScriptRunScript)>();
+		g_Script_vscript_server = g_Script_vscript_server_it->second->addr<const unsigned char *>();
+		g_pScriptVM = g_pScriptVM_it->second->addr<gsdk::IScriptVM **>();
 
-		CreateArray = CreateArray_it->second.mfp<decltype(CreateArray)>();
-		GetArrayCount = GetArrayCount_it->second.mfp<decltype(GetArrayCount)>();
+		CreateArray = CreateArray_it->second->mfp<decltype(CreateArray)>();
+		GetArrayCount = GetArrayCount_it->second->mfp<decltype(GetArrayCount)>();
 
-		PrintFunc = PrintFunc_it->second.func<decltype(PrintFunc)>();
-		ErrorFunc = ErrorFunc_it->second.func<decltype(ErrorFunc)>();
-		RegisterFunctionGuts = RegisterFunctionGuts_it->second.mfp<decltype(RegisterFunctionGuts)>();
-		sq_setparamscheck = sq_setparamscheck_it->second.func<decltype(sq_setparamscheck)>();
+		PrintFunc = PrintFunc_it->second->func<decltype(PrintFunc)>();
+		ErrorFunc = ErrorFunc_it->second->func<decltype(ErrorFunc)>();
+		RegisterFunctionGuts = RegisterFunctionGuts_it->second->mfp<decltype(RegisterFunctionGuts)>();
+		sq_setparamscheck = sq_setparamscheck_it->second->func<decltype(sq_setparamscheck)>();
 
-		sv_classdesc_pHead = sv_pHead_it->second.addr<gsdk::ScriptClassDesc_t **>();
+		sv_classdesc_pHead = sv_pHead_it->second->addr<gsdk::ScriptClassDesc_t **>();
 
 		vm_->SetOutputCallback(vscript_output);
 		vm_->SetErrorCallback(vscript_error_output);
@@ -2591,6 +2881,10 @@ namespace vmod
 			return "ehandle"sv;
 			case gsdk::FIELD_EDICT:
 			return "edict"sv;
+			case gsdk::FIELD_FUNCTION:
+			return "function"sv;
+			case gsdk::FIELD_CLASSPTR:
+			return "object"sv;
 			case gsdk::FIELD_TYPEUNKNOWN:
 			return "unknown"sv;
 			default:
@@ -3096,7 +3390,7 @@ namespace vmod
 		std::unordered_map<int, std::string> bit_str_map;
 
 		int num2{vm_->GetNumTableEntries(enum_table)};
-		for(int j{0}, it2{0}; j < num2 && it2 != -1; ++j) {
+		for(int j{0}, it2{0}; it2 != -1 && j < num2; ++j) {
 			script_variant_t key2;
 			script_variant_t value2;
 			it2 = vm_->GetKeyValue(enum_table, it2, &key2, &value2);
@@ -3214,7 +3508,7 @@ namespace vmod
 				add_gen_date(file);
 
 				int num{vm_->GetNumTableEntries(const_table)};
-				for(int i{0}, it{0}; i < num && it != -1; ++i) {
+				for(int i{0}, it{0}; it != -1 && i < num; ++i) {
 					script_variant_t key;
 					script_variant_t value;
 					it = vm_->GetKeyValue(const_table, it, &key, &value);
