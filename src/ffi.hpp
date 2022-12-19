@@ -6,10 +6,19 @@
 #include "hacking.hpp"
 #include "plugin.hpp"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-W#warnings"
+#else
 #pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-W#warnings"
+#pragma GCC diagnostic ignored "-Wcpp"
+#endif
 #include <ffi.h>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#else
 #pragma GCC diagnostic pop
+#endif
 
 namespace vmod
 {
@@ -32,29 +41,36 @@ namespace vmod
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field<ffi_type *>() noexcept
 	{
-	#if __UINTPTR_WIDTH__ == 32
+	#if __SIZEOF_POINTER__ == __SIZEOF_INT__
 		return gsdk::FIELD_UINT;
-	#elif __UINTPTR_WIDTH__ == 64
+	#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
 		return gsdk::FIELD_UINT64;
 	#else
 		#error
 	#endif
 	}
 	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, ffi_type *value) noexcept
-	{ var.m_ptr = reinterpret_cast<void *>(value); }
+	{
+		if(value) {
+			var.m_ptr = static_cast<void *>(value);
+		} else {
+			var.m_type = gsdk::FIELD_VOID;
+			var.m_ptr = nullptr;
+		}
+	}
 	template <>
 	inline ffi_type *variant_to_value<ffi_type *>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
-		#if __UINTPTR_WIDTH__ == 32
+		#if __SIZEOF_POINTER__ == __SIZEOF_INT__
 			case gsdk::FIELD_UINT:
-		#elif __UINTPTR_WIDTH__ == 64
+		#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
 			case gsdk::FIELD_UINT64:
 		#else
 			#error
 		#endif
-			return reinterpret_cast<ffi_type *>(var.m_ptr);
+			return static_cast<ffi_type *>(var.m_ptr);
 		}
 
 		return {};
@@ -186,13 +202,7 @@ namespace vmod
 
 		void script_set_dtor_func(gsdk::HSCRIPT func) noexcept;
 
-		inline void *script_release() noexcept
-		{
-			unsigned char *temp_ptr{ptr};
-			ptr = nullptr;
-			delete this;
-			return temp_ptr;
-		}
+		void *script_release() noexcept;
 
 		inline void script_delete() noexcept
 		{ delete this; }
@@ -328,10 +338,11 @@ namespace vmod
 
 		script_variant_t script_call(const script_variant_t *va_args, std::size_t num_args, ...) noexcept;
 
-		inline void script_set_func(generic_func_t func_) noexcept
-		{ func = func_; }
-		inline void script_set_mfp(generic_mfp_t func_) noexcept
-		{ mfp = func_; }
+		void script_set_func(generic_func_t func_) noexcept;
+		void script_set_mfp(generic_mfp_t func_) noexcept;
+
+		inline void script_delete() noexcept
+		{ delete this; }
 
 		union {
 			generic_func_t func;

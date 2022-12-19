@@ -3,12 +3,26 @@
 #include "vmod.hpp"
 #include "filesystem.hpp"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wdeprecated-anon-enum-enum-conversion"
+#pragma clang diagnostic ignored "-Wcomment"
+#pragma clang diagnostic ignored "-Wdeprecated-enum-enum-conversion"
+#pragma clang diagnostic ignored "-Wint-in-bool-context"
+#else
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
-#pragma GCC diagnostic ignored "-Wdeprecated-anon-enum-enum-conversion"
 #pragma GCC diagnostic ignored "-Wcomment"
+#pragma GCC diagnostic ignored "-Wdeprecated-enum-enum-conversion"
+#pragma GCC diagnostic ignored "-Wint-in-bool-context"
+#endif
 #include <tpp.h>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#else
 #pragma GCC diagnostic pop
+#endif
 
 namespace vmod
 {

@@ -1,7 +1,18 @@
 diff --git a/src/tpp.c b/src/tpp.c
-index f409df3..0f12573 100644
+index f409df3..fb5361d 100644
 --- a/src/tpp.c
 +++ b/src/tpp.c
+@@ -74,8 +74,8 @@
+ 
+ #ifndef PRIVATE
+ #ifdef __ELF__
+-#   define PRIVDEF  __attribute__((__visibility__("private")))
+-#   define PRIVATE  __attribute__((__visibility__("private")))
++#   define PRIVDEF  __attribute__((__visibility__("internal")))
++#   define PRIVATE  __attribute__((__visibility__("internal")))
+ #elif 1
+ #ifdef _MSC_VER
+ #   define PRIVDEF  extern
 @@ -1579,6 +1579,12 @@ LOCAL char *tpp_rskip_wraplf(char const *iter, char const *begin) {
  #endif /* !TPP_CONFIG_DYN_CALLBACK_UNKNOWN_FILE */
  #endif /* !TPP_CONFIG_NO_CALLBACK_UNKNOWN_FILE */
@@ -116,7 +127,7 @@ index f409df3..0f12573 100644
  
  #define Q(x) TPP_WARNF_QUOTE_BEGIN x TPP_WARNF_QUOTE_END
 diff --git a/src/tpp.h b/src/tpp.h
-index 045a422..6ed5d07 100644
+index 045a422..dabeee5 100644
 --- a/src/tpp.h
 +++ b/src/tpp.h
 @@ -315,6 +315,7 @@
@@ -137,3 +148,21 @@ index 045a422..6ed5d07 100644
  };
  #endif /* TPP_CONFIG_DYN_CALLBACKS */
  
+@@ -1431,7 +1435,7 @@ struct TPPKeyword {
+ 	size_t                    k_size;     /* [const] Size of the keyword (in characters). */
+ 	TPP(hash_t)               k_hash;     /* [const] The hash-value of the keyword. */
+ 	char                      k_name[TPP_SYMARRAY_SIZE]; /* [const][k_size] name of this keyword (HINT: doesn't contain unescaped linefeeds). */
+-/*	char                      k_zero;     /* [const][== 0] Ensure ZERO-termination of the keyword name. */
++//	char                      k_zero;     /* [const][== 0] Ensure ZERO-termination of the keyword name. */
+ };
+ #define TPPKeyword_ISDEFINED(self) ((self)->k_macro != NULL || TPP_ISBUILTINMACRO((self)->k_id))
+ #define TPPKeyword_MAKERARE(self)                                  \
+@@ -1582,7 +1586,7 @@ TPPFUN void TPPCALL TPPLexer_LoadPosition(struct TPPLexerPosition *__restrict se
+ #define TPPLEXER_FLAG_CHAR_UNSIGNED          0x04000000 /* When set, character-constants are unsigned. */
+ #define TPPLEXER_FLAG_EOF_ON_PAREN           0x08000000 /* When set, recursively track `(`...`)' pairs and yield EOF when `l_eof_paren' reaches ZERO(0). */
+ #define TPPLEXER_FLAG_WILLRESTORE            0x10000000 /* A preceding lexer position will be restored (don't fire internal events that could pose problems with this) */
+-/*                                           0x20000000 /* ... */
++//                                           0x20000000 /* ... */
+ #define TPPLEXER_FLAG_RANDOM_INITIALIZED     0x40000000 /* Set when rand() has been initialized. */
+ #define TPPLEXER_FLAG_ERROR                  0x80000000 /* When set, the lexer is in an error-state in which calls to yield() will return TOK_ERR. */
+ #define TPPLEXER_FLAG_MERGEMASK              0xe0000000 /* A mask of flags that are merged (or'd together) during popf(). */

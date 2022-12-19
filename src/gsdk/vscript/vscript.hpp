@@ -9,21 +9,34 @@
 #include "../string_t.hpp"
 #include <cstring>
 
+#include "../../hacking.hpp"
+
 #include <squirrel.h>
 
 #include <cassert>
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsuggest-override"
+#pragma clang diagnostic ignored "-Wextra-semi-stmt"
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wsuggest-destructor-override"
+#pragma clang diagnostic ignored "-Wweak-vtables"
+#pragma clang diagnostic ignored "-Wextra-semi"
+#pragma clang diagnostic ignored "-Wshadow-field"
+#pragma clang diagnostic ignored "-Wdeprecated-copy-with-user-provided-copy"
+#pragma clang diagnostic ignored "-Wdocumentation"
+#else
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsuggest-override"
-#pragma GCC diagnostic ignored "-Wextra-semi-stmt"
 #pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 #pragma GCC diagnostic ignored "-Wsign-conversion"
-#pragma GCC diagnostic ignored "-Wsuggest-destructor-override"
-#pragma GCC diagnostic ignored "-Wweak-vtables"
 #pragma GCC diagnostic ignored "-Wextra-semi"
-#pragma GCC diagnostic ignored "-Wshadow-field"
-#pragma GCC diagnostic ignored "-Wdeprecated-copy-with-user-provided-copy"
-#pragma GCC diagnostic ignored "-Wdocumentation"
+#pragma GCC diagnostic ignored "-Wdeprecated-copy"
+#pragma GCC diagnostic ignored "-Wclass-memaccess"
+#endif
 #include <sqvm.h>
 #include <sqobject.h>
 #include <sqstate.h>
@@ -32,7 +45,11 @@
 #include <sqarray.h>
 #include <sqclass.h>
 #undef type
+#ifdef __clang__
+#pragma clang diagnostic pop
+#else
 #pragma GCC diagnostic pop
+#endif
 
 namespace gsdk
 {
@@ -141,7 +158,7 @@ namespace gsdk
 	{
 		friend class IScriptVM;
 
-	protected:
+	public:
 		inline CVariantBase() noexcept
 		{
 		}
@@ -205,8 +222,10 @@ namespace gsdk
 
 	struct ScriptFunctionBindingStorageType_t
 	{
-		void *func;
-		std::size_t adjustor;
+		union {
+			vmod::generic_func_t func;
+			vmod::generic_mfp_t mfp;
+		};
 		char unk1[sizeof(unsigned long long)];
 	};
 
@@ -227,8 +246,7 @@ namespace gsdk
 
 		inline CScriptFunctionBindingStorageType &operator=(const CScriptFunctionBindingStorageType &other) noexcept
 		{
-			func = other.func;
-			adjustor = other.adjustor;
+			mfp = other.mfp;
 			std::memcpy(unk1, other.unk1, sizeof(unk1));
 			return *this;
 		}
@@ -238,8 +256,7 @@ namespace gsdk
 
 		inline CScriptFunctionBindingStorageType &operator=(CScriptFunctionBindingStorageType &&other) noexcept
 		{
-			func = other.func;
-			adjustor = other.adjustor;
+			mfp = other.mfp;
 			std::memmove(unk1, other.unk1, sizeof(unk1));
 			std::memset(other.unk1, 0, sizeof(unk1));
 			return *this;
@@ -351,24 +368,13 @@ namespace gsdk
 	class IScriptVM
 	{
 	public:
-		static inline short fixup_var_field(short field) noexcept
-		{
-			switch(field) {
-				case FIELD_CLASSPTR:
-				case FIELD_FUNCTION:
-				case FIELD_UINT:
-				case FIELD_UINT64:
-				return FIELD_INTEGER;
-				default:
-				return field;
-			}
-		}
+		static short fixup_var_field(short field) noexcept;
+		static ScriptVariant_t &fixup_var(ScriptVariant_t &var) noexcept;
 
-		static inline ScriptVariant_t &fixup_var(ScriptVariant_t &var) noexcept
-		{
-			var.m_type = fixup_var_field(var.m_type);
-			return var;
-		}
+		static void(gsdk::IScriptVM::*CreateArray_ptr)(gsdk::ScriptVariant_t &);
+		static int(gsdk::IScriptVM::*GetArrayCount_ptr)(gsdk::HSCRIPT) const;
+		static bool(gsdk::IScriptVM::*IsArray_ptr)(gsdk::HSCRIPT) const;
+		static bool(gsdk::IScriptVM::*IsTable_ptr)(gsdk::HSCRIPT) const;
 
 		virtual bool Init() = 0;
 		virtual void Shutdown() = 0;
@@ -386,31 +392,14 @@ namespace gsdk
 	private:
 		virtual HSCRIPT CreateScope_impl(const char *, HSCRIPT = nullptr) = 0;
 	public:
-		inline HSCRIPT CreateScope(const char *script, HSCRIPT parent = nullptr) noexcept
-		{
-			HSCRIPT ret{CreateScope_impl(script, parent)};
-			if(!ret) {
-				ret = INVALID_HSCRIPT;
-			}
-			return ret;
-		}
+		HSCRIPT CreateScope(const char *script, HSCRIPT parent = nullptr) noexcept;
 		virtual HSCRIPT ReferenceScope(HSCRIPT) = 0;
-		inline HSCRIPT ReferenceObject(HSCRIPT object)
-		{
-			return ReferenceScope(object);
-		}
+		HSCRIPT ReferenceObject(HSCRIPT object) noexcept;
 		virtual void ReleaseScope(HSCRIPT) = 0;
 	private:
 		virtual HSCRIPT LookupFunction_impl(const char *, HSCRIPT = nullptr) = 0;
 	public:
-		inline HSCRIPT LookupFunction(const char *name, HSCRIPT scope = nullptr) noexcept
-		{
-			HSCRIPT ret{LookupFunction_impl(name, scope)};
-			if(!ret) {
-				ret = INVALID_HSCRIPT;
-			}
-			return ret;
-		}
+		HSCRIPT LookupFunction(const char *name, HSCRIPT scope = nullptr) noexcept;
 		virtual void ReleaseFunction(HSCRIPT) = 0;
 		virtual ScriptStatus_t ExecuteFunction(HSCRIPT, const ScriptVariant_t *, int, ScriptVariant_t *, HSCRIPT, bool) = 0;
 		virtual void RegisterFunction(ScriptFunctionBinding_t *) = 0;
@@ -418,14 +407,7 @@ namespace gsdk
 	public:
 		virtual HSCRIPT RegisterInstance_impl(ScriptClassDesc_t *, void *) = 0;
 	public:
-		inline HSCRIPT RegisterInstance(ScriptClassDesc_t *desc, void *value) noexcept
-		{
-			HSCRIPT ret{RegisterInstance_impl(desc, value)};
-			if(!ret) {
-				ret = INVALID_HSCRIPT;
-			}
-			return ret;
-		}
+		HSCRIPT RegisterInstance(ScriptClassDesc_t *desc, void *value) noexcept;
 		virtual void SetInstanceUniqeId(HSCRIPT, const char *) = 0;
 		virtual void RemoveInstance(HSCRIPT) = 0;
 		virtual void *GetInstanceValue(HSCRIPT, ScriptClassDesc_t * = nullptr) = 0;
@@ -435,97 +417,27 @@ namespace gsdk
 	private:
 		virtual bool SetValue_impl(HSCRIPT, const char *, const ScriptVariant_t &) = 0;
 	public:
-		inline bool SetValue(HSCRIPT scope, const char *name, const ScriptVariant_t &var)
-		{
-			ScriptVariant_t temp;
-			temp.m_type = fixup_var_field(var.m_type);
-			temp.m_flags = var.m_flags & ~SV_FREE;
-			temp.m_ulonglong = var.m_ulonglong;
-			return SetValue_impl(scope, name, temp);
-		}
-		inline bool SetValue(HSCRIPT scope, const char *name, ScriptVariant_t &&var) noexcept
-		{
-			bool ret{SetValue(scope, name, static_cast<const ScriptVariant_t &>(var))};
-			var.m_flags &= ~SV_FREE;
-			return ret;
-		}
-		inline bool SetValue(HSCRIPT scope, const char *name, HSCRIPT object) noexcept
-		{
-			ScriptVariant_t var;
-			var.m_type = FIELD_HSCRIPT;
-			var.m_flags = SV_NOFLAGS;
-			var.m_hScript = object;
-			return SetValue(scope, name, static_cast<const ScriptVariant_t &>(var));
-		}
+		bool SetValue(HSCRIPT scope, const char *name, const ScriptVariant_t &var) noexcept;
+		bool SetValue(HSCRIPT scope, const char *name, ScriptVariant_t &&var) noexcept;
+		bool SetValue(HSCRIPT scope, const char *name, HSCRIPT object) noexcept;
 	private:
 		virtual void CreateTable_impl(ScriptVariant_t &) = 0;
 	public:
 		HSCRIPT CreateArray() noexcept;
-		inline HSCRIPT CreateTable() noexcept
-		{
-			ScriptVariant_t var;
-			CreateTable_impl(var);
-			return var.m_hScript;
-		}
-		inline void ReleaseTable(HSCRIPT table) noexcept
-		{
-			ScriptVariant_t var;
-			var.m_type = FIELD_HSCRIPT;
-			var.m_flags = SV_NOFLAGS;
-			var.m_hScript = table;
-			ReleaseValue(var);
-		}
-		inline void ReleaseArray(HSCRIPT array) noexcept
-		{
-			ScriptVariant_t var;
-			var.m_type = FIELD_HSCRIPT;
-			var.m_flags = SV_NOFLAGS;
-			var.m_hScript = array;
-			ReleaseValue(var);
-		}
+		bool IsArray(HSCRIPT array) const noexcept;
+		bool IsTable(HSCRIPT table) const noexcept;
+		HSCRIPT CreateTable() noexcept;
+		void ReleaseTable(HSCRIPT table) noexcept;
+		void ReleaseArray(HSCRIPT array) noexcept;
 		virtual int GetNumTableEntries(HSCRIPT) = 0;
-		int GetArrayCount(HSCRIPT);
+		int GetArrayCount(HSCRIPT array) const noexcept;
 		virtual int GetKeyValue(HSCRIPT, int, ScriptVariant_t *, ScriptVariant_t *) = 0;
-		inline int GetArrayValue(HSCRIPT array, int it, ScriptVariant_t *value)
-		{
-			ScriptVariant_t tmp;
-			tmp.m_type = FIELD_VOID;
-			tmp.m_flags = SV_NOFLAGS;
-			tmp.m_ulonglong = 0;
-			return GetKeyValue(array, it, &tmp, value);
-		}
+		int GetArrayValue(HSCRIPT array, int it, ScriptVariant_t *value) noexcept;
 		virtual bool GetValue(HSCRIPT, const char *, ScriptVariant_t *) = 0;
-		bool GetValue(HSCRIPT scope, const char *name, HSCRIPT *object) noexcept
-		{
-			ScriptVariant_t tmp;
-			tmp.m_type = FIELD_VOID;
-			tmp.m_flags = SV_NOFLAGS;
-			tmp.m_ulonglong = 0;
-			bool ret{GetValue(scope, name, &tmp)};
-			if(tmp.m_type == FIELD_HSCRIPT) {
-				*object = tmp.m_hScript;
-			} else {
-				*object = INVALID_HSCRIPT;
-			}
-			return ret;
-		}
+		bool GetValue(HSCRIPT scope, const char *name, HSCRIPT *object) noexcept;
 		virtual void ReleaseValue(ScriptVariant_t &) = 0;
-		inline void ReleaseValue(HSCRIPT object) noexcept
-		{
-			ScriptVariant_t var;
-			var.m_type = FIELD_HSCRIPT;
-			var.m_flags = SV_NOFLAGS;
-			var.m_hScript = object;
-			ReleaseValue(var);
-		}
-		inline void ReleaseObject(HSCRIPT object) noexcept
-		{
-			ScriptVariant_t var;
-			var.m_type = FIELD_HSCRIPT;
-			var.m_flags = SV_NOFLAGS;
-			var.m_hScript = object;
-			ReleaseValue(var);
-		}
+		void ReleaseValue(HSCRIPT object) noexcept;
+		void ReleaseObject(HSCRIPT object) noexcept;
 		virtual bool ClearValue(HSCRIPT, const char *) = 0;
 		virtual void WriteState(CUtlBuffer *) = 0;
 		virtual void ReadState(CUtlBuffer *) = 0;
@@ -537,24 +449,13 @@ namespace gsdk
 	private:
 		virtual CSquirrelMetamethodDelegateImpl *MakeSquirrelMetamethod_Get_impl(HSCRIPT &, const char *, ISquirrelMetamethodDelegate *, bool) = 0;
 	public:
-		inline CSquirrelMetamethodDelegateImpl *MakeSquirrelMetamethod_Get(HSCRIPT scope, const char *name, ISquirrelMetamethodDelegate *delegate, bool free)
-		{
-			if(!scope) {
-				scope = GetRootTable();
-			}
-
-			return MakeSquirrelMetamethod_Get_impl(scope, name, delegate, free);
-		}
+		CSquirrelMetamethodDelegateImpl *MakeSquirrelMetamethod_Get(HSCRIPT scope, const char *name, ISquirrelMetamethodDelegate *delegate, bool free) noexcept;
 		virtual void DestroySquirrelMetamethod_Get(CSquirrelMetamethodDelegateImpl *) = 0;
 		virtual int GetKeyValue2(HSCRIPT, int, ScriptVariant_t *, ScriptVariant_t *) = 0;
 		virtual HSQUIRRELVM GetInternalVM() = 0;
 		virtual bool GetScalarValue(HSCRIPT, ScriptVariant_t *) = 0;
 		virtual void ArrayAddToTail(HSCRIPT, const ScriptVariant_t &) = 0;
-		inline void ArrayAddToTail(HSCRIPT array, ScriptVariant_t &&var) noexcept
-		{
-			ArrayAddToTail(array, static_cast<const ScriptVariant_t &>(var));
-			var.m_flags &= ~SV_FREE;
-		}
+		void ArrayAddToTail(HSCRIPT array, ScriptVariant_t &&var) noexcept;
 		virtual HSCRIPT GetRootTable() = 0;
 		virtual HSCRIPT CopyHandle(HSCRIPT) = 0;
 		virtual HSCRIPT GetIdentity(HSCRIPT) = 0;

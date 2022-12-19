@@ -73,7 +73,12 @@ namespace vmod
 
 				template <typename T>
 				inline auto mfp() const noexcept -> function_pointer_t<T>
-				{ return reinterpret_cast<function_pointer_t<T>>(mfp_.func); }
+				{
+					#pragma GCC diagnostic push
+					#pragma GCC diagnostic ignored "-Wcast-function-type"
+					return reinterpret_cast<function_pointer_t<T>>(mfp_.func);
+					#pragma GCC diagnostic pop
+				}
 
 				inline std::size_t size() const noexcept
 				{ return size_; }

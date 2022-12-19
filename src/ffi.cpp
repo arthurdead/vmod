@@ -8,43 +8,43 @@ namespace vmod
 	{
 		switch(type_ptr->type) {
 			case FFI_TYPE_INT:
-			*reinterpret_cast<int *>(arg_ptr) = arg_var.get<int>();
+			*static_cast<int *>(arg_ptr) = arg_var.get<int>();
 			break;
 			case FFI_TYPE_FLOAT:
-			*reinterpret_cast<float *>(arg_ptr) = arg_var.get<float>();
+			*static_cast<float *>(arg_ptr) = arg_var.get<float>();
 			break;
 			case FFI_TYPE_DOUBLE:
-			*reinterpret_cast<double *>(arg_ptr) = arg_var.get<double>();
+			*static_cast<double *>(arg_ptr) = arg_var.get<double>();
 			break;
 			case FFI_TYPE_LONGDOUBLE:
-			*reinterpret_cast<long double *>(arg_ptr) = arg_var.get<long double>();
+			*static_cast<long double *>(arg_ptr) = arg_var.get<long double>();
 			break;
 			case FFI_TYPE_UINT8:
-			*reinterpret_cast<unsigned char *>(arg_ptr) = static_cast<unsigned char>(arg_var.get<unsigned short>());
+			*static_cast<unsigned char *>(arg_ptr) = static_cast<unsigned char>(arg_var.get<unsigned short>());
 			break;
 			case FFI_TYPE_SINT8:
-			*reinterpret_cast<signed char *>(arg_ptr) = static_cast<signed char>(arg_var.get<short>());
+			*static_cast<signed char *>(arg_ptr) = static_cast<signed char>(arg_var.get<short>());
 			break;
 			case FFI_TYPE_UINT16:
-			*reinterpret_cast<unsigned short *>(arg_ptr) = arg_var.get<unsigned short>();
+			*static_cast<unsigned short *>(arg_ptr) = arg_var.get<unsigned short>();
 			break;
 			case FFI_TYPE_SINT16:
-			*reinterpret_cast<short *>(arg_ptr) = arg_var.get<short>();
+			*static_cast<short *>(arg_ptr) = arg_var.get<short>();
 			break;
 			case FFI_TYPE_UINT32:
-			*reinterpret_cast<unsigned int *>(arg_ptr) = arg_var.get<unsigned int>();
+			*static_cast<unsigned int *>(arg_ptr) = arg_var.get<unsigned int>();
 			break;
 			case FFI_TYPE_SINT32:
-			*reinterpret_cast<int *>(arg_ptr) = arg_var.get<int>();
+			*static_cast<int *>(arg_ptr) = arg_var.get<int>();
 			break;
 			case FFI_TYPE_UINT64:
-			*reinterpret_cast<unsigned long long *>(arg_ptr) = arg_var.get<unsigned long long>();
+			*static_cast<unsigned long long *>(arg_ptr) = arg_var.get<unsigned long long>();
 			break;
 			case FFI_TYPE_SINT64:
-			*reinterpret_cast<long long *>(arg_ptr) = arg_var.get<long long>();
+			*static_cast<long long *>(arg_ptr) = arg_var.get<long long>();
 			break;
 			case FFI_TYPE_POINTER:
-			*reinterpret_cast<void **>(arg_ptr) = arg_var.get<void *>();
+			*static_cast<void **>(arg_ptr) = arg_var.get<void *>();
 			break;
 		}
 	}
@@ -53,43 +53,43 @@ namespace vmod
 	{
 		switch(type_ptr->type) {
 			case FFI_TYPE_INT:
-			arg_var.assign<int>(*reinterpret_cast<int *>(arg_ptr));
+			arg_var.assign<int>(*static_cast<int *>(arg_ptr));
 			break;
 			case FFI_TYPE_FLOAT:
-			arg_var.assign<float>(*reinterpret_cast<float *>(arg_ptr));
+			arg_var.assign<float>(*static_cast<float *>(arg_ptr));
 			break;
 			case FFI_TYPE_DOUBLE:
-			arg_var.assign<double>(*reinterpret_cast<double *>(arg_ptr));
+			arg_var.assign<double>(*static_cast<double *>(arg_ptr));
 			break;
 			case FFI_TYPE_LONGDOUBLE:
-			arg_var.assign<long double>(*reinterpret_cast<long double *>(arg_ptr));
+			arg_var.assign<long double>(*static_cast<long double *>(arg_ptr));
 			break;
 			case FFI_TYPE_UINT8:
-			arg_var.assign<unsigned short>(*reinterpret_cast<unsigned char *>(arg_ptr));
+			arg_var.assign<unsigned short>(*static_cast<unsigned char *>(arg_ptr));
 			break;
 			case FFI_TYPE_SINT8:
-			arg_var.assign<short>(*reinterpret_cast<signed char *>(arg_ptr));
+			arg_var.assign<short>(*static_cast<signed char *>(arg_ptr));
 			break;
 			case FFI_TYPE_UINT16:
-			arg_var.assign<unsigned short>(*reinterpret_cast<unsigned short *>(arg_ptr));
+			arg_var.assign<unsigned short>(*static_cast<unsigned short *>(arg_ptr));
 			break;
 			case FFI_TYPE_SINT16:
-			arg_var.assign<short>(*reinterpret_cast<short *>(arg_ptr));
+			arg_var.assign<short>(*static_cast<short *>(arg_ptr));
 			break;
 			case FFI_TYPE_UINT32:
-			arg_var.assign<unsigned int>(*reinterpret_cast<unsigned int *>(arg_ptr));
+			arg_var.assign<unsigned int>(*static_cast<unsigned int *>(arg_ptr));
 			break;
 			case FFI_TYPE_SINT32:
-			arg_var.assign<int>(*reinterpret_cast<int *>(arg_ptr));
+			arg_var.assign<int>(*static_cast<int *>(arg_ptr));
 			break;
 			case FFI_TYPE_UINT64:
-			arg_var.assign<unsigned long long>(*reinterpret_cast<unsigned long long *>(arg_ptr));
+			arg_var.assign<unsigned long long>(*static_cast<unsigned long long *>(arg_ptr));
 			break;
 			case FFI_TYPE_SINT64:
-			arg_var.assign<long long>(*reinterpret_cast<long long *>(arg_ptr));
+			arg_var.assign<long long>(*static_cast<long long *>(arg_ptr));
 			break;
 			case FFI_TYPE_POINTER:
-			arg_var.assign<void *>(*reinterpret_cast<void **>(arg_ptr));
+			arg_var.assign<void *>(*static_cast<void **>(arg_ptr));
 			break;
 		}
 	}
@@ -151,6 +151,13 @@ namespace vmod
 
 	gsdk::HSCRIPT memory_singleton::script_allocate(std::size_t size) noexcept
 	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(size == 0 || size == static_cast<std::size_t>(-1)) {
+			vm->RaiseException("vmod: invalid size");
+			return nullptr;
+		}
+
 		memory_block *block{new memory_block{size}};
 
 		if(!block->initialize()) {
@@ -163,8 +170,20 @@ namespace vmod
 		return block->instance;
 	}
 
-	gsdk::HSCRIPT memory_singleton::script_allocate_aligned(std::size_t align, std::size_t size) noexcept
+	gsdk::HSCRIPT memory_singleton::script_allocate_aligned(std::size_t size, std::size_t align) noexcept
 	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(size == 0 || size == static_cast<std::size_t>(-1)) {
+			vm->RaiseException("vmod: invalid size");
+			return nullptr;
+		}
+
+		if(align == 0 || align == static_cast<std::size_t>(-1) || (align % 2) != 0) {
+			vm->RaiseException("vmod: invalid align");
+			return nullptr;
+		}
+
 		memory_block *block{new memory_block{static_cast<std::align_val_t>(align), size}};
 
 		if(!block->initialize()) {
@@ -181,13 +200,23 @@ namespace vmod
 	{
 		gsdk::IScriptVM *vm{vmod.vm()};
 
-		script_variant_t type_id;
-		if(!vm->GetValue(type, "__internal_ptr__", &type_id)) {
+		if(!type || type == gsdk::INVALID_HSCRIPT) {
 			vm->RaiseException("vmod: invalid type");
-			return {};
+			return nullptr;
 		}
 
-		ffi_type *type_ptr{type_id.get<ffi_type *>()};
+		if(!vm->IsTable(type)) {
+			vm->RaiseException("vmod: invalid type");
+			return nullptr;
+		}
+
+		script_variant_t type_var;
+		if(!vm->GetValue(type, "__internal_ptr__", &type_var)) {
+			vm->RaiseException("vmod: invalid type");
+			return nullptr;
+		}
+
+		ffi_type *type_ptr{type_var.get<ffi_type *>()};
 
 		memory_block *block{new memory_block{static_cast<std::align_val_t>(type_ptr->alignment), type_ptr->size}};
 
@@ -203,6 +232,18 @@ namespace vmod
 
 	gsdk::HSCRIPT memory_singleton::script_allocate_zero(std::size_t num, std::size_t size) noexcept
 	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(size == 0 || size == static_cast<std::size_t>(-1)) {
+			vm->RaiseException("vmod: invalid size");
+			return nullptr;
+		}
+
+		if(num == 0 || num == static_cast<std::size_t>(-1)) {
+			vm->RaiseException("vmod: invalid num");
+			return nullptr;
+		}
+
 		memory_block *block{new memory_block{num, size}};
 
 		if(!block->initialize()) {
@@ -218,6 +259,21 @@ namespace vmod
 	script_variant_t memory_singleton::script_read(void *ptr, gsdk::HSCRIPT type) noexcept
 	{
 		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(!ptr) {
+			vm->RaiseException("vmod: invalid ptr");
+			return {};
+		}
+
+		if(!type || type == gsdk::INVALID_HSCRIPT) {
+			vm->RaiseException("vmod: invalid type");
+			return {};
+		}
+
+		if(!vm->IsTable(type)) {
+			vm->RaiseException("vmod: invalid type");
+			return {};
+		}
 
 		script_variant_t type_id;
 		if(!vm->GetValue(type, "__internal_ptr__", &type_id)) {
@@ -235,6 +291,21 @@ namespace vmod
 	void memory_singleton::script_write(void *ptr, gsdk::HSCRIPT type, script_variant_t arg_var) noexcept
 	{
 		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(!ptr) {
+			vm->RaiseException("vmod: invalid ptr");
+			return;
+		}
+
+		if(!type || type == gsdk::INVALID_HSCRIPT) {
+			vm->RaiseException("vmod: invalid type");
+			return;
+		}
+
+		if(!vm->IsTable(type)) {
+			vm->RaiseException("vmod: invalid type");
+			return;
+		}
 
 		script_variant_t type_id;
 		if(!vm->GetValue(type, "__internal_ptr__", &type_id)) {
@@ -505,7 +576,22 @@ namespace vmod
 
 	void memory_block::script_set_dtor_func(gsdk::HSCRIPT func) noexcept
 	{
-		dtor_func = vmod.vm()->ReferenceObject(func);
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(!func || func == gsdk::INVALID_HSCRIPT) {
+			vm->RaiseException("vmod: null function");
+			return;
+		}
+
+		dtor_func = vm->ReferenceObject(func);
+	}
+
+	void *memory_block::script_release() noexcept
+	{
+		unsigned char *temp_ptr{ptr};
+		ptr = nullptr;
+		delete this;
+		return static_cast<void *>(temp_ptr);
 	}
 
 	bool memory_block::bindings() noexcept
@@ -572,15 +658,41 @@ namespace vmod
 		return true;
 	}
 
+	void script_cif::script_set_func(generic_func_t func_) noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(!func_) {
+			vm->RaiseException("vmod: null function");
+			return;
+		}
+
+		func = func_;
+	}
+
+	void script_cif::script_set_mfp(generic_mfp_t func_) noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(!func_) {
+			vm->RaiseException("vmod: null function");
+			return;
+		}
+
+		mfp = func_;
+	}
+
 	script_variant_t script_cif::script_call(const script_variant_t *va_args, std::size_t num_args, ...) noexcept
 	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
 		if(!mfp) {
-			vmod.vm()->RaiseException("vmod: null function");
+			vm->RaiseException("vmod: null function");
 			return {};
 		}
 
-		if(num_args != arg_type_ptrs.size()) {
-			vmod.vm()->RaiseException("wrong number of parameters");
+		if(!va_args || num_args != arg_type_ptrs.size()) {
+			vm->RaiseException("wrong number of parameters");
 			return {};
 		}
 
@@ -589,13 +701,13 @@ namespace vmod
 			const script_variant_t &arg_var{va_args[i]};
 			auto &arg_ptr{args_storage[i]};
 
-			script_var_to_ffi_ptr(arg_type, reinterpret_cast<void *>(arg_ptr.get()), arg_var);
+			script_var_to_ffi_ptr(arg_type, static_cast<void *>(arg_ptr.get()), arg_var);
 		}
 
-		ffi_call(&cif_, reinterpret_cast<void(*)()>(mfp.addr), reinterpret_cast<void *>(ret_storage.get()), const_cast<void **>(args_storage_ptrs.data()));
+		ffi_call(&cif_, reinterpret_cast<void(*)()>(mfp.addr), static_cast<void *>(ret_storage.get()), const_cast<void **>(args_storage_ptrs.data()));
 
 		script_variant_t ret_var;
-		ffi_ptr_to_script_var(ret_type_ptr, reinterpret_cast<void *>(ret_storage.get()), ret_var);
+		ffi_ptr_to_script_var(ret_type_ptr, static_cast<void *>(ret_storage.get()), ret_var);
 
 		return ret_var;
 	}
@@ -618,6 +730,7 @@ namespace vmod
 		cif_desc.func(&script_cif::script_call, "script_call"sv, "call"sv);
 		cif_desc.func(&script_cif::script_set_func, "script_set_func"sv, "set_func"sv);
 		cif_desc.func(&script_cif::script_set_mfp, "script_set_mfp"sv, "set_mfp"sv);
+		cif_desc.func(&script_cif::script_delete, "script_delete"sv, "free"sv);
 		cif_desc.dtor();
 		cif_desc.doc_class_name("cif"sv);
 
@@ -642,7 +755,7 @@ namespace vmod
 
 		for(ffi_type *arg_type_ptr : arg_type_ptrs) {
 			auto &arg_ptr{args_storage.emplace_back()};
-			arg_ptr.reset(reinterpret_cast<unsigned char *>(std::aligned_alloc(arg_type_ptr->alignment, arg_type_ptr->size)));
+			arg_ptr.reset(static_cast<unsigned char *>(std::aligned_alloc(arg_type_ptr->alignment, arg_type_ptr->size)));
 		}
 
 		for(auto &ptr : args_storage) {
@@ -650,7 +763,7 @@ namespace vmod
 		}
 
 		if(ret_type_ptr != &ffi_type_void) {
-			ret_storage.reset(reinterpret_cast<unsigned char *>(std::aligned_alloc(ret_type_ptr->alignment, ret_type_ptr->size)));
+			ret_storage.reset(static_cast<unsigned char *>(std::aligned_alloc(ret_type_ptr->alignment, ret_type_ptr->size)));
 		}
 
 		return true;
@@ -687,6 +800,16 @@ namespace vmod
 	{
 		gsdk::IScriptVM *vm{vmod.vm()};
 
+		if(!args || args == gsdk::INVALID_HSCRIPT) {
+			vm->RaiseException("vmod: invalid args");
+			return false;
+		}
+
+		if(!vm->IsArray(args)) {
+			vm->RaiseException("vmod: invalid args");
+			return false;
+		}
+
 		int num_args{vm->GetArrayCount(args)};
 		for(int i{0}, it{0}; it != -1 && i < num_args; ++i) {
 			script_variant_t value;
@@ -704,7 +827,13 @@ namespace vmod
 	{
 		gsdk::IScriptVM *vm{vmod.vm()};
 
+		if(!ret) {
+			vm->RaiseException("vmod: invalid ret");
+			return nullptr;
+		}
+
 		ffi_type *ret_ptr{ret};
+
 		std::vector<ffi_type *> args_ptrs;
 		if(!script_create_cif_shared(args_ptrs, args)) {
 			return nullptr;
@@ -726,7 +855,13 @@ namespace vmod
 	{
 		gsdk::IScriptVM *vm{vmod.vm()};
 
+		if(!ret) {
+			vm->RaiseException("vmod: invalid ret");
+			return nullptr;
+		}
+
 		ffi_type *ret_ptr{ret};
+
 		std::vector<ffi_type *> args_ptrs;
 		if(!script_create_cif_shared(args_ptrs, args)) {
 			return nullptr;
@@ -749,6 +884,21 @@ namespace vmod
 	dynamic_detour *ffi_singleton::script_create_detour_shared(ffi_type *ret, gsdk::HSCRIPT args) noexcept
 	{
 		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(!ret) {
+			vm->RaiseException("vmod: invalid ret");
+			return nullptr;
+		}
+
+		if(!args || args == gsdk::INVALID_HSCRIPT) {
+			vm->RaiseException("vmod: invalid args");
+			return nullptr;
+		}
+
+		if(!vm->IsArray(args)) {
+			vm->RaiseException("vmod: invalid args");
+			return nullptr;
+		}
 
 		ffi_type *ret_ptr{ret};
 
@@ -777,6 +927,11 @@ namespace vmod
 			return nullptr;
 		}
 
+		if(!new_func || new_func == gsdk::INVALID_HSCRIPT) {
+			vm->RaiseException("vmod: null function");
+			return nullptr;
+		}
+
 		dynamic_detour *det{script_create_detour_shared(ret, args)};
 		if(!det) {
 			return nullptr;
@@ -798,6 +953,11 @@ namespace vmod
 		gsdk::IScriptVM *vm{vmod.vm()};
 
 		if(!old_func) {
+			vm->RaiseException("vmod: null function");
+			return nullptr;
+		}
+
+		if(!new_func || new_func == gsdk::INVALID_HSCRIPT) {
 			vm->RaiseException("vmod: null function");
 			return nullptr;
 		}
@@ -1159,7 +1319,7 @@ namespace vmod
 
 	script_variant_t dynamic_detour::script_call(const script_variant_t *va_args, std::size_t num_args, ...) noexcept
 	{
-		if(num_args != arg_type_ptrs.size()) {
+		if(!va_args || num_args != arg_type_ptrs.size()) {
 			vmod.vm()->RaiseException("wrong number of parameters");
 			return {};
 		}
@@ -1169,16 +1329,16 @@ namespace vmod
 			const script_variant_t &arg_var{va_args[i]};
 			auto &arg_ptr{args_storage[i]};
 
-			script_var_to_ffi_ptr(arg_type, reinterpret_cast<void *>(arg_ptr.get()), arg_var);
+			script_var_to_ffi_ptr(arg_type, static_cast<void *>(arg_ptr.get()), arg_var);
 		}
 
 		{
 			scope_enable sce{*this};
-			ffi_call(&cif_, reinterpret_cast<void(*)()>(old_func), reinterpret_cast<void *>(ret_storage.get()), const_cast<void **>(args_storage_ptrs.data()));
+			ffi_call(&cif_, static_cast<void(*)()>(old_func), static_cast<void *>(ret_storage.get()), const_cast<void **>(args_storage_ptrs.data()));
 		}
 
 		script_variant_t ret_var;
-		ffi_ptr_to_script_var(ret_type_ptr, reinterpret_cast<void *>(ret_storage.get()), ret_var);
+		ffi_ptr_to_script_var(ret_type_ptr, static_cast<void *>(ret_storage.get()), ret_var);
 
 		return ret_var;
 	}
@@ -1187,7 +1347,7 @@ namespace vmod
 	{
 		std::vector<script_variant_t> sargs;
 
-		dynamic_detour *det{reinterpret_cast<dynamic_detour *>(userptr)};
+		dynamic_detour *det{static_cast<dynamic_detour *>(userptr)};
 
 		sargs.emplace_back(det->instance);
 

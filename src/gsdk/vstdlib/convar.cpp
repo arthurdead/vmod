@@ -227,7 +227,7 @@ namespace gsdk
 		}
 
 		if(m_pszString) {
-			m_pszString = reinterpret_cast<char *>(std::realloc(m_pszString, 2));
+			m_pszString = static_cast<char *>(std::realloc(m_pszString, 2));
 		} else {
 			m_pszString = new char[2];
 		}
@@ -246,9 +246,9 @@ namespace gsdk
 
 		if(!ConCommandBase::IsFlagSet(FCVAR_NEVER_AS_STRING)) {
 			if(m_pszString) {
-				m_pszString = reinterpret_cast<char *>(std::realloc(m_pszString, len+1));
+				m_pszString = static_cast<char *>(std::realloc(m_pszString, len+1));
 			} else {
-				m_pszString = reinterpret_cast<char *>(std::malloc(len+1));
+				m_pszString = static_cast<char *>(std::malloc(len+1));
 			}
 
 			std::strncpy(m_pszString, value, len);
@@ -292,9 +292,9 @@ namespace gsdk
 			constexpr std::size_t len{6 + 6};
 
 			if(m_pszString) {
-				m_pszString = reinterpret_cast<char *>(std::realloc(m_pszString, len+1));
+				m_pszString = static_cast<char *>(std::realloc(m_pszString, len+1));
 			} else {
-				m_pszString = reinterpret_cast<char *>(std::malloc(len+1));
+				m_pszString = static_cast<char *>(std::malloc(len+1));
 			}
 
 			char *begin{m_pszString};
@@ -325,9 +325,9 @@ namespace gsdk
 			std::size_t len{value ? 4u : 5u};
 
 			if(m_pszString) {
-				m_pszString = reinterpret_cast<char *>(std::realloc(m_pszString, len+1));
+				m_pszString = static_cast<char *>(std::realloc(m_pszString, len+1));
 			} else {
-				m_pszString = reinterpret_cast<char *>(std::malloc(len+1));
+				m_pszString = static_cast<char *>(std::malloc(len+1));
 			}
 
 			std::strncpy(m_pszString, value ? "true" : "false", len);
@@ -354,9 +354,9 @@ namespace gsdk
 			constexpr std::size_t len{6};
 
 			if(m_pszString) {
-				m_pszString = reinterpret_cast<char *>(std::realloc(m_pszString, len+1));
+				m_pszString = static_cast<char *>(std::realloc(m_pszString, len+1));
 			} else {
-				m_pszString = reinterpret_cast<char *>(std::malloc(len+1));
+				m_pszString = static_cast<char *>(std::malloc(len+1));
 			}
 
 			char *begin{m_pszString};

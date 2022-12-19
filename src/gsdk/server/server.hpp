@@ -2,6 +2,7 @@
 
 #include "../tier1/interface.hpp"
 #include "../mathlib/vector.hpp"
+#include "../tier1/utldict.hpp"
 
 namespace gsdk
 {
@@ -170,6 +171,15 @@ namespace gsdk
 		virtual void Destroy(const char *, IServerNetworkable *) = 0;
 		virtual IEntityFactory *FindFactory(const char *) = 0;
 		virtual const char *GetCannonicalName(const char *) = 0;
+	};
+	#pragma GCC diagnostic pop
+
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
+	class CEntityFactoryDictionary : public IEntityFactoryDictionary
+	{
+	public:
+		CUtlDict<IEntityFactory *, unsigned short> m_Factories;
 	};
 	#pragma GCC diagnostic pop
 

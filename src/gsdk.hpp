@@ -25,12 +25,13 @@ namespace vmod
 	extern gsdk::CGlobalVars *sv_globals;
 	extern gsdk::IServerGameDLL *gamedll;
 	extern gsdk::IServerTools *servertools;
-	extern gsdk::IEntityFactoryDictionary *entityfactorydict;
+	extern gsdk::CEntityFactoryDictionary *entityfactorydict;
 	extern gsdk::IServerNetworkStringTableContainer *sv_stringtables;
 
 	constexpr gsdk::Color print_clr{255, 255, 255, 255};
 	constexpr gsdk::Color success_clr{0, 255, 0, 255};
 	constexpr gsdk::Color info_clr{0, 150, 150, 255};
+	constexpr gsdk::Color remark_clr{150, 0, 255, 255};
 	constexpr gsdk::Color warning_clr{255, 255, 0, 255};
 	constexpr gsdk::Color error_clr{255, 0, 0, 255};
 
@@ -45,6 +46,10 @@ namespace vmod
 	template <typename ...Args>
 	inline void info(std::string_view fmt, Args &&...args) noexcept
 	{ ConColorMsg(0, info_clr, fmt.data(), std::forward<Args>(args)...); }
+
+	template <typename ...Args>
+	inline void remark(std::string_view fmt, Args &&...args) noexcept
+	{ ConColorMsg(0, remark_clr, fmt.data(), std::forward<Args>(args)...); }
 
 	template <typename ...Args>
 	inline void warning(std::string_view fmt, Args &&...args) noexcept

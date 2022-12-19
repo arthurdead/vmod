@@ -18,7 +18,8 @@ link_args = [
 
 cpp_args = [
 	'-Wno-error=unused-variable',
-	'-Wno-error=unused-parameter'
+	'-Wno-error=unused-parameter',
+	'-Wno-error=unused-function'
 ]
 
 cpp_args += [
@@ -40,7 +41,6 @@ if compiler.get_id() == 'clang'
 	]
 
 	cpp_args += [
-		'-Wno-error=unused-function',
 		'-Wno-error=unused-private-field',
 		'-Wno-error=unused-local-typedef',
 		'-Wno-error=missing-variable-declarations',
@@ -53,6 +53,10 @@ if compiler.get_id() == 'clang'
 		'-Wno-gnu-anonymous-struct',
 		'-Wno-gnu-alignof-expression',
 		'-Wno-nested-anon-types'
+	]
+elif compiler.get_id() == 'gcc'
+	cpp_args += [
+		'-Wno-error=cpp'
 	]
 endif
 
@@ -221,6 +225,7 @@ lib = shared_library('vmod',
 		join_paths('src','ffi.cpp'),
 		join_paths('src','hacking.cpp'),
 		join_paths('src','symbol_cache.cpp'),
+		join_paths('src','gsdk','server','baseentity.cpp'),
 		join_paths('src','gsdk','vscript','vscript.cpp'),
 		join_paths('src','gsdk','vstdlib','convar.cpp'),
 		join_paths('src','gsdk','engine','vsp.cpp')

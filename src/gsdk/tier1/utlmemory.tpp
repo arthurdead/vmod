@@ -3,8 +3,8 @@
 
 namespace gsdk
 {
-	template <typename T>
-	void CUtlMemory<T>::resize(std::size_t num) noexcept
+	template <typename T, typename I>
+	void CUtlMemory<T, I>::resize(std::size_t num) noexcept
 	{
 		m_nAllocationCount = static_cast<int>(num);
 
@@ -20,8 +20,8 @@ namespace gsdk
 		}
 	}
 
-	template <typename T>
-	CUtlMemory<T>::~CUtlMemory() noexcept
+	template <typename T, typename I>
+	CUtlMemory<T, I>::~CUtlMemory() noexcept
 	{
 		std::size_t num{static_cast<std::size_t>(m_nAllocationCount)};
 		if(num > 0) {

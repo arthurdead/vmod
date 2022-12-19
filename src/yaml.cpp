@@ -11,7 +11,10 @@ namespace vmod
 
 	gsdk::HSCRIPT yaml::script_get_document(std::size_t i) noexcept
 	{
-		if(i >= documents.size()) {
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(i == static_cast<std::size_t>(-1) || i >= documents.size()) {
+			vm->RaiseException("vmod: invalid index");
 			return nullptr;
 		}
 
@@ -20,6 +23,13 @@ namespace vmod
 
 	gsdk::HSCRIPT yaml_singleton::script_load(std::filesystem::path &&path_) noexcept
 	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(path_.empty()) {
+			vm->RaiseException("vmod: invalid path");
+			return nullptr;
+		}
+
 		if(!path_.is_absolute()) {
 			path_ = std::filesystem::current_path() / path_;
 		}
@@ -28,6 +38,7 @@ namespace vmod
 
 		if(!temp_yaml->initialize(std::move(path_))) {
 			delete temp_yaml;
+			vm->RaiseException("vmod: failed to initialize");
 			return nullptr;
 		}
 

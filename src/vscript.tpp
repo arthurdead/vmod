@@ -69,22 +69,22 @@ namespace vmod
 	}
 
 	template <typename R, typename C, typename ...Args, std::size_t ...I>
-	R func_desc_t::call_member_impl(R(__attribute__((__thiscall__)) *binding_func)(C *, Args...), std::size_t adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, std::index_sequence<I...>) noexcept
+	R func_desc_t::call_member_impl(R(C::*func)(Args...), void *obj, const gsdk::ScriptVariant_t *args_var, std::index_sequence<I...>) noexcept
 	{
 		if constexpr(sizeof...(Args) == 0) {
-			return (static_cast<C *>(obj)->*mfp_from_func<R, C, Args...>(binding_func, adjustor))();
+			return (static_cast<C *>(obj)->*func)();
 		} else {
-			return (static_cast<C *>(obj)->*mfp_from_func<R, C, Args...>(binding_func, adjustor))(__variant_to_value_impl<std::decay_t<Args>>(args_var[I])...);
+			return (static_cast<C *>(obj)->*func)(__variant_to_value_impl<std::decay_t<Args>>(args_var[I])...);
 		}
 	}
 
 	template <typename R, typename ...Args, std::size_t ...I>
-	R func_desc_t::call_impl(R(*binding_func)(Args...), const gsdk::ScriptVariant_t *args_var, std::index_sequence<I...>) noexcept
+	R func_desc_t::call_impl(R(*func)(Args...), const gsdk::ScriptVariant_t *args_var, std::index_sequence<I...>) noexcept
 	{
 		if constexpr(sizeof...(Args) == 0) {
-			return binding_func();
+			return func();
 		} else {
-			return binding_func(__variant_to_value_impl<std::decay_t<Args>>(args_var[I])...);
+			return func(__variant_to_value_impl<std::decay_t<Args>>(args_var[I])...);
 		}
 	}
 
@@ -125,21 +125,26 @@ namespace vmod
 			}
 		}
 
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wcast-function-type"
+		R(C::*func)(Args...){reinterpret_cast<R(C::*)(Args...)>(binding_func.mfp)};
+		#pragma GCC diagnostic pop
+
 		if constexpr(std::is_void_v<R>) {
 			if(ret_var) {
 				__vmod_raiseexception("vmod: function is void");
 				return false;
 			}
 
-			call_member<R, C, Args...>(reinterpret_cast<R(__attribute__((__thiscall__)) *)(C *, Args...)>(binding_func.func), static_cast<std::size_t>(binding_func.adjustor), obj, args_var);
+			call_member<R, C, Args...>(func, obj, args_var);
 		} else {
 			if(!ret_var) {
-				call_member<R, C, Args...>(reinterpret_cast<R(__attribute__((__thiscall__)) *)(C *, Args...)>(binding_func.func), static_cast<std::size_t>(binding_func.adjustor), obj, args_var);
+				call_member<R, C, Args...>(func, obj, args_var);
 			} else {
 				if constexpr(std::is_same_v<R, script_variant_t>) {
-					*ret_var = call_member<R, C, Args...>(reinterpret_cast<R(__attribute__((__thiscall__)) *)(C *, Args...)>(binding_func.func), static_cast<std::size_t>(binding_func.adjustor), obj, args_var);
+					*ret_var = call_member<R, C, Args...>(func, obj, args_var);
 				} else {
-					R ret_val{call_member<R, C, Args...>(reinterpret_cast<R(__attribute__((__thiscall__)) *)(C *, Args...)>(binding_func.func), static_cast<std::size_t>(binding_func.adjustor), obj, args_var)};
+					R ret_val{call_member<R, C, Args...>(func, obj, args_var)};
 					value_to_variant<R>(*ret_var, std::forward<R>(ret_val));
 				}
 				gsdk::IScriptVM::fixup_var(*ret_var);
@@ -171,21 +176,26 @@ namespace vmod
 			}
 		}
 
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wcast-function-type"
+		R(*func)(Args...){reinterpret_cast<R(*)(Args...)>(binding_func.func)};
+		#pragma GCC diagnostic pop
+
 		if constexpr(std::is_void_v<R>) {
 			if(ret_var) {
 				__vmod_raiseexception("vmod: function is void");
 				return false;
 			}
 
-			call<R, Args...>(reinterpret_cast<R(*)(Args...)>(binding_func.func), args_var);
+			call<R, Args...>(func, args_var);
 		} else {
 			if(!ret_var) {
-				call<R, Args...>(reinterpret_cast<R(*)(Args...)>(binding_func.func), args_var);
+				call<R, Args...>(func, args_var);
 			} else {
 				if constexpr(std::is_same_v<R, script_variant_t>) {
-					*ret_var = call<R, Args...>(reinterpret_cast<R(*)(Args...)>(binding_func.func), args_var);
+					*ret_var = call<R, Args...>(func, args_var);
 				} else {
-					R ret_val{call<R, Args...>(reinterpret_cast<R(*)(Args...)>(binding_func.func), args_var)};
+					R ret_val{call<R, Args...>(func, args_var)};
 					value_to_variant<R>(*ret_var, std::forward<R>(ret_val));
 				}
 				gsdk::IScriptVM::fixup_var(*ret_var);
@@ -196,22 +206,22 @@ namespace vmod
 	}
 
 	template <typename R, typename C, typename ...Args, std::size_t ...I>
-	R func_desc_t::call_member_va_impl(R(*binding_func)(C *, Args..., ...), std::size_t adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, const gsdk::ScriptVariant_t *args_var_va, std::size_t num_va, std::index_sequence<I...>) noexcept
+	R func_desc_t::call_member_va_impl(R(C::*func)(Args..., ...), void *obj, const gsdk::ScriptVariant_t *args_var, const gsdk::ScriptVariant_t *args_var_va, std::size_t num_va, std::index_sequence<I...>) noexcept
 	{
 		if constexpr(sizeof...(Args) == 2) {
-			return (static_cast<C *>(obj)->*mfp_from_func<R, C, Args...>(binding_func, adjustor))(reinterpret_cast<const script_variant_t *>(args_var_va), num_va);
+			return (static_cast<C *>(obj)->*func)(static_cast<const script_variant_t *>(args_var_va), num_va);
 		} else {
-			return (static_cast<C *>(obj)->*mfp_from_func<R, C, Args...>(binding_func, adjustor))(__variant_to_value_impl<std::decay_t<Args>>(args_var[I])..., reinterpret_cast<const script_variant_t *>(args_var_va), num_va);
+			return (static_cast<C *>(obj)->*func)(__variant_to_value_impl<std::decay_t<Args>>(args_var[I])..., static_cast<const script_variant_t *>(args_var_va), num_va);
 		}
 	}
 
 	template <typename R, typename ...Args, std::size_t ...I>
-	R func_desc_t::call_va_impl(R(*binding_func)(Args..., ...), const gsdk::ScriptVariant_t *args_var, const gsdk::ScriptVariant_t *args_var_va, std::size_t num_va, std::index_sequence<I...>) noexcept
+	R func_desc_t::call_va_impl(R(*func)(Args..., ...), const gsdk::ScriptVariant_t *args_var, const gsdk::ScriptVariant_t *args_var_va, std::size_t num_va, std::index_sequence<I...>) noexcept
 	{
 		if constexpr(sizeof...(Args) == 2) {
-			return binding_func(reinterpret_cast<const script_variant_t *>(args_var_va), num_va);
+			return func(static_cast<const script_variant_t *>(args_var_va), num_va);
 		} else {
-			return binding_func(__variant_to_value_impl<std::decay_t<Args>>(args_var[I])..., reinterpret_cast<const script_variant_t *>(args_var_va), num_va);
+			return func(__variant_to_value_impl<std::decay_t<Args>>(args_var[I])..., static_cast<const script_variant_t *>(args_var_va), num_va);
 		}
 	}
 
@@ -259,21 +269,26 @@ namespace vmod
 			}
 		}
 
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wcast-function-type"
+		R(C::*func)(Args..., ...){reinterpret_cast<R(C::*)(Args..., ...)>(binding_func.mfp)};
+		#pragma GCC diagnostic pop
+
 		if constexpr(std::is_void_v<R>) {
 			if(ret_var) {
 				__vmod_raiseexception("vmod: function is void");
 				return false;
 			}
 
-			call_member_va<R, C, Args...>(reinterpret_cast<R(*)(C *, Args..., ...)>(binding_func.func), static_cast<std::size_t>(binding_func.adjustor), obj, args_var, args_var_va, num_va);
+			call_member_va<R, C, Args...>(func, obj, args_var, args_var_va, num_va);
 		} else {
 			if(!ret_var) {
-				call_member_va<R, C, Args...>(reinterpret_cast<R(*)(C *, Args..., ...)>(binding_func.func), static_cast<std::size_t>(binding_func.adjustor), obj, args_var, args_var_va, num_va);
+				call_member_va<R, C, Args...>(func, obj, args_var, args_var_va, num_va);
 			} else {
 				if constexpr(std::is_same_v<R, script_variant_t>) {
-					*ret_var = call_member_va<R, C, Args...>(reinterpret_cast<R(*)(C *, Args..., ...)>(binding_func.func), static_cast<std::size_t>(binding_func.adjustor), obj, args_var, args_var_va, num_va);
+					*ret_var = call_member_va<R, C, Args...>(func, obj, args_var, args_var_va, num_va);
 				} else {
-					R ret_val{call_member_va<R, C, Args...>(reinterpret_cast<R(*)(C *, Args..., ...)>(binding_func.func), static_cast<std::size_t>(binding_func.adjustor), obj, args_var, args_var_va, num_va)};
+					R ret_val{call_member_va<R, C, Args...>(func, obj, args_var, args_var_va, num_va)};
 					value_to_variant<R>(*ret_var, std::forward<R>(ret_val));
 				}
 				gsdk::IScriptVM::fixup_var(*ret_var);
@@ -312,21 +327,26 @@ namespace vmod
 			}
 		}
 
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wcast-function-type"
+		R(*func)(Args..., ...){reinterpret_cast<R(*)(Args..., ...)>(binding_func.func)};
+		#pragma GCC diagnostic pop
+
 		if constexpr(std::is_void_v<R>) {
 			if(ret_var) {
 				__vmod_raiseexception("vmod: function is void");
 				return false;
 			}
 
-			call_va<R, Args...>(reinterpret_cast<R(*)(Args..., ...)>(binding_func.func), args_var, args_var_va, num_va);
+			call_va<R, Args...>(func, args_var, args_var_va, num_va);
 		} else {
 			if(!ret_var) {
-				call_va<R, Args...>(reinterpret_cast<R(*)(Args..., ...)>(binding_func.func), args_var, args_var_va, num_va);
+				call_va<R, Args...>(func, args_var, args_var_va, num_va);
 			} else {
 				if constexpr(std::is_same_v<R, script_variant_t>) {
-					*ret_var = call_va<R, Args...>(reinterpret_cast<R(*)(Args..., ...)>(binding_func.func), args_var, args_var_va, num_va);
+					*ret_var = call_va<R, Args...>(func, args_var, args_var_va, num_va);
 				} else {
-					R ret_val{call_va<R, Args...>(reinterpret_cast<R(*)(Args..., ...)>(binding_func.func), args_var, args_var_va, num_va)};
+					R ret_val{call_va<R, Args...>(func, args_var, args_var_va, num_va)};
 					value_to_variant<R>(*ret_var, std::forward<R>(ret_val));
 				}
 				gsdk::IScriptVM::fixup_var(*ret_var);
@@ -339,9 +359,10 @@ namespace vmod
 	template <typename R, typename C, typename ...Args>
 	void func_desc_t::initialize_member(R(C::*func)(Args...), std::string_view name, std::string_view script_name)
 	{
-		auto mfp{mfp_to_func<R, C, Args...>(func)};
-		m_pFunction.func = reinterpret_cast<void *>(mfp.first);
-		m_pFunction.adjustor = static_cast<std::size_t>(mfp.second);
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wcast-function-type"
+		m_pFunction.mfp = reinterpret_cast<generic_mfp_t>(func);
+		#pragma GCC diagnostic pop
 		m_pfnBinding = static_cast<gsdk::ScriptBindingFunc_t>(binding_member<R, C, Args...>);
 		m_flags = gsdk::SF_MEMBER_FUNC;
 		initialize_shared<R, Args...>(name, script_name, false);
@@ -350,9 +371,10 @@ namespace vmod
 	template <typename R, typename C, typename ...Args>
 	void func_desc_t::initialize_member(R(C::*func)(Args..., ...), std::string_view name, std::string_view script_name)
 	{
-		auto mfp{mfp_to_func<R, C, Args...>(func)};
-		m_pFunction.func = reinterpret_cast<void *>(mfp.first);
-		m_pFunction.adjustor = static_cast<std::size_t>(mfp.second);
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wcast-function-type"
+		m_pFunction.mfp = reinterpret_cast<generic_mfp_t>(func);
+		#pragma GCC diagnostic pop
 		m_pfnBinding = static_cast<gsdk::ScriptBindingFunc_t>(binding_member_va<R, C, Args...>);
 		m_flags = gsdk::SF_MEMBER_FUNC;
 		initialize_shared<R, Args...>(name, script_name, true);
@@ -361,8 +383,10 @@ namespace vmod
 	template <typename R, typename ...Args>
 	void func_desc_t::initialize_static(R(*func)(Args...), std::string_view name, std::string_view script_name)
 	{
-		m_pFunction.func = reinterpret_cast<void *>(func);
-		m_pFunction.adjustor = 0;
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wcast-function-type"
+		m_pFunction.func = reinterpret_cast<generic_func_t>(func);
+		#pragma GCC diagnostic pop
 		m_pfnBinding = static_cast<gsdk::ScriptBindingFunc_t>(binding<R, Args...>);
 		m_flags = 0;
 		initialize_shared<R, Args...>(name, script_name, false);
@@ -371,8 +395,10 @@ namespace vmod
 	template <typename R, typename ...Args>
 	void func_desc_t::initialize_static(R(*func)(Args..., ...), std::string_view name, std::string_view script_name)
 	{
-		m_pFunction.func = reinterpret_cast<void *>(func);
-		m_pFunction.adjustor = 0;
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wcast-function-type"
+		m_pFunction.func = reinterpret_cast<generic_func_t>(func);
+		#pragma GCC diagnostic pop
 		m_pfnBinding = static_cast<gsdk::ScriptBindingFunc_t>(binding_va<R, Args...>);
 		m_flags = 0;
 		initialize_shared<R, Args...>(name, script_name, true);

@@ -262,37 +262,39 @@ namespace vmod
 		static bool binding_va(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *obj, const gsdk::ScriptVariant_t *args_var, int num_args, gsdk::ScriptVariant_t *ret_var) noexcept;
 
 		template <typename R, typename C, typename ...Args, std::size_t ...I>
-		static R call_member_impl(R(__attribute__((__thiscall__)) *binding_func)(C *, Args...), std::size_t adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, std::index_sequence<I...>) noexcept;
+		static R call_member_impl(R(C::*func)(Args...), void *obj, const gsdk::ScriptVariant_t *args_var, std::index_sequence<I...>) noexcept;
 
 		template <typename R, typename C, typename ...Args>
-		static inline R call_member(R(__attribute__((__thiscall__)) *binding_func)(C *, Args...), std::size_t adjustor, void *obj, const gsdk::ScriptVariant_t *args_var) noexcept
-		{ return call_member_impl<R, C, Args...>(binding_func, adjustor, obj, args_var, std::make_index_sequence<sizeof...(Args)>()); }
+		static inline R call_member(R(C::*func)(Args...), void *obj, const gsdk::ScriptVariant_t *args_var) noexcept
+		{ return call_member_impl<R, C, Args...>(func, obj, args_var, std::make_index_sequence<sizeof...(Args)>()); }
 
 		template <typename R, typename C, typename ...Args, std::size_t ...I>
-		static R call_member_va_impl(R(*binding_func)(C *, Args..., ...), std::size_t adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, const gsdk::ScriptVariant_t *args_var_va, std::size_t num_va, std::index_sequence<I...>) noexcept;
+		static R call_member_va_impl(R(C::*func)(Args..., ...), void *obj, const gsdk::ScriptVariant_t *args_var, const gsdk::ScriptVariant_t *args_var_va, std::size_t num_va, std::index_sequence<I...>) noexcept;
 
 		template <typename R, typename C, typename ...Args>
-		static inline R call_member_va(R(*binding_func)(C *, Args..., ...), std::size_t adjustor, void *obj, const gsdk::ScriptVariant_t *args_var, const gsdk::ScriptVariant_t *args_var_va, std::size_t num_va) noexcept
-		{ return call_member_va_impl<R, C, Args...>(binding_func, adjustor, obj, args_var, args_var_va, num_va, std::make_index_sequence<sizeof...(Args)>()); }
+		static inline R call_member_va(R(C::*func)(Args..., ...), void *obj, const gsdk::ScriptVariant_t *args_var, const gsdk::ScriptVariant_t *args_var_va, std::size_t num_va) noexcept
+		{ return call_member_va_impl<R, C, Args...>(func, obj, args_var, args_var_va, num_va, std::make_index_sequence<sizeof...(Args)>()); }
 
 		template <typename R, typename ...Args, std::size_t ...I>
-		static R call_impl(R(*binding_func)(Args...), const gsdk::ScriptVariant_t *args_var, std::index_sequence<I...>) noexcept;
+		static R call_impl(R(*func)(Args...), const gsdk::ScriptVariant_t *args_var, std::index_sequence<I...>) noexcept;
 
 		template <typename R, typename ...Args>
-		static inline R call(R(*binding_func)(Args...), const gsdk::ScriptVariant_t *args_var) noexcept
-		{ return call_impl<R, Args...>(binding_func, args_var, std::make_index_sequence<sizeof...(Args)>()); }
+		static inline R call(R(*func)(Args...), const gsdk::ScriptVariant_t *args_var) noexcept
+		{ return call_impl<R, Args...>(func, args_var, std::make_index_sequence<sizeof...(Args)>()); }
 
 		template <typename R, typename ...Args, std::size_t ...I>
-		static R call_va_impl(R(*binding_func)(Args..., ...), const gsdk::ScriptVariant_t *args_var, const gsdk::ScriptVariant_t *args_var_va, std::size_t num_va, std::index_sequence<I...>) noexcept;
+		static R call_va_impl(R(*func)(Args..., ...), const gsdk::ScriptVariant_t *args_var, const gsdk::ScriptVariant_t *args_var_va, std::size_t num_va, std::index_sequence<I...>) noexcept;
 
 		template <typename R, typename ...Args>
-		static inline R call_va(R(*binding_func)(Args..., ...), const gsdk::ScriptVariant_t *args_var, const gsdk::ScriptVariant_t *args_var_va, std::size_t num_va) noexcept
-		{ return call_va_impl<R, Args...>(binding_func, args_var, args_var_va, num_va, std::make_index_sequence<sizeof...(Args)>()); }
+		static inline R call_va(R(*func)(Args..., ...), const gsdk::ScriptVariant_t *args_var, const gsdk::ScriptVariant_t *args_var_va, std::size_t num_va) noexcept
+		{ return call_va_impl<R, Args...>(func, args_var, args_var_va, num_va, std::make_index_sequence<sizeof...(Args)>()); }
 	};
 
 	static_assert(sizeof(func_desc_t) == sizeof(gsdk::ScriptFunctionBinding_t));
 	static_assert(alignof(func_desc_t) == alignof(gsdk::ScriptFunctionBinding_t));
 
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 	template <typename T>
 	class instance_helper : public gsdk::IScriptInstanceHelper
 	{
@@ -318,6 +320,7 @@ namespace vmod
 			return singleton_;
 		}
 	};
+	#pragma GCC diagnostic pop
 
 	template <typename T>
 	class singleton_instance_helper final : public instance_helper<T>

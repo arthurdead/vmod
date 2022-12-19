@@ -459,7 +459,7 @@ namespace vmod
 		{
 			std::size_t pagesize{static_cast<std::size_t>(sysconf(_SC_PAGESIZE))};
 			start = align(ptr, pagesize);
-			void *end{align(reinterpret_cast<unsigned char *>(ptr) + len, pagesize)};
+			void *end{align(static_cast<unsigned char *>(ptr) + len, pagesize)};
 			size = ((reinterpret_cast<std::uintptr_t>(start) - reinterpret_cast<std::uintptr_t>(end)) - pagesize);
 		}
 
@@ -483,15 +483,11 @@ namespace vmod
 		generic_plain_mfp_t old_vfunc{vtable[index]};
 		page_info func_page{vtable + ((index > 0) ? (index-1) : 0), sizeof(generic_plain_mfp_t)};
 		func_page.protect(PROT_READ|PROT_WRITE|PROT_EXEC);
-	#ifdef __clang__
-		#pragma clang diagnostic push
-		#pragma clang diagnostic ignored "-Wcast-function-type"
-	#endif
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wcast-function-type"
 		vtable[index] = reinterpret_cast<generic_plain_mfp_t>(new_func);
 		auto mfp{mfp_from_func<R, C, Args...>(reinterpret_cast<R(__attribute__((__thiscall__)) *)(C *, Args...)>(old_vfunc))};
-	#ifdef __clang__
-		#pragma clang diagnostic pop
-	#endif
+		#pragma GCC diagnostic pop
 		return mfp;
 	}
 
@@ -555,15 +551,11 @@ namespace vmod
 	public:
 		inline void initialize(function_pointer_t<T> old_func_, function_pointer_t<T> new_func_) noexcept
 		{
-		#ifdef __clang__
-			#pragma clang diagnostic push
-			#pragma clang diagnostic ignored "-Wcast-function-type"
-		#endif
+			#pragma GCC diagnostic push
+			#pragma GCC diagnostic ignored "-Wcast-function-type"
 			this->old_mfp.addr = reinterpret_cast<generic_plain_mfp_t>(old_func_);
 			this->new_func = reinterpret_cast<generic_func_t>(new_func_);
-		#ifdef __clang__
-			#pragma clang diagnostic pop
-		#endif
+			#pragma GCC diagnostic pop
 			this->old_mfp.adjustor = 0;
 
 			this->backup_bytes();
@@ -583,15 +575,11 @@ namespace vmod
 	public:
 		inline void initialize(function_pointer_t<T> old_func_, function_plain_pointer_t<T> new_func_) noexcept
 		{
-		#ifdef __clang__
-			#pragma clang diagnostic push
-			#pragma clang diagnostic ignored "-Wcast-function-type"
-		#endif
+			#pragma GCC diagnostic push
+			#pragma GCC diagnostic ignored "-Wcast-function-type"
 			this->old_mfp.func = reinterpret_cast<generic_mfp_t>(old_func_);
 			this->new_mfp = reinterpret_cast<generic_plain_mfp_t>(new_func_);
-		#ifdef __clang__
-			#pragma clang diagnostic pop
-		#endif
+			#pragma GCC diagnostic pop
 
 			this->backup_bytes();
 		}
@@ -600,7 +588,10 @@ namespace vmod
 		inline function_return_t<T> operator()(function_class_t<T> *obj, Args &&...args) noexcept
 		{
 			__detour_scope_enable<T> se{*this};
+			#pragma GCC diagnostic push
+			#pragma GCC diagnostic ignored "-Wcast-function-type"
 			return (obj->*reinterpret_cast<function_pointer_t<T>>(this->old_mfp.func))(std::forward<Args>(args)...);
+			#pragma GCC diagnostic pop
 		}
 	};
 }

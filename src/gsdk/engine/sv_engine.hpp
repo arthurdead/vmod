@@ -28,7 +28,7 @@ namespace gsdk
 	enum soundlevel_t : int;
 	class ServerClass;
 	class VPlane;
-	class PVSInfo_t;
+	struct PVSInfo_t;
 	struct player_info_t;
 	class CGamestatsData;
 	class KeyValues;

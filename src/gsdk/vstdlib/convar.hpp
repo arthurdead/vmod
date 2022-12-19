@@ -109,7 +109,6 @@ namespace gsdk
 
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
-	#pragma GCC diagnostic ignored "-Wweak-vtables"
 	class IConVar
 	{
 	public:
@@ -121,6 +120,8 @@ namespace gsdk
 	};
 	#pragma GCC diagnostic pop
 
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 	class ConVar : public ConCommandBase, public IConVar
 	{
 	public:
@@ -171,6 +172,7 @@ namespace gsdk
 		bool m_bCompetitiveRestrictions;
 		FnChangeCallback_t m_fnChangeCallback;
 	};
+	#pragma GCC diagnostic pop
 
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"

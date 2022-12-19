@@ -12,7 +12,7 @@ namespace vmod
 	gsdk::CGlobalVars *sv_globals;
 	gsdk::IServerGameDLL *gamedll;
 	gsdk::IServerTools *servertools;
-	gsdk::IEntityFactoryDictionary *entityfactorydict;
+	gsdk::CEntityFactoryDictionary *entityfactorydict;
 	gsdk::IServerNetworkStringTableContainer *sv_stringtables;
 
 	bool gsdk_library::load(const std::filesystem::path &path) noexcept
@@ -142,7 +142,7 @@ namespace vmod
 			return false;
 		}
 
-		entityfactorydict = servertools->GetEntityFactoryDictionary();
+		entityfactorydict = reinterpret_cast<gsdk::CEntityFactoryDictionary *>(servertools->GetEntityFactoryDictionary());
 		if(!entityfactorydict) {
 			err_str = "EntityFactoryDictionary is null"s;
 			return false;

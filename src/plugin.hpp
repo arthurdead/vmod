@@ -22,6 +22,10 @@ namespace vmod
 		plugin &operator=(plugin &&other) noexcept;
 
 		plugin(std::filesystem::path &&path_) noexcept;
+		inline plugin(const std::filesystem::path &path_) noexcept
+			: plugin{std::filesystem::path{path_}}
+		{
+		}
 		~plugin() noexcept;
 
 		enum class load_status : unsigned char
@@ -37,9 +41,6 @@ namespace vmod
 			return load();
 		}
 		void unload() noexcept;
-
-		inline operator const std::filesystem::path &() const noexcept
-		{ return path; }
 
 		inline gsdk::HSCRIPT instance() noexcept
 		{ return instance_; }

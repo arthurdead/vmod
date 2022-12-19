@@ -87,12 +87,16 @@ namespace vmod
 
 		static void script_print(std::string_view str) noexcept
 		{ print("%s", str.data()); }
+		static void script_success(std::string_view str) noexcept
+		{ success("%s", str.data()); }
 		static void script_error(std::string_view str) noexcept
 		{ error("%s", str.data()); }
 		static void script_warning(std::string_view str) noexcept
 		{ warning("%s", str.data()); }
 		static void script_info(std::string_view str) noexcept
 		{ info("%s", str.data()); }
+		static void script_remark(std::string_view str) noexcept
+		{ remark("%s", str.data()); }
 
 		bool binding_mods() noexcept;
 		bool bindings() noexcept;
@@ -184,7 +188,7 @@ namespace vmod
 
 		std::vector<std::filesystem::path> added_paths;
 
-		std::vector<std::unique_ptr<plugin>> plugins;
+		std::unordered_map<std::filesystem::path, std::unique_ptr<plugin>> plugins;
 		bool plugins_loaded;
 
 		ConCommand vmod_reload_plugins;

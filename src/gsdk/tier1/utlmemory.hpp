@@ -5,7 +5,7 @@
 
 namespace gsdk
 {
-	template <typename T>
+	template <typename T, typename I = int>
 	class CUtlMemory
 	{
 	public:
@@ -30,9 +30,21 @@ namespace gsdk
 			return *this;
 		}
 
+		static constexpr std::size_t npos{static_cast<I>(-1)};
+
+		inline const T &operator[](std::size_t i) const noexcept
+		{ return m_pMemory[i]; }
+		inline T &operator[](std::size_t i) noexcept
+		{ return m_pMemory[i]; }
+
 		void resize(std::size_t num) noexcept;
 
 		~CUtlMemory() noexcept;
+
+		struct iterator
+		{
+			I index;
+		};
 
 		T *m_pMemory;
 		int m_nAllocationCount;

@@ -8,6 +8,7 @@
 #include "plugin.hpp"
 #include "filesystem.hpp"
 #include "gsdk/server/gamerules.hpp"
+#include "gsdk/server/baseentity.hpp"
 
 #include <filesystem>
 #include <string_view>
@@ -40,32 +41,16 @@ namespace vmod
 
 namespace vmod
 {
-	static void(gsdk::IScriptVM::*CreateArray)(gsdk::ScriptVariant_t &);
-	static int(gsdk::IScriptVM::*GetArrayCount)(gsdk::HSCRIPT);
-}
-
-namespace gsdk
-{
-	int IScriptVM::GetArrayCount(HSCRIPT array)
-	{
-		return (this->*vmod::GetArrayCount)(array);
-	}
-
-	HSCRIPT IScriptVM::CreateArray() noexcept
-	{
-		ScriptVariant_t var;
-		(this->*vmod::CreateArray)(var);
-		return var.m_hScript;
-	}
-}
-
-namespace vmod
-{
 	class vmod vmod;
 
 	gsdk::HSCRIPT vmod::script_find_plugin(std::string_view name) noexcept
 	{
 		using namespace std::literals::string_view_literals;
+
+		if(name.empty()) {
+			vm_->RaiseException("vmod: invalid name");
+			return nullptr;
+		}
 
 		std::filesystem::path path{name};
 		if(!path.is_absolute()) {
@@ -80,12 +65,9 @@ namespace vmod
 			return nullptr;
 		}
 
-		for(auto it{plugins.begin()}; it != plugins.end(); ++it) {
-			const std::filesystem::path &pl_path{static_cast<std::filesystem::path>(*(*it))};
-
-			if(pl_path == path) {
-				return (*it)->instance();
-			}
+		auto it{plugins.find(path)};
+		if(it != plugins.end()) {
+			return it->second->instance();
 		}
 
 		return nullptr;
@@ -128,6 +110,13 @@ namespace vmod
 			{
 				using namespace std::literals::string_view_literals;
 
+				gsdk::IScriptVM *vm{vmod.vm()};
+
+				if(name.empty()) {
+					vm->RaiseException("vmod: invalid name");
+					return nullptr;
+				}
+
 				std::string name_tmp{name};
 
 				auto tmp_it{it_->second->find(name_tmp)};
@@ -160,6 +149,13 @@ namespace vmod
 			gsdk::HSCRIPT script_lookup(std::string_view name) const noexcept
 			{
 				using namespace std::literals::string_view_literals;
+
+				gsdk::IScriptVM *vm{vmod.vm()};
+
+				if(name.empty()) {
+					vm->RaiseException("vmod: invalid name");
+					return nullptr;
+				}
 
 				std::string name_tmp{name};
 
@@ -200,6 +196,13 @@ namespace vmod
 		{
 			using namespace std::literals::string_view_literals;
 
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			if(name.empty()) {
+				vm->RaiseException("vmod: invalid name");
+				return nullptr;
+			}
+
 			std::string name_tmp{name};
 
 			const symbol_cache &syms{get_syms()};
@@ -215,6 +218,13 @@ namespace vmod
 		gsdk::HSCRIPT script_lookup_global(std::string_view name) const noexcept
 		{
 			using namespace std::literals::string_view_literals;
+
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			if(name.empty()) {
+				vm->RaiseException("vmod: invalid name");
+				return nullptr;
+			}
 
 			std::string name_tmp{name};
 
@@ -406,15 +416,24 @@ namespace vmod
 
 		static gsdk::HSCRIPT script_glob(std::filesystem::path pattern) noexcept
 		{
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			if(pattern.empty()) {
+				vm->RaiseException("vmod: invalid pattern");
+				return nullptr;
+			}
+
 			glob_t glob;
 			if(::glob(pattern.c_str(), GLOB_ERR|GLOB_NOSORT, script_globerr, &glob) != 0) {
 				globfree(&glob);
 				return nullptr;
 			}
 
-			gsdk::IScriptVM *vm{vmod.vm()};
-
 			gsdk::HSCRIPT arr{vm->CreateArray()};
+			if(!arr || arr == gsdk::INVALID_HSCRIPT) {
+				vm->RaiseException("vmod: failed to create array");
+				return nullptr;
+			}
 
 			for(std::size_t i{0}; i < glob.gl_pathc; ++i) {
 				std::string temp{glob.gl_pathv[i]};
@@ -586,6 +605,11 @@ namespace vmod
 	{
 		gsdk::IScriptVM *vm{::vmod::vmod.vm()};
 
+		if(name.empty()) {
+			vm->RaiseException("vmod: invalid name");
+			return static_cast<std::size_t>(-1);
+		}
+
 		if(!table) {
 			vm->RaiseException("vmod: stringtable is not created yet");
 			return static_cast<std::size_t>(-1);
@@ -610,6 +634,11 @@ namespace vmod
 	{
 		gsdk::IScriptVM *vm{::vmod::vmod.vm()};
 
+		if(i == static_cast<std::size_t>(-1) || static_cast<int>(i) >= table->GetNumStrings()) {
+			vm->RaiseException("vmod: invalid index");
+			return {};
+		}
+
 		if(!table) {
 			vm->RaiseException("vmod: stringtable is not created yet");
 			return {};
@@ -622,12 +651,17 @@ namespace vmod
 	{
 		gsdk::IScriptVM *vm{::vmod::vmod.vm()};
 
+		if(name.empty()) {
+			vm->RaiseException("vmod: invalid string");
+			return static_cast<std::size_t>(-1);
+		}
+
 		if(!table) {
 			vm->RaiseException("vmod: stringtable is not created yet");
 			return static_cast<std::size_t>(-1);
 		}
 
-		return static_cast<std::size_t>(table->AddString(true, name.data(), static_cast<ssize_t>(bytes), data));
+		return static_cast<std::size_t>(table->AddString(true, name.data(), bytes, data));
 	}
 
 	script_stringtable::~script_stringtable() noexcept
@@ -674,12 +708,12 @@ namespace vmod
 		set_table_value("InfoPanel"s, g_pStringTableInfoPanel);
 		set_table_value("Scenes"s, g_pStringTableClientSideChoreoScenes);
 
-		for(const auto &pl : plugins) {
-			if(!*pl) {
+		for(const auto &it : plugins) {
+			if(!*it.second) {
 				continue;
 			}
 
-			pl->string_tables_created();
+			it.second->string_tables_created();
 		}
 	}
 
@@ -814,6 +848,11 @@ namespace vmod
 		{
 			gsdk::IScriptVM *vm{vmod.vm()};
 
+			if(name.empty()) {
+				vm->RaiseException("vmod: invalid name");
+				return nullptr;
+			}
+
 			if(cvar->FindCommandBase(name.data()) != nullptr) {
 				vm->RaiseException("vmod: name already in use");
 				return nullptr;
@@ -843,6 +882,11 @@ namespace vmod
 		static gsdk::HSCRIPT script_find_cvar(std::string_view name) noexcept
 		{
 			gsdk::IScriptVM *vm{vmod.vm()};
+
+			if(name.empty()) {
+				vm->RaiseException("vmod: invalid name");
+				return nullptr;
+			}
 
 			gsdk::ConVar *var{cvar->FindVar(name.data())};
 			if(!var) {
@@ -1124,6 +1168,8 @@ namespace vmod
 	private:
 		friend class vmod;
 
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 		class script_factory_impl final : public gsdk::IEntityFactory, public plugin::owned_instance
 		{
 		public:
@@ -1136,10 +1182,15 @@ namespace vmod
 			inline std::size_t script_size() noexcept
 			{ return GetEntitySize(); }
 
+			inline void script_delete() noexcept
+			{ delete this; }
+
+			std::vector<std::string> names;
 			std::size_t size;
 			gsdk::HSCRIPT func;
 			gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
 		};
+		#pragma GCC diagnostic pop
 
 		static inline class_desc_t<script_factory_impl> script_factory_impl_desc{"__vmod_script_entity_factory_impl_class"};
 
@@ -1150,6 +1201,18 @@ namespace vmod
 
 		private:
 			friend class entities_singleton;
+
+			gsdk::IServerNetworkable *script_create(std::string_view classname) noexcept
+			{
+				gsdk::IScriptVM *vm{::vmod::vmod.vm()};
+
+				if(classname.empty()) {
+					vm->RaiseException("vmod: invalid classname");
+					return nullptr;
+				}
+
+				return factory->Create(classname.data());
+			}
 
 			inline void script_delete() noexcept
 			{ delete this; }
@@ -1167,6 +1230,11 @@ namespace vmod
 		static gsdk::HSCRIPT script_find_factory(std::string_view name) noexcept
 		{
 			gsdk::IScriptVM *vm{vmod.vm()};
+
+			if(name.empty()) {
+				vm->RaiseException("vmod: invalid name");
+				return nullptr;
+			}
 
 			gsdk::IEntityFactory *factory{entityfactorydict->FindFactory(name.data())};
 			if(!factory) {
@@ -1195,6 +1263,16 @@ namespace vmod
 		{
 			gsdk::IScriptVM *vm{vmod.vm()};
 
+			if(name.empty()) {
+				vm->RaiseException("vmod: invalid name");
+				return nullptr;
+			}
+
+			if(!func || func == gsdk::INVALID_HSCRIPT) {
+				vm->RaiseException("vmod: null function");
+				return nullptr;
+			}
+
 			gsdk::IEntityFactory *factory{entityfactorydict->FindFactory(name.data())};
 			if(factory) {
 				vm->RaiseException("vmod: name already in use");
@@ -1210,18 +1288,28 @@ namespace vmod
 				return nullptr;
 			}
 
+			sfac->names.emplace_back(name);
 			sfac->func = vm->ReferenceObject(func);
 			sfac->size = size;
 			sfac->instance = factory_instance;
 
 			sfac->set_plugin();
 
+			entityfactorydict->InstallFactory(sfac, name.data());
+
 			return sfac->instance;
 		}
 
 		static gsdk::HSCRIPT script_from_ptr(gsdk::CBaseEntity *ptr) noexcept
 		{
-			return nullptr;
+			gsdk::IScriptVM *vm{::vmod::vmod.vm()};
+
+			if(!ptr) {
+				vm->RaiseException("vmod: invalid ptr");
+				return nullptr;
+			}
+
+			return ptr->GetScriptInstance();
 		}
 
 		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
@@ -1256,6 +1344,13 @@ namespace vmod
 		if(func && func != gsdk::INVALID_HSCRIPT) {
 			vm->ReleaseFunction(func);
 		}
+
+		for(const std::string &name : names) {
+			std::size_t i{entityfactorydict->m_Factories.find(name)};
+			if(i != entityfactorydict->m_Factories.npos) {
+				entityfactorydict->m_Factories.erase(i);
+			}
+		}
 	}
 
 	gsdk::IServerNetworkable *entities_singleton::script_factory_impl::Create(const char *classname)
@@ -1267,15 +1362,11 @@ namespace vmod
 
 			script_variant_t args[]{instance, classname};
 			script_variant_t ret_var;
-			if(vm->ExecuteFunction(func, args, sizeof(args), &ret_var, pl_scope, true) == gsdk::SCRIPT_ERROR) {
+			if(vm->ExecuteFunction(func, args, std::size(args), &ret_var, pl_scope, true) == gsdk::SCRIPT_ERROR) {
 				return nullptr;
 			}
 
-			if(ret_var.m_type != gsdk::FIELD_INTEGER) {
-				return nullptr;
-			}
-
-			return reinterpret_cast<gsdk::IServerNetworkable *>(ret_var.m_ulonglong);
+			return ret_var.get<gsdk::IServerNetworkable *>();
 		}
 
 		return nullptr;
@@ -1319,13 +1410,16 @@ namespace vmod
 		}
 
 		script_factory_impl_desc.func(&script_factory_impl::script_size, "script_size"sv, "size"sv);
+		script_factory_impl_desc.func(&script_factory_impl::script_delete, "script_delete"sv, "free"sv);
 
 		if(!vm->RegisterClass(&script_factory_impl_desc)) {
 			error("vmod: failed to register entity factory impl script class\n"sv);
 			return false;
 		}
 
+		script_factory_desc.func(&script_factory::script_create, "script_create"sv, "create"sv);
 		script_factory_desc.func(&script_factory::script_size, "script_size"sv, "size"sv);
+		script_factory_desc.func(&script_factory::script_delete, "script_delete"sv, "free"sv);
 
 		if(!vm->RegisterClass(&script_factory_desc)) {
 			error("vmod: failed to register entity factory script class\n"sv);
@@ -1392,8 +1486,10 @@ namespace vmod
 		vmod_desc.func(&vmod::script_is_map_active, "script_is_map_active"sv, "is_map_active"sv);
 		vmod_desc.func(&vmod::script_is_map_loaded, "script_is_map_loaded"sv, "is_map_loaded"sv);
 		vmod_desc.func(&vmod::script_are_stringtables_created, "script_are_stringtables_created"sv, "are_stringtables_created"sv);
+		vmod_desc.func(&vmod::script_success, "script_success"sv, "success"sv);
 		vmod_desc.func(&vmod::script_print, "script_print"sv, "print"sv);
 		vmod_desc.func(&vmod::script_info, "script_info"sv, "info"sv);
+		vmod_desc.func(&vmod::script_remark, "script_remark"sv, "remark"sv);
 		vmod_desc.func(&vmod::script_error, "script_error"sv, "error"sv);
 		vmod_desc.func(&vmod::script_warning, "script_warning"sv, "warning"sv);
 
@@ -1608,7 +1704,7 @@ namespace vmod
 
 	static const unsigned char *g_Script_init;
 	static const unsigned char *g_Script_vscript_server;
-	static gsdk::IScriptVM **g_pScriptVM;
+	static gsdk::IScriptVM **g_pScriptVM_ptr;
 	static bool(*VScriptServerInit)();
 	static void(*VScriptServerTerm)();
 	static bool(*VScriptRunScript)(const char *, gsdk::HSCRIPT, bool);
@@ -1661,7 +1757,7 @@ namespace vmod
 
 		const gsdk::Color *clr{GetSpewOutputColor()};
 
-		if(!clr || (clr && (clr->r == 255 && clr->g == 255 && clr->b == 255))) {
+		if(!clr || (clr->r == 255 && clr->g == 255 && clr->b == 255)) {
 			switch(type) {
 				case gsdk::SPEW_MESSAGE: {
 					if(in_vscript_error) {
@@ -1693,8 +1789,10 @@ namespace vmod
 
 		gsdk::SpewRetval_t ret{old_spew(type, str)};
 
-		std::fputs("\033[0m", stdout);
-		std::fflush(stdout);
+		if(clr) {
+			std::fputs("\033[0m", stdout);
+			std::fflush(stdout);
+		}
 
 		return ret;
 	}
@@ -1758,7 +1856,9 @@ namespace vmod
 	{
 		in_vscript_server_init = true;
 		bool ret{vscript_server_init_called ? true : VScriptServerInit_detour()};
-		*g_pScriptVM = vmod.vm();
+		gsdk::IScriptVM *vm{vmod.vm()};
+		*g_pScriptVM_ptr = vm;
+		gsdk::g_pScriptVM = vm;
 		if(vscript_server_init_called) {
 			VScriptRunScript_detour("mapspawn", nullptr, false);
 		}
@@ -1771,7 +1871,9 @@ namespace vmod
 	{
 		in_vscript_server_term = true;
 		//VScriptServerTerm_detour();
-		*g_pScriptVM = vmod.vm();
+		gsdk::IScriptVM *vm{vmod.vm()};
+		*g_pScriptVM_ptr = vm;
+		gsdk::g_pScriptVM = vm;
 		in_vscript_server_term = false;
 	}
 
@@ -2143,6 +2245,18 @@ namespace vmod
 			return false;
 		}
 
+		auto CBaseEntity_it{sv_symbols.find("CBaseEntity"s)};
+		if(CBaseEntity_it == sv_symbols.end()) {
+			error("vmod: missing 'CBaseEntity' symbols\n"sv);
+			return false;
+		}
+
+		auto GetScriptInstance_it{CBaseEntity_it->second->find("GetScriptInstance()"s)};
+		if(GetScriptInstance_it == CBaseEntity_it->second->end()) {
+			error("vmod: missing 'CBaseEntity::GetScriptInstance()' symbol\n"sv);
+			return false;
+		}
+
 		auto sv_ScriptClassDesc_t_it{sv_symbols.find("ScriptClassDesc_t"s)};
 		if(sv_ScriptClassDesc_t_it == sv_symbols.end()) {
 			error("vmod: missing 'ScriptClassDesc_t' symbol\n"sv);
@@ -2248,6 +2362,18 @@ namespace vmod
 			return false;
 		}
 
+		auto IsArray_it{CSquirrelVM_it->second->find("IsArray(HSCRIPT__*)"s)};
+		if(IsArray_it == CSquirrelVM_it->second->end()) {
+			error("vmod: missing 'CSquirrelVM::IsArray(HSCRIPT__*)' symbol\n"sv);
+			return false;
+		}
+
+		auto IsTable_it{CSquirrelVM_it->second->find("IsTable(HSCRIPT__*)"s)};
+		if(IsTable_it == CSquirrelVM_it->second->end()) {
+			error("vmod: missing 'CSquirrelVM::IsTable(HSCRIPT__*)' symbol\n"sv);
+			return false;
+		}
+
 		auto PrintFunc_it{CSquirrelVM_it->second->find("PrintFunc(SQVM*, char const*, ...)"s)};
 		if(PrintFunc_it == CSquirrelVM_it->second->end()) {
 			error("vmod: missing 'CSquirrelVM::PrintFunc(SQVM*, char const*, ...)' symbol\n"sv);
@@ -2275,10 +2401,13 @@ namespace vmod
 		VScriptServerTerm = VScriptServerTerm_it->second->func<decltype(VScriptServerTerm)>();
 		VScriptRunScript = VScriptRunScript_it->second->func<decltype(VScriptRunScript)>();
 		g_Script_vscript_server = g_Script_vscript_server_it->second->addr<const unsigned char *>();
-		g_pScriptVM = g_pScriptVM_it->second->addr<gsdk::IScriptVM **>();
+		g_pScriptVM_ptr = g_pScriptVM_it->second->addr<gsdk::IScriptVM **>();
+		gsdk::g_pScriptVM = *g_pScriptVM_ptr;
 
-		CreateArray = CreateArray_it->second->mfp<decltype(CreateArray)>();
-		GetArrayCount = GetArrayCount_it->second->mfp<decltype(GetArrayCount)>();
+		gsdk::IScriptVM::CreateArray_ptr = CreateArray_it->second->mfp<decltype(gsdk::IScriptVM::CreateArray_ptr)>();
+		gsdk::IScriptVM::GetArrayCount_ptr = GetArrayCount_it->second->mfp<decltype(gsdk::IScriptVM::GetArrayCount_ptr)>();
+		gsdk::IScriptVM::IsArray_ptr = IsArray_it->second->mfp<decltype(gsdk::IScriptVM::IsArray_ptr)>();
+		gsdk::IScriptVM::IsTable_ptr = IsTable_it->second->mfp<decltype(gsdk::IScriptVM::IsTable_ptr)>();
 
 		PrintFunc = PrintFunc_it->second->func<decltype(PrintFunc)>();
 		ErrorFunc = ErrorFunc_it->second->func<decltype(ErrorFunc)>();
@@ -2286,6 +2415,22 @@ namespace vmod
 		sq_setparamscheck = sq_setparamscheck_it->second->func<decltype(sq_setparamscheck)>();
 
 		sv_classdesc_pHead = sv_pHead_it->second->addr<gsdk::ScriptClassDesc_t **>();
+
+		gsdk::CBaseEntity::GetScriptInstance_ptr = GetScriptInstance_it->second->mfp<decltype(gsdk::CBaseEntity::GetScriptInstance_ptr)>();
+
+		gsdk::ScriptClassDesc_t *tmp_desc{*sv_classdesc_pHead};
+		while(tmp_desc) {
+			if(std::strcmp(tmp_desc->m_pszClassname, "CBaseEntity") == 0) {
+				gsdk::CBaseEntity::g_pScriptDesc = tmp_desc;
+			}
+
+			tmp_desc = tmp_desc->m_pNextDesc;
+		}
+
+		if(!gsdk::CBaseEntity::g_pScriptDesc) {
+			error("vmod: failed to find baseentity script class"sv);
+			return false;
+		}
 
 		vm_->SetOutputCallback(vscript_output);
 		vm_->SetErrorCallback(vscript_error_output);
@@ -2303,175 +2448,6 @@ namespace vmod
 		if(!binding_mods()) {
 			return false;
 		}
-
-		scope_ = vm_->CreateScope("vmod", nullptr);
-		if(!scope_ || scope_ == gsdk::INVALID_HSCRIPT) {
-			error("vmod: failed to create vmod scope\n"sv);
-			return false;
-		}
-
-		vmod_reload_plugins.initialize("vmod_reload_plugins"sv, [this](const gsdk::CCommand &) noexcept -> void {
-			auto it{plugins.begin()};
-			while(it != plugins.end()) {
-				if((*it)->reload() == plugin::load_status::disabled) {
-					it = plugins.erase(it);
-					continue;
-				}
-				++it;
-			}
-
-			if(plugins_loaded) {
-				for(const auto &pl : plugins) {
-					if(!*pl) {
-						continue;
-					}
-
-					pl->all_plugins_loaded();
-				}
-			}
-		});
-
-		vmod_unload_plugins.initialize("vmod_unload_plugins"sv, [this](const gsdk::CCommand &) noexcept -> void {
-			for(const auto &pl : plugins) {
-				pl->unload();
-			}
-
-			plugins.clear();
-
-			for(const std::filesystem::path &it : added_paths) {
-				filesystem->RemoveSearchPath(it.c_str(), "GAME");
-			}
-			added_paths.clear();
-
-			plugins_loaded = false;
-		});
-
-		vmod_unload_plugin.initialize("vmod_unload_plugin"sv, [this](const gsdk::CCommand &args) noexcept -> void {
-			if(args.m_nArgc != 2) {
-				error("vmod: usage: vmod_unload_plugin <path>\n");
-				return;
-			}
-
-			std::filesystem::path path{args.m_ppArgv[1]};
-			if(!path.is_absolute()) {
-				path = (plugins_dir/path);
-			}
-			if(!path.has_extension()) {
-				path.replace_extension(scripts_extension);
-			}
-
-			if(path.extension() != scripts_extension) {
-				error("vmod: invalid extension\n");
-				return;
-			}
-
-			for(auto it{plugins.begin()}; it != plugins.end(); ++it) {
-				const std::filesystem::path &pl_path{static_cast<std::filesystem::path>(*(*it))};
-
-				if(pl_path == path) {
-					plugins.erase(it);
-					error("vmod: unloaded plugin '%s'\n", path.c_str());
-					return;
-				}
-			}
-
-			error("vmod: plugin '%s' not found\n", path.c_str());
-		});
-
-		vmod_load_plugin.initialize("vmod_load_plugin"sv, [this](const gsdk::CCommand &args) noexcept -> void {
-			if(args.m_nArgc != 2) {
-				error("vmod: usage: vmod_load_plugin <path>\n");
-				return;
-			}
-
-			std::filesystem::path path{args.m_ppArgv[1]};
-			if(!path.is_absolute()) {
-				path = (plugins_dir/path);
-			}
-			if(!path.has_extension()) {
-				path.replace_extension(scripts_extension);
-			}
-
-			if(path.extension() != scripts_extension) {
-				error("vmod: invalid extension\n");
-				return;
-			}
-
-			auto it{plugins.begin()};
-			while(it != plugins.end()) {
-				const std::filesystem::path &pl_path{static_cast<std::filesystem::path>(*(*it))};
-
-				if(pl_path == path) {
-					switch((*it)->reload()) {
-						case plugin::load_status::success: {
-							success("vmod: plugin '%s' reloaded\n", path.c_str());
-							if(plugins_loaded) {
-								(*it)->all_plugins_loaded();
-							}
-						} break;
-						case plugin::load_status::disabled: {
-							plugins.erase(it);
-						} break;
-						default: break;
-					}
-					return;
-				}
-
-				++it;
-			}
-
-			std::unique_ptr<plugin> pl{new plugin{std::move(path)}};
-			switch(pl->load()) {
-				case plugin::load_status::success: {
-					success("vmod: plugin '%s' loaded\n", static_cast<std::filesystem::path>(*pl).c_str());
-					if(plugins_loaded) {
-						pl->all_plugins_loaded();
-					}
-				} break;
-				case plugin::load_status::disabled: {
-					return;
-				}
-				default: break;
-			}
-
-			plugins.emplace_back(std::move(pl));
-		});
-
-		vmod_list_plugins.initialize("vmod_list_plugins"sv, [this](const gsdk::CCommand &args) noexcept -> void {
-			if(args.m_nArgc != 1) {
-				error("vmod: usage: vmod_list_plugins\n");
-				return;
-			}
-
-			if(plugins.empty()) {
-				info("vmod: no plugins loaded\n");
-				return;
-			}
-
-			for(const auto &pl : plugins) {
-				if(*pl) {
-					success("'%s'\n", static_cast<std::filesystem::path>(*pl).c_str());
-				} else {
-					error("'%s'\n", static_cast<std::filesystem::path>(*pl).c_str());
-				}
-			}
-		});
-
-		vmod_refresh_plugins.initialize("vmod_refresh_plugins"sv, [this](const gsdk::CCommand &) noexcept -> void {
-			vmod_unload_plugins();
-
-			load_plugins(plugins_dir);
-
-			for(const auto &pl : plugins) {
-				if(!*pl) {
-					continue;
-				}
-
-				pl->all_plugins_loaded();
-			}
-
-			plugins_loaded = true;
-		});
 
 		if(!VScriptServerInit_detour_callback()) {
 			error("vmod: VScriptServerInit failed\n"sv);
@@ -2586,6 +2562,166 @@ namespace vmod
 			return false;
 		}
 
+		scope_ = vm_->CreateScope("vmod", nullptr);
+		if(!scope_ || scope_ == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create vmod scope\n"sv);
+			return false;
+		}
+
+		vmod_reload_plugins.initialize("vmod_reload_plugins"sv, [this](const gsdk::CCommand &) noexcept -> void {
+			auto it{plugins.begin()};
+			while(it != plugins.end()) {
+				if(it->second->reload() == plugin::load_status::disabled) {
+					it = plugins.erase(it);
+					continue;
+				}
+				++it;
+			}
+
+			if(plugins_loaded) {
+				it = plugins.begin();
+				while(it != plugins.end()) {
+					if(!*it->second) {
+						continue;
+					}
+
+					it->second->all_plugins_loaded();
+				}
+			}
+		});
+
+		vmod_unload_plugins.initialize("vmod_unload_plugins"sv, [this](const gsdk::CCommand &) noexcept -> void {
+			for(const auto &it : plugins) {
+				it.second->unload();
+			}
+
+			plugins.clear();
+
+			for(const std::filesystem::path &it : added_paths) {
+				filesystem->RemoveSearchPath(it.c_str(), "GAME");
+			}
+			added_paths.clear();
+
+			plugins_loaded = false;
+		});
+
+		vmod_unload_plugin.initialize("vmod_unload_plugin"sv, [this](const gsdk::CCommand &args) noexcept -> void {
+			if(args.m_nArgc != 2) {
+				error("vmod: usage: vmod_unload_plugin <path>\n");
+				return;
+			}
+
+			std::filesystem::path path{args.m_ppArgv[1]};
+			if(!path.is_absolute()) {
+				path = (plugins_dir/path);
+			}
+			if(!path.has_extension()) {
+				path.replace_extension(scripts_extension);
+			}
+
+			if(path.extension() != scripts_extension) {
+				error("vmod: invalid extension\n");
+				return;
+			}
+
+			auto it{plugins.find(path)};
+			if(it != plugins.end()) {
+				error("vmod: unloaded plugin '%s'\n", it->first.c_str());
+				plugins.erase(it);
+			} else {
+				error("vmod: plugin '%s' not found\n", path.c_str());
+			}
+		});
+
+		vmod_load_plugin.initialize("vmod_load_plugin"sv, [this](const gsdk::CCommand &args) noexcept -> void {
+			if(args.m_nArgc != 2) {
+				error("vmod: usage: vmod_load_plugin <path>\n");
+				return;
+			}
+
+			std::filesystem::path path{args.m_ppArgv[1]};
+			if(!path.is_absolute()) {
+				path = (plugins_dir/path);
+			}
+			if(!path.has_extension()) {
+				path.replace_extension(scripts_extension);
+			}
+
+			if(path.extension() != scripts_extension) {
+				error("vmod: invalid extension\n");
+				return;
+			}
+
+			auto it{plugins.find(path)};
+			if(it != plugins.end()) {
+				switch(it->second->reload()) {
+					case plugin::load_status::success: {
+						success("vmod: plugin '%s' reloaded\n", it->first.c_str());
+						if(plugins_loaded) {
+							it->second->all_plugins_loaded();
+						}
+					} break;
+					case plugin::load_status::disabled: {
+						plugins.erase(it);
+					} break;
+					default: break;
+				}
+				return;
+			}
+
+			std::unique_ptr<plugin> pl{new plugin{path}};
+			switch(pl->load()) {
+				case plugin::load_status::success: {
+					success("vmod: plugin '%s' loaded\n", path.c_str());
+					if(plugins_loaded) {
+						pl->all_plugins_loaded();
+					}
+				} break;
+				case plugin::load_status::disabled: {
+					return;
+				}
+				default: break;
+			}
+
+			plugins.emplace(std::move(path), std::move(pl));
+		});
+
+		vmod_list_plugins.initialize("vmod_list_plugins"sv, [this](const gsdk::CCommand &args) noexcept -> void {
+			if(args.m_nArgc != 1) {
+				error("vmod: usage: vmod_list_plugins\n");
+				return;
+			}
+
+			if(plugins.empty()) {
+				info("vmod: no plugins loaded\n");
+				return;
+			}
+
+			for(const auto &it : plugins) {
+				if(*it.second) {
+					success("'%s'\n", it.first.c_str());
+				} else {
+					error("'%s'\n", it.first.c_str());
+				}
+			}
+		});
+
+		vmod_refresh_plugins.initialize("vmod_refresh_plugins"sv, [this](const gsdk::CCommand &) noexcept -> void {
+			vmod_unload_plugins();
+
+			load_plugins(plugins_dir);
+
+			for(const auto &it : plugins) {
+				if(!*it.second) {
+					continue;
+				}
+
+				it.second->all_plugins_loaded();
+			}
+
+			plugins_loaded = true;
+		});
+
 		sv_engine->InsertServerCommand("exec vmod/load.cfg\n");
 		sv_engine->ServerExecute();
 
@@ -2624,12 +2760,12 @@ namespace vmod
 				continue;
 			}
 
-			std::unique_ptr<plugin> pl{new plugin{std::move(path)}};
+			std::unique_ptr<plugin> pl{new plugin{path}};
 			if(pl->load() == plugin::load_status::disabled) {
 				continue;
 			}
 
-			plugins.emplace_back(std::move(pl));
+			plugins.emplace(std::move(path), std::move(pl));
 		}
 	}
 
@@ -2970,7 +3106,7 @@ namespace vmod
 	static std::string_view get_class_desc_name(const gsdk::ScriptClassDesc_t *desc) noexcept
 	{
 		if(desc->m_pNextDesc == reinterpret_cast<const gsdk::ScriptClassDesc_t *>(0xbebebebe)) {
-			const extra_class_desc_t &extra{reinterpret_cast<const base_class_desc_t<empty_class> *>(desc)->extra()};
+			const extra_class_desc_t &extra{static_cast<const base_class_desc_t<empty_class> *>(desc)->extra()};
 			if(!extra.doc_class_name.empty()) {
 				return extra.doc_class_name;
 			}
@@ -3558,12 +3694,12 @@ namespace vmod
 	{
 		is_map_loaded = true;
 
-		for(const auto &pl : plugins) {
-			if(!*pl) {
+		for(const auto &it : plugins) {
+			if(!*it.second) {
 				continue;
 			}
 
-			pl->map_loaded(name);
+			it.second->map_loaded(name);
 		}
 	}
 
@@ -3571,24 +3707,24 @@ namespace vmod
 	{
 		is_map_active = true;
 
-		for(const auto &pl : plugins) {
-			if(!*pl) {
+		for(const auto &it : plugins) {
+			if(!*it.second) {
 				continue;
 			}
 
-			pl->map_active();
+			it.second->map_active();
 		}
 	}
 
 	void vmod::map_unloaded() noexcept
 	{
 		if(is_map_loaded) {
-			for(const auto &pl : plugins) {
-				if(!*pl) {
+			for(const auto &it : plugins) {
+				if(!*it.second) {
 					continue;
 				}
 
-				pl->map_unloaded();
+				it.second->map_unloaded();
 			}
 		}
 
@@ -3602,8 +3738,8 @@ namespace vmod
 		vm_->Frame(sv_globals->frametime);
 	#endif
 
-		for(const auto &pl : plugins) {
-			pl->game_frame(simulating);
+		for(const auto &it : plugins) {
+			it.second->game_frame(simulating);
 		}
 	}
 
@@ -3669,8 +3805,12 @@ namespace vmod
 
 			vsmgr->DestroyVM(vm_);
 
-			if(*g_pScriptVM == vm_) {
-				*g_pScriptVM = nullptr;
+			if(*g_pScriptVM_ptr == vm_) {
+				*g_pScriptVM_ptr = nullptr;
+			}
+
+			if(gsdk::g_pScriptVM == vm_) {
+				gsdk::g_pScriptVM = nullptr;
 			}
 		}
 
