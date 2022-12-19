@@ -2,6 +2,7 @@
 
 #include <string_view>
 #include "../mathlib/vector.hpp"
+#include "../config.hpp"
 
 namespace gsdk
 {

@@ -2,6 +2,7 @@
 
 #include <string_view>
 #include "../tier1/interface.hpp"
+#include "../config.hpp"
 
 namespace gsdk
 {

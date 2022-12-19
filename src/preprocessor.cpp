@@ -39,11 +39,14 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
-		vmod_preproc_dump.initialize("vmod_preproc_dump"sv, false);
-
 		if(!TPP_INITIALIZE()) {
+			error("vmod: tpp failed to initialize\n"sv);
 			return false;
 		}
+
+		initialized = true;
+
+		vmod_preproc_dump.initialize("vmod_preproc_dump"sv, false);
 
 		TPPLexer_Current->l_flags = TPPLEXER_FLAG_WANTSPACE|TPPLEXER_FLAG_WANTLF|TPPLEXER_FLAG_MESSAGE_LOCATION;
 		TPPLexer_Current->l_callbacks.c_new_textfile =
@@ -171,6 +174,8 @@ namespace vmod
 
 	squirrel_preprocessor::~squirrel_preprocessor() noexcept
 	{
-		TPP_FINALIZE();
+		if(initialized) {
+			TPP_FINALIZE();
+		}
 	}
 }

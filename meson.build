@@ -60,16 +60,29 @@ elif compiler.get_id() == 'gcc'
 	]
 endif
 
-dedicated = true
-
-engine_dir = get_option('srcds')
-engine_bin = join_paths(engine_dir,'bin')
-game_dir = join_paths(engine_dir,'tf')
+engine_dir = get_option('engine_dir')
+game = get_option('game')
+if game == 'portal2'
+	engine_bin = join_paths(engine_dir,'bin','linux32')
+else
+	engine_bin = join_paths(engine_dir,'bin')
+endif
+game_dir = join_paths(engine_dir,game)
 game_bin = join_paths(game_dir,'bin')
 addons = join_paths(game_dir,'addons')
 vmod_root = join_paths(addons,'vmod')
 
-install = engine_dir != ''
+dedicated = game != 'portal2'
+
+install = engine_dir != '' and game != ''
+
+if game == 'tf'
+	cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_TF2']
+elif game == 'portal2'
+	cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_PORTAL2']
+elif game == 'left4dead2'
+	cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_L4D2']
+endif
 
 thirdparty_default_options = [
 	'warning_level=0',

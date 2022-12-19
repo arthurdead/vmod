@@ -410,6 +410,7 @@ namespace vmod
 	private:
 		static int script_globerr(const char *epath, int eerrno)
 		{
+			//TODO!!!
 			//vmod.vm()->RaiseException("vmod: glob error %i on %s:", eerrno, epath);
 			return 0;
 		}
@@ -1175,9 +1176,13 @@ namespace vmod
 		public:
 			~script_factory_impl() noexcept override;
 
-			gsdk::IServerNetworkable *Create(const char *classname) override;
+			inline gsdk::IServerNetworkable *Create(const char *classname) override
+			{ return create(classname, size); }
+
 			void Destroy(gsdk::IServerNetworkable *net) override;
 			size_t GetEntitySize() override;
+
+			gsdk::IServerNetworkable *create(std::string_view classname, std::size_t size_) noexcept;
 
 			gsdk::IServerNetworkable *script_create(std::string_view classname) noexcept
 			{
@@ -1188,7 +1193,24 @@ namespace vmod
 					return nullptr;
 				}
 
-				return Create(classname.data());
+				return create(classname, size);
+			}
+
+			gsdk::IServerNetworkable *script_create_sized(std::string_view classname, std::size_t size_) noexcept
+			{
+				gsdk::IScriptVM *vm{::vmod::vmod.vm()};
+
+				if(classname.empty()) {
+					vm->RaiseException("vmod: invalid classname");
+					return nullptr;
+				}
+
+				if(size_ == 0 || size_ == static_cast<std::size_t>(-1) || size_ < size) {
+					vm->RaiseException("vmod: invalid size");
+					return nullptr;
+				}
+
+				return create(classname, size_);
 			}
 
 			inline std::size_t script_size() noexcept
@@ -1253,6 +1275,11 @@ namespace vmod
 				return nullptr;
 			}
 
+			script_factory_impl *impl{dynamic_cast<script_factory_impl *>(factory)};
+			if(impl) {
+				return impl->instance;
+			}
+
 			script_factory *sfac{new script_factory};
 
 			gsdk::HSCRIPT factory_instance{vm->RegisterInstance(&script_factory_desc, sfac)};
@@ -1277,6 +1304,11 @@ namespace vmod
 
 			if(name.empty()) {
 				vm->RaiseException("vmod: invalid name");
+				return nullptr;
+			}
+
+			if(size == 0 || size == static_cast<std::size_t>(-1)) {
+				vm->RaiseException("vmod: invalid size");
 				return nullptr;
 			}
 
@@ -1365,16 +1397,20 @@ namespace vmod
 		}
 	}
 
-	gsdk::IServerNetworkable *entities_singleton::script_factory_impl::Create(const char *classname)
+	gsdk::IServerNetworkable *entities_singleton::script_factory_impl::create(std::string_view classname, std::size_t size_) noexcept
 	{
 		if(func && func != gsdk::INVALID_HSCRIPT) {
 			gsdk::IScriptVM *vm{vmod.vm()};
 
 			gsdk::HSCRIPT pl_scope{owner_scope()};
 
-			script_variant_t args[]{instance, classname};
+			std::vector<script_variant_t> args;
+			args.emplace_back(instance);
+			args.emplace_back(size_);
+			args.emplace_back(classname);
+
 			script_variant_t ret_var;
-			if(vm->ExecuteFunction(func, args, std::size(args), &ret_var, pl_scope, true) == gsdk::SCRIPT_ERROR) {
+			if(vm->ExecuteFunction(func, args.data(), static_cast<int>(args.size()), &ret_var, pl_scope, true) == gsdk::SCRIPT_ERROR) {
 				return nullptr;
 			}
 
@@ -1386,7 +1422,9 @@ namespace vmod
 
 	void entities_singleton::script_factory_impl::Destroy(gsdk::IServerNetworkable *net)
 	{
-
+		if(net) {
+			net->Release();
+		}
 	}
 
 	size_t entities_singleton::script_factory_impl::GetEntitySize()
@@ -1421,6 +1459,7 @@ namespace vmod
 			return false;
 		}
 
+		script_factory_impl_desc.func(&script_factory_impl::script_create_sized, "script_create_sized"sv, "create_sized"sv);
 		script_factory_impl_desc.func(&script_factory_impl::script_create, "script_create"sv, "create"sv);
 		script_factory_impl_desc.func(&script_factory_impl::script_size, "script_size"sv, "size"sv);
 		script_factory_impl_desc.func(&script_factory_impl::script_delete, "script_delete"sv, "free"sv);
@@ -1755,6 +1794,7 @@ namespace vmod
 		return ret;
 	}
 
+#if GSDK_ENGINE == GSDK_ENGINE_TF2
 	static gsdk::SpewOutputFunc_t old_spew;
 	static gsdk::SpewRetval_t new_spew(gsdk::SpewType_t type, const char *str)
 	{
@@ -1813,6 +1853,7 @@ namespace vmod
 
 		return ret;
 	}
+#endif
 
 	static bool vscript_server_init_called;
 
@@ -2136,6 +2177,7 @@ namespace vmod
 		}
 
 		std::filesystem::path exe_filename;
+		std::filesystem::path bin_folder;
 
 		{
 			char exe[PATH_MAX];
@@ -2143,42 +2185,72 @@ namespace vmod
 			exe[len] = '\0';
 
 			exe_filename = exe;
+
+			bin_folder = exe_filename.parent_path();
+			bin_folder /= "bin"sv;
+
 			exe_filename = exe_filename.filename();
 			exe_filename.replace_extension();
+
+			if(exe_filename == "portal2_linux"sv) {
+				bin_folder /= "linux32"sv;
+			}
 		}
 
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || \
+		GSDK_ENGINE == GSDK_ENGINE_L4D2
+		if(exe_filename != "hl2_linux"sv && exe_filename != "srcds_linux"sv) {
+			std::cout << "\033[0;31m"sv << "vmod: unsupported exe filename: '"sv << exe_filename << "'\n"sv << "\033[0m"sv;
+			return false;
+		}
+	#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2
+		if(exe_filename != "portal2_linux"sv) {
+			std::cout << "\033[0;31m"sv << "vmod: unsupported exe filename: '"sv << exe_filename << "'\n"sv << "\033[0m"sv;
+			return false;
+		}
+	#else
+		#error
+	#endif
+
 		std::string_view launcher_lib_name;
-		if(exe_filename == "hl2_linux"sv) {
-			launcher_lib_name = "bin/launcher.so"sv;
+		if(exe_filename == "hl2_linux"sv ||
+			exe_filename == "portal2_linux"sv) {
+			launcher_lib_name = "launcher.so"sv;
 		} else if(exe_filename == "srcds_linux"sv) {
-			launcher_lib_name = "bin/dedicated_srv.so"sv;
+			launcher_lib_name = "dedicated_srv.so"sv;
 		} else {
 			std::cout << "\033[0;31m"sv << "vmod: unsupported exe filename: '"sv << exe_filename << "'\n"sv << "\033[0m"sv;
 			return false;
 		}
 
-		if(!launcher_lib.load(launcher_lib_name)) {
+		if(!launcher_lib.load(bin_folder/launcher_lib_name)) {
 			std::cout << "\033[0;31m"sv << "vmod: failed to open launcher library: '"sv << launcher_lib.error_string() << "'\n"sv << "\033[0m"sv;
 			return false;
 		}
 
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		old_spew = GetSpewOutputFunc();
 		SpewOutputFunc(new_spew);
+	#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2 || \
+			GSDK_ENGINE == GSDK_ENGINE_L4D2
+		//TODO!!!
+		//LoggingSystem
+	#endif
 
-		std::string_view engine_lib_name{"bin/engine.so"sv};
+		std::string_view engine_lib_name{"engine.so"sv};
 		if(dedicated) {
-			engine_lib_name = "bin/engine_srv.so"sv;
+			engine_lib_name = "engine_srv.so"sv;
 		}
-		if(!engine_lib.load(engine_lib_name)) {
+		if(!engine_lib.load(bin_folder/engine_lib_name)) {
 			error("vmod: failed to open engine library: '%s'\n", engine_lib.error_string().c_str());
 			return false;
 		}
 
-		std::string_view vstdlib_lib_name{"bin/libvstdlib.so"sv};
+		std::string_view vstdlib_lib_name{"libvstdlib.so"sv};
 		if(sv_engine->IsDedicatedServer()) {
-			vstdlib_lib_name = "bin/libvstdlib_srv.so"sv;
+			vstdlib_lib_name = "libvstdlib_srv.so"sv;
 		}
-		if(!vstdlib_lib.load(vstdlib_lib_name)) {
+		if(!vstdlib_lib.load(bin_folder/vstdlib_lib_name)) {
 			error("vmod: failed to open vstdlib library: %s\n"sv, vstdlib_lib.error_string().c_str());
 			return false;
 		}
@@ -2207,10 +2279,11 @@ namespace vmod
 		base_script_path.replace_extension(scripts_extension);
 
 		std::filesystem::path server_lib_name{game_dir_};
+		server_lib_name /= "bin"sv;
 		if(sv_engine->IsDedicatedServer()) {
-			server_lib_name /= "bin/server_srv.so";
+			server_lib_name /= "server_srv.so";
 		} else {
-			server_lib_name /= "bin/server.so";
+			server_lib_name /= "server.so";
 		}
 		if(!server_lib.load(server_lib_name)) {
 			error("vmod: failed to open server library: '%s'\n"sv, server_lib.error_string().c_str());
@@ -2292,11 +2365,11 @@ namespace vmod
 			return false;
 		}
 
-		std::string_view vscript_lib_name{"bin/vscript.so"sv};
+		std::string_view vscript_lib_name{"vscript.so"sv};
 		if(sv_engine->IsDedicatedServer()) {
-			vscript_lib_name = "bin/vscript_srv.so"sv;
+			vscript_lib_name = "vscript_srv.so"sv;
 		}
-		if(!vscript_lib.load(vscript_lib_name)) {
+		if(!vscript_lib.load(bin_folder/vscript_lib_name)) {
 			error("vmod: failed to open vscript library: '%s'\n"sv, vscript_lib.error_string().c_str());
 			return false;
 		}
@@ -3862,9 +3935,11 @@ namespace vmod
 			}
 		}
 
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		if(old_spew) {
 			SpewOutputFunc(old_spew);
 		}
+	#endif
 	}
 }
 

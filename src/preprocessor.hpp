@@ -35,5 +35,7 @@ namespace vmod
 
 		std::vector<std::filesystem::path> *curr_incs;
 		const std::filesystem::path *curr_path;
+
+		bool initialized;
 	};
 }

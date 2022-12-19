@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../tier1/interface.hpp"
+#include "../tier0/dbg.hpp"
 #include <string_view>
 
 namespace gsdk
@@ -16,7 +17,6 @@ namespace gsdk
 	class IConVar;
 	using FnChangeCallback_t = void(*)(IConVar *, const char *, float);
 	class ConCommand;
-	struct Color;
 	class CCommand;
 	using FnCommandCallbackVoid_t = void(*)();
 	using FnCommandCallback_t = void(*)(const CCommand &);

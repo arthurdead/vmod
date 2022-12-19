@@ -1,1 +1,2 @@
-option('srcds', type: 'string')
+option('engine_dir', type: 'string')
+option('game', type: 'string')

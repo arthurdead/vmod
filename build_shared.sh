@@ -22,13 +22,13 @@ fi
 
 export CPP=/usr/bin/cpp
 
-srcds='/sv/tf2'
-
 clear
 
-if [[ -d 'builddir' ]]; then
-	if [[ ! -f 'builddir/build.ninja' ]]; then
-		rm -rf 'builddir'
+builddir='builddir_'$game
+
+if [[ -d $builddir ]]; then
+	if [[ ! -f $builddir'/build.ninja' ]]; then
+		rm -rf $builddir
 	fi
 fi
 
@@ -39,24 +39,24 @@ if [[ ! -f 'subprojects/libyaml.wrap' ]]; then
 	fi
 fi
 
-if [[ ! -d 'builddir' ]]; then
-	meson setup --backend=ninja --cross-file $script_dir'/x86-linux-gnu' -Dsrcds=$srcds 'builddir'
+if [[ ! -d $builddir ]]; then
+	meson setup --backend=ninja --cross-file $script_dir'/x86-linux-gnu' -Dengine_dir="$engine_dir" -Dgame=$game $builddir
 	if [[ $? != 0 ]]; then
 		exit 1
 	fi
 fi
 
-if [[ ! -d 'builddir' ]]; then
+if [[ ! -d $builddir ]]; then
 	echo 'no builddir'
 	exit 1
 fi
 
-samu -j8 -C'builddir' -f'build.ninja'
+samu -j8 -C$builddir -f'build.ninja'
 if [[ $? != 0 ]]; then
 	exit 1
 fi
 
-meson install -C'builddir' --no-rebuild --skip-subprojects='libyaml'
+meson install -C$builddir --no-rebuild --skip-subprojects='libyaml'
 if [[ $? != 0 ]]; then
 	exit 1
 fi

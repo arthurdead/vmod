@@ -37,27 +37,81 @@ namespace vmod
 
 	template <typename ...Args>
 	inline void print(std::string_view fmt, Args &&...args) noexcept
-	{ ConColorMsg(0, print_clr, fmt.data(), std::forward<Args>(args)...); }
+	{
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		ConColorMsg(0, print_clr, fmt.data(), std::forward<Args>(args)...);
+	#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2 || \
+			GSDK_ENGINE == GSDK_ENGINE_L4D2
+		ConColorMsg(print_clr, fmt.data(), std::forward<Args>(args)...);
+	#else
+		#error
+	#endif
+	}
 
 	template <typename ...Args>
 	inline void success(std::string_view fmt, Args &&...args) noexcept
-	{ ConColorMsg(0, success_clr, fmt.data(), std::forward<Args>(args)...); }
+	{
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		ConColorMsg(0, success_clr, fmt.data(), std::forward<Args>(args)...);
+	#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2 || \
+			GSDK_ENGINE == GSDK_ENGINE_L4D2
+		ConColorMsg(success_clr, fmt.data(), std::forward<Args>(args)...);
+	#else
+		#error
+	#endif
+	}
 
 	template <typename ...Args>
 	inline void info(std::string_view fmt, Args &&...args) noexcept
-	{ ConColorMsg(0, info_clr, fmt.data(), std::forward<Args>(args)...); }
+	{
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		ConColorMsg(0, info_clr, fmt.data(), std::forward<Args>(args)...);
+	#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2 || \
+			GSDK_ENGINE == GSDK_ENGINE_L4D2
+		ConColorMsg(info_clr, fmt.data(), std::forward<Args>(args)...);
+	#else
+		#error
+	#endif
+	}
 
 	template <typename ...Args>
 	inline void remark(std::string_view fmt, Args &&...args) noexcept
-	{ ConColorMsg(0, remark_clr, fmt.data(), std::forward<Args>(args)...); }
+	{
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		ConColorMsg(0, remark_clr, fmt.data(), std::forward<Args>(args)...);
+	#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2 || \
+			GSDK_ENGINE == GSDK_ENGINE_L4D2
+		ConColorMsg(remark_clr, fmt.data(), std::forward<Args>(args)...);
+	#else
+		#error
+	#endif
+	}
 
 	template <typename ...Args>
 	inline void warning(std::string_view fmt, Args &&...args) noexcept
-	{ ConColorMsg(0, warning_clr, fmt.data(), std::forward<Args>(args)...); }
+	{
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		ConColorMsg(0, warning_clr, fmt.data(), std::forward<Args>(args)...);
+	#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2 || \
+			GSDK_ENGINE == GSDK_ENGINE_L4D2
+		ConColorMsg(warning_clr, fmt.data(), std::forward<Args>(args)...);
+	#else
+		#error
+	#endif
+	}
 
 	template <typename ...Args>
 	inline void error(std::string_view fmt, Args &&...args) noexcept
-	{ ConColorMsg(0, error_clr, fmt.data(), std::forward<Args>(args)...); }
+	{
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		ConColorMsg(0, error_clr, fmt.data(), std::forward<Args>(args)...);
+	#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2 || \
+			GSDK_ENGINE == GSDK_ENGINE_L4D2
+		ConColorMsg(error_clr, fmt.data(), std::forward<Args>(args)...);
+	#else
+		#error
+	#endif
+	}
 
 	class gsdk_library
 	{
