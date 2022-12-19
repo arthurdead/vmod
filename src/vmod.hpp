@@ -128,6 +128,7 @@ namespace vmod
 		void write_enum_table(std::string &file, std::size_t depth, gsdk::HSCRIPT enum_table, write_enum_how how) const noexcept;
 		void write_mem_docs(const std::filesystem::path &dir) const noexcept;
 		void write_ffi_docs(const std::filesystem::path &dir) const noexcept;
+		void write_ent_docs(const std::filesystem::path &dir) const noexcept;
 
 		void load_plugins(const std::filesystem::path &dir) noexcept;
 

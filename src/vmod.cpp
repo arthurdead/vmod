@@ -1179,6 +1179,18 @@ namespace vmod
 			void Destroy(gsdk::IServerNetworkable *net) override;
 			size_t GetEntitySize() override;
 
+			gsdk::IServerNetworkable *script_create(std::string_view classname) noexcept
+			{
+				gsdk::IScriptVM *vm{::vmod::vmod.vm()};
+
+				if(classname.empty()) {
+					vm->RaiseException("vmod: invalid classname");
+					return nullptr;
+				}
+
+				return Create(classname.data());
+			}
+
 			inline std::size_t script_size() noexcept
 			{ return GetEntitySize(); }
 
@@ -1409,8 +1421,11 @@ namespace vmod
 			return false;
 		}
 
+		script_factory_impl_desc.func(&script_factory_impl::script_create, "script_create"sv, "create"sv);
 		script_factory_impl_desc.func(&script_factory_impl::script_size, "script_size"sv, "size"sv);
 		script_factory_impl_desc.func(&script_factory_impl::script_delete, "script_delete"sv, "free"sv);
+		script_factory_impl_desc.dtor();
+		script_factory_impl_desc.doc_class_name("entity_factory_impl"sv);
 
 		if(!vm->RegisterClass(&script_factory_impl_desc)) {
 			error("vmod: failed to register entity factory impl script class\n"sv);
@@ -1420,6 +1435,8 @@ namespace vmod
 		script_factory_desc.func(&script_factory::script_create, "script_create"sv, "create"sv);
 		script_factory_desc.func(&script_factory::script_size, "script_size"sv, "size"sv);
 		script_factory_desc.func(&script_factory::script_delete, "script_delete"sv, "free"sv);
+		script_factory_desc.dtor();
+		script_factory_desc.doc_class_name("entity_factory_ref"sv);
 
 		if(!vm->RegisterClass(&script_factory_desc)) {
 			error("vmod: failed to register entity factory script class\n"sv);
@@ -3457,6 +3474,33 @@ namespace vmod
 		write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
 	}
 
+	void vmod::write_ent_docs(const std::filesystem::path &dir) const noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		std::string file;
+
+		add_gen_date(file);
+
+		file += "namespace ent\n{\n"sv;
+
+		write_class(&entities_singleton::script_factory_impl_desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		write_class(&entities_singleton::script_factory_desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		write_class(&entities_singleton_desc, false, 1, file, false);
+
+		file += '}';
+
+		std::filesystem::path doc_path{dir};
+		doc_path /= "ent"sv;
+		doc_path.replace_extension(".txt"sv);
+
+		write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+	}
+
 	void vmod::write_vmod_docs(const std::filesystem::path &dir) const noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -3507,8 +3551,12 @@ namespace vmod
 		write_mem_docs(dir);
 
 		ident(file, 1);
-		file += "namespace strtables;\n"sv;
+		file += "namespace strtables;\n\n"sv;
 		write_strtables_docs(dir);
+
+		ident(file, 1);
+		file += "namespace ent;\n"sv;
+		write_ent_docs(dir);
 
 		file += '}';
 
