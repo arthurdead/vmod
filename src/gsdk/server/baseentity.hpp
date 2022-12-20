@@ -14,6 +14,7 @@ namespace gsdk
 	struct edict_t;
 	class ServerClass;
 	struct PVSInfo_t;
+	class SendTable;
 
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
@@ -57,6 +58,16 @@ namespace gsdk
 	};
 
 	extern IScriptVM *g_pScriptVM;
+
+	class ServerClass
+	{
+	public:
+		const char *m_pNetworkName;
+		SendTable *m_pTable;
+		ServerClass *m_pNext;
+		int m_ClassID;
+		int m_InstanceBaselineIndex;
+	};
 
 	class CBaseEntity : public IServerEntity
 	{

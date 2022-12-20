@@ -220,6 +220,7 @@ namespace vmod
 		}
 
 		switch(component->type) {
+			case DEMANGLE_COMPONENT_QUAL_NAME:
 			case DEMANGLE_COMPONENT_VTABLE:
 			case DEMANGLE_COMPONENT_LOCAL_NAME:
 			case DEMANGLE_COMPONENT_NAME:
@@ -352,6 +353,67 @@ namespace vmod
 				name_it = global_qual.names.emplace(std::move(name_unmangled), std::move(info)).first;
 				qual_it = qualifications.end();
 				return true;
+			}
+			case DEMANGLE_COMPONENT_QUAL_NAME: {
+				switch(component->u.s_binary.right->type) {
+					case DEMANGLE_COMPONENT_NAME: {
+						switch(component->u.s_binary.left->type) {
+							case DEMANGLE_COMPONENT_NAME: {
+								unmangled_buffer = cplus_demangle_print(base_demangle_flags, component->u.s_binary.left, guessed_name_length, &allocated);
+								if(!unmangled_buffer) {
+									name_it = global_qual.names.end();
+									qual_it = qualifications.end();
+									return false;
+								}
+
+								std::string qual_name{unmangled_buffer};
+								std::free(unmangled_buffer);
+
+								if(ignored_qual(qual_name)) {
+									name_it = global_qual.names.end();
+									qual_it = qualifications.end();
+									return false;
+								}
+
+								unmangled_buffer = cplus_demangle_print(base_demangle_flags, component->u.s_binary.right, guessed_name_length, &allocated);
+								if(!unmangled_buffer) {
+									name_it = global_qual.names.end();
+									qual_it = qualifications.end();
+									return false;
+								}
+
+								std::string name{unmangled_buffer};
+								std::free(unmangled_buffer);
+
+								std::unique_ptr<qualification_info::name_info> info{new qualification_info::name_info};
+
+								auto this_qual_it{qualifications.find(qual_name)};
+								if(this_qual_it == qualifications.end()) {
+									this_qual_it = qualifications.emplace(std::move(qual_name), new class_info{}).first;
+								}
+
+								std::ptrdiff_t offset{static_cast<std::ptrdiff_t>(sym.st_value)};
+								info->offset_ = offset;
+								info->size_ = static_cast<std::size_t>(sym.st_size);
+								info->resolve(base);
+
+								name_it = this_qual_it->second->names.insert_or_assign(std::move(name), std::move(info)).first;
+								qual_it = this_qual_it;
+								return true;
+							}
+							default: {
+								name_it = global_qual.names.end();
+								qual_it = qualifications.end();
+								return false;
+							}
+						}
+					}
+					default: {
+						name_it = global_qual.names.end();
+						qual_it = qualifications.end();
+						return false;
+					}
+				}
 			}
 			case DEMANGLE_COMPONENT_TYPED_NAME: {
 				switch(component->u.s_binary.right->type) {

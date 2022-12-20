@@ -104,6 +104,10 @@ namespace vmod
 
 		bool detours() noexcept;
 
+		bool assign_entity_class_info() noexcept;
+
+		bool walk_send_tree(std::string_view path) noexcept;
+
 		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
 
 		void recreate_script_stringtables() noexcept;
@@ -130,7 +134,18 @@ namespace vmod
 		void write_ffi_docs(const std::filesystem::path &dir) const noexcept;
 		void write_ent_docs(const std::filesystem::path &dir) const noexcept;
 
-		void load_plugins(const std::filesystem::path &dir) noexcept;
+		enum class load_plugins_flags : unsigned char
+		{
+			none,
+			no_recurse,
+			src_folder
+		};
+		friend constexpr inline bool operator&(load_plugins_flags lhs, load_plugins_flags rhs) noexcept
+		{ return static_cast<bool>(static_cast<unsigned char>(lhs) & static_cast<unsigned char>(rhs)); }
+		friend constexpr inline load_plugins_flags operator|(load_plugins_flags lhs, load_plugins_flags rhs) noexcept
+		{ return static_cast<load_plugins_flags>(static_cast<unsigned char>(lhs) | static_cast<unsigned char>(rhs)); }
+
+		void load_plugins(const std::filesystem::path &dir, load_plugins_flags flags) noexcept;
 
 		bool is_map_loaded;
 		bool is_map_active;

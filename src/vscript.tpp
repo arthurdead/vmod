@@ -9,7 +9,7 @@ namespace vmod
 		m_pfnConstruct = nullptr;
 		m_pfnDestruct = nullptr;
 		pHelper = nullptr;
-		m_pNextDesc = reinterpret_cast<ScriptClassDesc_t *>(0xbebebebe);
+		m_pNextDesc = reinterpret_cast<ScriptClassDesc_t *>(uninitialized_memory);
 		m_pBaseDesc = nullptr;
 		m_pszClassname = demangle<T>().c_str();
 		m_pszScriptName = name.data();

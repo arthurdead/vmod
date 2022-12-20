@@ -35,4 +35,17 @@ namespace gsdk
 		FIELD_VECTOR2D,
 		FIELD_TYPECOUNT,
 	};
+
+	struct typedescription_t;
+
+	struct datamap_t
+	{
+		typedescription_t *dataDesc;
+		int dataNumFields;
+		const char *dataClassName;
+		datamap_t *baseMap;
+		bool chains_validated;
+		bool packed_offsets_computed;
+		int packed_size;
+	};
 }

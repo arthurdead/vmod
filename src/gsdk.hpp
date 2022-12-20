@@ -13,6 +13,7 @@
 #include "gsdk/vstdlib/convar.hpp"
 #include "gsdk/vscript/vscript.hpp"
 #include "gsdk/tier0/dbg.hpp"
+#include "gsdk/server/baseentity.hpp"
 #include "symbol_cache.hpp"
 
 namespace vmod
@@ -27,6 +28,7 @@ namespace vmod
 	extern gsdk::IServerTools *servertools;
 	extern gsdk::CEntityFactoryDictionary *entityfactorydict;
 	extern gsdk::IServerNetworkStringTableContainer *sv_stringtables;
+	extern std::unordered_map<std::string, gsdk::ServerClass *> sv_classes;
 
 	constexpr gsdk::Color print_clr{255, 255, 255, 255};
 	constexpr gsdk::Color success_clr{0, 255, 0, 255};

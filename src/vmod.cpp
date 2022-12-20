@@ -9,6 +9,7 @@
 #include "filesystem.hpp"
 #include "gsdk/server/gamerules.hpp"
 #include "gsdk/server/baseentity.hpp"
+#include "gsdk/server/datamap.hpp"
 
 #include <filesystem>
 #include <string_view>
@@ -1533,6 +1534,26 @@ namespace vmod
 		}
 	}
 
+	//TODO!!!!
+	bool vmod::walk_send_tree(std::string_view path) noexcept
+	{
+		std::size_t i{path.find('.')};
+		if(i == std::string_view::npos) {
+			return false;
+		}
+
+		std::string classname{path.substr(0, i)};
+
+		auto sv_class_it{sv_classes.find(classname)};
+		if(sv_class_it == sv_classes.end()) {
+			return false;
+		}
+
+		gsdk::ServerClass *sv_class{sv_class_it->second};
+
+		return true;
+	}
+
 	bool vmod::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -1770,6 +1791,10 @@ namespace vmod
 	static void(gsdk::IScriptVM::*RegisterFunctionGuts)(gsdk::ScriptFunctionBinding_t *, gsdk::ScriptClassDesc_t *);
 	static SQRESULT(*sq_setparamscheck)(HSQUIRRELVM, SQInteger, const SQChar *);
 	static gsdk::ScriptClassDesc_t **sv_classdesc_pHead;
+	static std::unordered_map<std::string, gsdk::ScriptClassDesc_t *> sv_script_class_descs;
+	static std::unordered_map<std::string, gsdk::datamap_t *> sv_datamaps;
+	//TODO!!! g_SendTables
+	//static std::unordered_map<std::string, gsdk::SendTable *> sv_sendtables;
 
 	static bool in_vscript_server_init;
 	static bool in_vscript_print;
@@ -2415,15 +2440,18 @@ namespace vmod
 				return false;
 			}
 
+			//TODO!!! make this a cmd/cvar/cmdline opt
+		#if 0
 			info("vmod: squirrel info:\n");
 			info("vmod:   vmod:\n");
 			info("vmod:    SQUIRREL_VERSION: %s\n", SQUIRREL_VERSION);
 			info("vmod:    SQUIRREL_VERSION_NUMBER: %i\n", SQUIRREL_VERSION_NUMBER);
 			info("vmod:    sq_getversion: %i\n", curr_sq_ver);
 			info("vmod:   game:\n");
-			info("vmod:    _version_: %s\n", game_sq_version.m_pszString);
-			info("vmod:    _versionnumber_: %i\n", game_sq_versionnumber.m_int);
+			info("vmod:    _version_: %s\n", game_sq_version.get<std::string_view>().data());
+			info("vmod:    _versionnumber_: %i\n", game_sq_versionnumber.get<int>());
 			info("vmod:    sq_getversion: %i\n", game_sq_ver);
+		#endif
 		}
 
 		auto g_Script_init_it{vscript_global_qual.find("g_Script_init"s)};
@@ -2510,26 +2538,44 @@ namespace vmod
 
 		gsdk::ScriptClassDesc_t *tmp_desc{*sv_classdesc_pHead};
 		while(tmp_desc) {
-			if(std::strcmp(tmp_desc->m_pszClassname, "CBaseEntity") == 0) {
-				gsdk::CBaseEntity::g_pScriptDesc = tmp_desc;
-			}
-
+			sv_script_class_descs.emplace(tmp_desc->m_pszClassname, tmp_desc);
 			tmp_desc = tmp_desc->m_pNextDesc;
 		}
 
-		if(!gsdk::CBaseEntity::g_pScriptDesc) {
-			error("vmod: failed to find baseentity script class"sv);
+		for(const auto &it : sv_classes) {
+			auto sv_sym_it{sv_symbols.find(it.first)};
+			if(sv_sym_it == sv_symbols.end()) {
+				error("vmod: missing '%s' symbols\n"sv, it.first.c_str());
+				return false;
+			}
+
+			auto GetDataDescMap_it{sv_sym_it->second->find("GetDataDescMap()"s)};
+			if(GetDataDescMap_it == sv_sym_it->second->end()) {
+				continue;
+			}
+
+			using GetDataDescMap_t = gsdk::datamap_t *(gsdk::CBaseEntity::*)();
+			GetDataDescMap_t GetDataDescMap{GetDataDescMap_it->second->mfp<GetDataDescMap_t>()};
+			gsdk::datamap_t *map{(reinterpret_cast<gsdk::CBaseEntity *>(uninitialized_memory)->*GetDataDescMap)()};
+
+			sv_datamaps.emplace(it.first, map);
+		}
+
+		if(!assign_entity_class_info()) {
 			return false;
 		}
 
 		vm_->SetOutputCallback(vscript_output);
 		vm_->SetErrorCallback(vscript_error_output);
 
-		if(g_Script_init) {
-			write_file(root_dir_/"internal_scripts"sv/"init.nut"sv, g_Script_init, std::strlen(reinterpret_cast<const char *>(g_Script_init)+1));
-		}
+		//TODO!!! make this a cmd/cvar/cmdline opt
+		{
+			if(g_Script_init) {
+				write_file(root_dir_/"internal_scripts"sv/"init.nut"sv, g_Script_init, std::strlen(reinterpret_cast<const char *>(g_Script_init)+1));
+			}
 
-		write_file(root_dir_/"internal_scripts"sv/"vscript_server.nut"sv, g_Script_vscript_server, std::strlen(reinterpret_cast<const char *>(g_Script_vscript_server)+1));
+			write_file(root_dir_/"internal_scripts"sv/"vscript_server.nut"sv, g_Script_vscript_server, std::strlen(reinterpret_cast<const char *>(g_Script_vscript_server)+1));
+		}
 
 		if(!detours()) {
 			return false;
@@ -2544,7 +2590,7 @@ namespace vmod
 			return false;
 		}
 
-		(reinterpret_cast<gsdk::CTFGameRules *>(0xbebebebe)->*RegisterScriptFunctions)();
+		(reinterpret_cast<gsdk::CTFGameRules *>(uninitialized_memory)->*RegisterScriptFunctions)();
 
 		vscript_server_init_called = true;
 
@@ -2799,7 +2845,7 @@ namespace vmod
 		vmod_refresh_plugins.initialize("vmod_refresh_plugins"sv, [this](const gsdk::CCommand &) noexcept -> void {
 			vmod_unload_plugins();
 
-			load_plugins(plugins_dir);
+			load_plugins(plugins_dir, load_plugins_flags::none);
 
 			for(const auto &it : plugins) {
 				if(!*it.second) {
@@ -2818,35 +2864,83 @@ namespace vmod
 		return true;
 	}
 
-	void vmod::load_plugins(const std::filesystem::path &dir) noexcept
+	bool vmod::assign_entity_class_info() noexcept
+	{
+		using namespace std::literals::string_literals;
+		using namespace std::literals::string_view_literals;
+
+		{
+			auto CBaseEntity_desc_it{sv_script_class_descs.find("CBaseEntity"s)};
+			if(CBaseEntity_desc_it == sv_script_class_descs.end()) {
+				error("vmod: failed to find baseentity script class\n"sv);
+				return false;
+			}
+
+			gsdk::CBaseEntity::g_pScriptDesc = CBaseEntity_desc_it->second;
+		}
+
+		return true;
+	}
+
+	void vmod::load_plugins(const std::filesystem::path &dir, load_plugins_flags flags) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
+		std::filesystem::path dir_name{dir.filename()};
+
 		for(const auto &file : std::filesystem::directory_iterator{dir}) {
+			std::filesystem::path path{file.path()};
+			std::filesystem::path name{path.filename()};
+
+			if(name.native()[0] == '.') {
+				continue;
+			}
+
 			if(file.is_directory()) {
-				std::filesystem::path path{file.path()};
-				std::filesystem::path name{path.filename()};
-
-				if(name == "disabled"sv ||
-					name == "optional"sv ||
-					name == "include"sv) {
+				if(std::filesystem::exists(path/".ignored"sv)) {
 					continue;
 				}
 
-				if(name == "assets"sv) {
-					filesystem->AddSearchPath(path.c_str(), "GAME");
-					added_paths.emplace_back(std::move(path));
+				if(name == "include"sv) {
+					if(dir_name == "assets"sv) {
+						remark("vmod: include folder inside assets folder: '%s'\n"sv, path.c_str());
+					} else if(dir_name == "docs"sv) {
+						remark("vmod: include folder inside docs folder: '%s'\n"sv, path.c_str());
+					}
+					continue;
+				} else if(name == "docs"sv) {
+					if(dir_name == "assets"sv) {
+						remark("vmod: docs folder inside assets folder: '%s'\n"sv, path.c_str());
+					} else if(dir_name == "include"sv) {
+						remark("vmod: docs folder inside include folder: '%s'\n"sv, path.c_str());
+					}
+					continue;
+				} else if(name == "assets"sv) {
+					if(!(flags & load_plugins_flags::src_folder)) {
+						filesystem->AddSearchPath(path.c_str(), "GAME");
+						added_paths.emplace_back(std::move(path));
+					} else {
+						remark("vmod: assets folder inside src folder: '%s'\n"sv, path.c_str());
+					}
+					continue;
+				} else if(name == "src"sv) {
+					if(!(flags & load_plugins_flags::src_folder)) {
+						load_plugins(path, load_plugins_flags::src_folder|load_plugins_flags::no_recurse);
+					} else {
+						remark("vmod: src folder inside another src folder: '%s'\n"sv, path.c_str());
+					}
 					continue;
 				}
 
-				load_plugins(path);
+				if(!(flags & load_plugins_flags::no_recurse)) {
+					load_plugins(path, load_plugins_flags::none);
+				}
 				continue;
 			} else if(!file.is_regular_file()) {
 				continue;
 			}
 
-			std::filesystem::path path{file.path()};
-			if(path.extension() != scripts_extension) {
+			if(name.extension() != scripts_extension) {
 				continue;
 			}
 
@@ -3195,7 +3289,7 @@ namespace vmod
 
 	static std::string_view get_class_desc_name(const gsdk::ScriptClassDesc_t *desc) noexcept
 	{
-		if(desc->m_pNextDesc == reinterpret_cast<const gsdk::ScriptClassDesc_t *>(0xbebebebe)) {
+		if(desc->m_pNextDesc == reinterpret_cast<const gsdk::ScriptClassDesc_t *>(uninitialized_memory)) {
 			const extra_class_desc_t &extra{static_cast<const base_class_desc_t<empty_class> *>(desc)->extra()};
 			if(!extra.doc_class_name.empty()) {
 				return extra.doc_class_name;
@@ -3753,6 +3847,7 @@ namespace vmod
 		sv_engine->InsertServerCommand("exec vmod/load_late.cfg\n");
 		sv_engine->ServerExecute();
 
+		//TODO!!! make this a cmd/cvar/cmdline opt
 		{
 			std::filesystem::path game_docs{root_dir_/"docs"sv/"game"sv};
 			write_docs(game_docs, game_vscript_class_bindings, false);
@@ -3945,17 +4040,15 @@ namespace vmod
 
 namespace vmod
 {
-	#pragma GCC diagnostic push
-	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 	class vsp final : public gsdk::IServerPluginCallbacks
 	{
 	public:
 		inline vsp() noexcept
 		{
-			load_return = vmod.load();
+			
 		}
 
-		inline ~vsp() noexcept
+		virtual inline ~vsp() noexcept
 		{
 			if(!unloaded) {
 				vmod.unload();
@@ -3974,13 +4067,14 @@ namespace vmod
 		bool load_return;
 		bool unloaded;
 	};
-	#pragma GCC diagnostic pop
 
 	const char *vsp::GetPluginDescription()
 	{ return "vmod"; }
 
 	bool vsp::Load(gsdk::CreateInterfaceFn, gsdk::CreateInterfaceFn)
 	{
+		load_return = vmod.load();
+
 		if(!load_return) {
 			return false;
 		}
@@ -4010,13 +4104,9 @@ namespace vmod
 	void vsp::LevelShutdown()
 	{ vmod.map_unloaded(); }
 
-	static vsp vsp;
+	static class vsp vsp;
 }
 
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wmissing-prototypes"
-#endif
 extern "C" __attribute__((__visibility__("default"))) void * __attribute__((__cdecl__)) CreateInterface(const char *name, int *status)
 {
 	using namespace gsdk;
@@ -4033,6 +4123,3 @@ extern "C" __attribute__((__visibility__("default"))) void * __attribute__((__cd
 		return nullptr;
 	}
 }
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif

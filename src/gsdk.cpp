@@ -14,6 +14,7 @@ namespace vmod
 	gsdk::IServerTools *servertools;
 	gsdk::CEntityFactoryDictionary *entityfactorydict;
 	gsdk::IServerNetworkStringTableContainer *sv_stringtables;
+	std::unordered_map<std::string, gsdk::ServerClass *> sv_classes;
 
 	bool gsdk_library::load(const std::filesystem::path &path) noexcept
 	{
@@ -151,6 +152,13 @@ namespace vmod
 		if(!syms.load(path, base())) {
 			err_str = syms.error_string();
 			return false;
+		}
+
+		gsdk::ServerClass *temp_classes{gamedll->GetAllServerClasses()};
+		while(temp_classes) {
+			std::string name{temp_classes->m_pNetworkName};
+			sv_classes.emplace(std::move(name), temp_classes);
+			temp_classes = temp_classes->m_pNext;
 		}
 
 		return true;

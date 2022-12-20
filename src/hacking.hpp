@@ -51,6 +51,8 @@ namespace __cxxabiv1
 
 namespace vmod
 {
+	constexpr std::uintptr_t uninitialized_memory{0xbebebebe};
+
 	inline __attribute__((__always_inline__)) void debugtrap() noexcept
 	{
 	#ifdef __clang__
