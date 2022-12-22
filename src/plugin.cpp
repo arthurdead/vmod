@@ -8,6 +8,7 @@
 namespace vmod
 {
 	class_desc_t<plugin> plugin_desc{"__vmod_plugin_class"};
+	class_desc_t<plugin::owned_instance> plugin::owned_instance_desc{"__vmod_plugin_owned_instance_class"};
 
 	plugin *plugin::assumed_currently_running;
 	plugin *plugin::scope_assume_current::old_running;
@@ -73,12 +74,23 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
+		gsdk::IScriptVM *vm{vmod.vm()};
+
 		plugin_desc.func(&plugin::script_lookup_function, "script_lookup_function"sv, "lookup_function"sv);
 		plugin_desc.func(&plugin::script_lookup_value, "script_lookup_value"sv, "lookup_value"sv);
 		plugin_desc.doc_class_name("plugin"sv);
 
-		if(!vmod.vm()->RegisterClass(&plugin_desc)) {
+		if(!vm->RegisterClass(&plugin_desc)) {
 			error("vmod: failed to register plugin script class\n"sv);
+			return false;
+		}
+
+		owned_instance_desc.func(&owned_instance::script_delete, "script_delete"sv, "free"sv);
+		owned_instance_desc.dtor();
+		owned_instance_desc.doc_class_name("plugin_owned_instance"sv);
+
+		if(!vm->RegisterClass(&owned_instance_desc)) {
+			error("vmod: failed to register plugin owned instance script class\n"sv);
 			return false;
 		}
 
@@ -98,7 +110,9 @@ namespace vmod
 		private_scope_{gsdk::INVALID_HSCRIPT},
 		public_scope_{gsdk::INVALID_HSCRIPT},
 		functions_table{gsdk::INVALID_HSCRIPT},
-		values_table{gsdk::INVALID_HSCRIPT}
+		values_table{gsdk::INVALID_HSCRIPT},
+		running{false},
+		deleting_instances{false}
 	{
 		//TODO!!!! handle nested path
 		std::filesystem::path filename{path.filename()};
@@ -117,45 +131,6 @@ namespace vmod
 		if(std::isdigit(name[0])) {
 			name.insert(name.begin(), '_');
 		}
-	}
-
-	plugin &plugin::operator=(plugin &&other) noexcept
-	{
-		path = std::move(other.path);
-
-		script = other.script;
-		other.script = gsdk::INVALID_HSCRIPT;
-
-		private_scope_ = other.private_scope_;
-		other.private_scope_ = gsdk::INVALID_HSCRIPT;
-
-		public_scope_ = other.public_scope_;
-		other.public_scope_ = gsdk::INVALID_HSCRIPT;
-
-		functions_table = other.functions_table;
-		other.functions_table = gsdk::INVALID_HSCRIPT;
-
-		values_table = other.values_table;
-		other.values_table = gsdk::INVALID_HSCRIPT;
-
-		instance_ = other.instance_;
-		other.instance_ = gsdk::INVALID_HSCRIPT;
-
-		inotify_fd = other.inotify_fd;
-		other.inotify_fd = -1;
-
-		watch_ds = std::move(other.watch_ds);
-
-		map_active = std::move(other.map_active);
-		map_loaded = std::move(other.map_loaded);
-		map_unloaded = std::move(other.map_unloaded);
-		plugin_loaded = std::move(other.plugin_loaded);
-		plugin_unloaded = std::move(other.plugin_unloaded);
-		all_plugins_loaded = std::move(other.all_plugins_loaded);
-		string_tables_created = std::move(other.string_tables_created);
-		game_frame_ = std::move(other.game_frame_);
-
-		return *this;
 	}
 
 	plugin::load_status plugin::load() noexcept
@@ -380,10 +355,11 @@ namespace vmod
 
 		if(!owned_instances.empty()) {
 			deleting_instances = true;
-			for(owned_instance *it : owned_instances) {
-				it->plugin_unloaded();
+			auto it{owned_instances.begin()};
+			while(it != owned_instances.end()) {
+				(*it)->plugin_unloaded();
+				owned_instances.erase(it);
 			}
-			owned_instances.clear();
 			deleting_instances = false;
 		}
 

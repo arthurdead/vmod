@@ -46,7 +46,8 @@ if compiler.get_id() == 'clang'
 		'-Wno-error=missing-variable-declarations',
 		'-Wno-error=old-style-cast',
 		'-Wno-error=weak-vtables',
-		'-Wno-error=cast-function-type'
+		'-Wno-error=cast-function-type',
+		'-Wno-error=unused-but-set-variable'
 	]
 
 	cpp_args += [
@@ -238,6 +239,7 @@ lib = shared_library('vmod',
 		join_paths('src','ffi.cpp'),
 		join_paths('src','hacking.cpp'),
 		join_paths('src','symbol_cache.cpp'),
+		join_paths('src','gsdk','server','server.cpp'),
 		join_paths('src','gsdk','server','baseentity.cpp'),
 		join_paths('src','gsdk','vscript','vscript.cpp'),
 		join_paths('src','gsdk','vstdlib','convar.cpp'),

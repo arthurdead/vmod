@@ -6,7 +6,7 @@ namespace gsdk
 {
 	enum SendPropType : int
 	{
-		DPT_Int=0,
+		DPT_Int,
 		DPT_Float,
 		DPT_Vector,
 		DPT_VectorXY,

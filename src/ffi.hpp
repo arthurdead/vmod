@@ -22,59 +22,16 @@
 
 namespace vmod
 {
-	template <>
-	constexpr inline gsdk::ScriptDataType_t type_to_field<ffi_abi>() noexcept
-	{ return gsdk::FIELD_INTEGER; }
-	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, ffi_abi value) noexcept
-	{ var.m_int = static_cast<int>(value); }
-	template <>
-	inline ffi_abi variant_to_value<ffi_abi>(const gsdk::ScriptVariant_t &var) noexcept
-	{
-		switch(var.m_type) {
-			case gsdk::FIELD_INTEGER:
-			return static_cast<ffi_abi>(var.m_int);
-		}
+	extern ffi_type ffi_type_vector;
+	extern ffi_type ffi_type_qangle;
+	extern ffi_type ffi_type_color32;
+	extern ffi_type ffi_type_ehandle;
+	extern ffi_type ffi_type_bool;
+	extern ffi_type ffi_type_cstr;
 
-		return {};
-	}
-
-	template <>
-	constexpr inline gsdk::ScriptDataType_t type_to_field<ffi_type *>() noexcept
-	{
-	#if __SIZEOF_POINTER__ == __SIZEOF_INT__
-		return gsdk::FIELD_UINT;
-	#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
-		return gsdk::FIELD_UINT64;
-	#else
-		#error
-	#endif
-	}
-	inline void initialize_variant_value(gsdk::ScriptVariant_t &var, ffi_type *value) noexcept
-	{
-		if(value) {
-			var.m_ptr = static_cast<void *>(value);
-		} else {
-			var.m_type = gsdk::FIELD_VOID;
-			var.m_ptr = nullptr;
-		}
-	}
-	template <>
-	inline ffi_type *variant_to_value<ffi_type *>(const gsdk::ScriptVariant_t &var) noexcept
-	{
-		switch(var.m_type) {
-			case gsdk::FIELD_INTEGER:
-		#if __SIZEOF_POINTER__ == __SIZEOF_INT__
-			case gsdk::FIELD_UINT:
-		#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
-			case gsdk::FIELD_UINT64:
-		#else
-			#error
-		#endif
-			return static_cast<ffi_type *>(var.m_ptr);
-		}
-
-		return {};
-	}
+	extern void script_var_to_ptr(ffi_type *type_ptr, void *arg_ptr, const script_variant_t &arg_var) noexcept;
+	extern void ptr_to_script_var(ffi_type *type_ptr, void *arg_ptr, script_variant_t &arg_var) noexcept;
+	extern ffi_type *ffi_type_id_to_ptr(int id) noexcept;
 
 	extern bool ffi_bindings() noexcept;
 	extern void ffi_unbindings() noexcept;
@@ -204,9 +161,6 @@ namespace vmod
 
 		void *script_release() noexcept;
 
-		inline void script_delete() noexcept
-		{ delete this; }
-
 		inline void *script_ptr() noexcept
 		{ return ptr; }
 
@@ -231,6 +185,9 @@ namespace vmod
 		~cif() noexcept;
 
 		bool initialize(ffi_abi abi) noexcept;
+
+		inline ffi_cif *operator&() noexcept
+		{ return &cif_; }
 
 		ffi_cif cif_;
 
@@ -285,8 +242,6 @@ namespace vmod
 		{ enable(); }
 		inline void script_disable() noexcept
 		{ disable(); }
-		inline void script_delete() noexcept
-		{ delete this; }
 
 		struct scope_enable final {
 			inline scope_enable(dynamic_detour &det_) noexcept
@@ -340,9 +295,6 @@ namespace vmod
 
 		void script_set_func(generic_func_t func_) noexcept;
 		void script_set_mfp(generic_mfp_t func_) noexcept;
-
-		inline void script_delete() noexcept
-		{ delete this; }
 
 		union {
 			generic_func_t func;

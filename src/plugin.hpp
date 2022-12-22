@@ -16,10 +16,8 @@ namespace vmod
 		plugin() = delete;
 		plugin(const plugin &) = delete;
 		plugin &operator=(const plugin &) = delete;
-
-		inline plugin(plugin &&other) noexcept
-		{ operator=(std::move(other)); }
-		plugin &operator=(plugin &&other) noexcept;
+		plugin(plugin &&other) = delete;
+		plugin &operator=(plugin &&other) = delete;
 
 		plugin(std::filesystem::path &&path_) noexcept;
 		inline plugin(const std::filesystem::path &path_) noexcept
@@ -62,11 +60,9 @@ namespace vmod
 			inline function &operator=(function &&other) noexcept
 			{
 				scope = other.scope;
-				other.scope = gsdk::INVALID_HSCRIPT;
 				func = other.func;
 				other.func = gsdk::INVALID_HSCRIPT;
 				owner = other.owner;
-				other.owner = nullptr;
 				return *this;
 			}
 
@@ -131,8 +127,17 @@ namespace vmod
 		class owned_instance
 		{
 		public:
+			inline owned_instance() noexcept
+				: owner_{nullptr}
+			{
+			}
+			owned_instance(const owned_instance &) = delete;
+			owned_instance &operator=(const owned_instance &) = delete;
+			owned_instance(owned_instance &&) noexcept = delete;
+			owned_instance &operator=(owned_instance &&) = delete;
+
 			virtual ~owned_instance() noexcept;
-			virtual void plugin_unloaded() noexcept;
+			virtual void plugin_unloaded() noexcept final;
 
 			void set_plugin() noexcept;
 
@@ -143,8 +148,15 @@ namespace vmod
 			{ return owner_ ? owner_->private_scope_ : nullptr; }
 
 		private:
+			friend class plugin;
+
+			inline void script_delete() noexcept
+			{ delete this; }
+
 			plugin *owner_;
 		};
+
+		static class_desc_t<owned_instance> owned_instance_desc;
 
 	private:
 		static bool bindings() noexcept;
@@ -157,7 +169,9 @@ namespace vmod
 			inline scope_assume_current(plugin *pl_) noexcept
 			{
 				old_running = assumed_currently_running;
-				assumed_currently_running = pl_;
+				if(pl_) {
+					assumed_currently_running = pl_;
+				}
 			}
 			inline ~scope_assume_current() noexcept
 			{ assumed_currently_running = old_running; }

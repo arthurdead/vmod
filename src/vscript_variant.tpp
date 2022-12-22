@@ -869,8 +869,10 @@ namespace vmod
 
 		if constexpr(variant_to_value_specialized<T>::value) {
 			return variant_to_value<T>(temp_var);
+		} else if constexpr(std::is_pointer_v<T>) {
+			return static_cast<T>(variant_to_value<void *>(temp_var));
 		} else if constexpr(std::is_enum_v<T>) {
-			return variant_to_value<std::underlying_type_t<T>>(temp_var);
+			return static_cast<T>(variant_to_value<std::underlying_type_t<T>>(temp_var));
 		} else if constexpr(is_optional<T>::value) {
 			if(temp_var.m_type == gsdk::FIELD_VOID) {
 				return std::nullopt;
@@ -887,6 +889,8 @@ namespace vmod
 	{
 		if constexpr(type_to_field_specialized<T>::value) {
 			return type_to_field<T>();
+		} else if constexpr(std::is_pointer_v<T>) {
+			return type_to_field<void *>();
 		} else if constexpr(std::is_enum_v<T>) {
 			return type_to_field<std::underlying_type_t<T>>();
 		} else if constexpr(is_optional<T>::value) {

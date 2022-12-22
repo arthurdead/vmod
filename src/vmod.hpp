@@ -85,18 +85,31 @@ namespace vmod
 		inline bool script_are_stringtables_created() const noexcept
 		{ return are_string_tables_created; }
 
-		static void script_print(std::string_view str) noexcept
+		static inline void script_print(std::string_view str) noexcept
 		{ print("%s", str.data()); }
-		static void script_success(std::string_view str) noexcept
+		static inline void script_success(std::string_view str) noexcept
 		{ success("%s", str.data()); }
-		static void script_error(std::string_view str) noexcept
+		static inline void script_error(std::string_view str) noexcept
 		{ error("%s", str.data()); }
-		static void script_warning(std::string_view str) noexcept
+		static inline void script_warning(std::string_view str) noexcept
 		{ warning("%s", str.data()); }
-		static void script_info(std::string_view str) noexcept
+		static inline void script_info(std::string_view str) noexcept
 		{ info("%s", str.data()); }
-		static void script_remark(std::string_view str) noexcept
+		static inline void script_remark(std::string_view str) noexcept
 		{ remark("%s", str.data()); }
+
+		static inline void script_printl(std::string_view str) noexcept
+		{ print("%s\n", str.data()); }
+		static inline void script_successl(std::string_view str) noexcept
+		{ success("%s\n", str.data()); }
+		static inline void script_errorl(std::string_view str) noexcept
+		{ error("%s\n", str.data()); }
+		static inline void script_warningl(std::string_view str) noexcept
+		{ warning("%s\n", str.data()); }
+		static inline void script_infol(std::string_view str) noexcept
+		{ info("%s\n", str.data()); }
+		static inline void script_remarkl(std::string_view str) noexcept
+		{ remark("%s\n", str.data()); }
 
 		bool binding_mods() noexcept;
 		bool bindings() noexcept;
@@ -105,8 +118,6 @@ namespace vmod
 		bool detours() noexcept;
 
 		bool assign_entity_class_info() noexcept;
-
-		bool walk_send_tree(std::string_view path) noexcept;
 
 		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
 
@@ -136,9 +147,9 @@ namespace vmod
 
 		enum class load_plugins_flags : unsigned char
 		{
-			none,
-			no_recurse,
-			src_folder
+			none =             0,
+			no_recurse = (1 << 0),
+			src_folder = (1 << 1)
 		};
 		friend constexpr inline bool operator&(load_plugins_flags lhs, load_plugins_flags rhs) noexcept
 		{ return static_cast<bool>(static_cast<unsigned char>(lhs) & static_cast<unsigned char>(rhs)); }

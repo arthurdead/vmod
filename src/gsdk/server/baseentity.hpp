@@ -2,6 +2,8 @@
 
 #include "../vscript/vscript.hpp"
 #include "../string_t.hpp"
+#include "../engine/dt_send.hpp"
+#include "../engine/sv_engine.hpp"
 
 namespace gsdk
 {
@@ -78,4 +80,16 @@ namespace gsdk
 		HSCRIPT GetScriptInstance() noexcept;
 		static CBaseEntity *from_instance(HSCRIPT instance) noexcept;
 	};
+
+	class CBaseHandle
+	{
+		unsigned long m_Index{INVALID_EHANDLE_INDEX};
+	};
+
+	template <typename T>
+	class CHandle : public CBaseHandle
+	{
+	};
+
+	using EHANDLE = CHandle<CBaseEntity>;
 }

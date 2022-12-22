@@ -3,13 +3,16 @@
 #include <cstdarg>
 #include "../config.hpp"
 
-struct Color
+struct alignas(unsigned int) Color
 {
 	unsigned char r;
 	unsigned char g;
 	unsigned char b;
 	unsigned char a;
 };
+
+static_assert(sizeof(Color) == sizeof(unsigned int));
+static_assert(alignof(Color) == alignof(unsigned int));
 
 namespace gsdk
 {

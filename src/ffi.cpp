@@ -4,7 +4,57 @@
 
 namespace vmod
 {
-	static void script_var_to_ffi_ptr(ffi_type *type_ptr, void *arg_ptr, const script_variant_t &arg_var) noexcept
+	static ffi_type *ffi_type_vector_elements[3]{
+		&ffi_type_float, &ffi_type_float, &ffi_type_float
+	};
+	static ffi_type *ffi_type_qangle_elements[3]{
+		&ffi_type_float, &ffi_type_float, &ffi_type_float
+	};
+	static ffi_type *ffi_type_color32_elements[4]{
+		&ffi_type_uchar, &ffi_type_uchar, &ffi_type_uchar, &ffi_type_uchar
+	};
+	static ffi_type *ffi_type_ehandle_elements[1]{
+		&ffi_type_ulong
+	};
+
+	ffi_type ffi_type_vector{
+		sizeof(gsdk::Vector),
+		alignof(gsdk::Vector),
+		FFI_TYPE_STRUCT,
+		ffi_type_vector_elements
+	};
+	ffi_type ffi_type_qangle{
+		sizeof(gsdk::QAngle),
+		alignof(gsdk::QAngle),
+		FFI_TYPE_STRUCT,
+		ffi_type_qangle_elements
+	};
+	ffi_type ffi_type_color32{
+		sizeof(gsdk::Color),
+		alignof(gsdk::Color),
+		FFI_TYPE_STRUCT,
+		ffi_type_color32_elements
+	};
+	ffi_type ffi_type_ehandle{
+		sizeof(gsdk::EHANDLE),
+		alignof(gsdk::EHANDLE),
+		FFI_TYPE_STRUCT,
+		ffi_type_ehandle_elements
+	};
+	ffi_type ffi_type_bool{
+		sizeof(bool),
+		alignof(bool),
+		FFI_TYPE_UINT8,
+		nullptr
+	};
+	ffi_type ffi_type_cstr{
+		sizeof(const char *),
+		alignof(const char *),
+		FFI_TYPE_POINTER,
+		nullptr
+	};
+
+	void script_var_to_ptr(ffi_type *type_ptr, void *arg_ptr, const script_variant_t &arg_var) noexcept
 	{
 		switch(type_ptr->type) {
 			case FFI_TYPE_INT:
@@ -46,10 +96,13 @@ namespace vmod
 			case FFI_TYPE_POINTER:
 			*static_cast<void **>(arg_ptr) = arg_var.get<void *>();
 			break;
+			case FFI_TYPE_STRUCT: {
+				debugtrap();
+			} break;
 		}
 	}
 
-	static void ffi_ptr_to_script_var(ffi_type *type_ptr, void *arg_ptr, script_variant_t &arg_var) noexcept
+	void ptr_to_script_var(ffi_type *type_ptr, void *arg_ptr, script_variant_t &arg_var) noexcept
 	{
 		switch(type_ptr->type) {
 			case FFI_TYPE_INT:
@@ -91,10 +144,13 @@ namespace vmod
 			case FFI_TYPE_POINTER:
 			arg_var.assign<void *>(*static_cast<void **>(arg_ptr));
 			break;
+			case FFI_TYPE_STRUCT: {
+				debugtrap();
+			} break;
 		}
 	}
 
-	static ffi_type *ffi_type_id_to_ptr(int id) noexcept
+	ffi_type *ffi_type_id_to_ptr(int id) noexcept
 	{
 		switch(id) {
 			case FFI_TYPE_VOID: return &ffi_type_void;
@@ -111,6 +167,7 @@ namespace vmod
 			case FFI_TYPE_UINT64: return &ffi_type_uint64;
 			case FFI_TYPE_SINT64: return &ffi_type_sint64;
 			case FFI_TYPE_POINTER: return &ffi_type_pointer;
+			case FFI_TYPE_STRUCT: return nullptr;
 			default: return nullptr;
 		}
 	}
@@ -284,7 +341,7 @@ namespace vmod
 		ffi_type *type_ptr{type_id.get<ffi_type *>()};
 
 		script_variant_t ret_var;
-		ffi_ptr_to_script_var(type_ptr, ptr, ret_var);
+		ptr_to_script_var(type_ptr, ptr, ret_var);
 		return ret_var;
 	}
 
@@ -315,7 +372,7 @@ namespace vmod
 
 		ffi_type *type_ptr{type_id.get<ffi_type *>()};
 
-		script_var_to_ffi_ptr(type_ptr, ptr, arg_var);
+		script_var_to_ptr(type_ptr, ptr, arg_var);
 	}
 
 	bool memory_singleton::register_type(ffi_type *type_ptr, std::string_view name) noexcept
@@ -602,10 +659,10 @@ namespace vmod
 
 		mem_block_desc.func(&memory_block::script_set_dtor_func, "script_set_dtor_func"sv, "hook_free"sv);
 		mem_block_desc.func(&memory_block::script_release, "script_release"sv, "release"sv);
-		mem_block_desc.func(&memory_block::script_delete, "script_delete"sv, "free"sv);
 		mem_block_desc.func(&memory_block::script_ptr, "script_ptr"sv, "ptr"sv);
 		mem_block_desc.func(&memory_block::script_get_size, "script_get_size"sv, "size"sv);
 		mem_block_desc.dtor();
+		mem_block_desc.base(plugin::owned_instance_desc);
 		mem_block_desc.doc_class_name("memory_block"sv);
 
 		if(!vm->RegisterClass(&mem_block_desc)) {
@@ -701,13 +758,13 @@ namespace vmod
 			const script_variant_t &arg_var{va_args[i]};
 			auto &arg_ptr{args_storage[i]};
 
-			script_var_to_ffi_ptr(arg_type, static_cast<void *>(arg_ptr.get()), arg_var);
+			script_var_to_ptr(arg_type, static_cast<void *>(arg_ptr.get()), arg_var);
 		}
 
 		ffi_call(&cif_, reinterpret_cast<void(*)()>(mfp.addr), static_cast<void *>(ret_storage.get()), const_cast<void **>(args_storage_ptrs.data()));
 
 		script_variant_t ret_var;
-		ffi_ptr_to_script_var(ret_type_ptr, static_cast<void *>(ret_storage.get()), ret_var);
+		ptr_to_script_var(ret_type_ptr, static_cast<void *>(ret_storage.get()), ret_var);
 
 		return ret_var;
 	}
@@ -730,8 +787,8 @@ namespace vmod
 		cif_desc.func(&script_cif::script_call, "script_call"sv, "call"sv);
 		cif_desc.func(&script_cif::script_set_func, "script_set_func"sv, "set_func"sv);
 		cif_desc.func(&script_cif::script_set_mfp, "script_set_mfp"sv, "set_mfp"sv);
-		cif_desc.func(&script_cif::script_delete, "script_delete"sv, "free"sv);
 		cif_desc.dtor();
+		cif_desc.base(plugin::owned_instance_desc);
 		cif_desc.doc_class_name("cif"sv);
 
 		if(!vm->RegisterClass(&cif_desc)) {
@@ -1279,8 +1336,8 @@ namespace vmod
 		detour_desc.func(&dynamic_detour::script_call, "script_call"sv, "call"sv);
 		detour_desc.func(&dynamic_detour::script_enable, "script_enable"sv, "enable"sv);
 		detour_desc.func(&dynamic_detour::script_disable, "script_disable"sv, "disable"sv);
-		detour_desc.func(&dynamic_detour::script_delete, "script_delete"sv, "free"sv);
 		detour_desc.dtor();
+		detour_desc.base(plugin::owned_instance_desc);
 		detour_desc.doc_class_name("detour"sv);
 
 		if(!vm->RegisterClass(&detour_desc)) {
@@ -1329,7 +1386,7 @@ namespace vmod
 			const script_variant_t &arg_var{va_args[i]};
 			auto &arg_ptr{args_storage[i]};
 
-			script_var_to_ffi_ptr(arg_type, static_cast<void *>(arg_ptr.get()), arg_var);
+			script_var_to_ptr(arg_type, static_cast<void *>(arg_ptr.get()), arg_var);
 		}
 
 		{
@@ -1338,7 +1395,7 @@ namespace vmod
 		}
 
 		script_variant_t ret_var;
-		ffi_ptr_to_script_var(ret_type_ptr, static_cast<void *>(ret_storage.get()), ret_var);
+		ptr_to_script_var(ret_type_ptr, static_cast<void *>(ret_storage.get()), ret_var);
 
 		return ret_var;
 	}
@@ -1355,7 +1412,7 @@ namespace vmod
 			ffi_type *arg_type_ptr{closure_cif->arg_types[i]};
 			script_variant_t &arg_var{sargs.emplace_back()};
 
-			ffi_ptr_to_script_var(arg_type_ptr, args[i], arg_var);
+			ptr_to_script_var(arg_type_ptr, args[i], arg_var);
 		}
 
 		gsdk::IScriptVM *vm{vmod.vm()};
@@ -1368,7 +1425,7 @@ namespace vmod
 		}
 
 		if(det->ret_type_ptr != &ffi_type_void) {
-			script_var_to_ffi_ptr(det->ret_type_ptr, ret, ret_var);
+			script_var_to_ptr(det->ret_type_ptr, ret, ret_var);
 		}
 	}
 

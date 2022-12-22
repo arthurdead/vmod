@@ -53,6 +53,8 @@ namespace gsdk
 	class SendProp
 	{
 	public:
+		virtual ~SendProp() = 0;
+
 		RecvProp *m_pMatchingRecvProp;
 
 		SendPropType m_Type;

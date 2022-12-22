@@ -44,6 +44,19 @@ namespace vmod
 {
 	class vmod vmod;
 
+	struct entity_class_info
+	{
+		gsdk::ServerClass *sv_class;
+		gsdk::SendTable *sendtable;
+		gsdk::datamap_t *datamap;
+		gsdk::ScriptClassDesc_t *script_desc;
+	};
+
+	static std::unordered_map<std::string, gsdk::ScriptClassDesc_t *> sv_script_class_descs;
+	static std::unordered_map<std::string, gsdk::datamap_t *> sv_datamaps;
+	static std::unordered_map<std::string, gsdk::SendTable *> sv_sendtables;
+	static std::unordered_map<std::string, entity_class_info> sv_ent_class_info;
+
 	gsdk::HSCRIPT vmod::script_find_plugin(std::string_view name) noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -98,14 +111,9 @@ namespace vmod
 		static gsdk::HSCRIPT script_lookup_shared(symbol_cache::const_iterator it) noexcept;
 		static gsdk::HSCRIPT script_lookup_shared(symbol_cache::qualification_info::const_iterator it) noexcept;
 
-		struct script_qual_it_t final
+		struct script_qual_it_t final : public plugin::owned_instance
 		{
-			inline ~script_qual_it_t() noexcept
-			{
-				if(this->instance && this->instance != gsdk::INVALID_HSCRIPT) {
-					vmod.vm()->RemoveInstance(this->instance);
-				}
-			}
+			~script_qual_it_t() noexcept override;
 
 			gsdk::HSCRIPT script_lookup(std::string_view name) const noexcept
 			{
@@ -131,21 +139,13 @@ namespace vmod
 			inline std::string_view script_name() const noexcept
 			{ return it_->first; }
 
-			inline void script_delete() noexcept
-			{ delete this; }
-
 			symbol_cache::const_iterator it_;
 			gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
 		};
 
-		struct script_name_it_t final
+		struct script_name_it_t final : public plugin::owned_instance
 		{
-			inline ~script_name_it_t() noexcept
-			{
-				if(this->instance && this->instance != gsdk::INVALID_HSCRIPT) {
-					vmod.vm()->RemoveInstance(this->instance);
-				}
-			}
+			~script_name_it_t() noexcept override;
 
 			gsdk::HSCRIPT script_lookup(std::string_view name) const noexcept
 			{
@@ -180,9 +180,6 @@ namespace vmod
 			{ return it_->second->size(); }
 			inline std::size_t script_vindex() const noexcept
 			{ return it_->second->virtual_index(); }
-
-			inline void script_delete() noexcept
-			{ delete this; }
 
 			symbol_cache::qualification_info::const_iterator it_;
 			gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
@@ -253,6 +250,20 @@ namespace vmod
 		gsdk::HSCRIPT vs_instance_{gsdk::INVALID_HSCRIPT};
 	};
 
+	lib_symbols_singleton::script_qual_it_t::~script_qual_it_t() noexcept
+	{
+		if(instance && instance != gsdk::INVALID_HSCRIPT) {
+			vmod.vm()->RemoveInstance(instance);
+		}
+	}
+
+	lib_symbols_singleton::script_name_it_t::~script_name_it_t() noexcept
+	{
+		if(instance && instance != gsdk::INVALID_HSCRIPT) {
+			vmod.vm()->RemoveInstance(instance);
+		}
+	}
+
 	lib_symbols_singleton::~lib_symbols_singleton() noexcept
 	{
 		
@@ -322,6 +333,8 @@ namespace vmod
 
 		//vm->SetInstanceUniqeId
 
+		script_it->set_plugin();
+
 		return script_it->instance;
 	}
 
@@ -340,6 +353,8 @@ namespace vmod
 		}
 
 		//vm->SetInstanceUniqeId
+
+		script_it->set_plugin();
 
 		return script_it->instance;
 	}
@@ -366,8 +381,8 @@ namespace vmod
 
 		qual_it_desc.func(&script_qual_it_t::script_name, "script_name"sv, "name"sv);
 		qual_it_desc.func(&script_qual_it_t::script_lookup, "script_lookup"sv, "lookup"sv);
-		qual_it_desc.func(&script_qual_it_t::script_delete, "script_delete"sv, "free"sv);
 		qual_it_desc.dtor();
+		qual_it_desc.base(plugin::owned_instance_desc);
 		qual_it_desc.doc_class_name("symbol_qualifier"sv);
 
 		if(!vm->RegisterClass(&qual_it_desc)) {
@@ -382,8 +397,8 @@ namespace vmod
 		name_it_desc.func(&script_name_it_t::script_size, "script_size"sv, "size"sv);
 		name_it_desc.func(&script_name_it_t::script_vindex, "script_vindex"sv, "vidx"sv);
 		name_it_desc.func(&script_name_it_t::script_lookup, "script_lookup"sv, "lookup"sv);
-		name_it_desc.func(&script_name_it_t::script_delete, "script_delete"sv, "free"sv);
 		name_it_desc.dtor();
+		name_it_desc.base(plugin::owned_instance_desc);
 		name_it_desc.doc_class_name("symbol_name"sv);
 
 		if(!vm->RegisterClass(&name_it_desc)) {
@@ -766,9 +781,6 @@ namespace vmod
 		private:
 			friend class cvar_singleton;
 
-			inline void script_delete() noexcept
-			{ delete this; }
-
 			inline int script_get_value_int() const noexcept
 			{ return var->ConVar::GetInt(); }
 			inline float script_get_value_float() const noexcept
@@ -971,8 +983,8 @@ namespace vmod
 		script_cvar_desc.func(&script_cvar::script_get_value_float, "script_get_value_float"sv, "float"sv);
 		script_cvar_desc.func(&script_cvar::script_get_value_int, "script_get_value_int"sv, "int"sv);
 		script_cvar_desc.func(&script_cvar::script_get_value_bool, "script_get_value_bool"sv, "bool"sv);
-		script_cvar_desc.func(&script_cvar::script_delete, "script_delete"sv, "free"sv);
 		script_cvar_desc.dtor();
+		script_cvar_desc.base(plugin::owned_instance_desc);
 		script_cvar_desc.doc_class_name("convar"sv);
 
 		if(!vm->RegisterClass(&script_cvar_desc)) {
@@ -1217,9 +1229,6 @@ namespace vmod
 			inline std::size_t script_size() noexcept
 			{ return GetEntitySize(); }
 
-			inline void script_delete() noexcept
-			{ delete this; }
-
 			std::vector<std::string> names;
 			std::size_t size;
 			gsdk::HSCRIPT func;
@@ -1248,9 +1257,6 @@ namespace vmod
 
 				return factory->Create(classname.data());
 			}
-
-			inline void script_delete() noexcept
-			{ delete this; }
 
 			inline std::size_t script_size() const noexcept
 			{ return factory->GetEntitySize(); }
@@ -1357,12 +1363,330 @@ namespace vmod
 			return ptr->GetScriptInstance();
 		}
 
+		enum class entity_prop_result_type : unsigned char
+		{
+			none,
+			prop,
+			table
+		};
+
+		struct entity_prop_data_result
+		{
+			entity_prop_result_type type;
+
+			union {
+				gsdk::datamap_t *table;
+				gsdk::typedescription_t *prop;
+			};
+		};
+
+		struct entity_prop_send_result
+		{
+			entity_prop_result_type type;
+
+			union {
+				gsdk::SendTable *table;
+				gsdk::SendProp *prop;
+			};
+		};
+
+		struct entity_prop_result
+		{
+			enum class which : unsigned char
+			{
+				none,
+				send,
+				data,
+				both
+			};
+
+			enum which which;
+
+			entity_prop_result_type type;
+
+			union {
+				gsdk::datamap_t *datatable;
+				gsdk::typedescription_t *dataprop;
+
+				gsdk::SendTable *sendtable;
+				gsdk::SendProp *sendprop;
+			};
+
+			entity_prop_result &operator+=(const entity_prop_data_result &other) noexcept;
+			entity_prop_result &operator+=(const entity_prop_send_result &other) noexcept;
+
+			inline explicit operator entity_prop_data_result() const noexcept
+			{ return entity_prop_data_result{type, {datatable}}; }
+			inline explicit operator entity_prop_send_result() const noexcept
+			{ return entity_prop_send_result{type, {sendtable}}; }
+		};
+
+		enum class entity_prop_tree_flags : unsigned char
+		{
+			data =             (1 << 0),
+			send =             (1 << 1),
+			lazy =             (1 << 2),
+			ignore_exclude =   (1 << 3),
+			only_prop =        (1 << 4),
+			only_table =       (1 << 5),
+			both =             (data|send),
+		};
+		friend constexpr inline bool operator&(entity_prop_tree_flags lhs, entity_prop_tree_flags rhs) noexcept
+		{ return static_cast<bool>(static_cast<unsigned char>(lhs) & static_cast<unsigned char>(rhs)); }
+		friend constexpr inline entity_prop_tree_flags operator|(entity_prop_tree_flags lhs, entity_prop_tree_flags rhs) noexcept
+		{ return static_cast<entity_prop_tree_flags>(static_cast<unsigned char>(lhs) | static_cast<unsigned char>(rhs)); }
+		friend constexpr inline entity_prop_tree_flags operator~(entity_prop_tree_flags lhs) noexcept
+		{ return static_cast<entity_prop_tree_flags>(~static_cast<unsigned char>(lhs)); }
+		friend constexpr inline entity_prop_tree_flags &operator&=(entity_prop_tree_flags &lhs, entity_prop_tree_flags rhs) noexcept
+		{ lhs = static_cast<entity_prop_tree_flags>(static_cast<unsigned char>(lhs) & static_cast<unsigned char>(rhs)); return lhs; }
+		friend constexpr inline entity_prop_tree_flags &operator|=(entity_prop_tree_flags &lhs, entity_prop_tree_flags rhs) noexcept
+		{ lhs = static_cast<entity_prop_tree_flags>(static_cast<unsigned char>(lhs) | static_cast<unsigned char>(rhs)); return lhs; }
+
+		bool walk_entity_prop_tree(std::string_view path, entity_prop_tree_flags flags, entity_prop_result &result) noexcept;
+
+		struct entity_prop_tree_cache_t
+		{
+			std::unordered_map<std::string, entity_prop_data_result> data;
+			std::unordered_map<std::string, entity_prop_send_result> send;
+
+			std::unordered_map<std::string, std::string> lazy_to_full;
+		};
+
+		entity_prop_tree_cache_t entity_prop_tree_cache;
+
+		struct proxyhook_info_t;
+
+		struct proxyhook_instance_t final : public plugin::owned_instance
+		{
+			~proxyhook_instance_t() noexcept override
+			{
+				if(func && func != gsdk::INVALID_HSCRIPT) {
+					auto it{info->instances.find(func)};
+					if(it != info->instances.end()) {
+						info->instances.erase(it);
+					}
+
+					vmod.vm()->ReleaseFunction(func);
+				}
+			}
+
+			proxyhook_info_t *info;
+			gsdk::HSCRIPT func;
+			gsdk::HSCRIPT instance;
+		};
+
+		static inline cif proxy_cif{&ffi_type_void, {&ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_sint, &ffi_type_sint}};
+
+		static ffi_type *guess_prop_type(const gsdk::SendProp *prop, gsdk::SendVarProxyFn proxy, const gsdk::SendTable *table) noexcept;
+
+		struct proxyhook_info_t
+		{
+			static void closure_binding(ffi_cif *closure_cif, void *ret, void *args[], void *userptr) noexcept;
+
+			inline proxyhook_info_t(gsdk::SendProp *prop_) noexcept
+				: prop{prop_},
+				old_proxy{prop_->m_ProxyFn},
+				type_ptr{guess_prop_type(prop_, prop_->m_ProxyFn, nullptr)}
+			{
+			}
+
+			bool initialize() noexcept
+			{
+				closure = static_cast<ffi_closure *>(ffi_closure_alloc(sizeof(ffi_closure), reinterpret_cast<void **>(&prop->m_ProxyFn)));
+				if(!closure) {
+					return false;
+				}
+
+				if(ffi_prep_closure_loc(closure, &proxy_cif, closure_binding, this, reinterpret_cast<void *>(prop->m_ProxyFn)) != FFI_OK) {
+					return false;
+				}
+
+				return true;
+			}
+
+			inline ~proxyhook_info_t() noexcept
+			{
+				if(closure) {
+					ffi_closure_free(closure);
+				}
+			}
+
+			gsdk::SendProp *prop;
+			gsdk::SendVarProxyFn old_proxy;
+			ffi_type *type_ptr;
+
+			std::unordered_map<gsdk::HSCRIPT, proxyhook_instance_t *> instances;
+
+			ffi_closure *closure{nullptr};
+		};
+
+		std::unordered_map<gsdk::SendProp *, std::unique_ptr<proxyhook_info_t>> proxyhooks;
+
+		gsdk::SendProp *script_lookup_sendprop(std::string_view path) noexcept
+		{
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			if(path.empty()) {
+				vm->RaiseException("vmod: invalid path");
+				return nullptr;
+			}
+
+			entity_prop_result res;
+
+			entity_prop_tree_flags flags{
+				entity_prop_tree_flags::only_prop|
+				entity_prop_tree_flags::send|
+				entity_prop_tree_flags::ignore_exclude|
+				entity_prop_tree_flags::lazy
+			};
+			if(!walk_entity_prop_tree(path, flags, res)) {
+				vm->RaiseException("vmod: lookup failed");
+				return nullptr;
+			}
+
+			return res.sendprop;
+		}
+
+		gsdk::HSCRIPT script_hook_send_proxy(gsdk::SendProp *prop, gsdk::HSCRIPT func, bool per_client) noexcept
+		{
+			gsdk::IScriptVM *vm{vmod.vm()};
+
+			if(!prop) {
+				vm->RaiseException("vmod: invalid prop");
+				return nullptr;
+			}
+
+			if(!func || func == gsdk::INVALID_HSCRIPT) {
+				vm->RaiseException("vmod: invalid function");
+				return nullptr;
+			}
+
+			auto info_it{proxyhooks.find(prop)};
+			if(info_it == proxyhooks.end()) {
+				std::unique_ptr<proxyhook_info_t> info{new proxyhook_info_t{prop}};
+				if(!info->initialize()) {
+					vm->RaiseException("vmod: failed to initialize hook");
+					return nullptr;
+				}
+
+				info_it = proxyhooks.emplace(prop, std::move(info)).first;
+			}
+
+			return nullptr;
+		}
+
 		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
 
 		gsdk::HSCRIPT vs_instance_{gsdk::INVALID_HSCRIPT};
 		gsdk::HSCRIPT scope{gsdk::INVALID_HSCRIPT};
 		gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
 	};
+
+	ffi_type *entities_singleton::guess_prop_type(const gsdk::SendProp *prop, gsdk::SendVarProxyFn proxy, const gsdk::SendTable *table) noexcept
+	{
+		switch(prop->m_Type) {
+			case gsdk::DPT_Int: {
+				if(prop->m_Flags & gsdk::SPROP_UNSIGNED) {
+					if(proxy == std_proxies->m_UInt8ToInt32) {
+						if(prop->m_nBits == 1) {
+							return &ffi_type_bool;
+						}
+
+						return &ffi_type_uchar;
+					} else if(proxy == std_proxies->m_UInt16ToInt32) {
+						return &ffi_type_ushort;
+					} else if(proxy == std_proxies->m_UInt32ToInt32) {
+						if(table && std::strcmp(table->m_pNetTableName, "DT_BaseEntity") == 0 && std::strcmp(prop->m_pVarName, "m_clrRender") == 0) {
+							return &ffi_type_color32;
+						}
+
+						return &ffi_type_uint;
+					} else {
+						{
+							if(prop->m_nBits == 32) {
+								struct dummy_t {
+									unsigned int val{256};
+								} dummy;
+
+								gsdk::DVariant out{};
+								proxy(prop, static_cast<const void *>(&dummy), static_cast<const void *>(&dummy.val), &out, 0, static_cast<int>(gsdk::INVALID_EHANDLE_INDEX));
+								if(out.m_Int == 65536) {
+									return &ffi_type_color32;
+								}
+							}
+						}
+
+						{
+							if(prop->m_nBits == gsdk::NUM_NETWORKED_EHANDLE_BITS) {
+								struct dummy_t {
+									gsdk::EHANDLE val{};
+								} dummy;
+
+								gsdk::DVariant out{};
+								proxy(prop, static_cast<const void *>(&dummy), static_cast<const void *>(&dummy.val), &out, 0, static_cast<int>(gsdk::INVALID_EHANDLE_INDEX));
+								if(out.m_Int == gsdk::INVALID_NETWORKED_EHANDLE_VALUE) {
+									return &ffi_type_ehandle;
+								}
+							}
+						}
+
+						return &ffi_type_uint;
+					}
+				} else {
+					if(proxy == std_proxies->m_Int8ToInt32) {
+						return &ffi_type_schar;
+					} else if(proxy == std_proxies->m_Int16ToInt32) {
+						return &ffi_type_sshort;
+					} else if(proxy == std_proxies->m_Int32ToInt32) {
+						return &ffi_type_sint;
+					} else {
+						{
+							struct dummy_t {
+								short val{SHRT_MAX-1};
+							} dummy;
+
+							gsdk::DVariant out{};
+							proxy(prop, static_cast<const void *>(&dummy), static_cast<const void *>(&dummy.val), &out, 0, static_cast<int>(gsdk::INVALID_EHANDLE_INDEX));
+							if(out.m_Int == dummy.val+1) {
+								return &ffi_type_sshort;
+							}
+						}
+
+						return &ffi_type_sint;
+					}
+				}
+			}
+			case gsdk::DPT_Float:
+			return &ffi_type_float;
+			case gsdk::DPT_Vector: {
+				if(prop->m_fLowValue == 0.0f && prop->m_fHighValue == 360.0f) {
+					return &ffi_type_qangle;
+				} else {
+					return &ffi_type_vector;
+				}
+			}
+			case gsdk::DPT_VectorXY:
+			return &ffi_type_vector;
+			case gsdk::DPT_String: {
+				return &ffi_type_cstr;
+			}
+			case gsdk::DPT_Array:
+			return nullptr;
+			case gsdk::DPT_DataTable:
+			return nullptr;
+			default:
+			return nullptr;
+		}
+	}
+
+	void entities_singleton::proxyhook_info_t::closure_binding(ffi_cif *closure_cif, void *ret, void *args[], void *userptr) noexcept
+	{
+		proxyhook_info_t *prop_info{static_cast<proxyhook_info_t *>(userptr)};
+
+		//TODO!!!
+
+		ffi_call(closure_cif, reinterpret_cast<void(*)()>(prop_info->old_proxy), ret, args);
+	}
 
 	bool entities_singleton::Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value)
 	{
@@ -1377,6 +1701,456 @@ namespace vmod
 
 	inline class entities_singleton &entities_singleton::instance() noexcept
 	{ return ::vmod::entities_singleton; }
+
+	entities_singleton::entity_prop_result &entities_singleton::entity_prop_result::operator+=(const entity_prop_data_result &other) noexcept
+	{
+		switch(which) {
+			case which::none:
+			which = which::data; break;
+			case which::send:
+			which = which::both; break;
+			default: break;
+		}
+
+		switch(other.type) {
+			case entity_prop_result_type::prop:
+			dataprop = other.prop; break;
+			case entity_prop_result_type::table:
+			datatable = other.table; break;
+			default: break;
+		}
+
+		return *this;
+	}
+
+	entities_singleton::entity_prop_result &entities_singleton::entity_prop_result::operator+=(const entity_prop_send_result &other) noexcept
+	{
+		switch(which) {
+			case which::none:
+			which = which::send; break;
+			case which::data:
+			which = which::both; break;
+			default: break;
+		}
+
+		switch(other.type) {
+			case entity_prop_result_type::prop:
+			sendprop = other.prop; break;
+			case entity_prop_result_type::table:
+			sendtable = other.table; break;
+			default: break;
+		}
+
+		return *this;
+	}
+
+	bool entities_singleton::walk_entity_prop_tree(std::string_view path, entity_prop_tree_flags flags, entity_prop_result &result) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		if(!(flags & entity_prop_tree_flags::send) && !(flags & entity_prop_tree_flags::data)) {
+			error("vmod: no tree type specified\n"sv);
+			return false;
+		}
+
+		if((flags & entity_prop_tree_flags::only_prop) && (flags & entity_prop_tree_flags::only_table)) {
+			error("vmod: cannot exclude both prop and table\n"sv);
+			return false;
+		}
+
+		if((flags & entity_prop_tree_flags::send) && (flags & entity_prop_tree_flags::data)) {
+			error("vmod: walking both send and data is not supported yet\n"sv);
+			return false;
+		}
+
+		if(flags & entity_prop_tree_flags::lazy) {
+			auto full_it{entity_prop_tree_cache.lazy_to_full.find(std::string{path})};
+			if(full_it != entity_prop_tree_cache.lazy_to_full.end()) {
+				flags &= ~entity_prop_tree_flags::lazy;
+				path = full_it->second;
+			}
+		}
+
+		if(flags & entity_prop_tree_flags::data) {
+			auto datares_it{entity_prop_tree_cache.data.find(std::string{path})};
+			if(datares_it != entity_prop_tree_cache.data.end()) {
+				flags &= ~entity_prop_tree_flags::data;
+				result += datares_it->second;
+			}
+		}
+
+		if(flags & entity_prop_tree_flags::send) {
+			auto sendres_it{entity_prop_tree_cache.send.find(std::string{path})};
+			if(sendres_it != entity_prop_tree_cache.send.end()) {
+				flags &= ~entity_prop_tree_flags::send;
+				result += sendres_it->second;
+			}
+		}
+
+		if((result.which == entity_prop_result::which::both) ||
+			(!(flags & entity_prop_tree_flags::send) && !(flags & entity_prop_tree_flags::data))) {
+			return true;
+		}
+
+		std::size_t path_len{path.length()};
+
+		std::size_t name_start{path.find('.')};
+		if(name_start == std::string_view::npos) {
+			name_start = path_len;
+		}
+
+		std::string_view classname{path.substr(0, name_start)};
+
+		auto sv_class_it{sv_ent_class_info.find(std::string{classname})};
+		if(sv_class_it == sv_ent_class_info.end()) {
+			error("vmod: invalid class '%.*s'\n"sv, classname.length(), classname.data());
+			return false;
+		}
+
+		entity_class_info &class_info{sv_class_it->second};
+
+		gsdk::ServerClass *sv_class{class_info.sv_class};
+
+		gsdk::datamap_t *curr_datamap{nullptr};
+		gsdk::typedescription_t *curr_dataprop{nullptr};
+
+		gsdk::SendTable *curr_sendtable{nullptr};
+		gsdk::SendProp *curr_sendprop{nullptr};
+
+		std::string_view last_send_name{classname};
+		std::string_view last_data_name{classname};
+
+		if(flags & entity_prop_tree_flags::send) {
+			curr_sendtable = sv_class->m_pTable;
+		}
+
+		if(flags & entity_prop_tree_flags::data) {
+			curr_datamap = class_info.datamap;
+		}
+
+		std::string full_path;
+
+		if(flags & entity_prop_tree_flags::lazy) {
+			full_path = classname;
+		}
+
+		if(name_start < path_len) {
+			while(true) {
+				std::size_t name_end{path.find('.', name_start+1)};
+				bool done{name_end == std::string_view::npos};
+				if(done) {
+					name_end = path_len;
+				}
+
+				++name_start;
+				std::string_view name{path.substr(name_start, name_end-name_start)};
+
+				std::size_t subscript_start{name.find('[')};
+				if(subscript_start != std::string_view::npos) {
+					std::size_t subscript_end{name.find(']', subscript_start+1)};
+					if(subscript_end == std::string_view::npos) {
+						error("vmod: subscript started but not ended\n"sv);
+						return false;
+					} else if(subscript_end != name.length()) {
+						error("vmod: subscript ending must be the last character\n"sv);
+						return false;
+					}
+
+					std::string_view subscript_num{name.substr(subscript_start, subscript_end-subscript_start)};
+
+					const char *num_begin{subscript_num.data()};
+					const char *num_end{subscript_num.data() + subscript_num.length()};
+
+					std::size_t num;
+					std::from_chars(num_begin, num_end, num);
+
+					//TODO!!!!
+					error("vmod: subscripts are not supported yet\n"sv);
+					return false;
+				} else {
+					if((flags & entity_prop_tree_flags::send) && !curr_sendtable) {
+						error("vmod: '%.*s' cannot contain members\n"sv, last_send_name.length(), last_send_name.data());
+						return false;
+					}
+
+					if((flags & entity_prop_tree_flags::data) && !curr_datamap) {
+						error("vmod: '%.*s' cannot contain members\n"sv, last_data_name.length(), last_data_name.data());
+						return false;
+					}
+
+					unsigned char found{0};
+
+					if(flags & entity_prop_tree_flags::send) {
+						bool send_found{false};
+
+						gsdk::SendTable *temp_table{curr_sendtable};
+
+						std::function<void()> loop_props{
+							[flags,&full_path,&send_found,&temp_table,&curr_sendprop,name,&loop_props]() noexcept -> void {
+								gsdk::SendTable *baseclass{nullptr};
+								std::vector<std::pair<const char *, gsdk::SendTable *>> check_later;
+
+								std::size_t num_props{static_cast<std::size_t>(temp_table->m_nProps)};
+								for(std::size_t i{0}; i < num_props; ++i) {
+									gsdk::SendProp &prop{temp_table->m_pProps[i]};
+									if(flags & entity_prop_tree_flags::ignore_exclude) {
+										if(prop.m_Flags & gsdk::SPROP_EXCLUDE) {
+											continue;
+										}
+									}
+
+									if(std::strncmp(prop.m_pVarName, name.data(), name.length()) == 0) {
+										curr_sendprop = &prop;
+										send_found = true;
+										return;
+									} else if(flags & entity_prop_tree_flags::lazy) {
+										if(std::strcmp(prop.m_pVarName, "baseclass") == 0) {
+											baseclass = prop.m_pDataTable;
+										} else if(prop.m_Type == gsdk::DPT_DataTable) {
+											check_later.emplace_back(std::pair<const char *, gsdk::SendTable *>{prop.m_pVarName, prop.m_pDataTable});
+										}
+									}
+								}
+
+								if(flags & entity_prop_tree_flags::lazy) {
+									if(!check_later.empty()) {
+										for(const auto &it : check_later) {
+											temp_table = it.second;
+											loop_props();
+											if(send_found) {
+												full_path += '.';
+												full_path += it.first;
+												return;
+											}
+										}
+									}
+
+									if(baseclass) {
+										temp_table = baseclass;
+										full_path += '.';
+										full_path += "baseclass"sv;
+										loop_props();
+										if(send_found) {
+											return;
+										}
+									}
+								}
+							}
+						};
+
+						loop_props();
+
+						if(flags & entity_prop_tree_flags::lazy) {
+							full_path += '.';
+							full_path += curr_sendprop->m_pVarName;
+						}
+
+						if(send_found) {
+							found |= (1 << 0);
+						}
+
+						if(!send_found) {
+							error("vmod: member '%.*s' was not found in '%.*s'\n"sv, name.length(), name.data(), last_send_name.length(), last_send_name.data());
+							return false;
+						}
+					}
+
+					if(flags & entity_prop_tree_flags::data) {
+						bool data_found{false};
+
+						gsdk::datamap_t *temp_table{curr_datamap};
+
+						std::function<void()> loop_props{
+							[flags,&full_path,&data_found,&temp_table,&curr_dataprop,&curr_datamap,name,&loop_props]() noexcept -> void {
+								gsdk::datamap_t *baseclass{temp_table->baseMap};
+
+								if(name == "baseclass"sv) {
+									if(baseclass) {
+										curr_datamap = baseclass;
+										data_found = true;
+									} else {
+										data_found = false;
+									}
+									return;
+								}
+
+								std::vector<std::pair<const char *, gsdk::datamap_t *>> check_later;
+
+								std::size_t num_props{static_cast<std::size_t>(temp_table->dataNumFields)};
+								for(std::size_t i{0}; i < num_props; ++i) {
+									gsdk::typedescription_t &prop{temp_table->dataDesc[i]};
+									if(std::strncmp(prop.fieldName, name.data(), name.length()) == 0) {
+										curr_dataprop = &prop;
+										data_found = true;
+										return;
+									} else if(flags & entity_prop_tree_flags::lazy) {
+										if(prop.td) {
+											check_later.emplace_back(std::pair<const char *, gsdk::datamap_t *>{prop.fieldName, prop.td});
+										}
+									}
+								}
+
+								if(flags & entity_prop_tree_flags::lazy) {
+									full_path += '.';
+									full_path += temp_table->dataClassName;
+
+									if(!check_later.empty()) {
+										for(const auto &it : check_later) {
+											temp_table = it.second;
+											loop_props();
+											if(data_found) {
+												full_path += '.';
+												full_path += it.first;
+												return;
+											}
+										}
+									}
+
+									if(baseclass) {
+										temp_table = baseclass;
+										full_path += '.';
+										full_path += "baseclass"sv;
+										loop_props();
+										if(data_found) {
+											return;
+										}
+									}
+								}
+							}
+						};
+
+						loop_props();
+
+						if(flags & entity_prop_tree_flags::lazy) {
+							full_path += '.';
+							full_path += curr_dataprop->fieldName;
+						}
+
+						if(data_found) {
+							found |= (1 << 1);
+						}
+
+						if(!data_found) {
+							error("vmod: member '%.*s' was not found in '%.*s'\n"sv, name.length(), name.data(), last_data_name.length(), last_data_name.data());
+							return false;
+						}
+					}
+				}
+
+				if(flags & entity_prop_tree_flags::send) {
+					switch(curr_sendprop->m_Type) {
+						case gsdk::DPT_DataTable: {
+							curr_sendtable = curr_sendprop->m_pDataTable;
+							curr_sendprop = nullptr;
+						} break;
+						default: {
+							curr_sendtable = nullptr;
+						} break;
+					}
+				}
+
+				if(flags & entity_prop_tree_flags::data) {
+					if(curr_dataprop) {
+						if(curr_dataprop->td) {
+							curr_datamap = curr_dataprop->td;
+							curr_dataprop = nullptr;
+						} else {
+							curr_datamap = nullptr;
+						}
+					} else if(curr_datamap) {
+						curr_dataprop = nullptr;
+					}
+				}
+
+				last_send_name = name;
+				last_data_name = name;
+
+				name_start = name_end;
+
+				if(done) {
+					break;
+				}
+			}
+		}
+
+		if(flags & entity_prop_tree_flags::lazy) {
+			entity_prop_tree_cache.lazy_to_full.emplace(path, std::move(full_path));
+		}
+
+		if(flags & entity_prop_tree_flags::send) {
+			if(flags & entity_prop_tree_flags::only_prop) {
+				if(!curr_sendprop) {
+					error("vmod: '%.*s' is not a prop\n"sv, last_send_name.length(), last_send_name.data());
+					return false;
+				}
+			} else if(flags & entity_prop_tree_flags::only_table) {
+				if(!curr_sendtable) {
+					error("vmod: '%.*s' is not a table\n"sv, last_send_name.length(), last_send_name.data());
+					return false;
+				}
+			}
+		}
+
+		if(flags & entity_prop_tree_flags::data) {
+			if(flags & entity_prop_tree_flags::only_prop) {
+				if(!curr_dataprop) {
+					error("vmod: '%.*s' is not a prop\n"sv, last_data_name.length(), last_data_name.data());
+					return false;
+				}
+			} else if(flags & entity_prop_tree_flags::only_table) {
+				if(!curr_datamap) {
+					error("vmod: '%.*s' is not a table\n"sv, last_data_name.length(), last_data_name.data());
+					return false;
+				}
+			}
+		}
+
+		if(flags & entity_prop_tree_flags::send) {
+			if(curr_sendtable) {
+				result.type = entity_prop_result_type::table;
+				result.sendtable = curr_sendtable;
+			} else if(curr_sendprop) {
+				result.type = entity_prop_result_type::prop;
+				result.sendprop = curr_sendprop;
+			}
+
+			switch(result.which) {
+				case entity_prop_result::which::none:
+				result.which = entity_prop_result::which::send; break;
+				case entity_prop_result::which::data:
+				result.which = entity_prop_result::which::both; break;
+				default: break;
+			}
+		}
+
+		if(flags & entity_prop_tree_flags::data) {
+			if(curr_datamap) {
+				result.type = entity_prop_result_type::table;
+				result.datatable = curr_datamap;
+			} else if(curr_dataprop) {
+				result.type = entity_prop_result_type::prop;
+				result.dataprop = curr_dataprop;
+			}
+
+			switch(result.which) {
+				case entity_prop_result::which::none:
+				result.which = entity_prop_result::which::data; break;
+				case entity_prop_result::which::send:
+				result.which = entity_prop_result::which::both; break;
+				default: break;
+			}
+		}
+
+		if(flags & entity_prop_tree_flags::send) {
+			entity_prop_tree_cache.send.emplace(path, static_cast<entity_prop_send_result>(result));
+		}
+
+		if(flags & entity_prop_tree_flags::data) {
+			entity_prop_tree_cache.data.emplace(path, static_cast<entity_prop_data_result>(result));
+		}
+
+		return true;
+	}
 
 	entities_singleton::script_factory_impl::~script_factory_impl() noexcept
 	{
@@ -1451,6 +2225,13 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{vmod.vm()};
 
+		if(!proxy_cif.initialize(FFI_SYSV)) {
+			error("vmod: failed to initialize send proxy cif\n"sv);
+			return false;
+		}
+
+		entities_singleton_desc.func(&entities_singleton::script_hook_send_proxy, "script_hook_send_proxy"sv, "hook_sendprop_proxy"sv);
+		entities_singleton_desc.func(&entities_singleton::script_lookup_sendprop, "script_lookup_sendprop"sv, "lookup_sendprop"sv);
 		entities_singleton_desc.func(&entities_singleton::script_from_ptr, "script_from_ptr"sv, "from_ptr"sv);
 		entities_singleton_desc.func(&entities_singleton::script_find_factory, "script_find_factory"sv, "find_factory"sv);
 		entities_singleton_desc.func(&entities_singleton::script_create_factory, "script_create_factory"sv, "create_factory"sv);
@@ -1463,8 +2244,8 @@ namespace vmod
 		script_factory_impl_desc.func(&script_factory_impl::script_create_sized, "script_create_sized"sv, "create_sized"sv);
 		script_factory_impl_desc.func(&script_factory_impl::script_create, "script_create"sv, "create"sv);
 		script_factory_impl_desc.func(&script_factory_impl::script_size, "script_size"sv, "size"sv);
-		script_factory_impl_desc.func(&script_factory_impl::script_delete, "script_delete"sv, "free"sv);
 		script_factory_impl_desc.dtor();
+		script_factory_impl_desc.base(plugin::owned_instance_desc);
 		script_factory_impl_desc.doc_class_name("entity_factory_impl"sv);
 
 		if(!vm->RegisterClass(&script_factory_impl_desc)) {
@@ -1474,8 +2255,8 @@ namespace vmod
 
 		script_factory_desc.func(&script_factory::script_create, "script_create"sv, "create"sv);
 		script_factory_desc.func(&script_factory::script_size, "script_size"sv, "size"sv);
-		script_factory_desc.func(&script_factory::script_delete, "script_delete"sv, "free"sv);
 		script_factory_desc.dtor();
+		script_factory_desc.base(plugin::owned_instance_desc);
 		script_factory_desc.doc_class_name("entity_factory_ref"sv);
 
 		if(!vm->RegisterClass(&script_factory_desc)) {
@@ -1534,26 +2315,6 @@ namespace vmod
 		}
 	}
 
-	//TODO!!!!
-	bool vmod::walk_send_tree(std::string_view path) noexcept
-	{
-		std::size_t i{path.find('.')};
-		if(i == std::string_view::npos) {
-			return false;
-		}
-
-		std::string classname{path.substr(0, i)};
-
-		auto sv_class_it{sv_classes.find(classname)};
-		if(sv_class_it == sv_classes.end()) {
-			return false;
-		}
-
-		gsdk::ServerClass *sv_class{sv_class_it->second};
-
-		return true;
-	}
-
 	bool vmod::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -1563,12 +2324,20 @@ namespace vmod
 		vmod_desc.func(&vmod::script_is_map_active, "script_is_map_active"sv, "is_map_active"sv);
 		vmod_desc.func(&vmod::script_is_map_loaded, "script_is_map_loaded"sv, "is_map_loaded"sv);
 		vmod_desc.func(&vmod::script_are_stringtables_created, "script_are_stringtables_created"sv, "are_stringtables_created"sv);
+
 		vmod_desc.func(&vmod::script_success, "script_success"sv, "success"sv);
 		vmod_desc.func(&vmod::script_print, "script_print"sv, "print"sv);
 		vmod_desc.func(&vmod::script_info, "script_info"sv, "info"sv);
 		vmod_desc.func(&vmod::script_remark, "script_remark"sv, "remark"sv);
 		vmod_desc.func(&vmod::script_error, "script_error"sv, "error"sv);
 		vmod_desc.func(&vmod::script_warning, "script_warning"sv, "warning"sv);
+
+		vmod_desc.func(&vmod::script_successl, "script_successl"sv, "successl"sv);
+		vmod_desc.func(&vmod::script_printl, "script_printl"sv, "printl"sv);
+		vmod_desc.func(&vmod::script_infol, "script_infol"sv, "infol"sv);
+		vmod_desc.func(&vmod::script_remarkl, "script_remarkl"sv, "remarkl"sv);
+		vmod_desc.func(&vmod::script_errorl, "script_errorl"sv, "errorl"sv);
+		vmod_desc.func(&vmod::script_warningl, "script_warningl"sv, "warningl"sv);
 
 		if(!vm_->RegisterClass(&vmod_desc)) {
 			error("vmod: failed to register vmod script class\n"sv);
@@ -1673,6 +2442,10 @@ namespace vmod
 			}
 		}
 
+		if(!plugin::bindings()) {
+			return false;
+		}
+
 		if(!server_symbols_singleton.bindings()) {
 			return false;
 		}
@@ -1697,10 +2470,6 @@ namespace vmod
 
 		if(!vm_->SetValue(scope_, "root_dir", root_dir_.c_str())) {
 			error("vmod: failed to set root dir value\n"sv);
-			return false;
-		}
-
-		if(!plugin::bindings()) {
 			return false;
 		}
 
@@ -1791,10 +2560,7 @@ namespace vmod
 	static void(gsdk::IScriptVM::*RegisterFunctionGuts)(gsdk::ScriptFunctionBinding_t *, gsdk::ScriptClassDesc_t *);
 	static SQRESULT(*sq_setparamscheck)(HSQUIRRELVM, SQInteger, const SQChar *);
 	static gsdk::ScriptClassDesc_t **sv_classdesc_pHead;
-	static std::unordered_map<std::string, gsdk::ScriptClassDesc_t *> sv_script_class_descs;
-	static std::unordered_map<std::string, gsdk::datamap_t *> sv_datamaps;
-	//TODO!!! g_SendTables
-	//static std::unordered_map<std::string, gsdk::SendTable *> sv_sendtables;
+	static gsdk::CUtlVector<gsdk::SendTable *> *g_SendTables;
 
 	static bool in_vscript_server_init;
 	static bool in_vscript_print;
@@ -2315,6 +3081,9 @@ namespace vmod
 			return false;
 		}
 
+		const auto &eng_symbols{engine_lib.symbols()};
+		const auto &eng_global_qual{eng_symbols.global()};
+
 		const auto &sv_symbols{server_lib.symbols()};
 		const auto &sv_global_qual{sv_symbols.global()};
 
@@ -2510,6 +3279,12 @@ namespace vmod
 			return false;
 		}
 
+		auto g_SendTables_it{eng_global_qual.find("g_SendTables"s)};
+		if(g_SendTables_it == eng_global_qual.end()) {
+			error("vmod: missing 'g_SendTables' symbol\n"sv);
+			return false;
+		}
+
 		if(g_Script_init_it != vscript_global_qual.end()) {
 			g_Script_init = g_Script_init_it->second->addr<const unsigned char *>();
 		}
@@ -2534,15 +3309,29 @@ namespace vmod
 
 		sv_classdesc_pHead = sv_pHead_it->second->addr<gsdk::ScriptClassDesc_t **>();
 
-		gsdk::CBaseEntity::GetScriptInstance_ptr = GetScriptInstance_it->second->mfp<decltype(gsdk::CBaseEntity::GetScriptInstance_ptr)>();
+		g_SendTables = g_SendTables_it->second->addr<gsdk::CUtlVector<gsdk::SendTable *> *>();
 
 		gsdk::ScriptClassDesc_t *tmp_desc{*sv_classdesc_pHead};
 		while(tmp_desc) {
-			sv_script_class_descs.emplace(tmp_desc->m_pszClassname, tmp_desc);
+			std::string name{tmp_desc->m_pszClassname};
+			sv_script_class_descs.emplace(std::move(name), tmp_desc);
 			tmp_desc = tmp_desc->m_pNextDesc;
 		}
 
 		for(const auto &it : sv_classes) {
+			auto info_it{sv_ent_class_info.find(it.first)};
+			if(info_it == sv_ent_class_info.end()) {
+				info_it = sv_ent_class_info.emplace(it.first, entity_class_info{}).first;
+			}
+
+			info_it->second.sv_class = it.second;
+			info_it->second.sendtable = it.second->m_pTable;
+
+			auto script_desc_it{sv_script_class_descs.find(it.first)};
+			if(script_desc_it != sv_script_class_descs.end()) {
+				info_it->second.script_desc = script_desc_it->second;
+			}
+
 			auto sv_sym_it{sv_symbols.find(it.first)};
 			if(sv_sym_it == sv_symbols.end()) {
 				error("vmod: missing '%s' symbols\n"sv, it.first.c_str());
@@ -2550,16 +3339,16 @@ namespace vmod
 			}
 
 			auto GetDataDescMap_it{sv_sym_it->second->find("GetDataDescMap()"s)};
-			if(GetDataDescMap_it == sv_sym_it->second->end()) {
-				continue;
+			if(GetDataDescMap_it != sv_sym_it->second->end()) {
+				using GetDataDescMap_t = gsdk::datamap_t *(gsdk::CBaseEntity::*)();
+				GetDataDescMap_t GetDataDescMap{GetDataDescMap_it->second->mfp<GetDataDescMap_t>()};
+				gsdk::datamap_t *map{(reinterpret_cast<gsdk::CBaseEntity *>(uninitialized_memory)->*GetDataDescMap)()};
+
+				info_it->second.datamap = map;
 			}
-
-			using GetDataDescMap_t = gsdk::datamap_t *(gsdk::CBaseEntity::*)();
-			GetDataDescMap_t GetDataDescMap{GetDataDescMap_it->second->mfp<GetDataDescMap_t>()};
-			gsdk::datamap_t *map{(reinterpret_cast<gsdk::CBaseEntity *>(uninitialized_memory)->*GetDataDescMap)()};
-
-			sv_datamaps.emplace(it.first, map);
 		}
+
+		gsdk::CBaseEntity::GetScriptInstance_ptr = GetScriptInstance_it->second->mfp<decltype(gsdk::CBaseEntity::GetScriptInstance_ptr)>();
 
 		if(!assign_entity_class_info()) {
 			return false;
@@ -3338,6 +4127,19 @@ namespace vmod
 			file += '\n';
 			ident(file, depth);
 			file += "{\n"sv;
+
+			if(desc->m_pfnConstruct) {
+				ident(file, depth+1);
+				file += get_class_desc_name(desc);
+				file += "();\n\n"sv;
+			}
+
+			if(desc->m_pfnDestruct) {
+				ident(file, depth+1);
+				file += '~';
+				file += get_class_desc_name(desc);
+				file += "();\n\n"sv;
+			}
 		}
 
 		std::size_t written{0};
@@ -3682,6 +4484,9 @@ namespace vmod
 
 		ident(file, 1);
 		file += "string root_dir;\n\n"sv;
+
+		write_class(&plugin::owned_instance_desc, true, 1, file, false);
+		file += "\n\n"sv;
 
 		write_class(&plugin_desc, true, 1, file, false);
 		file += "\n\n"sv;

@@ -189,7 +189,7 @@ namespace gsdk
 	{
 	public:
 		virtual IServerNetworkable *Create(const char *) = 0;
-		virtual void Destroy(IServerNetworkable *) = 0;
+		virtual void Destroy(IServerNetworkable *net);
 		virtual size_t GetEntitySize() = 0;
 	};
 	#pragma GCC diagnostic pop

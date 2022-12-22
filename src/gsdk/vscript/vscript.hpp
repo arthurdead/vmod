@@ -210,6 +210,7 @@ namespace gsdk
 			void *m_EHandle;
 			HSCRIPT m_hScript;
 			void *m_ptr;
+			unsigned char m_data[sizeof(unsigned long long)];
 		};
 
 		short m_type;

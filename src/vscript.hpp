@@ -93,18 +93,18 @@ namespace vmod
 
 		template <typename T>
 		inline bool operator==(const T &value) const noexcept
-		{ return variant_to_value<T>(*this) == value; }
+		{ return __variant_to_value_impl<T>(*this) == value; }
 		template <typename T>
 		inline bool operator!=(const T &value) const noexcept
-		{ return variant_to_value<T>(*this) != value; }
+		{ return __variant_to_value_impl<T>(*this) != value; }
 
 		template <typename T>
 		explicit inline operator T() const noexcept
-		{ return variant_to_value<T>(*this); }
+		{ return __variant_to_value_impl<T>(*this); }
 
 		template <typename T>
 		inline T get() const noexcept
-		{ return variant_to_value<T>(*this); }
+		{ return __variant_to_value_impl<T>(*this); }
 
 	private:
 		inline void free() noexcept
@@ -432,6 +432,14 @@ namespace vmod
 		inline base_class_desc_t &doc_class_name(std::string_view name) noexcept
 		{
 			extra_.doc_class_name = name;
+			return *this;
+		}
+
+		template <typename U>
+		inline base_class_desc_t &base(base_class_desc_t<U> &other) noexcept
+		{
+			static_assert(std::is_base_of_v<U, T>);
+			m_pBaseDesc = &static_cast<gsdk::ScriptClassDesc_t &>(other);
 			return *this;
 		}
 

@@ -29,6 +29,7 @@ namespace vmod
 	extern gsdk::CEntityFactoryDictionary *entityfactorydict;
 	extern gsdk::IServerNetworkStringTableContainer *sv_stringtables;
 	extern std::unordered_map<std::string, gsdk::ServerClass *> sv_classes;
+	extern gsdk::CStandardSendProxies *std_proxies;
 
 	constexpr gsdk::Color print_clr{255, 255, 255, 255};
 	constexpr gsdk::Color success_clr{0, 255, 0, 255};
@@ -167,6 +168,12 @@ namespace vmod
 	{
 	public:
 		bool load(const std::filesystem::path &path) noexcept override;
+
+		inline const symbol_cache &symbols() const noexcept
+		{ return syms; }
+
+	private:
+		symbol_cache syms;
 	};
 
 	class gsdk_server_library final : public gsdk_library

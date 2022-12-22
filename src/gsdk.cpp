@@ -15,6 +15,7 @@ namespace vmod
 	gsdk::CEntityFactoryDictionary *entityfactorydict;
 	gsdk::IServerNetworkStringTableContainer *sv_stringtables;
 	std::unordered_map<std::string, gsdk::ServerClass *> sv_classes;
+	gsdk::CStandardSendProxies *std_proxies;
 
 	bool gsdk_library::load(const std::filesystem::path &path) noexcept
 	{
@@ -109,6 +110,11 @@ namespace vmod
 			return false;
 		}
 
+		if(!syms.load(path, base())) {
+			err_str = syms.error_string();
+			return false;
+		}
+
 		return true;
 	}
 
@@ -148,6 +154,8 @@ namespace vmod
 			err_str = "EntityFactoryDictionary is null"s;
 			return false;
 		}
+
+		std_proxies = gamedll->GetStandardSendProxies();
 
 		if(!syms.load(path, base())) {
 			err_str = syms.error_string();

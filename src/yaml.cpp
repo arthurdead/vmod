@@ -94,8 +94,8 @@ namespace vmod
 
 		yaml_desc.func(&yaml::script_num_documents, "script_num_documents"sv, "num_documents"sv);
 		yaml_desc.func(&yaml::script_get_document, "script_get_document"sv, "get_document"sv);
-		yaml_desc.func(&yaml::script_delete, "script_delete"sv, "free"sv);
 		yaml_desc.dtor();
+		yaml_desc.base(plugin::owned_instance_desc);
 		yaml_desc.doc_class_name("yaml"sv);
 
 		if(!vmod.vm()->RegisterClass(&yaml_desc)) {
