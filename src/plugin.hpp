@@ -141,7 +141,6 @@ namespace vmod
 
 			void set_plugin() noexcept;
 
-		protected:
 			inline plugin *owner() noexcept
 			{ return owner_; }
 			inline gsdk::HSCRIPT owner_scope() noexcept

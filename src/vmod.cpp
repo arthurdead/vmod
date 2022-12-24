@@ -1024,11 +1024,6 @@ namespace vmod
 			return false;
 		}
 
-		if(!vm->SetValue(scope, "flags", flags_table)) {
-			error("vmod: failed to set cvar flags table value\n"sv);
-			return false;
-		}
-
 		{
 			if(!vm->SetValue(flags_table, "none", script_variant_t{gsdk::FCVAR_NONE})) {
 				error("vmod: failed to set cvar none flag value\n"sv);
@@ -1134,6 +1129,11 @@ namespace vmod
 				error("vmod: failed to set cvar exec_in_default flag value\n"sv);
 				return false;
 			}
+		}
+
+		if(!vm->SetValue(scope, "flags", flags_table)) {
+			error("vmod: failed to set cvar flags table value\n"sv);
+			return false;
 		}
 
 		return true;
@@ -1454,44 +1454,46 @@ namespace vmod
 
 		entity_prop_tree_cache_t entity_prop_tree_cache;
 
-		struct proxyhook_info_t;
+		struct script_sendprop_t;
 
 		struct proxyhook_instance_t final : public plugin::owned_instance
 		{
-			~proxyhook_instance_t() noexcept override
+			inline proxyhook_instance_t(script_sendprop_t *prop_, bool post_) noexcept
+				: prop{prop_}, post{post_}
 			{
-				if(func && func != gsdk::INVALID_HSCRIPT) {
-					auto it{info->instances.find(func)};
-					if(it != info->instances.end()) {
-						info->instances.erase(it);
-					}
-
-					vmod.vm()->ReleaseFunction(func);
-				}
 			}
 
-			proxyhook_info_t *info;
-			gsdk::HSCRIPT func;
-			gsdk::HSCRIPT instance;
+			bool initialize(gsdk::HSCRIPT func_) noexcept;
+
+			~proxyhook_instance_t() noexcept override;
+
+			script_sendprop_t *prop;
+			bool post;
+			gsdk::HSCRIPT func{gsdk::INVALID_HSCRIPT};
+			gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
 		};
 
 		static inline cif proxy_cif{&ffi_type_void, {&ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_sint, &ffi_type_sint}};
 
 		static ffi_type *guess_prop_type(const gsdk::SendProp *prop, gsdk::SendVarProxyFn proxy, const gsdk::SendTable *table) noexcept;
 
-		struct proxyhook_info_t
+		struct script_sendprop_t
 		{
 			static void closure_binding(ffi_cif *closure_cif, void *ret, void *args[], void *userptr) noexcept;
 
-			inline proxyhook_info_t(gsdk::SendProp *prop_) noexcept
+			inline script_sendprop_t(gsdk::SendProp *prop_) noexcept
 				: prop{prop_},
 				old_proxy{prop_->m_ProxyFn},
 				type_ptr{guess_prop_type(prop_, prop_->m_ProxyFn, nullptr)}
 			{
 			}
 
-			bool initialize() noexcept
+			bool initialize_closure() noexcept
 			{
+				if(closure) {
+					return true;
+				}
+
 				closure = static_cast<ffi_closure *>(ffi_closure_alloc(sizeof(ffi_closure), reinterpret_cast<void **>(&prop->m_ProxyFn)));
 				if(!closure) {
 					return false;
@@ -1504,25 +1506,60 @@ namespace vmod
 				return true;
 			}
 
-			inline ~proxyhook_info_t() noexcept
+			inline ~script_sendprop_t() noexcept
 			{
 				if(closure) {
 					ffi_closure_free(closure);
 				}
+
+				if(instance && instance != gsdk::INVALID_HSCRIPT) {
+					vmod.vm()->RemoveInstance(instance);
+				}
+			}
+
+			gsdk::HSCRIPT script_hook_proxy(gsdk::HSCRIPT func, bool post, bool per_client) noexcept
+			{
+				gsdk::IScriptVM *vm{vmod.vm()};
+
+				if(!func || func == gsdk::INVALID_HSCRIPT) {
+					vm->RaiseException("vmod: invalid function");
+					return nullptr;
+				}
+
+				if(!initialize_closure()) {
+					vm->RaiseException("vmod: failed to initialize closure");
+					return nullptr;
+				}
+
+				proxyhook_instance_t *hook_inst{new proxyhook_instance_t{this, post}};
+				if(!hook_inst->initialize(func)) {
+					vm->RaiseException("vmod: failed to initialize hook");
+					delete hook_inst;
+					return nullptr;
+				}
+
+				hook_inst->set_plugin();
+
+				return hook_inst->instance;
 			}
 
 			gsdk::SendProp *prop;
 			gsdk::SendVarProxyFn old_proxy;
 			ffi_type *type_ptr;
 
-			std::unordered_map<gsdk::HSCRIPT, proxyhook_instance_t *> instances;
+			std::unordered_map<gsdk::HSCRIPT, proxyhook_instance_t *> proxyhook_pre;
+			std::unordered_map<gsdk::HSCRIPT, proxyhook_instance_t *> proxyhook_post;
 
 			ffi_closure *closure{nullptr};
+
+			gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
 		};
 
-		std::unordered_map<gsdk::SendProp *, std::unique_ptr<proxyhook_info_t>> proxyhooks;
+		std::unordered_map<gsdk::SendProp *, std::unique_ptr<script_sendprop_t>> script_sendprops;
 
-		gsdk::SendProp *script_lookup_sendprop(std::string_view path) noexcept
+		static inline class_desc_t<script_sendprop_t> sendprop_desc{"__vmod_sendprop_class"};
+
+		gsdk::HSCRIPT script_lookup_sendprop(std::string_view path) noexcept
 		{
 			gsdk::IScriptVM *vm{vmod.vm()};
 
@@ -1544,35 +1581,22 @@ namespace vmod
 				return nullptr;
 			}
 
-			return res.sendprop;
-		}
+			auto it{script_sendprops.find(res.sendprop)};
+			if(it == script_sendprops.end()) {
+				std::unique_ptr<script_sendprop_t> prop{new script_sendprop_t{res.sendprop}};
 
-		gsdk::HSCRIPT script_hook_send_proxy(gsdk::SendProp *prop, gsdk::HSCRIPT func, bool per_client) noexcept
-		{
-			gsdk::IScriptVM *vm{vmod.vm()};
-
-			if(!prop) {
-				vm->RaiseException("vmod: invalid prop");
-				return nullptr;
-			}
-
-			if(!func || func == gsdk::INVALID_HSCRIPT) {
-				vm->RaiseException("vmod: invalid function");
-				return nullptr;
-			}
-
-			auto info_it{proxyhooks.find(prop)};
-			if(info_it == proxyhooks.end()) {
-				std::unique_ptr<proxyhook_info_t> info{new proxyhook_info_t{prop}};
-				if(!info->initialize()) {
-					vm->RaiseException("vmod: failed to initialize hook");
+				gsdk::HSCRIPT instance{vm->RegisterInstance(&sendprop_desc, prop.get())};
+				if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+					vm->RaiseException("vmod: failed to register instance");
 					return nullptr;
 				}
 
-				info_it = proxyhooks.emplace(prop, std::move(info)).first;
+				prop->instance = instance;
+
+				it = script_sendprops.emplace(res.sendprop, std::move(prop)).first;
 			}
 
-			return nullptr;
+			return it->second->instance;
 		}
 
 		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override;
@@ -1581,6 +1605,50 @@ namespace vmod
 		gsdk::HSCRIPT scope{gsdk::INVALID_HSCRIPT};
 		gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
 	};
+
+	entities_singleton::proxyhook_instance_t::~proxyhook_instance_t() noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(func && func != gsdk::INVALID_HSCRIPT) {
+			if(post) {
+				auto it{prop->proxyhook_post.find(func)};
+				if(it != prop->proxyhook_post.end()) {
+					prop->proxyhook_post.erase(it);
+				}
+			} else {
+				auto it{prop->proxyhook_pre.find(func)};
+				if(it != prop->proxyhook_pre.end()) {
+					prop->proxyhook_pre.erase(it);
+				}
+			}
+
+			vm->ReleaseFunction(func);
+		}
+
+		if(instance && instance != gsdk::INVALID_HSCRIPT) {
+			vm->RemoveInstance(instance);
+		}
+	}
+
+	bool entities_singleton::proxyhook_instance_t::initialize(gsdk::HSCRIPT func_) noexcept
+	{
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		if(!vm->RegisterInstance(&plugin::owned_instance_desc, this)) {
+			return false;
+		}
+
+		func = vm->ReferenceObject(func_);
+
+		if(post) {
+			prop->proxyhook_post.emplace(func, this);
+		} else {
+			prop->proxyhook_pre.emplace(func, this);
+		}
+
+		return true;
+	}
 
 	ffi_type *entities_singleton::guess_prop_type(const gsdk::SendProp *prop, gsdk::SendVarProxyFn proxy, const gsdk::SendTable *table) noexcept
 	{
@@ -1679,13 +1747,73 @@ namespace vmod
 		}
 	}
 
-	void entities_singleton::proxyhook_info_t::closure_binding(ffi_cif *closure_cif, void *ret, void *args[], void *userptr) noexcept
+	static std::size_t proxy_client{static_cast<std::size_t>(-1)};
+
+	void entities_singleton::script_sendprop_t::closure_binding(ffi_cif *closure_cif, void *ret, void *args[], void *userptr) noexcept
 	{
-		proxyhook_info_t *prop_info{static_cast<proxyhook_info_t *>(userptr)};
+		script_sendprop_t *prop{static_cast<script_sendprop_t *>(userptr)};
 
-		//TODO!!!
+		if(prop->proxyhook_pre.empty() &&
+			prop->proxyhook_post.empty()) {
+			ffi_call(closure_cif, reinterpret_cast<void(*)()>(prop->old_proxy), ret, args);
+			return;
+		}
 
-		ffi_call(closure_cif, reinterpret_cast<void(*)()>(prop_info->old_proxy), ret, args);
+		gsdk::IScriptVM *vm{vmod.vm()};
+
+		gsdk::DVariant *dvar{*static_cast<gsdk::DVariant **>(args[3])};
+
+		script_variant_t vargs[]{
+			*static_cast<gsdk::SendProp **>  (args[0]),
+			*static_cast<void **>            (args[1]),
+			*static_cast<void **>            (args[2]),
+			&dvar->m_ptr,
+			*static_cast<int *>              (args[4]),
+			*static_cast<int *>              (args[5]),
+			proxy_client,
+		};
+
+		std::memset(dvar->m_data, 0, sizeof(gsdk::DVariant::m_data));
+
+		bool call_orig{true};
+
+		for(const auto &it : prop->proxyhook_pre) {
+			gsdk::HSCRIPT pl_scope{it.second->owner_scope()};
+
+			script_variant_t ret_var;
+			if(vm->ExecuteFunction(it.first, vargs, static_cast<int>(std::size(vargs)), &ret_var, pl_scope, true) == gsdk::SCRIPT_ERROR) {
+				continue;
+			}
+
+			callback_result_flags flags{ret_var.get<callback_result_flags>()};
+
+			if(flags & callback_result_flags::handled) {
+				call_orig = false;
+			}
+
+			if(flags & callback_result_flags::halt) {
+				break;
+			}
+		}
+
+		if(call_orig) {
+			ffi_call(closure_cif, reinterpret_cast<void(*)()>(prop->old_proxy), ret, args);
+		}
+
+		for(const auto &it : prop->proxyhook_post) {
+			gsdk::HSCRIPT pl_scope{it.second->owner_scope()};
+
+			script_variant_t ret_var;
+			if(vm->ExecuteFunction(it.first, vargs, static_cast<int>(std::size(vargs)), &ret_var, pl_scope, true) == gsdk::SCRIPT_ERROR) {
+				continue;
+			}
+
+			callback_result_flags flags{ret_var.get<callback_result_flags>()};
+
+			if(flags & callback_result_flags::halt) {
+				break;
+			}
+		}
 	}
 
 	bool entities_singleton::Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value)
@@ -2230,7 +2358,6 @@ namespace vmod
 			return false;
 		}
 
-		entities_singleton_desc.func(&entities_singleton::script_hook_send_proxy, "script_hook_send_proxy"sv, "hook_sendprop_proxy"sv);
 		entities_singleton_desc.func(&entities_singleton::script_lookup_sendprop, "script_lookup_sendprop"sv, "lookup_sendprop"sv);
 		entities_singleton_desc.func(&entities_singleton::script_from_ptr, "script_from_ptr"sv, "from_ptr"sv);
 		entities_singleton_desc.func(&entities_singleton::script_find_factory, "script_find_factory"sv, "find_factory"sv);
@@ -2261,6 +2388,14 @@ namespace vmod
 
 		if(!vm->RegisterClass(&script_factory_desc)) {
 			error("vmod: failed to register entity factory script class\n"sv);
+			return false;
+		}
+
+		sendprop_desc.func(&script_sendprop_t::script_hook_proxy, "script_hook_proxy"sv, "hook_proxy"sv);
+		sendprop_desc.doc_class_name("sendprop"sv);
+
+		if(!vm->RegisterClass(&sendprop_desc)) {
+			error("vmod: failed to register sendprop script class\n"sv);
 			return false;
 		}
 
@@ -2363,25 +2498,42 @@ namespace vmod
 			return false;
 		}
 
-		symbols_table_ = vm_->CreateTable();
-		if(!symbols_table_ || symbols_table_ == gsdk::INVALID_HSCRIPT) {
+		result_table = vm_->CreateTable();
+		if(!result_table || result_table == gsdk::INVALID_HSCRIPT) {
 			error("vmod: failed to create symbols table\n"sv);
 			return false;
 		}
 
-		if(!vm_->SetValue(scope_, "syms", symbols_table_)) {
-			error("vmod: failed to set symbols table value\n"sv);
+		{
+			if(!vm_->SetValue(result_table, "continue", script_variant_t{callback_result_flags::continue_})) {
+				error("vmod: failed to set result table continue value\n"sv);
+				return false;
+			}
+
+			if(!vm_->SetValue(result_table, "halt", script_variant_t{callback_result_flags::halt})) {
+				error("vmod: failed to set result table halt value\n"sv);
+				return false;
+			}
+
+			if(!vm_->SetValue(result_table, "handled", script_variant_t{callback_result_flags::handled})) {
+				error("vmod: failed to set result table handled value\n"sv);
+				return false;
+			}
+
+			if(!vm_->SetValue(result_table, "handled_halt", script_variant_t{callback_result_flags::handled|callback_result_flags::halt})) {
+				error("vmod: failed to set result table handled halt value\n"sv);
+				return false;
+			}
+		}
+
+		if(!vm_->SetValue(scope_, "res", result_table)) {
+			error("vmod: failed to set result table value\n"sv);
 			return false;
 		}
 
 		stringtable_table = vm_->CreateTable();
 		if(!stringtable_table || stringtable_table == gsdk::INVALID_HSCRIPT) {
 			error("vmod: failed to create stringtable table\n"sv);
-			return false;
-		}
-
-		if(!vm_->SetValue(scope_, "strtables", stringtable_table)) {
-			error("vmod: failed to set stringtable table value\n"sv);
 			return false;
 		}
 
@@ -2442,11 +2594,27 @@ namespace vmod
 			}
 		}
 
+		if(!vm_->SetValue(scope_, "strtables", stringtable_table)) {
+			error("vmod: failed to set stringtable table value\n"sv);
+			return false;
+		}
+
 		if(!plugin::bindings()) {
 			return false;
 		}
 
+		symbols_table_ = vm_->CreateTable();
+		if(!symbols_table_ || symbols_table_ == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create symbols table\n"sv);
+			return false;
+		}
+
 		if(!server_symbols_singleton.bindings()) {
+			return false;
+		}
+
+		if(!vm_->SetValue(scope_, "syms", symbols_table_)) {
+			error("vmod: failed to set symbols table value\n"sv);
 			return false;
 		}
 
@@ -2521,6 +2689,14 @@ namespace vmod
 			vm_->ClearValue(scope_, "syms");
 		}
 
+		if(result_table && result_table != gsdk::INVALID_HSCRIPT) {
+			vm_->ReleaseTable(result_table);
+		}
+
+		if(vm_->ValueExists(scope_, "res")) {
+			vm_->ClearValue(scope_, "res");
+		}
+
 		script_stringtables.clear();
 
 		if(stringtable_table && stringtable_table != gsdk::INVALID_HSCRIPT) {
@@ -2558,6 +2734,9 @@ namespace vmod
 	static void(*PrintFunc)(HSQUIRRELVM, const SQChar *, ...);
 	static void(*ErrorFunc)(HSQUIRRELVM, const SQChar *, ...);
 	static void(gsdk::IScriptVM::*RegisterFunctionGuts)(gsdk::ScriptFunctionBinding_t *, gsdk::ScriptClassDesc_t *);
+	static void(gsdk::IScriptVM::*RegisterFunction)(gsdk::ScriptFunctionBinding_t *);
+	static bool(gsdk::IScriptVM::*RegisterClass)(gsdk::ScriptClassDesc_t *);
+	static gsdk::HSCRIPT(gsdk::IScriptVM::*RegisterInstance)(gsdk::ScriptClassDesc_t *, void *);
 	static SQRESULT(*sq_setparamscheck)(HSQUIRRELVM, SQInteger, const SQChar *);
 	static gsdk::ScriptClassDesc_t **sv_classdesc_pHead;
 	static gsdk::CUtlVector<gsdk::SendTable *> *g_SendTables;
@@ -2866,45 +3045,101 @@ namespace vmod
 		(vm->*SetErrorCallback_original)(func);
 	}
 
+	static std::vector<const gsdk::ScriptFunctionBinding_t *> internal_vscript_func_bindings;
+	static std::vector<const gsdk::ScriptClassDesc_t *> internal_vscript_class_bindings;
+
 	static std::vector<const gsdk::ScriptFunctionBinding_t *> game_vscript_func_bindings;
 	static std::vector<const gsdk::ScriptClassDesc_t *> game_vscript_class_bindings;
 
 	static void (gsdk::IScriptVM::*RegisterFunction_original)(gsdk::ScriptFunctionBinding_t *);
+	static detour<decltype(RegisterFunction)> RegisterFunction_detour;
 	static void RegisterFunction_detour_callback(gsdk::IScriptVM *vm, gsdk::ScriptFunctionBinding_t *func)
 	{
-		(vm->*RegisterFunction_original)(func);
-		if(!vscript_server_init_called) {
+		if(RegisterFunction_original) {
+			(vm->*RegisterFunction_original)(func);
+		} else {
+			RegisterFunction_detour(vm, func);
+		}
+
+		if(!vmod.vm()) {
+			std::vector<const gsdk::ScriptFunctionBinding_t *> &vec{internal_vscript_func_bindings};
+			vec.emplace_back(func);
+		} else if(!vscript_server_init_called) {
 			std::vector<const gsdk::ScriptFunctionBinding_t *> &vec{game_vscript_func_bindings};
 			vec.emplace_back(func);
 		}
 	}
 
 	static bool (gsdk::IScriptVM::*RegisterClass_original)(gsdk::ScriptClassDesc_t *);
+	static detour<decltype(RegisterClass)> RegisterClass_detour;
 	static bool RegisterClass_detour_callback(gsdk::IScriptVM *vm, gsdk::ScriptClassDesc_t *desc)
 	{
-		bool ret{(vm->*RegisterClass_original)(desc)};
-		if(!vscript_server_init_called) {
+		bool ret;
+
+		if(RegisterClass_original) {
+			ret = (vm->*RegisterClass_original)(desc);
+		} else {
+			ret = RegisterClass_detour(vm, desc);
+		}
+
+		if(!vmod.vm()) {
+			std::vector<const gsdk::ScriptClassDesc_t *> &vec{internal_vscript_class_bindings};
+			auto it{std::find(vec.begin(), vec.end(), desc)};
+			if(it == vec.end()) {
+				vec.emplace_back(desc);
+			}
+		} else if(!vscript_server_init_called) {
 			std::vector<const gsdk::ScriptClassDesc_t *> &vec{game_vscript_class_bindings};
 			auto it{std::find(vec.begin(), vec.end(), desc)};
 			if(it == vec.end()) {
 				vec.emplace_back(desc);
 			}
 		}
+
 		return ret;
 	}
 
 	static gsdk::HSCRIPT (gsdk::IScriptVM::*RegisterInstance_original)(gsdk::ScriptClassDesc_t *, void *);
+	static detour<decltype(RegisterInstance)> RegisterInstance_detour;
 	static gsdk::HSCRIPT RegisterInstance_detour_callback(gsdk::IScriptVM *vm, gsdk::ScriptClassDesc_t *desc, void *ptr)
 	{
-		gsdk::HSCRIPT ret{(vm->*RegisterInstance_original)(desc, ptr)};
-		if(!vscript_server_init_called) {
+		gsdk::HSCRIPT ret;
+
+		if(RegisterInstance_original) {
+			ret = (vm->*RegisterInstance_original)(desc, ptr);
+		} else {
+			ret = RegisterInstance_detour(vm, desc, ptr);
+		}
+
+		if(!vmod.vm()) {
+			std::vector<const gsdk::ScriptClassDesc_t *> &vec{internal_vscript_class_bindings};
+			auto it{std::find(vec.begin(), vec.end(), desc)};
+			if(it == vec.end()) {
+				vec.emplace_back(desc);
+			}
+		} else if(!vscript_server_init_called) {
 			std::vector<const gsdk::ScriptClassDesc_t *> &vec{game_vscript_class_bindings};
 			auto it{std::find(vec.begin(), vec.end(), desc)};
 			if(it == vec.end()) {
 				vec.emplace_back(desc);
 			}
 		}
+
 		return ret;
+	}
+
+	bool vmod::detours_prevm() noexcept
+	{
+		RegisterFunction_detour.initialize(RegisterFunction, RegisterFunction_detour_callback);
+		RegisterFunction_detour.enable();
+
+		RegisterClass_detour.initialize(RegisterClass, RegisterClass_detour_callback);
+		RegisterClass_detour.enable();
+
+		RegisterInstance_detour.initialize(RegisterInstance, RegisterInstance_detour_callback);
+		RegisterInstance_detour.enable();
+
+		return true;
 	}
 
 	bool vmod::detours() noexcept
@@ -2935,6 +3170,10 @@ namespace vmod
 
 		Run_original = swap_vfunc(vm_, static_cast<decltype(Run_original)>(&gsdk::IScriptVM::Run), Run_detour_callback);
 		SetErrorCallback_original = swap_vfunc(vm_, &gsdk::IScriptVM::SetErrorCallback, SetErrorCallback_detour_callback);
+
+		RegisterFunction_detour.disable();
+		RegisterClass_detour.disable();
+		RegisterInstance_detour.disable();
 
 		RegisterFunction_original = swap_vfunc(vm_, &gsdk::IScriptVM::RegisterFunction, RegisterFunction_detour_callback);
 		RegisterClass_original = swap_vfunc(vm_, &gsdk::IScriptVM::RegisterClass, RegisterClass_detour_callback);
@@ -3171,9 +3410,41 @@ namespace vmod
 		const auto &vscript_symbols{vscript_lib.symbols()};
 		const auto &vscript_global_qual{vscript_symbols.global()};
 
+		auto CSquirrelVM_it{vscript_symbols.find("CSquirrelVM"s)};
+		if(CSquirrelVM_it == vscript_symbols.end()) {
+			error("vmod: missing 'CSquirrelVM' symbols\n"sv);
+			return false;
+		}
+
 		auto sq_getversion_it{vscript_global_qual.find("sq_getversion"s)};
 		if(sq_getversion_it == vscript_global_qual.end()) {
 			error("vmod: missing 'sq_getversion' symbol\n"sv);
+			return false;
+		}
+
+		auto RegisterFunction_it{CSquirrelVM_it->second->find("RegisterFunction(ScriptFunctionBinding_t*)"s)};
+		if(RegisterFunction_it == CSquirrelVM_it->second->end()) {
+			error("vmod: missing 'CSquirrelVM::RegisterFunction(ScriptFunctionBinding_t*)' symbol\n"sv);
+			return false;
+		}
+
+		auto RegisterClass_it{CSquirrelVM_it->second->find("RegisterClass(ScriptClassDesc_t*)"s)};
+		if(RegisterClass_it == CSquirrelVM_it->second->end()) {
+			error("vmod: missing 'CSquirrelVM::RegisterClass(ScriptClassDesc_t*)' symbol\n"sv);
+			return false;
+		}
+
+		auto RegisterInstance_it{CSquirrelVM_it->second->find("RegisterInstance(ScriptClassDesc_t*, void*)"s)};
+		if(RegisterInstance_it == CSquirrelVM_it->second->end()) {
+			error("vmod: missing 'CSquirrelVM::RegisterInstance(ScriptClassDesc_t*, void*)' symbol\n"sv);
+			return false;
+		}
+
+		RegisterFunction = RegisterFunction_it->second->mfp<decltype(RegisterFunction)>();
+		RegisterClass = RegisterClass_it->second->mfp<decltype(RegisterClass)>();
+		RegisterInstance = RegisterInstance_it->second->mfp<decltype(RegisterInstance)>();
+
+		if(!detours_prevm()) {
 			return false;
 		}
 
@@ -3231,12 +3502,6 @@ namespace vmod
 			return false;
 		}
 
-		auto CSquirrelVM_it{vscript_symbols.find("CSquirrelVM"s)};
-		if(CSquirrelVM_it == vscript_symbols.end()) {
-			error("vmod: missing 'CSquirrelVM' symbols\n"sv);
-			return false;
-		}
-
 		auto CreateArray_it{CSquirrelVM_it->second->find("CreateArray(CVariantBase<CVariantDefaultAllocator>&)"s)};
 		if(CreateArray_it == CSquirrelVM_it->second->end()) {
 			error("vmod: missing 'CSquirrelVM::CreateArray(CVariantBase<CVariantDefaultAllocator>&)' symbol\n"sv);
@@ -3290,6 +3555,7 @@ namespace vmod
 		}
 
 		RegisterScriptFunctions = RegisterScriptFunctions_it->second->mfp<decltype(RegisterScriptFunctions)>();
+
 		VScriptServerInit = VScriptServerInit_it->second->func<decltype(VScriptServerInit)>();
 		VScriptServerTerm = VScriptServerTerm_it->second->func<decltype(VScriptServerTerm)>();
 		VScriptRunScript = VScriptRunScript_it->second->func<decltype(VScriptRunScript)>();
@@ -3826,6 +4092,8 @@ namespace vmod
 	{ return vmod.typeof_(object); }
 	void __vmod_raiseexception(const char *str) noexcept
 	{ vmod.vm()->RaiseException(str); }
+	bool __vmod_get_scalar(gsdk::HSCRIPT object, gsdk::ScriptVariant_t *var) noexcept
+	{ return vmod.vm()->GetScalarValue(object, var); }
 
 	static inline void ident(std::string &file, std::size_t num) noexcept
 	{ file.insert(file.end(), num, '\t'); }
@@ -3923,8 +4191,6 @@ namespace vmod
 			return "FIELD_INTEGER64"sv;
 			case gsdk::FIELD_VECTOR4D:
 			return "FIELD_VECTOR4D"sv;
-			case gsdk::FIELD_RESOURCE:
-			return "FIELD_RESOURCE"sv;
 			default: {
 				temp_buffer = "<<unknown: "sv;
 
@@ -4119,9 +4385,14 @@ namespace vmod
 			file += "class "sv;
 			file += get_class_desc_name(desc);
 
-			if(desc->m_pBaseDesc) {
-				file += " : "sv;
-				file += get_class_desc_name(desc->m_pBaseDesc);
+			if(desc->m_pBaseDesc != reinterpret_cast<gsdk::ScriptClassDesc_t *>(uninitialized_memory)) {
+				if(desc->m_pBaseDesc) {
+					file += " : "sv;
+					file += get_class_desc_name(desc->m_pBaseDesc);
+				} else {
+					file += " : "sv;
+					file += "instance"sv;
+				}
 			}
 
 			file += '\n';
@@ -4546,6 +4817,36 @@ namespace vmod
 		std::unordered_map<int, std::string> bit_str_map;
 
 		int num2{vm_->GetNumTableEntries(enum_table)};
+
+		if(how == write_enum_how::flags) {
+			for(int j{0}, it2{0}; it2 != -1 && j < num2; ++j) {
+				script_variant_t key2;
+				script_variant_t value2;
+				it2 = vm_->GetKeyValue(enum_table, it2, &key2, &value2);
+
+				std::string_view value_name{key2.get<std::string_view>()};
+
+				unsigned int val{value2.get<unsigned int>()};
+
+				unsigned char found_bits{0};
+				unsigned char last_bit{0};
+
+				for(int k{0}; val; val >>= 1, ++k) {
+					if(val & 1) {
+						++found_bits;
+						last_bit = static_cast<unsigned char>(k);
+						if(found_bits > 1) {
+							break;
+						}
+					}
+				}
+
+				if(found_bits <= 1) {
+					bit_str_map.emplace(last_bit, value_name);
+				}
+			}
+		}
+
 		for(int j{0}, it2{0}; it2 != -1 && j < num2; ++j) {
 			script_variant_t key2;
 			script_variant_t value2;
@@ -4592,7 +4893,7 @@ namespace vmod
 						}
 						for(int bit : bits) {
 							auto name_it{bit_str_map.find(bit)};
-							if(name_it != bit_str_map.end()) {
+							if(name_it != bit_str_map.end() && name_it->second != value_name) {
 								file += name_it->second;
 								file += '|';
 							} else {
@@ -4613,10 +4914,6 @@ namespace vmod
 						file.pop_back();
 						if(num_bits > 1) {
 							file += ')';
-						}
-
-						if(num_bits == 1) {
-							bit_str_map.emplace(bits[0], value_name);
 						}
 					} else {
 						file += value_str;
@@ -4641,6 +4938,162 @@ namespace vmod
 		}
 	}
 
+	static gsdk::ScriptFunctionBinding_t developer_desc;
+	static gsdk::ScriptFunctionBinding_t isweakref_desc;
+	static gsdk::ScriptFunctionBinding_t dumpobject_desc;
+	static gsdk::ScriptFunctionBinding_t getfunctionsignature_desc;
+	static gsdk::ScriptFunctionBinding_t makenamespace_desc;
+
+	static gsdk::ScriptClassDesc_t instance_desc;
+	static gsdk::ScriptClassDesc_t vector_desc;
+	static gsdk::ScriptClassDesc_t quaternion_desc;
+	static gsdk::ScriptClassDesc_t vector4d_desc;
+	static gsdk::ScriptClassDesc_t vector2d_desc;
+	static gsdk::ScriptClassDesc_t qangle_desc;
+
+	static bool internal_docs_built;
+
+	//TODO!!! automate this
+	void vmod::build_internal_docs() noexcept
+	{
+		if(internal_docs_built) {
+			return;
+		}
+
+		{
+			gsdk::ScriptFunctionBinding_t &func{developer_desc};
+
+			func.m_flags = 0;
+			func.m_desc.m_pszDescription = nullptr;
+			func.m_desc.m_pszScriptName = "developer";
+			func.m_desc.m_ReturnType = gsdk::FIELD_INTEGER;
+
+			internal_vscript_func_bindings.emplace_back(&func);
+		}
+
+		{
+			gsdk::ScriptFunctionBinding_t &func{isweakref_desc};
+
+			func.m_flags = 0;
+			func.m_desc.m_pszDescription = nullptr;
+			func.m_desc.m_pszScriptName = "IsWeakref";
+			func.m_desc.m_ReturnType = gsdk::FIELD_BOOLEAN;
+
+			internal_vscript_func_bindings.emplace_back(&func);
+		}
+
+		{
+			gsdk::ScriptFunctionBinding_t &func{getfunctionsignature_desc};
+
+			func.m_flags = 0;
+			func.m_desc.m_pszDescription = nullptr;
+			func.m_desc.m_pszScriptName = "GetFunctionSignature";
+			func.m_desc.m_ReturnType = gsdk::FIELD_CSTRING;
+
+			internal_vscript_func_bindings.emplace_back(&func);
+		}
+
+		{
+			gsdk::ScriptFunctionBinding_t &func{makenamespace_desc};
+
+			func.m_flags = 0;
+			func.m_desc.m_pszDescription = nullptr;
+			func.m_desc.m_pszScriptName = "MakeNamespace";
+			func.m_desc.m_ReturnType = gsdk::FIELD_VOID;
+
+			internal_vscript_func_bindings.emplace_back(&func);
+		}
+
+		{
+			gsdk::ScriptClassDesc_t &desc{instance_desc};
+
+			desc.m_pszScriptName = "instance";
+			desc.m_pBaseDesc = reinterpret_cast<gsdk::ScriptClassDesc_t *>(uninitialized_memory);
+			desc.m_pszDescription = nullptr;
+			desc.m_pNextDesc = nullptr;
+			desc.m_pfnConstruct = nullptr;
+			desc.m_pfnDestruct = nullptr;
+
+			{
+				gsdk::ScriptFunctionBinding_t &func{desc.m_FunctionBindings.emplace_back()};
+
+				func.m_flags = gsdk::SF_MEMBER_FUNC;
+				func.m_desc.m_pszDescription = nullptr;
+				func.m_desc.m_pszScriptName = "IsValid";
+				func.m_desc.m_ReturnType = gsdk::FIELD_BOOLEAN;
+			}
+
+			internal_vscript_class_bindings.emplace_back(&desc);
+		}
+
+		{
+			gsdk::ScriptClassDesc_t &desc{vector_desc};
+
+			desc.m_pszScriptName = "Vector";
+			desc.m_pBaseDesc = reinterpret_cast<gsdk::ScriptClassDesc_t *>(uninitialized_memory);
+			desc.m_pszDescription = nullptr;
+			desc.m_pNextDesc = nullptr;
+			desc.m_pfnConstruct = nullptr;
+			desc.m_pfnDestruct = nullptr;
+
+			internal_vscript_class_bindings.emplace_back(&desc);
+		}
+
+		{
+			gsdk::ScriptClassDesc_t &desc{quaternion_desc};
+
+			desc.m_pszScriptName = "Quaternion";
+			desc.m_pBaseDesc = reinterpret_cast<gsdk::ScriptClassDesc_t *>(uninitialized_memory);
+			desc.m_pszDescription = nullptr;
+			desc.m_pNextDesc = nullptr;
+			desc.m_pfnConstruct = nullptr;
+			desc.m_pfnDestruct = nullptr;
+
+			internal_vscript_class_bindings.emplace_back(&desc);
+		}
+
+		{
+			gsdk::ScriptClassDesc_t &desc{vector4d_desc};
+
+			desc.m_pszScriptName = "Vector4D";
+			desc.m_pBaseDesc = reinterpret_cast<gsdk::ScriptClassDesc_t *>(uninitialized_memory);
+			desc.m_pszDescription = nullptr;
+			desc.m_pNextDesc = nullptr;
+			desc.m_pfnConstruct = nullptr;
+			desc.m_pfnDestruct = nullptr;
+
+			internal_vscript_class_bindings.emplace_back(&desc);
+		}
+
+		{
+			gsdk::ScriptClassDesc_t &desc{vector2d_desc};
+
+			desc.m_pszScriptName = "Vector2D";
+			desc.m_pBaseDesc = reinterpret_cast<gsdk::ScriptClassDesc_t *>(uninitialized_memory);
+			desc.m_pszDescription = nullptr;
+			desc.m_pNextDesc = nullptr;
+			desc.m_pfnConstruct = nullptr;
+			desc.m_pfnDestruct = nullptr;
+
+			internal_vscript_class_bindings.emplace_back(&desc);
+		}
+
+		{
+			gsdk::ScriptClassDesc_t &desc{qangle_desc};
+
+			desc.m_pszScriptName = "QAngle";
+			desc.m_pBaseDesc = reinterpret_cast<gsdk::ScriptClassDesc_t *>(uninitialized_memory);
+			desc.m_pszDescription = nullptr;
+			desc.m_pNextDesc = nullptr;
+			desc.m_pfnConstruct = nullptr;
+			desc.m_pfnDestruct = nullptr;
+
+			internal_vscript_class_bindings.emplace_back(&desc);
+		}
+
+		internal_docs_built = true;
+	}
+
 	bool vmod::load_late() noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -4654,6 +5107,12 @@ namespace vmod
 
 		//TODO!!! make this a cmd/cvar/cmdline opt
 		{
+			build_internal_docs();
+
+			std::filesystem::path internal_docs{root_dir_/"docs"sv/"internal"sv};
+			write_docs(internal_docs, internal_vscript_class_bindings, false);
+			write_docs(internal_docs, internal_vscript_func_bindings, false);
+
 			std::filesystem::path game_docs{root_dir_/"docs"sv/"game"sv};
 			write_docs(game_docs, game_vscript_class_bindings, false);
 			write_docs(game_docs, game_vscript_func_bindings, false);

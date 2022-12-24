@@ -28,7 +28,7 @@ namespace vmod
 	{
 		var.m_type = static_cast<short>(__type_to_field_impl<std::decay_t<T>>());
 		var.m_flags = gsdk::SV_NOFLAGS;
-		initialize_variant_value(var, std::forward<T>(value));
+		__initialize_variant_value_impl(var, std::forward<T>(value));
 	}
 }
 
@@ -37,7 +37,7 @@ namespace vmod
 	inline void null_variant(gsdk::ScriptVariant_t &var) noexcept
 	{
 		var.m_type = gsdk::FIELD_VOID;
-		var.m_ulonglong = 0;
+		std::memset(var.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
 		var.m_flags = gsdk::SV_NOFLAGS;
 	}
 
@@ -47,11 +47,7 @@ namespace vmod
 	{
 	public:
 		inline script_variant_t() noexcept
-		{
-			m_type = gsdk::FIELD_VOID;
-			m_ulonglong = 0;
-			m_flags = gsdk::SV_NOFLAGS;
-		}
+		{ null_variant(*this); }
 
 		inline ~script_variant_t() noexcept
 		{ free(); }
@@ -62,7 +58,7 @@ namespace vmod
 		inline script_variant_t &operator=(script_variant_t &&other) noexcept
 		{
 			m_type = other.m_type;
-			m_ulonglong = other.m_ulonglong;
+			std::memmove(m_data, other.m_data, sizeof(gsdk::ScriptVariant_t::m_data));
 			m_flags = other.m_flags;
 			other.m_flags = gsdk::SV_NOFLAGS;
 			return *this;
@@ -136,7 +132,7 @@ namespace vmod
 						free_variant_hscript(*this);
 					} break;
 					default: {
-						std::free(reinterpret_cast<void *>(m_ulonglong));
+						std::free(static_cast<void *>(m_data));
 					} break;
 				}
 				m_flags &= ~gsdk::SV_FREE;
@@ -159,7 +155,7 @@ namespace vmod
 		script_variant_t temp_var;
 		temp_var.m_type = var.m_type;
 		temp_var.m_flags = gsdk::SV_NOFLAGS;
-		temp_var.m_ulonglong = var.m_ulonglong;
+		std::memcpy(temp_var.m_data, var.m_data, sizeof(gsdk::ScriptVariant_t::m_data));
 		return temp_var;
 	}
 

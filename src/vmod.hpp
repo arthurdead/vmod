@@ -18,6 +18,19 @@ namespace vmod
 
 	class script_stringtable;
 
+	enum class callback_result_flags : unsigned char
+	{
+		continue_ =        0,
+		halt =       (1 << 0),
+		handled =    (1 << 1)
+	};
+	constexpr inline bool operator&(callback_result_flags lhs, callback_result_flags rhs) noexcept
+	{ return static_cast<bool>(static_cast<unsigned char>(lhs) & static_cast<unsigned char>(rhs)); }
+	constexpr inline callback_result_flags operator|(callback_result_flags lhs, callback_result_flags rhs) noexcept
+	{ return static_cast<callback_result_flags>(static_cast<unsigned char>(lhs) | static_cast<unsigned char>(rhs)); }
+
+	static_assert(static_cast<unsigned char>(callback_result_flags::continue_) == 0);
+
 	class vmod final : public gsdk::ISquirrelMetamethodDelegate
 	{
 		friend class vsp;
@@ -115,6 +128,7 @@ namespace vmod
 		bool bindings() noexcept;
 		void unbindings() noexcept;
 
+		bool detours_prevm() noexcept;
 		bool detours() noexcept;
 
 		bool assign_entity_class_info() noexcept;
@@ -144,6 +158,8 @@ namespace vmod
 		void write_mem_docs(const std::filesystem::path &dir) const noexcept;
 		void write_ffi_docs(const std::filesystem::path &dir) const noexcept;
 		void write_ent_docs(const std::filesystem::path &dir) const noexcept;
+
+		void build_internal_docs() noexcept;
 
 		enum class load_plugins_flags : unsigned char
 		{
@@ -191,6 +207,8 @@ namespace vmod
 		gsdk::HSCRIPT plugins_table_{gsdk::INVALID_HSCRIPT};
 
 		gsdk::HSCRIPT symbols_table_{gsdk::INVALID_HSCRIPT};
+
+		gsdk::HSCRIPT result_table{gsdk::INVALID_HSCRIPT};
 
 		gsdk::HSCRIPT stringtable_table{gsdk::INVALID_HSCRIPT};
 		std::unordered_map<std::string, std::unique_ptr<script_stringtable>> script_stringtables;

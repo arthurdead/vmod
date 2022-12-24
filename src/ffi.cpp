@@ -70,10 +70,10 @@ namespace vmod
 			*static_cast<long double *>(arg_ptr) = arg_var.get<long double>();
 			break;
 			case FFI_TYPE_UINT8:
-			*static_cast<unsigned char *>(arg_ptr) = static_cast<unsigned char>(arg_var.get<unsigned short>());
+			*static_cast<unsigned char *>(arg_ptr) = arg_var.get<unsigned char>();
 			break;
 			case FFI_TYPE_SINT8:
-			*static_cast<signed char *>(arg_ptr) = static_cast<signed char>(arg_var.get<short>());
+			*static_cast<signed char *>(arg_ptr) = arg_var.get<signed char>();
 			break;
 			case FFI_TYPE_UINT16:
 			*static_cast<unsigned short *>(arg_ptr) = arg_var.get<unsigned short>();
@@ -118,10 +118,10 @@ namespace vmod
 			arg_var.assign<long double>(*static_cast<long double *>(arg_ptr));
 			break;
 			case FFI_TYPE_UINT8:
-			arg_var.assign<unsigned short>(*static_cast<unsigned char *>(arg_ptr));
+			arg_var.assign<unsigned char>(*static_cast<unsigned char *>(arg_ptr));
 			break;
 			case FFI_TYPE_SINT8:
-			arg_var.assign<short>(*static_cast<signed char *>(arg_ptr));
+			arg_var.assign<signed char>(*static_cast<signed char *>(arg_ptr));
 			break;
 			case FFI_TYPE_UINT16:
 			arg_var.assign<unsigned short>(*static_cast<unsigned short *>(arg_ptr));
@@ -512,11 +512,6 @@ namespace vmod
 			return false;
 		}
 
-		if(!vm->SetValue(scope, "types", types_table)) {
-			error("vmod: failed to set memory types table value\n"sv);
-			return false;
-		}
-
 		{
 			if(!register_type(&ffi_type_void, "void"sv)) {
 				error("vmod: failed to register memory type void\n"sv);
@@ -622,6 +617,21 @@ namespace vmod
 				error("vmod: failed to register memory type ptr\n"sv);
 				return false;
 			}
+
+			if(!register_type(&ffi_type_bool, "bool"sv)) {
+				error("vmod: failed to register memory type bool\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_cstr, "cstr"sv)) {
+				error("vmod: failed to register memory type cstr\n"sv);
+				return false;
+			}
+		}
+
+		if(!vm->SetValue(scope, "types", types_table)) {
+			error("vmod: failed to set memory types table value\n"sv);
+			return false;
 		}
 
 		if(!memory_block::bindings()) {
@@ -1097,17 +1107,6 @@ namespace vmod
 			return false;
 		}
 
-		abi_table = vm->CreateTable();
-		if(!abi_table || abi_table == gsdk::INVALID_HSCRIPT) {
-			error("vmod: failed to create ffi abi table\n"sv);
-			return false;
-		}
-
-		if(!vm->SetValue(scope, "types", types_table)) {
-			error("vmod: failed to set ffi types table value\n"sv);
-			return false;
-		}
-
 		{
 			if(!vm->SetValue(types_table, "void", script_variant_t{&ffi_type_void})) {
 				error("vmod: failed to set ffi types void value\n"sv);
@@ -1213,10 +1212,26 @@ namespace vmod
 				error("vmod: failed to set ffi types ptr value\n"sv);
 				return false;
 			}
+
+			if(!vm->SetValue(types_table, "bool", script_variant_t{&ffi_type_bool})) {
+				error("vmod: failed to set ffi types bool value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(types_table, "cstr", script_variant_t{&ffi_type_cstr})) {
+				error("vmod: failed to set ffi types cstr value\n"sv);
+				return false;
+			}
 		}
 
-		if(!vm->SetValue(scope, "abi", abi_table)) {
-			error("vmod: failed to set ffi abi table value\n"sv);
+		if(!vm->SetValue(scope, "types", types_table)) {
+			error("vmod: failed to set ffi types table value\n"sv);
+			return false;
+		}
+
+		abi_table = vm->CreateTable();
+		if(!abi_table || abi_table == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create ffi abi table\n"sv);
 			return false;
 		}
 
@@ -1250,6 +1265,11 @@ namespace vmod
 				error("vmod: failed to set ffi abi current value\n"sv);
 				return false;
 			}
+		}
+
+		if(!vm->SetValue(scope, "abi", abi_table)) {
+			error("vmod: failed to set ffi abi table value\n"sv);
+			return false;
 		}
 
 		if(!script_cif::bindings()) {

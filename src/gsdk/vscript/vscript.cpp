@@ -83,6 +83,16 @@ namespace gsdk
 		return ret;
 	}
 
+	ScriptStatus_t IScriptVM::ExecuteFunction(HSCRIPT func, const ScriptVariant_t *args, int num_args, ScriptVariant_t *ret, HSCRIPT scope, bool wait) noexcept
+	{
+		std::size_t num_args_siz{static_cast<std::size_t>(num_args)};
+		for(std::size_t i{0}; i < num_args_siz; ++i) {
+			fixup_var(const_cast<ScriptVariant_t &>(args[i]));
+		}
+
+		return ExecuteFunction_impl(func, args, num_args, ret, scope, wait);
+	}
+
 	bool IScriptVM::SetValue(HSCRIPT scope, const char *name, const ScriptVariant_t &var) noexcept
 	{
 		if(scope == INVALID_HSCRIPT) {
@@ -92,7 +102,7 @@ namespace gsdk
 		ScriptVariant_t temp;
 		temp.m_type = fixup_var_field(var.m_type);
 		temp.m_flags = var.m_flags & ~SV_FREE;
-		temp.m_ulonglong = var.m_ulonglong;
+		std::memcpy(temp.m_data, var.m_data, sizeof(ScriptVariant_t::m_data));
 		return SetValue_impl(scope, name, temp);
 	}
 
@@ -179,7 +189,7 @@ namespace gsdk
 		ScriptVariant_t tmp;
 		tmp.m_type = FIELD_VOID;
 		tmp.m_flags = SV_NOFLAGS;
-		tmp.m_ulonglong = 0;
+		std::memset(tmp.m_data, 0, sizeof(ScriptVariant_t::m_data));
 		return GetKeyValue(array, it, &tmp, value);
 	}
 
@@ -192,7 +202,7 @@ namespace gsdk
 		ScriptVariant_t tmp;
 		tmp.m_type = FIELD_VOID;
 		tmp.m_flags = SV_NOFLAGS;
-		tmp.m_ulonglong = 0;
+		std::memset(tmp.m_data, 0, sizeof(ScriptVariant_t::m_data));
 		bool ret{GetValue(scope, name, &tmp)};
 		if(ret && tmp.m_type == FIELD_HSCRIPT && tmp.m_hScript) {
 			*object = tmp.m_hScript;
@@ -259,6 +269,7 @@ namespace gsdk
 			case FIELD_FUNCTION:
 			case FIELD_UINT:
 			case FIELD_UINT64:
+			case FIELD_SHORT:
 			return FIELD_INTEGER;
 			default:
 			return field;

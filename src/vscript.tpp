@@ -41,6 +41,8 @@ namespace vmod
 	template <typename R, typename ...Args>
 	void func_desc_t::initialize_shared(std::string_view name, std::string_view script_name, bool va)
 	{
+		constexpr std::size_t num_args{sizeof...(Args)};
+
 		m_desc.m_pszDescription = "@";
 
 		m_desc.m_pszFunction = name.data();
@@ -49,7 +51,6 @@ namespace vmod
 		m_desc.m_ReturnType = __type_to_field_impl<std::decay_t<R>>();
 		(m_desc.m_Parameters.emplace_back(gsdk::IScriptVM::fixup_var_field(__type_to_field_impl<std::decay_t<Args>>())), ...);
 
-		constexpr std::size_t num_args{sizeof...(Args)};
 		if constexpr(num_args > 0) {
 			using LA = std::tuple_element_t<num_args-1, std::tuple<Args...>>;
 			if constexpr(is_optional<LA>::value) {
@@ -60,10 +61,9 @@ namespace vmod
 		if(va) {
 			m_flags |= SF_VA_FUNC;
 
-			constexpr std::size_t va_start{sizeof...(Args)};
-			if(va_start >= 2) {
-				m_desc.m_Parameters.erase(va_start);
-				m_desc.m_Parameters.erase(va_start);
+			if(num_args >= 2) {
+				m_desc.m_Parameters.erase(num_args);
+				m_desc.m_Parameters.erase(num_args);
 			}
 		}
 	}

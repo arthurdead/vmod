@@ -144,8 +144,7 @@ namespace gsdk
 		FIELD_QANGLE,
 
 		FIELD_INTEGER64,
-		FIELD_VECTOR4D,
-		FIELD_RESOURCE
+		FIELD_VECTOR4D
 	};
 
 	using HSCRIPT = HSQOBJECT *;
@@ -176,8 +175,7 @@ namespace gsdk
 
 		inline CVariantBase &operator=(CVariantBase &&other) noexcept
 		{
-			m_ulonglong = other.m_ulonglong;
-			other.m_ulonglong = 0;
+			std::memmove(m_data, other.m_data, sizeof(CVariantBase::m_data));
 			m_type = other.m_type;
 			m_flags = other.m_flags;
 			other.m_flags = SV_NOFLAGS;
@@ -191,6 +189,7 @@ namespace gsdk
 			short m_short;
 			unsigned short m_ushort;
 			char m_char;
+			signed char m_schar;
 			unsigned char m_uchar;
 			bool m_bool;
 			long m_long;
@@ -274,7 +273,7 @@ namespace gsdk
 
 	struct ScriptFunctionBinding_t
 	{
-	protected:
+	public:
 		inline ScriptFunctionBinding_t() noexcept
 		{
 		}
@@ -315,7 +314,7 @@ namespace gsdk
 
 	struct ScriptClassDesc_t
 	{
-	protected:
+	public:
 		inline ScriptClassDesc_t() noexcept
 		{
 		}
@@ -372,10 +371,10 @@ namespace gsdk
 		static short fixup_var_field(short field) noexcept;
 		static ScriptVariant_t &fixup_var(ScriptVariant_t &var) noexcept;
 
-		static void(gsdk::IScriptVM::*CreateArray_ptr)(gsdk::ScriptVariant_t &);
-		static int(gsdk::IScriptVM::*GetArrayCount_ptr)(gsdk::HSCRIPT) const;
-		static bool(gsdk::IScriptVM::*IsArray_ptr)(gsdk::HSCRIPT) const;
-		static bool(gsdk::IScriptVM::*IsTable_ptr)(gsdk::HSCRIPT) const;
+		static void(IScriptVM::*CreateArray_ptr)(ScriptVariant_t &);
+		static int(IScriptVM::*GetArrayCount_ptr)(HSCRIPT) const;
+		static bool(IScriptVM::*IsArray_ptr)(HSCRIPT) const;
+		static bool(IScriptVM::*IsTable_ptr)(HSCRIPT) const;
 
 		virtual bool Init() = 0;
 		virtual void Shutdown() = 0;
@@ -402,7 +401,10 @@ namespace gsdk
 	public:
 		HSCRIPT LookupFunction(const char *name, HSCRIPT scope = nullptr) noexcept;
 		virtual void ReleaseFunction(HSCRIPT) = 0;
-		virtual ScriptStatus_t ExecuteFunction(HSCRIPT, const ScriptVariant_t *, int, ScriptVariant_t *, HSCRIPT, bool) = 0;
+	private:
+		virtual ScriptStatus_t ExecuteFunction_impl(HSCRIPT, const ScriptVariant_t *, int, ScriptVariant_t *, HSCRIPT, bool) = 0;
+	public:
+		ScriptStatus_t ExecuteFunction(HSCRIPT func, const ScriptVariant_t *args, int num_args, ScriptVariant_t *ret, HSCRIPT scope, bool wait) noexcept;
 		virtual void RegisterFunction(ScriptFunctionBinding_t *) = 0;
 		virtual bool RegisterClass(ScriptClassDesc_t *) = 0;
 	public:

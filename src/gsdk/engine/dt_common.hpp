@@ -2,6 +2,8 @@
 
 //#define GSDK_DT_SUPPORTS_INT64
 
+#include "../mathlib/vector.hpp"
+
 namespace gsdk
 {
 	enum SendPropType : int
@@ -54,7 +56,7 @@ namespace gsdk
 			float m_Float;
 			int m_Int;
 			const char *m_pString;
-			void *m_pData;
+			void *m_ptr;
 		#if 0
 			float m_Vector[4];
 		#else
@@ -63,8 +65,11 @@ namespace gsdk
 		#ifdef GSDK_DT_SUPPORTS_INT64
 			long long m_Int64;
 		#endif
+			unsigned char m_data[sizeof(float) * 3];
 		};
 
 		SendPropType m_Type;
 	};
+
+	static_assert(sizeof(DVariant) == (sizeof(Vector) + sizeof(SendPropType)));
 }
