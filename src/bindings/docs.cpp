@@ -512,6 +512,10 @@ namespace vmod::bindings::docs
 				vscript::variant value2;
 				it2 = vm->GetKeyValue(enum_table, it2, &key2, &value2);
 
+				if(value2.m_type == gsdk::FIELD_VOID) {
+					continue;
+				}
+
 				std::string_view value_name{key2.get<std::string_view>()};
 
 				unsigned int val{value2.get<unsigned int>()};
