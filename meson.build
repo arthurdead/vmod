@@ -1,6 +1,6 @@
 project('vmod', 'cpp',
 	default_options: [
-		'warning_level=3',
+		'warning_level=everything',
 		'werror=true',
 		'buildtype=debug',
 		'b_sanitize=address',
@@ -19,7 +19,8 @@ link_args = [
 cpp_args = [
 	'-Wno-error=unused-variable',
 	'-Wno-error=unused-parameter',
-	'-Wno-error=unused-function'
+	'-Wno-error=unused-function',
+	'-Wno-error=unreachable-code'
 ]
 
 cpp_args += [
@@ -29,7 +30,6 @@ cpp_args += [
 compiler = meson.get_compiler('cpp')
 if compiler.get_id() == 'clang'
 	cpp_args += [
-		'-Weverything',
 		'-Wno-c++98-compat',
 		'-Wno-c++98-compat-pedantic',
 		'-Wno-padded',
@@ -228,19 +228,42 @@ endif
 
 lib = shared_library('vmod',
 	files(
-		join_paths('src','vmod.cpp'),
+		join_paths('src','main.cpp'),
 		join_paths('src','filesystem.cpp'),
 		join_paths('src','preprocessor.cpp'),
 		join_paths('src','plugin.cpp'),
 		join_paths('src','convar.cpp'),
 		join_paths('src','gsdk.cpp'),
-		join_paths('src','vscript.cpp'),
-		join_paths('src','vscript_variant.cpp'),
-		join_paths('src','yaml.cpp'),
+		join_paths('src','vscript','variant.cpp'),
+		join_paths('src','vscript','vscript.cpp'),
+		join_paths('src','bindings','vmod','plugin.cpp'),
+		join_paths('src','bindings','vmod','singleton.cpp'),
+		join_paths('src','bindings','cvar','bindings.cpp'),
+		join_paths('src','bindings','cvar','singleton.cpp'),
+		join_paths('src','bindings','cvar','convar.cpp'),
+		join_paths('src','bindings','mem','bindings.cpp'),
+		join_paths('src','bindings','mem','singleton.cpp'),
+		join_paths('src','bindings','mem','container.cpp'),
+		join_paths('src','bindings','fs','bindings.cpp'),
+		join_paths('src','bindings','fs','singleton.cpp'),
+		join_paths('src','bindings','syms','bindings.cpp'),
+		join_paths('src','bindings','syms','singleton.cpp'),
+		join_paths('src','bindings','strtables','bindings.cpp'),
+		join_paths('src','bindings','strtables','singleton.cpp'),
+		join_paths('src','bindings','strtables','string_table.cpp'),
+		join_paths('src','bindings','ffi','bindings.cpp'),
+		join_paths('src','bindings','ffi','singleton.cpp'),
+		join_paths('src','bindings','ffi','cif.cpp'),
+		join_paths('src','bindings','ffi','detour.cpp'),
+		join_paths('src','bindings','ent','bindings.cpp'),
+		join_paths('src','bindings','ent','singleton.cpp'),
+		join_paths('src','bindings','ent','sendprop.cpp'),
+		join_paths('src','bindings','ent','factory.cpp'),
+		join_paths('src','bindings','docs.cpp'),
+		join_paths('src','bindings','singleton.cpp'),
 		join_paths('src','ffi.cpp'),
 		join_paths('src','hacking.cpp'),
 		join_paths('src','symbol_cache.cpp'),
-		join_paths('src','gsdk','server','server.cpp'),
 		join_paths('src','gsdk','server','baseentity.cpp'),
 		join_paths('src','gsdk','vscript','vscript.cpp'),
 		join_paths('src','gsdk','vstdlib','convar.cpp'),

@@ -7,46 +7,6 @@
 
 namespace gsdk
 {
-	ConCommandBase::ConCommandBase() noexcept
-		: m_pNext{nullptr},
-		m_bRegistered{false},
-		m_pszName{nullptr},
-		m_pszHelpString{nullptr},
-		m_nFlags{FCVAR_UNREGISTERED}
-	{
-	}
-
-	ConVar::ConVar() noexcept
-		: ConCommandBase{},
-		m_pParent{this},
-		m_pszDefaultValue{""},
-		m_pszString{nullptr},
-		m_StringLength{0},
-		m_fValue{0.0f},
-		m_nValue{0},
-		m_bHasMin{false},
-		m_fMinVal{0.0f},
-		m_bHasMax{false},
-		m_fMaxVal{0.0f},
-		m_bHasCompMin{false},
-		m_fCompMinVal{0.0f},
-		m_bHasCompMax{false},
-		m_fCompMaxVal{0.0f},
-		m_bCompetitiveRestrictions{false},
-		m_fnChangeCallback{nullptr}
-	{
-	}
-
-	ConCommand::ConCommand() noexcept
-		: ConCommandBase{},
-		m_fnCommandCallback{nullptr},
-		m_fnCompletionCallback{nullptr},
-		m_bHasCompletionCallback{false},
-		m_bUsingNewCommandCallback{false},
-		m_bUsingCommandCallbackInterface{false}
-	{
-	}
-
 	ConCommandBase::~ConCommandBase() {}
 	bool ConCommandBase::IsCommand() const { return true; }
 
@@ -188,7 +148,7 @@ namespace gsdk
 
 			if(!m_bHasCompMin && !m_bHasCompMax && m_pszDefaultValue && m_pszDefaultValue[0] != '\0') {
 				const char *begin{m_pszDefaultValue};
-				const char *end{m_pszDefaultValue + std::strlen(m_pszDefaultValue)};
+				const char *end{begin + std::strlen(m_pszDefaultValue)};
 
 				std::from_chars(begin, end, value);
 				return true;
@@ -272,7 +232,7 @@ namespace gsdk
 			ConVar::ClampValue(m_nValue);
 		} else {
 			const char *begin{value};
-			const char *end{value + len};
+			const char *end{begin + len};
 
 			std::from_chars(begin, end, m_fValue);
 			ConVar::ClampValue(m_fValue);
@@ -298,7 +258,7 @@ namespace gsdk
 			}
 
 			char *begin{m_pszString};
-			char *end{m_pszString + len};
+			char *end{begin + len};
 
 			std::to_chars_result tc_res{std::to_chars(begin, end, value)};
 			tc_res.ptr[0] = '\0';
@@ -360,7 +320,7 @@ namespace gsdk
 			}
 
 			char *begin{m_pszString};
-			char *end{m_pszString + len};
+			char *end{begin + len};
 
 			std::to_chars_result tc_res{std::to_chars(begin, end, value)};
 			tc_res.ptr[0] = '\0';
@@ -377,10 +337,8 @@ namespace gsdk
 		ConVar::ClampValue(m_nValue);
 	}
 
-	void ConVar::ChangeStringValue(const char *value, float old_float)
-	{
-		ConVar::InternalSetValue(value);
-	}
+	void ConVar::ChangeStringValue(const char *value, [[maybe_unused]] float)
+	{ ConVar::InternalSetValue(value); }
 
 	ConVar::~ConVar()
 	{

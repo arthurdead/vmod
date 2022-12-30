@@ -1,5 +1,5 @@
 #include "convar.hpp"
-#include "vmod.hpp"
+#include "main.hpp"
 
 namespace vmod
 {
@@ -14,17 +14,17 @@ namespace vmod
 	{ unregister(); }
 
 	gsdk::CVarDLLIdentifier_t ConCommand::GetDLLIdentifier() const
-	{ return vmod.cvar_dll_id(); }
+	{ return main::instance().cvar_dll_id(); }
 
 	void ConCommand::Init()
-	{ cvar->RegisterConCommand(static_cast<gsdk::ConCommandBase *>(this)); }
+	{ cvar->RegisterConCommand(this); }
 
 	ConVar::~ConVar() noexcept
 	{ unregister(); }
 
 	void ConVar::Init()
-	{ cvar->RegisterConCommand(static_cast<gsdk::ConCommandBase *>(this)); }
+	{ cvar->RegisterConCommand(this); }
 
 	gsdk::CVarDLLIdentifier_t ConVar::GetDLLIdentifier() const
-	{ return vmod.cvar_dll_id(); }
+	{ return main::instance().cvar_dll_id(); }
 }

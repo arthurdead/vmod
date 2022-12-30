@@ -25,13 +25,13 @@ namespace vmod
 
 			func = std::move(func_);
 
-			cvar->RegisterConCommand(static_cast<gsdk::ConCommandBase *>(this));
+			cvar->RegisterConCommand(this);
 		}
 
 		inline void unregister() noexcept
 		{
 			if(gsdk::ConCommandBase::IsRegistered()) {
-				cvar->UnregisterConCommand(static_cast<gsdk::ConCommandBase *>(this));
+				cvar->UnregisterConCommand(this);
 			}
 		}
 
@@ -80,19 +80,22 @@ namespace vmod
 		inline void unregister() noexcept
 		{
 			if(gsdk::ConCommandBase::IsRegistered()) {
-				cvar->UnregisterConCommand(static_cast<gsdk::ConCommandBase *>(this));
+				cvar->UnregisterConCommand(this);
 			}
 		}
 
 		template <typename T>
-		ConVar &set(T &&value) noexcept;
+		void set(T &&value) noexcept;
 
 		template <typename T>
-		T get() const noexcept;
+		std::remove_reference_t<T> get() const noexcept;
 
 		template <typename T>
 		inline ConVar &operator=(T &&value) noexcept
-		{ return set(std::forward<T>(value)); }
+		{
+			set(std::forward<T>(value));
+			return *this;
+		}
 
 		operator bool() const noexcept = delete;
 		bool operator!() const noexcept = delete;

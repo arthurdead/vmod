@@ -1,5 +1,5 @@
 #include "plugin.hpp"
-#include "vmod.hpp"
+#include "main.hpp"
 #include "filesystem.hpp"
 #include <cctype>
 #include <charconv>
@@ -7,146 +7,36 @@
 
 namespace vmod
 {
-	class_desc_t<plugin> plugin_desc{"__vmod_plugin_class"};
-	class_desc_t<plugin::owned_instance> plugin::owned_instance_desc{"__vmod_plugin_owned_instance_class"};
-
 	plugin *plugin::assumed_currently_running;
 	plugin *plugin::scope_assume_current::old_running;
 
-	script_variant_t plugin::script_lookup_value(std::string_view val_name) noexcept
-	{
-		gsdk::IScriptVM *vm{vmod.vm()};
-
-		script_variant_t var;
-		if(!vm->GetValue(private_scope_, val_name.data(), &var)) {
-			null_variant(var);
-		} else {
-			vm->SetValue(values_table, val_name.data(), var);
-		}
-
-		return var;
-	}
-
-	gsdk::HSCRIPT plugin::script_lookup_function(std::string_view func_name) noexcept
-	{
-		using namespace std::literals::string_view_literals;
-
-		std::string func_name_str{func_name};
-
-		auto it{function_cache.find(func_name_str)};
-		if(it != function_cache.end()) {
-			return it->second;
-		}
-
-		if(func_name == "map_active"sv) {
-			return map_active.func;
-		} else if(func_name == "map_loaded"sv) {
-			return map_loaded.func;
-		} else if(func_name == "map_unloaded"sv) {
-			return map_unloaded.func;
-		} else if(func_name == "plugin_loaded"sv) {
-			return plugin_loaded.func;
-		} else if(func_name == "plugin_unloaded"sv) {
-			return plugin_unloaded.func;
-		} else if(func_name == "all_plugins_loaded"sv) {
-			return all_plugins_loaded.func;
-		} else if(func_name == "string_tables_created"sv) {
-			return string_tables_created.func;
-		} else if(func_name == "game_frame"sv) {
-			return game_frame_.func;
-		}
-
-		gsdk::IScriptVM *vm{vmod.vm()};
-
-		gsdk::HSCRIPT func{vm->LookupFunction(func_name.data(), private_scope_)};
-		if(!func || func == gsdk::INVALID_HSCRIPT) {
-			return nullptr;
-		}
-
-		vm->SetValue(functions_table, func_name.data(), func);
-
-		function_cache.emplace(std::move(func_name_str), func);
-
-		return func;
-	}
-
-	bool plugin::bindings() noexcept
-	{
-		using namespace std::literals::string_view_literals;
-
-		gsdk::IScriptVM *vm{vmod.vm()};
-
-		plugin_desc.func(&plugin::script_lookup_function, "script_lookup_function"sv, "lookup_function"sv);
-		plugin_desc.func(&plugin::script_lookup_value, "script_lookup_value"sv, "lookup_value"sv);
-		plugin_desc.doc_class_name("plugin"sv);
-
-		if(!vm->RegisterClass(&plugin_desc)) {
-			error("vmod: failed to register plugin script class\n"sv);
-			return false;
-		}
-
-		owned_instance_desc.func(&owned_instance::script_delete, "script_delete"sv, "free"sv);
-		owned_instance_desc.dtor();
-		owned_instance_desc.doc_class_name("plugin_owned_instance"sv);
-
-		if(!vm->RegisterClass(&owned_instance_desc)) {
-			error("vmod: failed to register plugin owned instance script class\n"sv);
-			return false;
-		}
-
-		return true;
-	}
-
-	void plugin::unbindings() noexcept
-	{
-
-	}
-
 	plugin::plugin(std::filesystem::path &&path_) noexcept
-		: path{std::move(path_)},
-		inotify_fd{-1},
-		instance_{gsdk::INVALID_HSCRIPT},
-		script{gsdk::INVALID_HSCRIPT},
-		private_scope_{gsdk::INVALID_HSCRIPT},
-		public_scope_{gsdk::INVALID_HSCRIPT},
-		functions_table{gsdk::INVALID_HSCRIPT},
-		values_table{gsdk::INVALID_HSCRIPT},
-		running{false},
-		deleting_instances{false}
+		: path{std::move(path_)}
 	{
-		//TODO!!!! handle nested path
-		std::filesystem::path filename{path.filename()};
-		filename.replace_extension();
-
-		name = filename;
-
-		for(char &c : name) {
-			if(std::isalnum(c)) {
-				continue;
-			}
-
-			c = '_';
-		}
-
-		if(std::isdigit(name[0])) {
-			name.insert(name.begin(), '_');
-		}
 	}
 
 	plugin::load_status plugin::load() noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
-		if(script != gsdk::INVALID_HSCRIPT) {
-			return load_status::success;
+		if(script && script != gsdk::INVALID_HSCRIPT) {
+			if(running) {
+				return load_status::success;
+			} else {
+				return load_status::error;
+			}
+		} else {
+			if(running) {
+				return load_status::error;
+			}
 		}
 
-		gsdk::IScriptVM *vm{vmod.vm()};
+		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		{
 			std::string script_data;
 
-			squirrel_preprocessor &pp{vmod.preprocessor()};
+			squirrel_preprocessor &pp{main::instance().preprocessor()};
 			if(!pp.preprocess(script_data, path, incs)) {
 				error("vmod: plugin '%s' failed to preprocess\n"sv, path.c_str());
 				return load_status::error;
@@ -164,10 +54,14 @@ namespace vmod
 				std::hash<std::filesystem::path> path_hash{};
 
 				char temp_buffer[16];
-				std::to_chars_result tc_res{std::to_chars(temp_buffer, temp_buffer + sizeof(temp_buffer), path_hash(path))};
+
+				char *begin{temp_buffer};
+				char *end{begin + sizeof(temp_buffer)};
+
+				std::to_chars_result tc_res{std::to_chars(begin, end, path_hash(path))};
 				tc_res.ptr[0] = '\0';
 
-				base_scope_name += temp_buffer;
+				base_scope_name += begin;
 			}
 
 			{
@@ -192,7 +86,7 @@ namespace vmod
 				}
 			}
 
-			instance_ = vm->RegisterInstance(&plugin_desc, this);
+			instance_ = vm->RegisterInstance(&desc, this);
 			if(!instance_ || instance_ == gsdk::INVALID_HSCRIPT) {
 				error("vmod: plugin '%s' failed to register its own instance\n"sv, path.c_str());
 				return load_status::error;
@@ -227,11 +121,6 @@ namespace vmod
 				return load_status::error;
 			}
 
-			if(!vm->SetValue(vmod.plugins_table(), name.c_str(), public_scope_)) {
-				error("vmod: plugin '%s' failed to set value in plugins table\n"sv, path.c_str());
-				return load_status::error;
-			}
-
 			{
 				scope_assume_current sac{this};
 				if(vm->Run(script, private_scope_, false) == gsdk::SCRIPT_ERROR) {
@@ -241,8 +130,8 @@ namespace vmod
 			}
 
 			{
-				script_variant_t temp_var;
-				if(vm->GetValue(private_scope_, "VMOD_DISABLED", &temp_var) && temp_var == true) {
+				vscript::variant tmp_var;
+				if(vm->GetValue(private_scope_, "VMOD_DISABLED", &tmp_var) && tmp_var == true) {
 					unwatch();
 					unload();
 					return load_status::disabled;
@@ -252,34 +141,34 @@ namespace vmod
 			running = true;
 
 			{
-				script_variant_t temp_var;
-				if(vm->GetValue(private_scope_, "VMOD_AUTO_RELOAD", &temp_var) && temp_var == true) {
+				vscript::variant tmp_var;
+				if(vm->GetValue(private_scope_, "VMOD_AUTO_RELOAD", &tmp_var) && tmp_var == true) {
 					watch();
 				} else {
 					unwatch();
 				}
 			}
 
-			map_active = lookup_function("map_active"sv);
-			map_loaded = lookup_function("map_loaded"sv);
-			map_unloaded = lookup_function("map_unloaded"sv);
-			plugin_loaded = lookup_function("plugin_loaded"sv);
-			plugin_unloaded = lookup_function("plugin_unloaded"sv);
-			all_plugins_loaded = lookup_function("all_plugins_loaded"sv);
-			string_tables_created = lookup_function("string_tables_created"sv);
-			game_frame_ = lookup_function("game_frame"sv);
+			lookup_function("map_active"sv, map_active);
+			lookup_function("map_loaded"sv, map_loaded);
+			lookup_function("map_unloaded"sv, map_unloaded);
+			lookup_function("plugin_loaded"sv, plugin_loaded);
+			lookup_function("plugin_unloaded"sv, plugin_unloaded);
+			lookup_function("all_plugins_loaded"sv, all_plugins_loaded);
+			lookup_function("string_tables_created"sv, string_tables_created);
+			lookup_function("game_frame"sv, game_frame_);
 
 			plugin_loaded();
 
-			if(vmod.map_is_loaded()) {
+			if(main::instance().map_is_loaded()) {
 				map_loaded(gsdk::STRING(sv_globals->mapname));
 			}
 
-			if(vmod.map_is_active()) {
+			if(main::instance().map_is_active()) {
 				map_active();
 			}
 
-			if(vmod.string_tables_created()) {
+			if(main::instance().string_tables_created()) {
 				string_tables_created();
 			}
 		}
@@ -289,16 +178,28 @@ namespace vmod
 
 	void plugin::watch() noexcept
 	{
+		using namespace std::literals::string_view_literals;
+
 		if(inotify_fd != -1) {
 			return;
 		}
 
 		inotify_fd = inotify_init1(IN_NONBLOCK);
 		if(inotify_fd != -1) {
-			watch_ds.emplace_back(inotify_add_watch(inotify_fd, path.c_str(), IN_MODIFY));
+			int watch_fd{inotify_add_watch(inotify_fd, path.c_str(), IN_MODIFY)};
+			if(watch_fd != -1) {
+				watch_fds.emplace_back(watch_fd);
+			} else {
+				warning("vmod: could not watch file '%s'\n"sv, path.c_str());
+			}
 
 			for(const std::filesystem::path &inc : incs) {
-				watch_ds.emplace_back(inotify_add_watch(inotify_fd, inc.c_str(), IN_MODIFY));
+				watch_fd = inotify_add_watch(inotify_fd, inc.c_str(), IN_MODIFY);
+				if(watch_fd != -1) {
+					watch_fds.emplace_back(watch_fd);
+				} else {
+					warning("vmod: could not watch file '%s'\n"sv, inc.c_str());
+				}
 			}
 		}
 	}
@@ -306,10 +207,14 @@ namespace vmod
 	void plugin::unwatch() noexcept
 	{
 		if(inotify_fd != -1) {
-			for(int it : watch_ds) {
+			for(int it : watch_fds) {
+				if(it == -1) {
+					continue;
+				}
+
 				inotify_rm_watch(inotify_fd, it);
 			}
-			watch_ds.clear();
+			watch_fds.clear();
 			close(inotify_fd);
 			inotify_fd = -1;
 		}
@@ -321,13 +226,38 @@ namespace vmod
 		unwatch();
 	}
 
+#if 0
+	plugin::callback_instance::~callback_instance() noexcept
+	{
+		gsdk::IScriptVM *vm{main::instance().vm()};
+
+		if(func && func != gsdk::INVALID_HSCRIPT) {
+			if(post) {
+				auto it{callable->callbacks_post.find(func)};
+				if(it != callable->callbacks_post.end()) {
+					callable->callbacks_post.erase(it);
+				}
+			} else {
+				auto it{callable->callbacks_pre.find(func)};
+				if(it != callable->callbacks_pre.end()) {
+					callable->callbacks_pre.erase(it);
+				}
+			}
+
+			vm->ReleaseFunction(func);
+		}
+	}
+#endif
+
 	plugin::owned_instance::~owned_instance() noexcept
 	{
-		if(!owner_) {
-			return;
+		gsdk::IScriptVM *vm{main::instance().vm()};
+
+		if(instance && instance != gsdk::INVALID_HSCRIPT) {
+			vm->RemoveInstance(instance);
 		}
 
-		if(!owner_->deleting_instances) {
+		if(owner_ && !owner_->clearing_instances) {
 			std::vector<owned_instance *> &instances{owner_->owned_instances};
 
 			auto it{std::find(instances.begin(), instances.end(), this)};
@@ -339,6 +269,81 @@ namespace vmod
 
 	void plugin::owned_instance::plugin_unloaded() noexcept
 	{ delete this; }
+
+	bool plugin::owned_instance::register_class(gsdk::ScriptClassDesc_t *target_desc) noexcept
+	{
+		gsdk::IScriptVM *vm{main::instance().vm()};
+
+		if(target_desc->m_pBaseDesc != &desc) {
+			if(!target_desc->m_pBaseDesc) {
+				target_desc->m_pBaseDesc = &desc;
+			} else {
+				bool found{false};
+
+				gsdk::ScriptClassDesc_t *base_desc{target_desc->m_pBaseDesc};
+				while(base_desc) {
+					if(base_desc == &desc) {
+						found = true;
+						break;
+					}
+
+					base_desc = base_desc->m_pBaseDesc;
+				}
+
+				if(!found) {
+					error("vmod: owned instance class '%s' has invalid base\n", target_desc->m_pszClassname);
+					return false;
+				}
+			}
+		}
+
+		if(!target_desc->m_pfnDestruct) {
+			target_desc->m_pfnDestruct = 
+				[](void *ptr) noexcept -> void {
+					delete reinterpret_cast<owned_instance *>(ptr);
+				}
+			;
+		}
+
+		return vm->RegisterClass(target_desc);
+	}
+
+	bool plugin::owned_instance::register_instance(gsdk::ScriptClassDesc_t *target_desc) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		gsdk::IScriptVM *vm{main::instance().vm()};
+
+		instance = vm->RegisterInstance(target_desc, this);
+		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+			vm->RaiseException("vmod: failed to register instance");
+			return false;
+		}
+
+		std::string_view obfuscated_name;
+
+		if(target_desc->m_pNextDesc == reinterpret_cast<const gsdk::ScriptClassDesc_t *>(uninitialized_memory)) {
+			const vscript::extra_class_desc &extra{static_cast<const vscript::detail::base_class_desc<generic_class> *>(target_desc)->extra()};
+			obfuscated_name = extra.obfuscated_name();
+		} else {
+			vm->RaiseException("vmod: invalid class desc");
+			return false;
+		}
+
+		{
+			std::string id_root{obfuscated_name};
+			id_root += "_instance"sv;
+
+			if(!vm->SetInstanceUniqeId2(instance, id_root.data())) {
+				vm->RaiseException("vmod: failed to generate unique id");
+				return false;
+			}
+		}
+
+		set_plugin();
+
+		return true;
+	}
 
 	void plugin::owned_instance::set_plugin() noexcept
 	{
@@ -354,24 +359,23 @@ namespace vmod
 		plugin_unloaded();
 
 		if(!owned_instances.empty()) {
-			deleting_instances = true;
-			auto it{owned_instances.begin()};
-			while(it != owned_instances.end()) {
-				(*it)->plugin_unloaded();
-				owned_instances.erase(it);
+			clearing_instances = true;
+			for(owned_instance *it : owned_instances) {
+				it->plugin_unloaded();
 			}
-			deleting_instances = false;
+			owned_instances.clear();
+			clearing_instances = false;
 		}
 
-		gsdk::IScriptVM *vm{vmod.vm()};
+		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(!function_cache.empty()) {
 			for(const auto &it : function_cache) {
-				vm->ReleaseFunction(it.second);
-
 				if(vm->ValueExists(functions_table, it.first.c_str())) {
 					vm->ClearValue(functions_table, it.first.c_str());
 				}
+
+				vm->ReleaseFunction(it.second);
 			}
 			function_cache.clear();
 		}
@@ -430,57 +434,48 @@ namespace vmod
 			vm->ReleaseScope(public_scope_);
 			public_scope_ = gsdk::INVALID_HSCRIPT;
 		}
-
-		gsdk::HSCRIPT plugins_table{vmod.plugins_table()};
-		if(vm->ValueExists(plugins_table, name.c_str())) {
-			vm->ClearValue(plugins_table, name.c_str());
-		}
 	}
 
-	plugin::function::function(plugin &pl, std::string_view func_name) noexcept
+	void plugin::lookup_function(std::string_view func_name, function &func) noexcept
 	{
-		if(pl) {
-			func = vmod.vm()->LookupFunction(func_name.data(), pl.private_scope_);
-			if(!func || func == gsdk::INVALID_HSCRIPT) {
-				scope = gsdk::INVALID_HSCRIPT;
-				func = gsdk::INVALID_HSCRIPT;
-			} else {
-				scope = pl.private_scope_;
-			}
-		} else {
-			scope = gsdk::INVALID_HSCRIPT;
-			func = gsdk::INVALID_HSCRIPT;
+		gsdk::HSCRIPT func_obj{main::instance().vm()->LookupFunction(func_name.data(), private_scope_)};
+		if(!func_obj || func_obj == gsdk::INVALID_HSCRIPT) {
+			return;
 		}
+
+		func.owner = this;
+		func.scope = private_scope_;
+		func.func = func_obj;
 	}
 
-	gsdk::ScriptStatus_t plugin::function::execute_internal(script_variant_t &ret, const std::vector<script_variant_t> &args) noexcept
+	gsdk::ScriptStatus_t plugin::function::execute_internal(gsdk::ScriptVariant_t &ret, const gsdk::ScriptVariant_t *args, std::size_t num_args) noexcept
 	{
 		if(!valid()) {
 			return gsdk::SCRIPT_ERROR;
 		}
 
 		scope_assume_current sac{owner};
-		return vmod.vm()->ExecuteFunction(func, static_cast<const gsdk::ScriptVariant_t *>(args.data()), static_cast<int>(args.size()), static_cast<gsdk::ScriptVariant_t *>(&ret), scope, true);
+		return main::instance().vm()->ExecuteFunction(func, args, static_cast<int>(num_args), &ret, scope, true);
 	}
 
-	gsdk::ScriptStatus_t plugin::function::execute_internal(script_variant_t &ret) noexcept
+	gsdk::ScriptStatus_t plugin::function::execute_internal(gsdk::ScriptVariant_t &ret) noexcept
 	{
 		if(!valid()) {
 			return gsdk::SCRIPT_ERROR;
 		}
 
 		scope_assume_current sac{owner};
-		return vmod.vm()->ExecuteFunction(func, nullptr, 0, static_cast<gsdk::ScriptVariant_t *>(&ret), scope, true);
+		return main::instance().vm()->ExecuteFunction(func, nullptr, 0, &ret, scope, true);
 	}
 
-	gsdk::ScriptStatus_t plugin::function::execute_internal(const std::vector<script_variant_t> &args) noexcept
+	gsdk::ScriptStatus_t plugin::function::execute_internal(const gsdk::ScriptVariant_t *args, std::size_t num_args) noexcept
 	{
 		if(!valid()) {
 			return gsdk::SCRIPT_ERROR;
 		}
 
 		scope_assume_current sac{owner};
-		return vmod.vm()->ExecuteFunction(func, static_cast<const gsdk::ScriptVariant_t *>(args.data()), static_cast<int>(args.size()), nullptr, scope, true);
+		return main::instance().vm()->ExecuteFunction(func, args, static_cast<int>(num_args), nullptr, scope, true);
 	}
 
 	gsdk::ScriptStatus_t plugin::function::execute_internal() noexcept
@@ -490,25 +485,21 @@ namespace vmod
 		}
 
 		scope_assume_current sac{owner};
-		return vmod.vm()->ExecuteFunction(func, nullptr, 0, nullptr, scope, true);
+		return main::instance().vm()->ExecuteFunction(func, nullptr, 0, nullptr, scope, true);
 	}
 
 	void plugin::function::unload() noexcept
 	{
 		if(func && func != gsdk::INVALID_HSCRIPT) {
-			vmod.vm()->ReleaseFunction(func);
+			main::instance().vm()->ReleaseFunction(func);
 			func = gsdk::INVALID_HSCRIPT;
-		}
-
-		if(scope && scope != gsdk::INVALID_HSCRIPT) {
-			scope = gsdk::INVALID_HSCRIPT;
 		}
 	}
 
 	plugin::function::~function() noexcept
 	{
 		if(func && func != gsdk::INVALID_HSCRIPT) {
-			vmod.vm()->ReleaseFunction(func);
+			main::instance().vm()->ReleaseFunction(func);
 		}
 	}
 

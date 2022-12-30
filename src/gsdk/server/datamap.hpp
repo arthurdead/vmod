@@ -73,29 +73,43 @@ namespace gsdk
 
 	struct typedescription_t
 	{
-		fieldtype_t fieldType;
-		const char *fieldName;
-		int fieldOffset[TD_OFFSET_COUNT];
-		unsigned short fieldSize;
-		short flags;
-		const char *externalName;
-		ISaveRestoreOps *pSaveRestoreOps;
-		inputfunc_t inputFunc;
-		datamap_t *td;
-		int fieldSizeInBytes;
-		typedescription_t *override_field;
-		int override_count;
-		float fieldTolerance;
+		fieldtype_t fieldType{FIELD_VOID};
+		const char *fieldName{nullptr};
+		int fieldOffset[TD_OFFSET_COUNT]{0,0};
+		unsigned short fieldSize{0};
+		short flags{0};
+		const char *externalName{nullptr};
+		ISaveRestoreOps *pSaveRestoreOps{nullptr};
+		inputfunc_t inputFunc{nullptr};
+		datamap_t *td{nullptr};
+		int fieldSizeInBytes{0};
+		typedescription_t *override_field{nullptr};
+		int override_count{0};
+		float fieldTolerance{0.0f};
+
+	private:
+		typedescription_t() = delete;
+		typedescription_t(const typedescription_t &) = delete;
+		typedescription_t &operator=(const typedescription_t &) = delete;
+		typedescription_t(typedescription_t &&) = delete;
+		typedescription_t &operator=(typedescription_t &&) = delete;
 	};
 
 	struct datamap_t
 	{
-		typedescription_t *dataDesc;
-		int dataNumFields;
-		const char *dataClassName;
-		datamap_t *baseMap;
-		bool chains_validated;
-		bool packed_offsets_computed;
-		int packed_size;
+		typedescription_t *dataDesc{nullptr};
+		int dataNumFields{0};
+		const char *dataClassName{nullptr};
+		datamap_t *baseMap{nullptr};
+		bool chains_validated{false};
+		bool packed_offsets_computed{false};
+		int packed_size{0};
+
+	private:
+		datamap_t() = delete;
+		datamap_t(const datamap_t &) = delete;
+		datamap_t &operator=(const datamap_t &) = delete;
+		datamap_t(datamap_t &&) = delete;
+		datamap_t &operator=(datamap_t &&) = delete;
 	};
 }

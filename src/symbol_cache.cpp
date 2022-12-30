@@ -576,4 +576,93 @@ namespace vmod
 			}
 		}
 	}
+
+	std::ptrdiff_t symbol_cache::uncached_find_mangled_func(const std::filesystem::path &path, std::string_view search) noexcept
+	{
+		int fd{open(path.c_str(), O_RDONLY)};
+		if(fd < 0) {
+			return 0;
+		}
+
+		Elf *elf{elf_begin(fd, ELF_C_READ, nullptr)};
+		if(!elf) {
+			return 0;
+		}
+
+		if(elf_kind(elf) != ELF_K_ELF || gelf_getclass(elf) == ELFCLASSNONE) {
+			elf_end(elf);
+			return 0;
+		}
+
+		std::ptrdiff_t offset{0};
+
+		GElf_Shdr scn_hdr;
+		GElf_Sym sym;
+
+		Elf_Scn *scn{elf_nextscn(elf, nullptr)};
+		while(scn) {
+			struct scope_nextscn final {
+				inline scope_nextscn(Elf *elf_, Elf_Scn *&scn_) noexcept
+					: elf{elf_}, scn{scn_} {}
+				inline ~scope_nextscn() noexcept
+				{ scn = elf_nextscn(elf, scn); }
+			private:
+				Elf *elf;
+				Elf_Scn *&scn;
+			};
+
+			scope_nextscn snscn{elf, scn};
+
+			if(!gelf_getshdr(scn, &scn_hdr)) {
+				continue;
+			}
+
+			switch(scn_hdr.sh_type) {
+				case SHT_SYMTAB: break;
+				default: continue;
+			}
+
+			Elf_Data *scn_data{elf_getdata(scn, nullptr)};
+
+			std::size_t count{static_cast<std::size_t>(scn_hdr.sh_size) / static_cast<std::size_t>(scn_hdr.sh_entsize)};
+			for(std::size_t i{0}; i < count; ++i) {
+				gelf_getsym(scn_data, static_cast<int>(i), &sym);
+
+				switch(GELF_ST_BIND(sym.st_info)) {
+					case STB_LOCAL: break;
+					default: continue;
+				}
+
+				switch(GELF_ST_TYPE(sym.st_info)) {
+					case STT_FUNC: break;
+					default: continue;
+				}
+
+				switch(GELF_ST_VISIBILITY(sym.st_other)) {
+					case STV_DEFAULT: break;
+					default: continue;
+				}
+
+				std::string_view name_mangled{elf_strptr(elf, scn_hdr.sh_link, sym.st_name)};
+				if(name_mangled.empty()) {
+					continue;
+				}
+
+				if(search == name_mangled) {
+					offset = static_cast<std::ptrdiff_t>(sym.st_value);
+					break;
+				}
+			}
+
+			if(offset != 0) {
+				break;
+			}
+		}
+
+		elf_end(elf);
+
+		close(fd);
+
+		return offset;
+	}
 }

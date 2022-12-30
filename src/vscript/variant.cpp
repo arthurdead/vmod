@@ -1,11 +1,14 @@
-#include "vscript.hpp"
+#include "variant.hpp"
 
-namespace vmod
+namespace vmod::vscript
 {
-	char __vscript_variant_to_value_buffer[__vscript_max_strsiz];
+	namespace detail
+	{
+		char variant_str_buffer[variant_str_buffer_max];
+	}
 
 	template <>
-	bool variant_to_value<bool>(const gsdk::ScriptVariant_t &var) noexcept
+	bool to_value_impl<bool>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -18,30 +21,30 @@ namespace vmod
 				return var.m_double > 0.0;
 			}
 			case gsdk::FIELD_STRING: {
-				const char *m_pszString{gsdk::STRING(var.m_tstring)};
+				const char *ccstr{gsdk::STRING(var.m_tstr)};
 
-				if(std::strcmp(m_pszString, "true") == 0) {
+				if(std::strcmp(ccstr, "true") == 0) {
 					return true;
-				} else if(std::strcmp(m_pszString, "false") == 0) {
+				} else if(std::strcmp(ccstr, "false") == 0) {
 					return false;
 				}
 
-				const char *begin{m_pszString};
-				const char *end{m_pszString + std::strlen(m_pszString)};
+				const char *begin{ccstr};
+				const char *end{ccstr + std::strlen(ccstr)};
 
 				unsigned short ret;
 				std::from_chars(begin, end, ret);
 				return ret > 0;
 			}
 			case gsdk::FIELD_CSTRING: {
-				if(std::strcmp(var.m_pszString, "true") == 0) {
+				if(std::strcmp(var.m_ccstr, "true") == 0) {
 					return true;
-				} else if(std::strcmp(var.m_pszString, "false") == 0) {
+				} else if(std::strcmp(var.m_ccstr, "false") == 0) {
 					return false;
 				}
 
-				const char *begin{var.m_pszString};
-				const char *end{var.m_pszString + std::strlen(var.m_pszString)};
+				const char *begin{var.m_ccstr};
+				const char *end{var.m_ccstr + std::strlen(var.m_ccstr)};
 
 				unsigned short ret;
 				std::from_chars(begin, end, ret);
@@ -71,35 +74,35 @@ namespace vmod
 			}
 			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
 			case gsdk::FIELD_HSCRIPT: {
-				return __vmod_to_bool(var.m_hScript);
+				return detail::to_bool(var.m_object);
 			}
 			default: return {};
 		}
 	}
 
-	void initialize_variant_value(gsdk::ScriptVariant_t &var, std::string &&value) noexcept
+	void initialize_impl(gsdk::ScriptVariant_t &var, std::string &&value) noexcept
 	{
 		if(!value.empty()) {
 			std::size_t len{value.length()};
-			var.m_pszString = new char[len+1];
-			std::strncpy(const_cast<char *>(var.m_pszString), value.c_str(), len);
-			const_cast<char *>(var.m_pszString)[len] = '\0';
+			var.m_cstr = new char[len+1];
+			std::strncpy(var.m_cstr, value.c_str(), len);
+			var.m_cstr[len] = '\0';
 			var.m_flags |= gsdk::SV_FREE;
 		} else {
-			var.m_pszString = "";
+			var.m_ccstr = "";
 		}
 	}
 
-	void initialize_variant_value(gsdk::ScriptVariant_t &var, std::filesystem::path &&value) noexcept
+	void initialize_impl(gsdk::ScriptVariant_t &var, std::filesystem::path &&value) noexcept
 	{
 		if(!value.empty()) {
 			std::size_t len{value.native().length()};
-			var.m_pszString = new char[len+1];
-			std::strncpy(const_cast<char *>(var.m_pszString), value.c_str(), len);
-			const_cast<char *>(var.m_pszString)[len] = '\0';
+			var.m_cstr = new char[len+1];
+			std::strncpy(var.m_cstr, value.c_str(), len);
+			var.m_cstr[len] = '\0';
 			var.m_flags |= gsdk::SV_FREE;
 		} else {
-			var.m_pszString = "";
+			var.m_ccstr = "";
 		}
 	}
 }

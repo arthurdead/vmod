@@ -8,6 +8,7 @@
 #include <vector>
 #include <unistd.h>
 #include <sys/mman.h>
+#include "type_traits.hpp"
 
 #include <cxxabi.h>
 
@@ -63,195 +64,36 @@ namespace vmod
 	}
 
 	template <typename T>
-	struct function_traits;
-
-	template <typename R, typename ...Args>
-	struct function_traits<R(*)(Args...)>
-	{
-		using return_type = R;
-
-		static constexpr bool va{false};
-		static constexpr bool member{false};
-
-		using args_tuple = std::tuple<Args...>;
-
-		template <std::size_t i>
-		struct arg
-		{
-			using type = std::tuple_element_t<i, args_tuple>;
-		};
-
-		using pointer_type = R(*)(Args...);
-		using plain_pointer_type = pointer_type;
-		using thiscall_pointer_type = R(__attribute__((__thiscall__)) *)(Args...);
-	};
-
-	template <typename R, typename C, typename ...Args>
-	struct function_traits<R(C::*)(Args...)>
-	{
-		using return_type = R;
-
-		using class_type = C;
-
-		static constexpr bool va{false};
-		static constexpr bool member{true};
-
-		using args_tuple = std::tuple<Args...>;
-
-		template <std::size_t i>
-		struct arg
-		{
-			using type = std::tuple_element_t<i, args_tuple>;
-		};
-
-		using pointer_type = R(C::*)(Args...);
-		using plain_pointer_type = R(*)(C *, Args...);
-		using thiscall_pointer_type = R(__attribute__((__thiscall__)) *)(C *, Args...);
-	};
-
-	template <typename R, typename C, typename ...Args>
-	struct function_traits<R(C::*)(Args...) const> : function_traits<R(C::*)(Args...)>
-	{
-		using class_type = const C;
-
-		using pointer_type = R(C::*)(Args...) const;
-		using plain_pointer_type = R(*)(const C *, Args...);
-		using thiscall_pointer_type = R(__attribute__((__thiscall__)) *)(const C *, Args...);
-	};
-
-	template <typename R, typename ...Args>
-	struct function_traits<R(*)(Args..., ...)> : function_traits<R(*)(Args...)>
-	{
-		static constexpr bool va{true};
-
-		using pointer_type = R(*)(Args..., ...);
-		using plain_pointer_type = pointer_type;
-		using thiscall_pointer_type = plain_pointer_type;
-	};
-
-	template <typename R, typename C, typename ...Args>
-	struct function_traits<R(C::*)(Args..., ...)> : function_traits<R(C::*)(Args...)>
-	{
-		static constexpr bool va{true};
-
-		using pointer_type = R(C::*)(Args..., ...);
-		using plain_pointer_type = R(*)(C *, Args..., ...);
-		using thiscall_pointer_type = plain_pointer_type;
-	};
-
-	template <typename R, typename C, typename ...Args>
-	struct function_traits<R(C::*)(Args..., ...) const> : function_traits<R(C::*)(Args...)>
-	{
-		static constexpr bool va{true};
-
-		using pointer_type = R(C::*)(Args..., ...) const;
-		using plain_pointer_type = R(*)(const C *, Args..., ...);
-		using thiscall_pointer_type = plain_pointer_type;
-	};
-
-	template <typename R, typename ...Args>
-	struct function_traits<R(*)(Args...) noexcept> : public function_traits<R(*)(Args...)>
-	{
-	};
-
-	template <typename R, typename ...Args>
-	struct function_traits<R(*)(Args..., ...) noexcept> : public function_traits<R(*)(Args..., ...)>
-	{
-	};
-
-	template <typename R, typename C, typename ...Args>
-	struct function_traits<R(C::*)(Args...) noexcept> : function_traits<R(C::*)(Args...)>
-	{
-	};
-
-	template <typename R, typename C, typename ...Args>
-	struct function_traits<R(C::*)(Args...) const noexcept> : function_traits<R(C::*)(Args...) const>
-	{
-	};
-
-	template <typename R, typename C, typename ...Args>
-	struct function_traits<R(C::*)(Args..., ...) noexcept> : function_traits<R(C::*)(Args..., ...)>
-	{
-	};
-
-	template <typename R, typename C, typename ...Args>
-	struct function_traits<R(C::*)(Args..., ...) const noexcept> : function_traits<R(C::*)(Args..., ...) const>
-	{
-	};
-
-	template <typename R, typename ...Args>
-	struct function_traits<R(Args...)> : function_traits<R(*)(Args...)>
-	{
-	};
-
-	template <typename R, typename ...Args>
-	struct function_traits<R(Args...) noexcept> : function_traits<R(*)(Args...) noexcept>
-	{
-	};
-
-	template <typename R, typename ...Args>
-	struct function_traits<R(Args..., ...)> : function_traits<R(*)(Args..., ...)>
-	{
-	};
-
-	template <typename R, typename ...Args>
-	struct function_traits<R(Args..., ...) noexcept> : function_traits<R(*)(Args..., ...) noexcept>
-	{
-	};
-
-	template <typename T>
-	using function_return_t = typename function_traits<T>::return_type;
-
-	template <typename T>
-	using function_args_tuple_t = typename function_traits<T>::args_tuple;
-
-	template <typename T>
-	using function_pointer_t = typename function_traits<T>::pointer_type;
-
-	template <typename T>
-	using function_thiscall_pointer_t = typename function_traits<T>::thiscall_pointer_type;
-
-	template <typename T>
-	using function_plain_pointer_t = typename function_traits<T>::plain_pointer_type;
-
-	template <typename T>
-	using function_class_t = typename function_traits<T>::class_type;
-
-	template <typename T>
-	constexpr bool function_is_member_v{function_traits<T>::member};
-
-	template <typename T>
-	constexpr bool function_is_va_v{function_traits<T>::va};
-
-	template <typename T>
 	const std::string &demangle() noexcept;
 
-	class empty_class final
+	class generic_class final
 	{
 	public:
-		[[noreturn]] inline void empty_function() noexcept
+		[[noreturn]] inline void generic_function() noexcept
 		{ __builtin_trap(); }
 	private:
-		empty_class() = delete;
-		~empty_class() = delete;
-		empty_class(const empty_class &) = delete;
-		empty_class &operator=(const empty_class &) = delete;
-		empty_class(empty_class &&) = delete;
-		empty_class &operator=(empty_class &&) = delete;
+		generic_class() = delete;
+		~generic_class() = delete;
+		generic_class(const generic_class &) = delete;
+		generic_class &operator=(const generic_class &) = delete;
+		generic_class(generic_class &&) = delete;
+		generic_class &operator=(generic_class &&) = delete;
 	};
 
-	using generic_object_t = empty_class;
+	using generic_object_t = generic_class;
 	using generic_func_t = void(*)();
-	using generic_plain_mfp_t = void(__attribute__((__thiscall__)) *)(empty_class *);
-	using generic_mfp_t = void(empty_class::*)();
+	using generic_plain_mfp_t = void(__attribute__((__thiscall__)) *)(generic_class *);
+	using generic_mfp_t = void(generic_class::*)();
 
-	static_assert(sizeof(&empty_class::empty_function) == sizeof(std::uint64_t));
-	static_assert(alignof(&empty_class::empty_function) == alignof(std::uint64_t));
+	static_assert(sizeof(&generic_class::generic_function) == sizeof(std::uint64_t));
+	static_assert(alignof(&generic_class::generic_function) == alignof(std::uint64_t));
 
 	template <typename R, typename C, typename ...Args>
 	union alignas(std::uint64_t) mfp_internal_t
 	{
-		inline mfp_internal_t() noexcept
+		mfp_internal_t() noexcept = default;
+
+		inline mfp_internal_t(std::nullptr_t) noexcept
 			: func{nullptr}
 		{
 		}
@@ -295,23 +137,30 @@ namespace vmod
 			return *this;
 		}
 
+		mfp_internal_t(mfp_internal_t &&) noexcept = default;
+		mfp_internal_t &operator=(mfp_internal_t &&) noexcept = default;
+		mfp_internal_t(const mfp_internal_t &) noexcept = default;
+		mfp_internal_t &operator=(const mfp_internal_t &) noexcept = default;
+
 		inline operator bool() const noexcept
-		{ return func; }
+		{ return addr; }
 		inline bool operator!() const noexcept
-		{ return !func; }
+		{ return !addr; }
 
 		std::uint64_t value;
 		struct {
 			R(__attribute__((__thiscall__)) *addr)(C *, Args...);
 			std::size_t adjustor;
 		};
-		R(C::*func)(Args...);
+		R(C::*func)(Args...) {nullptr};
 	};
 
 	template <typename R, typename C, typename ...Args>
 	union alignas(std::uint64_t) mfp_internal_va_t
 	{
-		inline mfp_internal_va_t() noexcept
+		mfp_internal_va_t() noexcept = default;
+
+		inline mfp_internal_va_t(std::nullptr_t) noexcept
 			: func{nullptr}
 		{
 		}
@@ -355,27 +204,56 @@ namespace vmod
 			return *this;
 		}
 
+		mfp_internal_va_t(mfp_internal_va_t &&) noexcept = default;
+		mfp_internal_va_t &operator=(mfp_internal_va_t &&) noexcept = default;
+		mfp_internal_va_t(const mfp_internal_va_t &) noexcept = default;
+		mfp_internal_va_t &operator=(const mfp_internal_va_t &) noexcept = default;
+
 		inline operator bool() const noexcept
-		{ return func; }
+		{ return addr; }
 		inline bool operator!() const noexcept
-		{ return !func; }
+		{ return !addr; }
 
 		std::uint64_t value;
 		struct {
 			R(*addr)(C *, Args..., ...);
 			std::size_t adjustor;
 		};
-		R(C::*func)(Args..., ...);
+		R(C::*func)(Args..., ...) {nullptr};
 	};
 
-	using generic_internal_mfp_t = mfp_internal_t<void, empty_class>;
-	using generic_internal_mfp_va_t = mfp_internal_va_t<void, empty_class>;
+	using generic_internal_mfp_t = mfp_internal_t<void, generic_class>;
+	using generic_internal_mfp_va_t = mfp_internal_va_t<void, generic_class>;
 
-	static_assert(sizeof(generic_internal_mfp_t) == sizeof(&empty_class::empty_function));
-	static_assert(alignof(generic_internal_mfp_t) == alignof(&empty_class::empty_function));
+	static_assert(sizeof(generic_internal_mfp_t) == sizeof(&generic_class::generic_function));
+	static_assert(alignof(generic_internal_mfp_t) == alignof(&generic_class::generic_function));
 
 	static_assert(sizeof(generic_internal_mfp_va_t) == sizeof(generic_internal_mfp_t));
 	static_assert(alignof(generic_internal_mfp_va_t) == alignof(generic_internal_mfp_t));
+
+	union mfp_or_func_t
+	{
+		mfp_or_func_t() noexcept = default;
+
+		mfp_or_func_t(mfp_or_func_t &&) noexcept = default;
+		mfp_or_func_t &operator=(mfp_or_func_t &&) noexcept = default;
+		mfp_or_func_t(const mfp_or_func_t &) noexcept = default;
+		mfp_or_func_t &operator=(const mfp_or_func_t &) noexcept = default;
+
+		inline mfp_or_func_t(std::nullptr_t) noexcept
+			: mfp{nullptr}
+		{
+		}
+
+		generic_func_t func;
+		generic_plain_mfp_t plain;
+		generic_internal_mfp_t mfp{};
+
+		inline operator bool() const noexcept
+		{ return static_cast<bool>(mfp); }
+		inline bool operator!() const noexcept
+		{ return !mfp; }
+	};
 
 	using generic_vtable_t = generic_plain_mfp_t *;
 
@@ -471,6 +349,13 @@ namespace vmod
 	private:
 		void *start;
 		std::size_t size;
+
+	private:
+		page_info() = delete;
+		page_info(const page_info &) = delete;
+		page_info &operator=(const page_info &) = delete;
+		page_info(page_info &&) = delete;
+		page_info &operator=(page_info &&) = delete;
 	};
 
 	template <typename R, typename C, typename U, typename ...Args>
@@ -499,11 +384,12 @@ namespace vmod
 	public:
 		inline detour_base() noexcept
 		{
+			std::memset(old_bytes, 0, sizeof(old_bytes));
 		}
 
 		inline ~detour_base() noexcept
 		{
-			if(old_func) {
+			if(old_target) {
 				disable();
 			}
 		}
@@ -512,24 +398,23 @@ namespace vmod
 
 		inline void disable() noexcept
 		{
-			unsigned char *bytes{reinterpret_cast<unsigned char *>(old_func)};
+			unsigned char *bytes{reinterpret_cast<unsigned char *>(old_target.mfp.addr)};
 			std::memcpy(bytes, old_bytes, sizeof(old_bytes));
 		}
 
 	protected:
 		void backup_bytes() noexcept;
 
-		union {
-			generic_func_t old_func;
-			generic_internal_mfp_t old_mfp;
-		};
-
-		union {
-			generic_func_t new_func;
-			generic_plain_mfp_t new_mfp;
-		};
+		mfp_or_func_t old_target;
+		mfp_or_func_t new_target;
 
 		unsigned char old_bytes[1 + sizeof(std::uintptr_t)];
+
+	private:
+		detour_base(const detour_base &) = delete;
+		detour_base &operator=(const detour_base &) = delete;
+		detour_base(detour_base &&) = delete;
+		detour_base &operator=(detour_base &&) = delete;
 	};
 
 	template <typename T>
@@ -551,14 +436,16 @@ namespace vmod
 	class detour<T, false> final : public detour_base<T>
 	{
 	public:
+		detour() noexcept = default;
+
 		inline void initialize(function_pointer_t<T> old_func_, function_pointer_t<T> new_func_) noexcept
 		{
 			#pragma GCC diagnostic push
 			#pragma GCC diagnostic ignored "-Wcast-function-type"
-			this->old_mfp.addr = reinterpret_cast<generic_plain_mfp_t>(old_func_);
-			this->new_func = reinterpret_cast<generic_func_t>(new_func_);
+			this->old_target.mfp.addr = reinterpret_cast<generic_plain_mfp_t>(old_func_);
+			this->new_target.func = reinterpret_cast<generic_func_t>(new_func_);
 			#pragma GCC diagnostic pop
-			this->old_mfp.adjustor = 0;
+			this->old_target.mfp.adjustor = 0;
 
 			this->backup_bytes();
 		}
@@ -567,20 +454,28 @@ namespace vmod
 		inline function_return_t<T> operator()(Args &&...args) noexcept
 		{
 			__detour_scope_enable<T> se{*this};
-			return reinterpret_cast<function_pointer_t<T>>(this->old_func)(std::forward<Args>(args)...);
+			return reinterpret_cast<function_pointer_t<T>>(this->old_target.func)(std::forward<Args>(args)...);
 		}
+
+	private:
+		detour(const detour &) = delete;
+		detour &operator=(const detour &) = delete;
+		detour(detour &&) = delete;
+		detour &operator=(detour &&) = delete;
 	};
 
 	template <typename T>
 	class detour<T, true> final : public detour_base<T>
 	{
 	public:
+		detour() noexcept = default;
+
 		inline void initialize(function_pointer_t<T> old_func_, function_plain_pointer_t<T> new_func_) noexcept
 		{
 			#pragma GCC diagnostic push
 			#pragma GCC diagnostic ignored "-Wcast-function-type"
-			this->old_mfp.func = reinterpret_cast<generic_mfp_t>(old_func_);
-			this->new_mfp = reinterpret_cast<generic_plain_mfp_t>(new_func_);
+			this->old_target.mfp.func = reinterpret_cast<generic_mfp_t>(old_func_);
+			this->new_target.plain = reinterpret_cast<generic_plain_mfp_t>(new_func_);
 			#pragma GCC diagnostic pop
 
 			this->backup_bytes();
@@ -592,9 +487,15 @@ namespace vmod
 			__detour_scope_enable<T> se{*this};
 			#pragma GCC diagnostic push
 			#pragma GCC diagnostic ignored "-Wcast-function-type"
-			return (obj->*reinterpret_cast<function_pointer_t<T>>(this->old_mfp.func))(std::forward<Args>(args)...);
+			return (obj->*reinterpret_cast<function_pointer_t<T>>(this->old_target.mfp.func))(std::forward<Args>(args)...);
 			#pragma GCC diagnostic pop
 		}
+
+	private:
+		detour(const detour &) = delete;
+		detour &operator=(const detour &) = delete;
+		detour(detour &&) = delete;
+		detour &operator=(detour &&) = delete;
 	};
 }
 

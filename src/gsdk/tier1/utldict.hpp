@@ -14,7 +14,7 @@ namespace gsdk
 	};
 
 	template <typename T, typename I>
-	struct UtlRBTreeNode_t : public UtlRBTreeLinks_t<I>
+	struct UtlRBTreeNode_t : UtlRBTreeLinks_t<I>
 	{
 		T m_Data;
 	};
@@ -95,7 +95,14 @@ namespace gsdk
 		I m_FirstFree;
 		typename M::iterator m_LastAlloc;
 
-		node_t *m_pElements;
+		node_t *m_pElements{nullptr};
+
+	private:
+		CUtlRBTree() = delete;
+		CUtlRBTree(const CUtlRBTree &) = delete;
+		CUtlRBTree &operator=(const CUtlRBTree &) = delete;
+		CUtlRBTree(CUtlRBTree &&) = delete;
+		CUtlRBTree &operator=(CUtlRBTree &&) = delete;
 	};
 
 	template <typename K, typename T, typename I = unsigned short>
@@ -125,6 +132,13 @@ namespace gsdk
 		{ m_Tree.erase(i); }
 
 		tree_t m_Tree;
+
+	private:
+		CUtlMap() = delete;
+		CUtlMap(const CUtlMap &) = delete;
+		CUtlMap &operator=(const CUtlMap &) = delete;
+		CUtlMap(CUtlMap &&) = delete;
+		CUtlMap &operator=(CUtlMap &&) = delete;
 	};
 
 	template <typename T, typename I = int>
@@ -141,6 +155,13 @@ namespace gsdk
 		void erase(std::size_t i) noexcept;
 
 		map_t m_Elements;
+
+	private:
+		CUtlDict() = delete;
+		CUtlDict(const CUtlDict &) = delete;
+		CUtlDict &operator=(const CUtlDict &) = delete;
+		CUtlDict(CUtlDict &&) = delete;
+		CUtlDict &operator=(CUtlDict &&) = delete;
 	};
 }
 

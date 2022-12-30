@@ -1,6 +1,6 @@
 #include "preprocessor.hpp"
 #include "gsdk.hpp"
-#include "vmod.hpp"
+#include "main.hpp"
 #include "filesystem.hpp"
 
 #ifdef __clang__
@@ -26,15 +26,15 @@
 
 namespace vmod
 {
-	squirrel_preprocessor *squirrel_preprocessor::current;
+	squirrel_preprocessor *squirrel_preprocessor::current{nullptr};
+
+	char squirrel_preprocessor::msg_buff[squirrel_preprocessor::msg_buff_max];
 
 	squirrel_preprocessor::squirrel_preprocessor() noexcept
 	{
 		current = this;
 	}
 
-	static char __sqpp_temp_path_buff[PATH_MAX];
-	static char __sqpp_temp_msg_buff[4026];
 	bool squirrel_preprocessor::initialize() noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -47,6 +47,16 @@ namespace vmod
 		initialized = true;
 
 		vmod_preproc_dump.initialize("vmod_preproc_dump"sv, false);
+
+		const std::filesystem::path &plugins_dir{main::instance().plugins_dir()};
+
+		pp_dir = plugins_dir.parent_path();
+
+		{
+			std::string dir_name{plugins_dir.filename().native()};
+			dir_name += "_pp"sv;
+			pp_dir /= std::move(dir_name);
+		}
 
 		TPPLexer_Current->l_flags = TPPLEXER_FLAG_WANTSPACE|TPPLEXER_FLAG_WANTLF|TPPLEXER_FLAG_MESSAGE_LOCATION;
 		TPPLexer_Current->l_callbacks.c_new_textfile =
@@ -61,27 +71,27 @@ namespace vmod
 			[](const char *fmt, va_list args) noexcept -> void {
 				#pragma GCC diagnostic push
 				#pragma GCC diagnostic ignored "-Wformat-nonliteral"
-				std::vsnprintf(__sqpp_temp_msg_buff, sizeof(__sqpp_temp_msg_buff), fmt, args);
+				std::vsnprintf(msg_buff, sizeof(msg_buff), fmt, args);
 				#pragma GCC diagnostic pop
 
 				constexpr std::size_t warn_begin_len{__builtin_strlen(TPP_WARNF_WARN_BEGIN)};
 				constexpr std::size_t err_begin_len{__builtin_strlen(TPP_WARNF_WARN_BEGIN)};
 
-				if(std::strncmp(__sqpp_temp_msg_buff, TPP_WARNF_WARN_BEGIN, warn_begin_len) == 0) {
+				if(std::strncmp(msg_buff, TPP_WARNF_WARN_BEGIN, warn_begin_len) == 0) {
 					current->print_state = print_state::warning;
-				} else if(std::strncmp(__sqpp_temp_msg_buff, TPP_WARNF_ERROR_BEGIN, err_begin_len) == 0) {
+				} else if(std::strncmp(msg_buff, TPP_WARNF_ERROR_BEGIN, err_begin_len) == 0) {
 					current->print_state = print_state::error;
 				}
 
 				switch(current->print_state) {
 					case print_state::unknown:
-					info("%s", __sqpp_temp_msg_buff);
+					info("%s", msg_buff);
 					break;
 					case print_state::warning:
-					warning("%s", __sqpp_temp_msg_buff);
+					warning("%s", msg_buff);
 					break;
 					case print_state::error:
-					error("%s", __sqpp_temp_msg_buff);
+					error("%s", msg_buff);
 					break;
 				}
 			};
@@ -89,23 +99,23 @@ namespace vmod
 			[](const char *fmt, va_list args) noexcept -> void {
 				#pragma GCC diagnostic push
 				#pragma GCC diagnostic ignored "-Wformat-nonliteral"
-				std::vsnprintf(__sqpp_temp_msg_buff, sizeof(__sqpp_temp_msg_buff), fmt, args);
+				std::vsnprintf(msg_buff, sizeof(msg_buff), fmt, args);
 				#pragma GCC diagnostic pop
-				info("%s", __sqpp_temp_msg_buff);
+				info("%s", msg_buff);
 			};
 
 		std::error_code err;
 
-		std::filesystem::path include_dir{vmod.root_dir()};
+		std::filesystem::path include_dir{main::instance().root_dir()};
 		include_dir /= "include"sv;
-		std::strncpy(__sqpp_temp_path_buff, include_dir.c_str(), include_dir.native().length());
-		TPPLexer_AddIncludePath(__sqpp_temp_path_buff, include_dir.native().length());
+		std::strncpy(path_buff, include_dir.c_str(), include_dir.native().length());
+		TPPLexer_AddIncludePath(path_buff, include_dir.native().length());
 
-		include_dir = vmod.game_dir();
+		include_dir = main::instance().game_dir();
 		include_dir /= "scripts"sv;
 		include_dir /= "vscripts"sv;
-		std::strncpy(__sqpp_temp_path_buff, include_dir.c_str(), include_dir.native().length());
-		TPPLexer_AddIncludePath(__sqpp_temp_path_buff, include_dir.native().length());
+		std::strncpy(path_buff, include_dir.c_str(), include_dir.native().length());
+		TPPLexer_AddIncludePath(path_buff, include_dir.native().length());
 
 		return true;
 	}
@@ -114,8 +124,8 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
-		std::strncpy(__sqpp_temp_path_buff, path.c_str(), path.native().length());
-		TPPFile *file{TPPLexer_OpenFile(TPPLEXER_OPENFILE_MODE_NORMAL, __sqpp_temp_path_buff, path.native().length(), nullptr)};
+		std::strncpy(path_buff, path.c_str(), path.native().length());
+		TPPFile *file{TPPLexer_OpenFile(TPPLEXER_OPENFILE_MODE_NORMAL, path_buff, path.native().length(), nullptr)};
 		if(!file) {
 			error("failed to open file '%s'\n", path.c_str());
 			return false;
@@ -134,10 +144,20 @@ namespace vmod
 			{}
 			inline ~scope_cleanup() noexcept {
 				if(pp.vmod_preproc_dump.get<bool>()) {
-					std::filesystem::path pp_path{vmod.root_dir()};
-					pp_path /= "plugins_pp"sv;
-					pp_path /= path.filename();
-					pp_path.replace_extension(".nut.pp"sv);
+					std::filesystem::path pp_path{pp.pp_dir};
+					{
+						const std::filesystem::path &plugins_dir{main::instance().plugins_dir()};
+
+						std::string path_delta{path.native()};
+						path_delta.erase(0, plugins_dir.native().length()+1);
+						pp_path /= std::move(path_delta);
+					}
+
+					{
+						std::string ext{path.extension().native()};
+						ext += ".pp"sv;
+						pp_path.replace_extension(std::move(ext));
+					}
 
 					write_file(pp_path, reinterpret_cast<const unsigned char *>(str.c_str()), str.length());
 				}

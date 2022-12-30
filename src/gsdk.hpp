@@ -119,6 +119,8 @@ namespace vmod
 	class gsdk_library
 	{
 	public:
+		gsdk_library() noexcept = default;
+
 		virtual bool load(const std::filesystem::path &path) noexcept;
 
 		inline const std::string &error_string() const noexcept
@@ -147,8 +149,14 @@ namespace vmod
 
 	private:
 		void *dl{nullptr};
-		gsdk::CreateInterfaceFn iface_fac;
-		void *base_addr;
+		gsdk::CreateInterfaceFn iface_fac{nullptr};
+		void *base_addr{nullptr};
+
+	private:
+		gsdk_library(const gsdk_library &) = delete;
+		gsdk_library &operator=(const gsdk_library &) = delete;
+		gsdk_library(gsdk_library &&) = delete;
+		gsdk_library &operator=(gsdk_library &&) = delete;
 	};
 
 	template <typename T>
@@ -167,6 +175,8 @@ namespace vmod
 	class gsdk_engine_library final : public gsdk_library
 	{
 	public:
+		gsdk_engine_library() noexcept = default;
+
 		bool load(const std::filesystem::path &path) noexcept override;
 
 		inline const symbol_cache &symbols() const noexcept
@@ -174,11 +184,19 @@ namespace vmod
 
 	private:
 		symbol_cache syms;
+
+	private:
+		gsdk_engine_library(const gsdk_engine_library &) = delete;
+		gsdk_engine_library &operator=(const gsdk_engine_library &) = delete;
+		gsdk_engine_library(gsdk_engine_library &&) = delete;
+		gsdk_engine_library &operator=(gsdk_engine_library &&) = delete;
 	};
 
 	class gsdk_server_library final : public gsdk_library
 	{
 	public:
+		gsdk_server_library() noexcept = default;
+
 		bool load(const std::filesystem::path &path) noexcept override;
 
 		inline const symbol_cache &symbols() const noexcept
@@ -186,6 +204,12 @@ namespace vmod
 
 	private:
 		symbol_cache syms;
+
+	private:
+		gsdk_server_library(const gsdk_server_library &) = delete;
+		gsdk_server_library &operator=(const gsdk_server_library &) = delete;
+		gsdk_server_library(gsdk_server_library &&) = delete;
+		gsdk_server_library &operator=(gsdk_server_library &&) = delete;
 	};
 
 	class gsdk_filesystem_library final : public gsdk_library
@@ -203,6 +227,8 @@ namespace vmod
 	class gsdk_vscript_library final : public gsdk_library
 	{
 	public:
+		gsdk_vscript_library() noexcept = default;
+
 		bool load(const std::filesystem::path &path) noexcept override;
 
 		inline const symbol_cache &symbols() const noexcept
@@ -210,6 +236,12 @@ namespace vmod
 
 	private:
 		symbol_cache syms;
+
+	private:
+		gsdk_vscript_library(const gsdk_vscript_library &) = delete;
+		gsdk_vscript_library &operator=(const gsdk_vscript_library &) = delete;
+		gsdk_vscript_library(gsdk_vscript_library &&) = delete;
+		gsdk_vscript_library &operator=(gsdk_vscript_library &&) = delete;
 	};
 }
 

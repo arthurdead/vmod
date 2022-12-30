@@ -3,6 +3,7 @@
 //#define GSDK_DT_SUPPORTS_INT64
 
 #include "../mathlib/vector.hpp"
+#include <cstring>
 
 namespace gsdk
 {
@@ -51,6 +52,11 @@ namespace gsdk
 	class DVariant
 	{
 	public:
+		inline DVariant() noexcept
+		{
+			std::memset(m_data, 0, sizeof(m_data));
+		}
+
 		union
 		{
 			float m_Float;
@@ -68,7 +74,13 @@ namespace gsdk
 			unsigned char m_data[sizeof(float) * 3];
 		};
 
-		SendPropType m_Type;
+		SendPropType m_Type{DPT_Int};
+
+	private:
+		DVariant(const DVariant &) = delete;
+		DVariant &operator=(const DVariant &) = delete;
+		DVariant(DVariant &&) = delete;
+		DVariant &operator=(DVariant &&) = delete;
 	};
 
 	static_assert(sizeof(DVariant) == (sizeof(Vector) + sizeof(SendPropType)));

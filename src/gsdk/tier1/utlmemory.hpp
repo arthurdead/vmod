@@ -9,14 +9,7 @@ namespace gsdk
 	class CUtlMemory
 	{
 	public:
-		inline CUtlMemory() noexcept
-			: m_pMemory{nullptr},
-			m_nAllocationCount{0},
-			m_nGrowSize{0}
-		{
-		}
-		CUtlMemory(const CUtlMemory &) = delete;
-		CUtlMemory &operator=(const CUtlMemory &) = delete;
+		CUtlMemory() noexcept = default;
 		inline CUtlMemory(CUtlMemory &&other) noexcept
 		{ operator=(std::move(other)); }
 		inline CUtlMemory &operator=(CUtlMemory &&other) noexcept
@@ -46,9 +39,13 @@ namespace gsdk
 			I index;
 		};
 
-		T *m_pMemory;
-		int m_nAllocationCount;
-		int m_nGrowSize;
+		T *m_pMemory{nullptr};
+		int m_nAllocationCount{0};
+		int m_nGrowSize{0};
+
+	private:
+		CUtlMemory(const CUtlMemory &) = delete;
+		CUtlMemory &operator=(const CUtlMemory &) = delete;
 	};
 }
 

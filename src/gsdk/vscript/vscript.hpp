@@ -90,39 +90,6 @@ namespace gsdk
 
 	using ScriptDataType_t = int;
 
-	struct ScriptFuncDescriptor_t
-	{
-	public:
-		inline ScriptFuncDescriptor_t() noexcept
-		{
-		}
-
-		ScriptFuncDescriptor_t(const ScriptFuncDescriptor_t &) = delete;
-		ScriptFuncDescriptor_t &operator=(const ScriptFuncDescriptor_t &) = delete;
-
-		inline ScriptFuncDescriptor_t(ScriptFuncDescriptor_t &&other) noexcept
-		{ operator=(std::move(other)); }
-
-		inline ScriptFuncDescriptor_t &operator=(ScriptFuncDescriptor_t &&other) noexcept
-		{
-			m_pszScriptName = other.m_pszScriptName;
-			other.m_pszScriptName = nullptr;
-			m_pszFunction = other.m_pszFunction;
-			other.m_pszFunction = nullptr;
-			m_pszDescription = other.m_pszDescription;
-			other.m_pszDescription = nullptr;
-			m_ReturnType = other.m_ReturnType;
-			m_Parameters = std::move(other.m_Parameters);
-			return *this;
-		}
-
-		const char *m_pszScriptName;
-		const char *m_pszFunction;
-		const char *m_pszDescription;
-		ScriptDataType_t m_ReturnType;
-		CUtlVector<ScriptDataType_t> m_Parameters;
-	};
-
 	enum SVFlags_t : short
 	{
 		SV_NOFLAGS = 0,
@@ -160,23 +127,34 @@ namespace gsdk
 	public:
 		inline CVariantBase() noexcept
 		{
+			std::memset(m_data, 0, sizeof(m_data));
 		}
+
+		void free() noexcept;
 
 		inline ~CVariantBase() noexcept
-		{
-		}
+		{ free(); }
 
-	public:
-		CVariantBase(const CVariantBase &) = delete;
-		CVariantBase &operator=(const CVariantBase &) = delete;
+		CVariantBase(const CVariantBase &other) noexcept
+		{ operator=(other); }
+
+		inline CVariantBase &operator=(const CVariantBase &other) noexcept
+		{
+			m_type = other.m_type;
+			std::memcpy(m_data, other.m_data, sizeof(m_data));
+			m_flags = other.m_flags & ~SV_FREE;
+			return *this;
+		}
 
 		inline CVariantBase(CVariantBase &&other) noexcept
 		{ operator=(std::move(other)); }
 
 		inline CVariantBase &operator=(CVariantBase &&other) noexcept
 		{
-			std::memmove(m_data, other.m_data, sizeof(CVariantBase::m_data));
 			m_type = other.m_type;
+			other.m_type = FIELD_VOID;
+			std::memmove(m_data, other.m_data, sizeof(m_data));
+			std::memset(other.m_data, 0, sizeof(m_data));
 			m_flags = other.m_flags;
 			other.m_flags = SV_NOFLAGS;
 			return *this;
@@ -199,21 +177,22 @@ namespace gsdk
 			float m_float;
 			double m_double;
 			//long double m_longdouble;
-			string_t m_tstring;
-			const char *m_pszString;
-			CUtlStringToken *m_pUtlStringToken;
-			const Vector *m_pVector;
-			const Quaternion *m_pQuaternion;
-			const Vector2D *m_pVector2D;
-			const QAngle *m_pQAngle;
-			void *m_EHandle;
-			HSCRIPT m_hScript;
+			string_t m_tstr;
+			char *m_cstr;
+			const char *m_ccstr;
+			CUtlStringToken *m_utlstringtoken;
+			Vector *m_vector;
+			Quaternion *m_quaternion;
+			Vector2D *m_vector2d;
+			QAngle *m_qangle;
+			void *m_ehandle;
+			HSCRIPT m_object;
 			void *m_ptr;
 			unsigned char m_data[sizeof(unsigned long long)];
 		};
 
-		short m_type;
-		short m_flags;
+		short m_type{FIELD_VOID};
+		short m_flags{SV_NOFLAGS};
 	};
 
 	using ScriptVariant_t = CVariantBase<CVariantDefaultAllocator>;
@@ -238,17 +217,8 @@ namespace gsdk
 	{
 		inline CScriptFunctionBindingStorageType() noexcept
 		{
+			mfp = nullptr;
 			std::memset(unk1, 0, sizeof(unk1));
-		}
-
-		CScriptFunctionBindingStorageType(const CScriptFunctionBindingStorageType &other) noexcept
-		{ operator=(other); }
-
-		inline CScriptFunctionBindingStorageType &operator=(const CScriptFunctionBindingStorageType &other) noexcept
-		{
-			mfp = other.mfp;
-			std::memcpy(unk1, other.unk1, sizeof(unk1));
-			return *this;
 		}
 
 		CScriptFunctionBindingStorageType(CScriptFunctionBindingStorageType &&other) noexcept
@@ -261,6 +231,10 @@ namespace gsdk
 			std::memset(other.unk1, 0, sizeof(unk1));
 			return *this;
 		}
+
+	private:
+		CScriptFunctionBindingStorageType(const CScriptFunctionBindingStorageType &) noexcept = delete;
+		CScriptFunctionBindingStorageType &operator=(const CScriptFunctionBindingStorageType &) noexcept = delete;
 	};
 
 	static_assert(sizeof(CScriptFunctionBindingStorageType) == sizeof(ScriptFunctionBindingStorageType_t));
@@ -268,19 +242,48 @@ namespace gsdk
 
 	enum ScriptFuncBindingFlags_t : unsigned int
 	{
+		SF_NOFLAGS = 0,
 		SF_MEMBER_FUNC = 0x01,
+		SF_NUM_FLAGS = 1
+	};
+
+	struct ScriptFuncDescriptor_t
+	{
+	public:
+		ScriptFuncDescriptor_t() noexcept = default;
+
+		inline ScriptFuncDescriptor_t(ScriptFuncDescriptor_t &&other) noexcept
+		{ operator=(std::move(other)); }
+
+		inline ScriptFuncDescriptor_t &operator=(ScriptFuncDescriptor_t &&other) noexcept
+		{
+			m_pszScriptName = other.m_pszScriptName;
+			other.m_pszScriptName = nullptr;
+			m_pszFunction = other.m_pszFunction;
+			other.m_pszFunction = nullptr;
+			m_pszDescription = other.m_pszDescription;
+			other.m_pszDescription = nullptr;
+			m_ReturnType = other.m_ReturnType;
+			other.m_ReturnType = FIELD_VOID;
+			m_Parameters = std::move(other.m_Parameters);
+			return *this;
+		}
+
+		const char *m_pszScriptName{nullptr};
+		const char *m_pszFunction{nullptr};
+		const char *m_pszDescription{nullptr};
+		ScriptDataType_t m_ReturnType{FIELD_VOID};
+		CUtlVector<ScriptDataType_t> m_Parameters;
+
+	private:
+		ScriptFuncDescriptor_t(const ScriptFuncDescriptor_t &) = delete;
+		ScriptFuncDescriptor_t &operator=(const ScriptFuncDescriptor_t &) = delete;
 	};
 
 	struct ScriptFunctionBinding_t
 	{
 	public:
-		inline ScriptFunctionBinding_t() noexcept
-		{
-		}
-
-	public:
-		ScriptFunctionBinding_t(const ScriptFunctionBinding_t &) = delete;
-		ScriptFunctionBinding_t &operator=(const ScriptFunctionBinding_t &) = delete;
+		ScriptFunctionBinding_t() noexcept = default;
 
 		inline ScriptFunctionBinding_t(ScriptFunctionBinding_t &&other) noexcept
 		{ operator=(std::move(other)); }
@@ -292,13 +295,18 @@ namespace gsdk
 			other.m_pfnBinding = nullptr;
 			m_pFunction = std::move(other.m_pFunction);
 			m_flags = other.m_flags;
+			other.m_flags = SF_NOFLAGS;
 			return *this;
 		}
 
 		ScriptFuncDescriptor_t m_desc;
-		ScriptBindingFunc_t m_pfnBinding;
+		ScriptBindingFunc_t m_pfnBinding{nullptr};
 		CScriptFunctionBindingStorageType m_pFunction;
-		unsigned m_flags;
+		unsigned m_flags{SF_NOFLAGS};
+
+	private:
+		ScriptFunctionBinding_t(const ScriptFunctionBinding_t &) = delete;
+		ScriptFunctionBinding_t &operator=(const ScriptFunctionBinding_t &) = delete;
 	};
 
 	#pragma GCC diagnostic push
@@ -315,25 +323,23 @@ namespace gsdk
 	struct ScriptClassDesc_t
 	{
 	public:
-		inline ScriptClassDesc_t() noexcept
-		{
-		}
+		ScriptClassDesc_t() noexcept = default;
 
-	public:
+		const char *m_pszScriptName{nullptr};
+		const char *m_pszClassname{nullptr};
+		const char *m_pszDescription{nullptr};
+		ScriptClassDesc_t *m_pBaseDesc{nullptr};
+		CUtlVector<ScriptFunctionBinding_t> m_FunctionBindings;
+		void *(*m_pfnConstruct)() {nullptr};
+		void (*m_pfnDestruct)(void *) {nullptr};
+		IScriptInstanceHelper *pHelper{nullptr};
+		ScriptClassDesc_t *m_pNextDesc{nullptr};
+
+	private:
 		ScriptClassDesc_t(const ScriptClassDesc_t &) = delete;
 		ScriptClassDesc_t &operator=(const ScriptClassDesc_t &) = delete;
 		ScriptClassDesc_t(ScriptClassDesc_t &&) = delete;
 		ScriptClassDesc_t &operator=(ScriptClassDesc_t &&) = delete;
-
-		const char *m_pszScriptName;
-		const char *m_pszClassname;
-		const char *m_pszDescription;
-		ScriptClassDesc_t *m_pBaseDesc;
-		CUtlVector<ScriptFunctionBinding_t> m_FunctionBindings;
-		void *(*m_pfnConstruct)();
-		void (*m_pfnDestruct)(void *);
-		IScriptInstanceHelper *pHelper;
-		ScriptClassDesc_t *m_pNextDesc;
 	};
 
 	enum ScriptErrorLevel_t : int
@@ -376,6 +382,8 @@ namespace gsdk
 		static bool(IScriptVM::*IsArray_ptr)(HSCRIPT) const;
 		static bool(IScriptVM::*IsTable_ptr)(HSCRIPT) const;
 
+		static constexpr std::size_t unique_id_max{4095 + 6 + 64};
+
 		virtual bool Init() = 0;
 		virtual void Shutdown() = 0;
 		virtual bool ConnectDebugger() = 0;
@@ -412,9 +420,13 @@ namespace gsdk
 	public:
 		HSCRIPT RegisterInstance(ScriptClassDesc_t *desc, void *value) noexcept;
 		virtual void SetInstanceUniqeId(HSCRIPT, const char *) = 0;
+		bool SetInstanceUniqeId2(HSCRIPT instance, const char *root) noexcept;
 		virtual void RemoveInstance(HSCRIPT) = 0;
 		virtual void *GetInstanceValue(HSCRIPT, ScriptClassDesc_t * = nullptr) = 0;
 		virtual bool GenerateUniqueKey(const char *, char *, int) = 0;
+		template <std::size_t S>
+		bool GenerateUniqueKey(const char *root, char (&buffer)[S]) noexcept
+		{ return GenerateUniqueKey(root, buffer, static_cast<int>(S)); }
 		virtual bool ValueExists(HSCRIPT, const char *) = 0;
 		virtual bool SetValue(HSCRIPT, const char *, const char *) = 0;
 	private:
@@ -466,6 +478,8 @@ namespace gsdk
 	};
 	#pragma GCC diagnostic pop
 
+	extern IScriptVM *g_pScriptVM;
+
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 	class CSquirrelVM : public IScriptVM
@@ -475,3 +489,5 @@ namespace gsdk
 	};
 	#pragma GCC diagnostic pop
 }
+
+#include "vscript.tpp"

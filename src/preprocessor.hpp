@@ -9,6 +9,8 @@ namespace vmod
 {
 	class squirrel_preprocessor final
 	{
+		friend class main;
+
 	public:
 		squirrel_preprocessor() noexcept;
 		~squirrel_preprocessor() noexcept;
@@ -16,8 +18,6 @@ namespace vmod
 		bool preprocess(std::string &str, const std::filesystem::path &path, std::vector<std::filesystem::path> &incs) noexcept;
 
 	private:
-		friend class vmod;
-
 		bool initialize() noexcept;
 
 		static squirrel_preprocessor *current;
@@ -31,11 +31,23 @@ namespace vmod
 			error
 		};
 
-		enum print_state print_state;
+		enum print_state print_state{print_state::unknown};
 
-		std::vector<std::filesystem::path> *curr_incs;
-		const std::filesystem::path *curr_path;
+		char path_buff[PATH_MAX];
+		static constexpr std::size_t msg_buff_max{4026};
+		static char msg_buff[msg_buff_max];
 
-		bool initialized;
+		std::vector<std::filesystem::path> *curr_incs{nullptr};
+		const std::filesystem::path *curr_path{nullptr};
+
+		bool initialized{false};
+
+		std::filesystem::path pp_dir;
+
+	private:
+		squirrel_preprocessor(const squirrel_preprocessor &) = delete;
+		squirrel_preprocessor &operator=(const squirrel_preprocessor &) = delete;
+		squirrel_preprocessor(squirrel_preprocessor &&) = delete;
+		squirrel_preprocessor &operator=(squirrel_preprocessor &&) = delete;
 	};
 }

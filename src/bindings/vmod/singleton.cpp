@@ -1,0 +1,317 @@
+#include "../../main.hpp"
+#include "../../plugin.hpp"
+#include "../../filesystem.hpp"
+#include "../docs.hpp"
+
+#include "../cvar/bindings.hpp"
+#include "../mem/bindings.hpp"
+#include "../fs/bindings.hpp"
+#include "../strtables/bindings.hpp"
+#include "../syms/bindings.hpp"
+#include "../ffi/bindings.hpp"
+#include "../ent/bindings.hpp"
+
+namespace vmod
+{
+	vscript::singleton_class_desc<main> main::desc{"vmod"};
+
+	bool main::binding_mods() noexcept
+	{
+		return true;
+	}
+
+	bool main::bindings() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		desc.func(&main::script_find_plugin, "script_find_plugin"sv, "find_plugin"sv);
+		desc.func(&main::script_is_map_active, "script_is_map_active"sv, "is_map_active"sv);
+		desc.func(&main::script_is_map_loaded, "script_is_map_loaded"sv, "is_map_loaded"sv);
+		desc.func(&main::script_are_stringtables_created, "script_are_stringtables_created"sv, "are_stringtables_created"sv);
+
+		desc.func(&main::script_success, "script_success"sv, "success"sv);
+		desc.func(&main::script_print, "script_print"sv, "print"sv);
+		desc.func(&main::script_info, "script_info"sv, "info"sv);
+		desc.func(&main::script_remark, "script_remark"sv, "remark"sv);
+		desc.func(&main::script_error, "script_error"sv, "error"sv);
+		desc.func(&main::script_warning, "script_warning"sv, "warning"sv);
+
+		desc.func(&main::script_successl, "script_successl"sv, "successl"sv);
+		desc.func(&main::script_printl, "script_printl"sv, "printl"sv);
+		desc.func(&main::script_infol, "script_infol"sv, "infol"sv);
+		desc.func(&main::script_remarkl, "script_remarkl"sv, "remarkl"sv);
+		desc.func(&main::script_errorl, "script_errorl"sv, "errorl"sv);
+		desc.func(&main::script_warningl, "script_warningl"sv, "warningl"sv);
+
+		if(!singleton_base::bindings(&desc)) {
+			return false;
+		}
+
+		if(!vm_->SetValue(scope, "root_dir", root_dir_.c_str())) {
+			error("vmod: failed to set root_dir value\n"sv);
+			return false;
+		}
+
+		return_flags_table = vm_->CreateTable();
+		if(!return_flags_table || return_flags_table == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create return flags table\n"sv);
+			return false;
+		}
+
+		{
+			if(!vm_->SetValue(return_flags_table, "ignored", vscript::variant{plugin::callable::return_flags::ignored})) {
+				error("vmod: failed to set return flags continue value\n"sv);
+				return false;
+			}
+
+			if(!vm_->SetValue(return_flags_table, "halt", vscript::variant{plugin::callable::return_flags::halt})) {
+				error("vmod: failed to set return flags halt value\n"sv);
+				return false;
+			}
+
+			if(!vm_->SetValue(return_flags_table, "handled", vscript::variant{plugin::callable::return_flags::handled})) {
+				error("vmod: failed to set return flags handled value\n"sv);
+				return false;
+			}
+
+			if(!vm_->SetValue(return_flags_table, "handled_halt", vscript::variant{plugin::callable::return_flags::handled|plugin::callable::return_flags::halt})) {
+				error("vmod: failed to set return flags handled_halt value\n"sv);
+				return false;
+			}
+		}
+
+		if(!vm_->SetValue(scope, "ret", return_flags_table)) {
+			error("vmod: failed to set return flags table value\n"sv);
+			return false;
+		}
+
+		if(!plugin::bindings()) {
+			return false;
+		}
+
+		if(!bindings::cvar::bindings()) {
+			return false;
+		}
+
+		if(!bindings::mem::bindings()) {
+			return false;
+		}
+
+		if(!bindings::ffi::bindings()) {
+			return false;
+		}
+
+		if(!bindings::fs::bindings()) {
+			return false;
+		}
+
+		if(!bindings::ent::bindings()) {
+			return false;
+		}
+
+		if(!bindings::strtables::bindings()) {
+			return false;
+		}
+
+		stringtable_table = vm_->CreateTable();
+		if(!stringtable_table || stringtable_table == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create strtables table\n"sv);
+			return false;
+		}
+
+		if(!create_script_stringtables()) {
+			return false;
+		}
+
+		if(!vm_->SetValue(scope, "strtables", stringtable_table)) {
+			error("vmod: failed to set strtables table value\n"sv);
+			return false;
+		}
+
+		if(!bindings::syms::bindings()) {
+			return false;
+		}
+
+		symbols_table_ = vm_->CreateTable();
+		if(!symbols_table_ || symbols_table_ == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create syms table\n"sv);
+			return false;
+		}
+
+		if(!create_script_symbols()) {
+			return false;
+		}
+
+		if(!vm_->SetValue(scope, "syms", symbols_table_)) {
+			error("vmod: failed to set syms table value\n"sv);
+			return false;
+		}
+
+		return true;
+	}
+
+	void main::write_docs(const std::filesystem::path &dir) const noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		std::string file;
+
+		bindings::docs::gen_date(file);
+
+		file += "namespace vmod\n{\n"sv;
+		bindings::docs::write(&desc, false, 1, file, false);
+		file += '\n';
+
+		bindings::docs::ident(file, 1);
+		file += "string root_dir;\n\n"sv;
+
+		bindings::docs::write(&plugin::owned_instance::desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		bindings::docs::write(&plugin::desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		bindings::docs::ident(file, 1);
+		file += "namespace fs;\n\n"sv;
+		bindings::fs::write_docs(dir);
+
+		bindings::docs::ident(file, 1);
+		file += "namespace cvar;\n\n"sv;
+		bindings::cvar::write_docs(dir);
+
+		bindings::docs::ident(file, 1);
+		file += "namespace mem;\n\n"sv;
+		bindings::mem::write_docs(dir);
+
+		bindings::docs::ident(file, 1);
+		file += "namespace strtables;\n\n"sv;
+		bindings::strtables::write_docs(dir);
+
+		bindings::docs::ident(file, 1);
+		file += "namespace syms;\n\n"sv;
+		bindings::syms::write_docs(dir);
+
+		bindings::docs::ident(file, 1);
+		file += "namespace ffi;\n\n"sv;
+		bindings::ffi::write_docs(dir);
+
+		bindings::docs::ident(file, 1);
+		file += "namespace ent;\n\n"sv;
+		bindings::ent::write_docs(dir);
+
+		file += '}';
+
+		std::filesystem::path doc_path{dir};
+		doc_path /= "vmod"sv;
+		doc_path.replace_extension(".txt"sv);
+
+		write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+	}
+
+	void main::unbindings() noexcept
+	{
+		script_stringtables.clear();
+
+		if(stringtable_table && stringtable_table != gsdk::INVALID_HSCRIPT) {
+			vm_->ReleaseTable(stringtable_table);
+		}
+
+		if(vm_->ValueExists(scope, "strtables")) {
+			vm_->ClearValue(scope, "strtables");
+		}
+
+		bindings::strtables::unbindings();
+
+		if(symbols_table_ && symbols_table_ != gsdk::INVALID_HSCRIPT) {
+			vm_->ReleaseTable(symbols_table_);
+		}
+
+		if(vm_->ValueExists(scope, "syms")) {
+			vm_->ClearValue(scope, "syms");
+		}
+
+		bindings::ent::unbindings();
+
+		bindings::ffi::unbindings();
+
+		bindings::syms::unbindings();
+
+		bindings::fs::unbindings();
+
+		bindings::mem::unbindings();
+
+		bindings::cvar::unbindings();
+
+		plugin::unbindings();
+
+		if(return_flags_table && return_flags_table != gsdk::INVALID_HSCRIPT) {
+			vm_->ReleaseTable(return_flags_table);
+		}
+
+		if(vm_->ValueExists(scope, "ret")) {
+			vm_->ClearValue(scope, "ret");
+		}
+
+		if(vm_->ValueExists(scope, "root_dir")) {
+			vm_->ClearValue(scope, "root_dir");
+		}
+
+		singleton_base::unbindings();
+	}
+
+	gsdk::HSCRIPT main::script_find_plugin(std::string_view plname) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		if(plname.empty()) {
+			vm_->RaiseException("vmod: invalid name");
+			return nullptr;
+		}
+
+		std::filesystem::path path{build_plugin_path(plname)};
+		if(path.extension() != scripts_extension) {
+			vm_->RaiseException("vmod: invalid extension");
+			return nullptr;
+		}
+
+		auto it{plugins.find(path)};
+		if(it != plugins.end()) {
+			return it->second->instance();
+		}
+
+		return nullptr;
+	}
+
+	void main::script_print(std::string_view str) noexcept
+	{ print("%s", str.data()); }
+	void main::script_success(std::string_view str) noexcept
+	{ success("%s", str.data()); }
+	void main::script_error(std::string_view str) noexcept
+	{ error("%s", str.data()); }
+	void main::script_warning(std::string_view str) noexcept
+	{ warning("%s", str.data()); }
+	void main::script_info(std::string_view str) noexcept
+	{ info("%s", str.data()); }
+	void main::script_remark(std::string_view str) noexcept
+	{ remark("%s", str.data()); }
+
+	void main::script_printl(std::string_view str) noexcept
+	{ print("%s\n", str.data()); }
+	void main::script_successl(std::string_view str) noexcept
+	{ success("%s\n", str.data()); }
+	void main::script_errorl(std::string_view str) noexcept
+	{ error("%s\n", str.data()); }
+	void main::script_warningl(std::string_view str) noexcept
+	{ warning("%s\n", str.data()); }
+	void main::script_infol(std::string_view str) noexcept
+	{ info("%s\n", str.data()); }
+	void main::script_remarkl(std::string_view str) noexcept
+	{ remark("%s\n", str.data()); }
+
+	bool main::script_is_map_loaded() const noexcept
+	{ return is_map_loaded; }
+	bool main::script_is_map_active() const noexcept
+	{ return is_map_active; }
+	bool main::script_are_stringtables_created() const noexcept
+	{ return are_string_tables_created; }
+}

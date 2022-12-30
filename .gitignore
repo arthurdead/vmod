@@ -1,4 +1,5 @@
 builddir/
+backup/
 subprojects/packagecache/
 subprojects/libyaml.wrap
 subprojects/yaml-?.?.?/

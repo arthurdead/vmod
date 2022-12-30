@@ -2,17 +2,24 @@
 
 namespace gsdk
 {
+	namespace detail
+	{
+		static char vscript_uniqueid_buffer[IScriptVM::unique_id_max];
+	}
+
 	ISquirrelMetamethodDelegate::~ISquirrelMetamethodDelegate() {}
 
 	void *IScriptInstanceHelper::GetProxied(void *ptr)
 	{ return ptr; }
-	void *IScriptInstanceHelper::BindOnRead([[maybe_unused]] HSCRIPT instance, void *ptr, [[maybe_unused]] const char *)
+	void *IScriptInstanceHelper::BindOnRead([[maybe_unused]] HSCRIPT, void *ptr, [[maybe_unused]] const char *)
 	{ return ptr; }
 
-	void(IScriptVM::*IScriptVM::CreateArray_ptr)(ScriptVariant_t &);
-	int(IScriptVM::*IScriptVM::GetArrayCount_ptr)(HSCRIPT) const;
-	bool(IScriptVM::*IScriptVM::IsArray_ptr)(HSCRIPT) const;
-	bool(IScriptVM::*IScriptVM::IsTable_ptr)(HSCRIPT) const;
+	IScriptVM *g_pScriptVM{nullptr};
+
+	void(IScriptVM::*IScriptVM::CreateArray_ptr)(ScriptVariant_t &) {nullptr};
+	int(IScriptVM::*IScriptVM::GetArrayCount_ptr)(HSCRIPT) const {nullptr};
+	bool(IScriptVM::*IScriptVM::IsArray_ptr)(HSCRIPT) const {nullptr};
+	bool(IScriptVM::*IScriptVM::IsTable_ptr)(HSCRIPT) const {nullptr};
 
 	int IScriptVM::GetArrayCount(HSCRIPT array) const noexcept
 	{
@@ -27,7 +34,7 @@ namespace gsdk
 	{
 		ScriptVariant_t var;
 		(this->*CreateArray_ptr)(var);
-		HSCRIPT ret{var.m_hScript};
+		HSCRIPT ret{var.m_object};
 		if(!ret) {
 			ret = INVALID_HSCRIPT;
 		}
@@ -126,7 +133,7 @@ namespace gsdk
 		ScriptVariant_t var;
 		var.m_type = FIELD_HSCRIPT;
 		var.m_flags = SV_NOFLAGS;
-		var.m_hScript = object;
+		var.m_object = object;
 		return SetValue(scope, name, static_cast<const ScriptVariant_t &>(var));
 	}
 
@@ -134,7 +141,7 @@ namespace gsdk
 	{
 		ScriptVariant_t var;
 		CreateTable_impl(var);
-		HSCRIPT ret{var.m_hScript};
+		HSCRIPT ret{var.m_object};
 		if(!ret) {
 			ret = INVALID_HSCRIPT;
 		}
@@ -150,7 +157,7 @@ namespace gsdk
 		ScriptVariant_t var;
 		var.m_type = FIELD_HSCRIPT;
 		var.m_flags = SV_NOFLAGS;
-		var.m_hScript = table;
+		var.m_object = table;
 		ReleaseValue(var);
 	}
 
@@ -163,7 +170,7 @@ namespace gsdk
 		ScriptVariant_t var;
 		var.m_type = FIELD_HSCRIPT;
 		var.m_flags = SV_NOFLAGS;
-		var.m_hScript = array;
+		var.m_object = array;
 		ReleaseValue(var);
 	}
 
@@ -204,8 +211,8 @@ namespace gsdk
 		tmp.m_flags = SV_NOFLAGS;
 		std::memset(tmp.m_data, 0, sizeof(ScriptVariant_t::m_data));
 		bool ret{GetValue(scope, name, &tmp)};
-		if(ret && tmp.m_type == FIELD_HSCRIPT && tmp.m_hScript) {
-			*object = tmp.m_hScript;
+		if(ret && tmp.m_type == FIELD_HSCRIPT && tmp.m_object) {
+			*object = tmp.m_object;
 		} else {
 			*object = INVALID_HSCRIPT;
 		}
@@ -222,7 +229,7 @@ namespace gsdk
 		ScriptVariant_t var;
 		var.m_type = FIELD_HSCRIPT;
 		var.m_flags = SV_NOFLAGS;
-		var.m_hScript = object;
+		var.m_object = object;
 		ReleaseValue(var);
 	}
 
@@ -235,7 +242,7 @@ namespace gsdk
 		ScriptVariant_t var;
 		var.m_type = FIELD_HSCRIPT;
 		var.m_flags = SV_NOFLAGS;
-		var.m_hScript = object;
+		var.m_object = object;
 		ReleaseValue(var);
 	}
 
@@ -260,6 +267,16 @@ namespace gsdk
 
 		ArrayAddToTail(array, static_cast<const ScriptVariant_t &>(var));
 		var.m_flags &= ~SV_FREE;
+	}
+
+	bool IScriptVM::SetInstanceUniqeId2(HSCRIPT instance, const char *root) noexcept
+	{
+		if(!GenerateUniqueKey(root, detail::vscript_uniqueid_buffer)) {
+			return false;
+		}
+
+		SetInstanceUniqeId(instance, detail::vscript_uniqueid_buffer);
+		return true;
 	}
 
 	short IScriptVM::fixup_var_field(short field) noexcept

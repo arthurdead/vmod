@@ -4,18 +4,18 @@
 
 namespace vmod
 {
-	gsdk::IDedicatedExports *dedicated;
-	gsdk::IVEngineServer *sv_engine;
-	gsdk::IFileSystem *filesystem;
-	gsdk::ICvar *cvar;
-	gsdk::IScriptManager *vsmgr;
-	gsdk::CGlobalVars *sv_globals;
-	gsdk::IServerGameDLL *gamedll;
-	gsdk::IServerTools *servertools;
-	gsdk::CEntityFactoryDictionary *entityfactorydict;
-	gsdk::IServerNetworkStringTableContainer *sv_stringtables;
+	gsdk::IDedicatedExports *dedicated{nullptr};
+	gsdk::IVEngineServer *sv_engine{nullptr};
+	gsdk::IFileSystem *filesystem{nullptr};
+	gsdk::ICvar *cvar{nullptr};
+	gsdk::IScriptManager *vsmgr{nullptr};
+	gsdk::CGlobalVars *sv_globals{nullptr};
+	gsdk::IServerGameDLL *gamedll{nullptr};
+	gsdk::IServerTools *servertools{nullptr};
+	gsdk::CEntityFactoryDictionary *entityfactorydict{nullptr};
+	gsdk::IServerNetworkStringTableContainer *sv_stringtables{nullptr};
 	std::unordered_map<std::string, gsdk::ServerClass *> sv_classes;
-	gsdk::CStandardSendProxies *std_proxies;
+	gsdk::CStandardSendProxies *std_proxies{nullptr};
 
 	bool gsdk_library::load(const std::filesystem::path &path) noexcept
 	{
@@ -24,8 +24,10 @@ namespace vmod
 		dl = dlopen(path.c_str(), RTLD_LAZY|RTLD_LOCAL|RTLD_NODELETE|RTLD_NOLOAD);
 		if(!dl) {
 			const char *err{dlerror()};
-			if(err) {
+			if(err && err[0] != '\0') {
 				err_str = err;
+			} else {
+				err_str = "unknown error"s;
 			}
 			return false;
 		} else {
@@ -175,16 +177,36 @@ namespace vmod
 	bool gsdk_filesystem_library::load(const std::filesystem::path &path) noexcept
 	{
 		using namespace std::literals::string_literals;
+		using namespace std::literals::string_view_literals;
 
 		if(!gsdk_library::load(path)) {
 			return false;
 		}
 
-		filesystem = iface<gsdk::IFileSystem>();
-		if(!filesystem) {
-			err_str = "missing IFileSystem interface version "s;
-			err_str += gsdk::IFileSystem::interface_name;
-			return false;
+		bool is_ded{iface<gsdk::IDedicatedExports>() != nullptr};
+		if(!is_ded) {
+			filesystem = iface<gsdk::IFileSystem>();
+			if(!filesystem) {
+				err_str = "missing IFileSystem interface version "s;
+				err_str += gsdk::IFileSystem::interface_name;
+				return false;
+			}
+		} else {
+			std::ptrdiff_t offset{symbol_cache::uncached_find_mangled_func(path, "_Z17FileSystemFactoryPKcPi"sv)};
+			if(offset == 0) {
+				err_str = "missing FileSystemFactory function"s;
+				return false;
+			}
+
+			gsdk::CreateInterfaceFn FileSystemFactory{reinterpret_cast<gsdk::CreateInterfaceFn>(static_cast<unsigned char *>(base()) + offset)};
+
+			int status{gsdk::IFACE_OK};
+			filesystem = static_cast<gsdk::IFileSystem *>(FileSystemFactory(gsdk::IFileSystem::interface_name.data(), &status));
+			if(!filesystem || status != gsdk::IFACE_OK) {
+				err_str = "missing IFileSystem interface version "s;
+				err_str += gsdk::IFileSystem::interface_name;
+				return false;
+			}
 		}
 
 		return true;

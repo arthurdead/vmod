@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <functional>
 #include "hacking.hpp"
+#include "type_traits.hpp"
 
 #include <libelf.h>
 #include <gelf.h>
@@ -25,6 +26,8 @@ namespace vmod
 	public:
 		static bool initialize() noexcept;
 
+		symbol_cache() noexcept = default;
+
 		inline bool load(const std::filesystem::path &path) noexcept
 		{ return load(path, nullptr); }
 		bool load(const std::filesystem::path &path, void *base) noexcept;
@@ -39,8 +42,6 @@ namespace vmod
 			virtual ~qualification_info() noexcept = default;
 
 			qualification_info() noexcept = default;
-			qualification_info(const qualification_info &) = delete;
-			qualification_info &operator=(const qualification_info &) = delete;
 			qualification_info(qualification_info &&) noexcept = default;
 			qualification_info &operator=(qualification_info &&) noexcept = default;
 
@@ -54,12 +55,7 @@ namespace vmod
 			{
 				virtual ~name_info() noexcept = default;
 
-				inline name_info() noexcept
-				{
-				}
-
-				name_info(const name_info &) = delete;
-				name_info &operator=(const name_info &) = delete;
+				name_info() noexcept = default;
 				name_info(name_info &&) noexcept = default;
 				name_info &operator=(name_info &&) noexcept = default;
 
@@ -106,16 +102,20 @@ namespace vmod
 
 				virtual void resolve(void *base) noexcept;
 
-				std::ptrdiff_t offset_;
-				std::size_t vindex;
-				std::size_t size_;
+				std::ptrdiff_t offset_{0};
+				std::size_t vindex{0};
+				std::size_t size_{0};
 				union {
 					void *addr_;
 					generic_func_t func_;
-					generic_internal_mfp_t mfp_;
+					generic_internal_mfp_t mfp_{nullptr};
 				};
 
 				names_t names;
+
+			private:
+				name_info(const name_info &) = delete;
+				name_info &operator=(const name_info &) = delete;
 			};
 
 		public:
@@ -140,6 +140,10 @@ namespace vmod
 			virtual void resolve(void *base) noexcept;
 
 			names_t names;
+
+		private:
+			qualification_info(const qualification_info &) = delete;
+			qualification_info &operator=(const qualification_info &) = delete;
 		};
 
 		struct class_info final : qualification_info
@@ -149,6 +153,8 @@ namespace vmod
 
 			void resolve(void *base) noexcept override;
 
+			class_info() noexcept = default;
+
 			struct vtable_info final
 			{
 			private:
@@ -156,10 +162,18 @@ namespace vmod
 
 				void resolve(void *base) noexcept;
 
-				std::ptrdiff_t offset;
-				std::size_t size_;
-				__cxxabiv1::vtable_prefix *prefix;
+				vtable_info() noexcept = default;
+
+				std::ptrdiff_t offset{0};
+				std::size_t size_{0};
+				__cxxabiv1::vtable_prefix *prefix{nullptr};
 				std::vector<names_t::const_iterator> funcs;
+
+			private:
+				vtable_info(const vtable_info &) = delete;
+				vtable_info &operator=(const vtable_info &) = delete;
+				vtable_info(vtable_info &&) = delete;
+				vtable_info &operator=(vtable_info &&) = delete;
 			};
 
 			struct ctor_info final : name_info
@@ -171,7 +185,15 @@ namespace vmod
 
 				void resolve(void *base) noexcept override;
 
+				ctor_info() noexcept = default;
+
 				kind_t kind;
+
+			private:
+				ctor_info(const ctor_info &) = delete;
+				ctor_info &operator=(const ctor_info &) = delete;
+				ctor_info(ctor_info &&) = delete;
+				ctor_info &operator=(ctor_info &&) = delete;
 			};
 
 			struct dtor_info final : name_info
@@ -183,10 +205,24 @@ namespace vmod
 
 				void resolve(void *base) noexcept override;
 
+				dtor_info() noexcept = default;
+
 				kind_t kind;
+
+			private:
+				dtor_info(const dtor_info &) = delete;
+				dtor_info &operator=(const dtor_info &) = delete;
+				dtor_info(dtor_info &&) = delete;
+				dtor_info &operator=(dtor_info &&) = delete;
 			};
 
 			vtable_info vtable;
+
+		private:
+			class_info(const class_info &) = delete;
+			class_info &operator=(const class_info &) = delete;
+			class_info(class_info &&) = delete;
+			class_info &operator=(class_info &&) = delete;
 		};
 
 	private:
@@ -211,6 +247,8 @@ namespace vmod
 		inline const qualification_info &global() const noexcept
 		{ return global_qual; }
 
+		static std::ptrdiff_t uncached_find_mangled_func(const std::filesystem::path &path, std::string_view search) noexcept;
+
 	private:
 		std::string err_str;
 
@@ -222,5 +260,11 @@ namespace vmod
 
 		qualifications_t qualifications;
 		qualification_info global_qual;
+
+	private:
+		symbol_cache(const symbol_cache &) = delete;
+		symbol_cache &operator=(const symbol_cache &) = delete;
+		symbol_cache(symbol_cache &&) = delete;
+		symbol_cache &operator=(symbol_cache &&) = delete;
 	};
 }

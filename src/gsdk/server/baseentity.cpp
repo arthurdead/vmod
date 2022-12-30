@@ -2,10 +2,15 @@
 
 namespace gsdk
 {
-	IScriptVM *g_pScriptVM;
+	ScriptClassDesc_t *CBaseEntity::g_pScriptDesc{nullptr};
+	HSCRIPT (CBaseEntity::*CBaseEntity::GetScriptInstance_ptr)() {nullptr};
 
-	ScriptClassDesc_t *CBaseEntity::g_pScriptDesc;
-	HSCRIPT (CBaseEntity::*CBaseEntity::GetScriptInstance_ptr)();
+	void IEntityFactory::Destroy(IServerNetworkable *net)
+	{
+		if(net) {
+			net->Release();
+		}
+	}
 
 	HSCRIPT CBaseEntity::GetScriptInstance() noexcept
 	{

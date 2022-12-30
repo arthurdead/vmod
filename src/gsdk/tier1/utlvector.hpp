@@ -10,13 +10,7 @@ namespace gsdk
 	class CUtlVector
 	{
 	public:
-		inline CUtlVector() noexcept
-			: m_Size{0}, m_pElements{nullptr}
-		{
-		}
-
-		CUtlVector(const CUtlVector &) = delete;
-		CUtlVector &operator=(const CUtlVector &) = delete;
+		CUtlVector() noexcept = default;
 
 		inline CUtlVector(CUtlVector &&other) noexcept
 		{ operator=(std::move(other)); }
@@ -44,8 +38,12 @@ namespace gsdk
 		{ return static_cast<std::size_t>(m_Size); }
 
 		CUtlMemory<T> m_Memory;
-		int m_Size;
-		T *m_pElements;
+		int m_Size{0};
+		T *m_pElements{nullptr};
+
+	private:
+		CUtlVector(const CUtlVector &) = delete;
+		CUtlVector &operator=(const CUtlVector &) = delete;
 	};
 }
 

@@ -14,7 +14,13 @@ namespace gsdk
 		inline const char *c_str() const noexcept
 		{ return m_pString; }
 
-	public:
-		char *m_pString;
+		char *m_pString{nullptr};
+
+	private:
+		CUtlString() = delete;
+		CUtlString(const CUtlString &) = delete;
+		CUtlString &operator=(const CUtlString &) = delete;
+		CUtlString(CUtlString &&) = delete;
+		CUtlString &operator=(CUtlString &&) = delete;
 	};
 }

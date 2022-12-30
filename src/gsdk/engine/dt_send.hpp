@@ -20,6 +20,13 @@ namespace gsdk
 	public:
 		SendTableProxyFn m_Fn;
 		CNonModifiedPointerProxy *m_pNext;
+
+	private:
+		CNonModifiedPointerProxy() = delete;
+		CNonModifiedPointerProxy(const CNonModifiedPointerProxy &) = delete;
+		CNonModifiedPointerProxy &operator=(const CNonModifiedPointerProxy &) = delete;
+		CNonModifiedPointerProxy(CNonModifiedPointerProxy &&) = delete;
+		CNonModifiedPointerProxy &operator=(CNonModifiedPointerProxy &&) = delete;
 	};
 
 	class CStandardSendProxiesV1
@@ -40,6 +47,13 @@ namespace gsdk
 		SendVarProxyFn m_Int64ToInt64;
 		SendVarProxyFn m_UInt64ToInt64;
 	#endif
+
+	private:
+		CStandardSendProxiesV1() = delete;
+		CStandardSendProxiesV1(const CStandardSendProxiesV1 &) = delete;
+		CStandardSendProxiesV1 &operator=(const CStandardSendProxiesV1 &) = delete;
+		CStandardSendProxiesV1(CStandardSendProxiesV1 &&) = delete;
+		CStandardSendProxiesV1 &operator=(CStandardSendProxiesV1 &&) = delete;
 	};
 
 	class CStandardSendProxies : public CStandardSendProxiesV1
@@ -48,6 +62,13 @@ namespace gsdk
 		SendTableProxyFn m_DataTableToDataTable;
 		SendTableProxyFn m_SendLocalDataTable;
 		CNonModifiedPointerProxy **m_ppNonModifiedPointerProxies;
+
+	private:
+		CStandardSendProxies() = delete;
+		CStandardSendProxies(const CStandardSendProxies &) = delete;
+		CStandardSendProxies &operator=(const CStandardSendProxies &) = delete;
+		CStandardSendProxies(CStandardSendProxies &&) = delete;
+		CStandardSendProxies &operator=(CStandardSendProxies &&) = delete;
 	};
 
 	class SendProp
@@ -84,6 +105,13 @@ namespace gsdk
 		int m_Offset;
 
 		const void *m_pExtraData;
+
+	private:
+		SendProp() = delete;
+		SendProp(const SendProp &) = delete;
+		SendProp &operator=(const SendProp &) = delete;
+		SendProp(SendProp &&) = delete;
+		SendProp &operator=(SendProp &&) = delete;
 	};
 
 	class SendTable
@@ -99,5 +127,12 @@ namespace gsdk
 		bool m_bInitialized : 1;
 		bool m_bHasBeenWritten : 1;
 		bool m_bHasPropsEncodedAgainstCurrentTickCount : 1;
+
+	private:
+		SendTable() = delete;
+		SendTable(const SendTable &) = delete;
+		SendTable &operator=(const SendTable &) = delete;
+		SendTable(SendTable &&) = delete;
+		SendTable &operator=(SendTable &&) = delete;
 	};
 }

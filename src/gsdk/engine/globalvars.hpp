@@ -27,6 +27,13 @@ namespace gsdk
 		bool m_bClient;
 		int nTimestampNetworkingBase;
 		int nTimestampRandomizeWindow;
+
+	private:
+		CGlobalVarsBase() = delete;
+		CGlobalVarsBase(const CGlobalVarsBase &) = delete;
+		CGlobalVarsBase &operator=(const CGlobalVarsBase &) = delete;
+		CGlobalVarsBase(CGlobalVarsBase &&) = delete;
+		CGlobalVarsBase &operator=(CGlobalVarsBase &&) = delete;
 	};
 
 	class CGlobalVars : public CGlobalVarsBase
@@ -42,5 +49,12 @@ namespace gsdk
 		bool teamplay;
 		int maxEntities;
 		int serverCount;
+
+	private:
+		CGlobalVars() = delete;
+		CGlobalVars(const CGlobalVars &) = delete;
+		CGlobalVars &operator=(const CGlobalVars &) = delete;
+		CGlobalVars(CGlobalVars &&) = delete;
+		CGlobalVars &operator=(CGlobalVars &&) = delete;
 	};
 }

@@ -25,21 +25,21 @@ namespace vmod
 	template <typename T>
 	void detour_base<T>::enable() noexcept
 	{
-		unsigned char *bytes{reinterpret_cast<unsigned char *>(old_func)};
+		unsigned char *bytes{reinterpret_cast<unsigned char *>(old_target.mfp.addr)};
 
 		bytes[0] = 0xE9;
 
-		std::uintptr_t target{reinterpret_cast<std::uintptr_t>(new_func) - (reinterpret_cast<std::uintptr_t>(old_func) + sizeof(old_bytes))};
+		std::uintptr_t target{reinterpret_cast<std::uintptr_t>(new_target.plain) - (reinterpret_cast<std::uintptr_t>(old_target.mfp.addr) + sizeof(old_bytes))};
 		std::memcpy(bytes + 1, &target, sizeof(std::uintptr_t));
 	}
 
 	template <typename T>
 	void detour_base<T>::backup_bytes() noexcept
 	{
-		page_info func_page{reinterpret_cast<void *>(old_func), sizeof(old_bytes)};
+		page_info func_page{reinterpret_cast<void *>(old_target.mfp.addr), sizeof(old_bytes)};
 		func_page.protect(PROT_READ|PROT_WRITE|PROT_EXEC);
 
-		unsigned char *bytes{reinterpret_cast<unsigned char *>(old_func)};
+		unsigned char *bytes{reinterpret_cast<unsigned char *>(old_target.mfp.addr)};
 
 		std::memcpy(old_bytes, bytes, sizeof(old_bytes));
 	}

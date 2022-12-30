@@ -3,6 +3,7 @@
 #include "../tier1/interface.hpp"
 #include "../tier0/dbg.hpp"
 #include <string_view>
+#include <cstring>
 
 namespace gsdk
 {
@@ -85,7 +86,7 @@ namespace gsdk
 	class ConCommandBase
 	{
 	public:
-		ConCommandBase() noexcept;
+		ConCommandBase() noexcept = default;
 
 		virtual ~ConCommandBase();
 		virtual bool IsCommand() const;
@@ -100,15 +101,22 @@ namespace gsdk
 
 		bool IsCompetitiveRestricted() const noexcept;
 
-		ConCommandBase *m_pNext;
-		bool m_bRegistered;
-		const char *m_pszName;
-		const char *m_pszHelpString;
-		int m_nFlags;
+		ConCommandBase *m_pNext{nullptr};
+		bool m_bRegistered{false};
+		const char *m_pszName{nullptr};
+		const char *m_pszHelpString{nullptr};
+		int m_nFlags{FCVAR_UNREGISTERED};
+
+	private:
+		ConCommandBase(const ConCommandBase &) = delete;
+		ConCommandBase &operator=(const ConCommandBase &) = delete;
+		ConCommandBase(ConCommandBase &&) = delete;
+		ConCommandBase &operator=(ConCommandBase &&) = delete;
 	};
 
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
+	#pragma GCC diagnostic ignored "-Wweak-vtables"
 	class IConVar
 	{
 	public:
@@ -125,7 +133,7 @@ namespace gsdk
 	class ConVar : public ConCommandBase, public IConVar
 	{
 	public:
-		ConVar() noexcept;
+		ConVar() noexcept = default;
 		~ConVar() override;
 
 		virtual void InternalSetValue(const char *value) final;
@@ -155,22 +163,28 @@ namespace gsdk
 		bool IsCommand() const override final;
 		void CreateBase(const char *name, const char *help = nullptr, int flags = FCVAR_NONE) override final;
 
-		ConVar *m_pParent;
-		const char *m_pszDefaultValue;
-		char *m_pszString;
-		int m_StringLength;
-		float m_fValue;
-		int m_nValue;
-		bool m_bHasMin;
-		float m_fMinVal;
-		bool m_bHasMax;
-		float m_fMaxVal;
-		bool m_bHasCompMin;
-		float m_fCompMinVal;
-		bool m_bHasCompMax;
-		float m_fCompMaxVal;
-		bool m_bCompetitiveRestrictions;
-		FnChangeCallback_t m_fnChangeCallback;
+		ConVar *m_pParent{nullptr};
+		const char *m_pszDefaultValue{nullptr};
+		char *m_pszString{nullptr};
+		int m_StringLength{0};
+		float m_fValue{0.0f};
+		int m_nValue{0};
+		bool m_bHasMin{false};
+		float m_fMinVal{0.0f};
+		bool m_bHasMax{false};
+		float m_fMaxVal{0.0f};
+		bool m_bHasCompMin{false};
+		float m_fCompMinVal{0.0f};
+		bool m_bHasCompMax{false};
+		float m_fCompMaxVal{0.0f};
+		bool m_bCompetitiveRestrictions{false};
+		FnChangeCallback_t m_fnChangeCallback{nullptr};
+
+	private:
+		ConVar(const ConVar &) = delete;
+		ConVar &operator=(const ConVar &) = delete;
+		ConVar(ConVar &&) = delete;
+		ConVar &operator=(ConVar &&) = delete;
 	};
 	#pragma GCC diagnostic pop
 
@@ -232,17 +246,30 @@ namespace gsdk
 		static constexpr int COMMAND_MAX_ARGC{64};
 		static constexpr int COMMAND_MAX_LENGTH{512};
 
-		int m_nArgc;
-		int m_nArgv0Size;
+		inline CCommand() noexcept
+		{
+			std::memset(m_pArgSBuffer, 0, sizeof(m_pArgSBuffer));
+			std::memset(m_pArgvBuffer, 0, sizeof(m_pArgvBuffer));
+			std::memset(m_ppArgv, 0, sizeof(m_ppArgv));
+		}
+
+		int m_nArgc{0};
+		int m_nArgv0Size{0};
 		char m_pArgSBuffer[COMMAND_MAX_LENGTH];
 		char m_pArgvBuffer[COMMAND_MAX_LENGTH];
 		const char *m_ppArgv[COMMAND_MAX_ARGC];
+
+	private:
+		CCommand(const CCommand &) = delete;
+		CCommand &operator=(const CCommand &) = delete;
+		CCommand(CCommand &&) = delete;
+		CCommand &operator=(CCommand &&) = delete;
 	};
 
 	class ConCommand : public ConCommandBase
 	{
 	public:
-		ConCommand() noexcept;
+		ConCommand() noexcept = default;
 
 		virtual int AutoCompleteSuggest(const char *, CUtlVector<CUtlString> &);
 		virtual bool CanAutoComplete();
@@ -254,18 +281,24 @@ namespace gsdk
 		union
 		{
 			FnCommandCallbackVoid_t m_fnCommandCallbackV1;
-			FnCommandCallback_t m_fnCommandCallback;
+			FnCommandCallback_t m_fnCommandCallback{nullptr};
 			ICommandCallback *m_pCommandCallback; 
 		};
 
 		union
 		{
-			FnCommandCompletionCallback m_fnCompletionCallback;
+			FnCommandCompletionCallback m_fnCompletionCallback{nullptr};
 			ICommandCompletionCallback *m_pCommandCompletionCallback;
 		};
 
-		bool m_bHasCompletionCallback : 1;
-		bool m_bUsingNewCommandCallback : 1;
-		bool m_bUsingCommandCallbackInterface : 1;
+		bool m_bHasCompletionCallback : 1 {false};
+		bool m_bUsingNewCommandCallback : 1 {false};
+		bool m_bUsingCommandCallbackInterface : 1 {false};
+
+	private:
+		ConCommand(const ConCommand &) = delete;
+		ConCommand &operator=(const ConCommand &) = delete;
+		ConCommand(ConCommand &&) = delete;
+		ConCommand &operator=(ConCommand &&) = delete;
 	};
 }

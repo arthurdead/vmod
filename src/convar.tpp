@@ -44,11 +44,11 @@ namespace vmod
 
 		set(std::forward<T>(value));
 
-		cvar->RegisterConCommand(static_cast<gsdk::ConCommandBase *>(this));
+		cvar->RegisterConCommand(this);
 	}
 
 	template <typename T>
-	ConVar &ConVar::set(T &&value) noexcept
+	void ConVar::set(T &&value) noexcept
 	{
 		using decay_t = std::decay_t<T>;
 
@@ -65,12 +65,10 @@ namespace vmod
 		} else {
 			static_assert(false_t<T>::value);
 		}
-
-		return *this;
 	}
 
 	template <typename T>
-	T ConVar::get() const noexcept
+	std::remove_reference_t<T> ConVar::get() const noexcept
 	{
 		using decay_t = std::decay_t<T>;
 
