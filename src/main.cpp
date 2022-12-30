@@ -79,6 +79,8 @@ namespace vmod
 	static void(gsdk::IScriptVM::*RegisterFunction)(gsdk::ScriptFunctionBinding_t *) {nullptr};
 	static bool(gsdk::IScriptVM::*RegisterClass)(gsdk::ScriptClassDesc_t *) {nullptr};
 	static gsdk::HSCRIPT(gsdk::IScriptVM::*RegisterInstance)(gsdk::ScriptClassDesc_t *, void *) {nullptr};
+	static bool(gsdk::IScriptVM::*SetValue_var)(gsdk::HSCRIPT, const char *, const gsdk::ScriptVariant_t &) {nullptr};
+	static bool(gsdk::IScriptVM::*SetValue_str)(gsdk::HSCRIPT, const char *, const char *) {nullptr};
 	static SQRESULT(*sq_setparamscheck)(HSQUIRRELVM, SQInteger, const SQChar *) {nullptr};
 	static gsdk::ScriptClassDesc_t **sv_classdesc_pHead{nullptr};
 	static gsdk::CUtlVector<gsdk::SendTable *> *g_SendTables{nullptr};
@@ -410,9 +412,11 @@ namespace vmod
 
 	static std::vector<const gsdk::ScriptFunctionBinding_t *> internal_vscript_func_bindings;
 	static std::vector<const gsdk::ScriptClassDesc_t *> internal_vscript_class_bindings;
+	static std::unordered_map<std::string, bindings::docs::value> internal_vscript_values;
 
 	static std::vector<const gsdk::ScriptFunctionBinding_t *> game_vscript_func_bindings;
 	static std::vector<const gsdk::ScriptClassDesc_t *> game_vscript_class_bindings;
+	static std::unordered_map<std::string, bindings::docs::value> game_vscript_values;
 
 	static void (gsdk::IScriptVM::*RegisterFunction_original)(gsdk::ScriptFunctionBinding_t *) {nullptr};
 	static detour<decltype(RegisterFunction)> RegisterFunction_detour;
@@ -425,10 +429,10 @@ namespace vmod
 		}
 
 		if(!main::instance().vm()) {
-			std::vector<const gsdk::ScriptFunctionBinding_t *> &vec{internal_vscript_func_bindings};
+			auto &vec{internal_vscript_func_bindings};
 			vec.emplace_back(func);
 		} else if(!vscript_server_init_called) {
-			std::vector<const gsdk::ScriptFunctionBinding_t *> &vec{game_vscript_func_bindings};
+			auto &vec{game_vscript_func_bindings};
 			vec.emplace_back(func);
 		}
 	}
@@ -446,13 +450,13 @@ namespace vmod
 		}
 
 		if(!main::instance().vm()) {
-			std::vector<const gsdk::ScriptClassDesc_t *> &vec{internal_vscript_class_bindings};
+			auto &vec{internal_vscript_class_bindings};
 			auto it{std::find(vec.begin(), vec.end(), desc)};
 			if(it == vec.end()) {
 				vec.emplace_back(desc);
 			}
 		} else if(!vscript_server_init_called) {
-			std::vector<const gsdk::ScriptClassDesc_t *> &vec{game_vscript_class_bindings};
+			auto &vec{game_vscript_class_bindings};
 			auto it{std::find(vec.begin(), vec.end(), desc)};
 			if(it == vec.end()) {
 				vec.emplace_back(desc);
@@ -461,6 +465,15 @@ namespace vmod
 
 		return ret;
 	}
+
+	struct registered_instance_info_t
+	{
+		gsdk::HSCRIPT instance{nullptr};
+		gsdk::ScriptClassDesc_t *desc{nullptr};
+		void *ptr{nullptr};
+	};
+
+	static registered_instance_info_t last_registered_instance;
 
 	static gsdk::HSCRIPT (gsdk::IScriptVM::*RegisterInstance_original)(gsdk::ScriptClassDesc_t *, void *) {nullptr};
 	static detour<decltype(RegisterInstance)> RegisterInstance_detour;
@@ -474,17 +487,85 @@ namespace vmod
 			ret = RegisterInstance_detour(vm, desc, ptr);
 		}
 
+		last_registered_instance.instance = ret;
+		last_registered_instance.desc = desc;
+		last_registered_instance.ptr = ptr;
+
 		if(!main::instance().vm()) {
-			std::vector<const gsdk::ScriptClassDesc_t *> &vec{internal_vscript_class_bindings};
+			auto &vec{internal_vscript_class_bindings};
 			auto it{std::find(vec.begin(), vec.end(), desc)};
 			if(it == vec.end()) {
 				vec.emplace_back(desc);
 			}
 		} else if(!vscript_server_init_called) {
-			std::vector<const gsdk::ScriptClassDesc_t *> &vec{game_vscript_class_bindings};
+			auto &vec{game_vscript_class_bindings};
 			auto it{std::find(vec.begin(), vec.end(), desc)};
 			if(it == vec.end()) {
 				vec.emplace_back(desc);
+			}
+		}
+
+		return ret;
+	}
+
+	static bool (gsdk::IScriptVM::*SetValue_str_original)(gsdk::HSCRIPT, const char *, const char *) {nullptr};
+	static detour<decltype(SetValue_str)> SetValue_str_detour;
+	static bool SetValue_str_detour_callback(gsdk::IScriptVM *vm, gsdk::HSCRIPT scope, const char *name, const char *value)
+	{
+		bool ret;
+
+		if(SetValue_str_original) {
+			ret = (vm->*SetValue_str_original)(scope, name, value);
+		} else {
+			ret = SetValue_str_detour(vm, scope, name, value);
+		}
+
+		if(scope == nullptr) {
+			if(!main::instance().vm()) {
+				auto &map{internal_vscript_values};
+				vscript::variant var;
+				var.assign<std::string>(value);
+				map.emplace(name, std::move(var));
+			} else if(!vscript_server_init_called) {
+				auto &map{game_vscript_values};
+				vscript::variant var;
+				var.assign<std::string>(value);
+				map.emplace(name, std::move(var));
+			}
+		}
+
+		return ret;
+	}
+
+	static bool (gsdk::IScriptVM::*SetValue_var_original)(gsdk::HSCRIPT, const char *, const gsdk::ScriptVariant_t &value) {nullptr};
+	static detour<decltype(SetValue_var)> SetValue_var_detour;
+	static bool SetValue_var_detour_callback(gsdk::IScriptVM *vm, gsdk::HSCRIPT scope, const char *name, const gsdk::ScriptVariant_t &value)
+	{
+		bool ret;
+
+		if(SetValue_var_original) {
+			ret = (vm->*SetValue_var_original)(scope, name, value);
+		} else {
+			ret = SetValue_var_detour(vm, scope, name, value);
+		}
+
+		if(scope == nullptr) {
+			if(value.m_type == gsdk::FIELD_HSCRIPT && last_registered_instance.instance == value.m_object) {
+				if(!main::instance().vm()) {
+					auto &map{internal_vscript_values};
+					map.emplace(name, last_registered_instance.desc);
+				} else if(!vscript_server_init_called) {
+					auto &map{game_vscript_values};
+					map.emplace(name, last_registered_instance.desc);
+				}
+			} else {
+				if(!main::instance().vm()) {
+					auto &map{internal_vscript_values};
+					map.emplace(name, value);
+				} else if(!vscript_server_init_called) {
+					auto &map{game_vscript_values};
+					map.emplace(name, value);
+				}
 			}
 		}
 
@@ -501,6 +582,12 @@ namespace vmod
 
 		RegisterInstance_detour.initialize(RegisterInstance, RegisterInstance_detour_callback);
 		RegisterInstance_detour.enable();
+
+		SetValue_str_detour.initialize(SetValue_str, SetValue_str_detour_callback);
+		SetValue_str_detour.enable();
+
+		SetValue_var_detour.initialize(SetValue_var, SetValue_var_detour_callback);
+		SetValue_var_detour.enable();
 
 		return true;
 	}
@@ -537,10 +624,14 @@ namespace vmod
 		RegisterFunction_detour.disable();
 		RegisterClass_detour.disable();
 		RegisterInstance_detour.disable();
+		SetValue_var_detour.disable();
+		SetValue_str_detour.disable();
 
 		RegisterFunction_original = swap_vfunc(vm_, &gsdk::IScriptVM::RegisterFunction, RegisterFunction_detour_callback);
 		RegisterClass_original = swap_vfunc(vm_, &gsdk::IScriptVM::RegisterClass, RegisterClass_detour_callback);
 		RegisterInstance_original = swap_vfunc(vm_, &gsdk::IScriptVM::RegisterInstance_impl, RegisterInstance_detour_callback);
+		SetValue_var_original = swap_vfunc(vm_, &gsdk::IScriptVM::SetValue_impl, SetValue_var_detour_callback);
+		SetValue_str_original = swap_vfunc(vm_, static_cast<decltype(SetValue_str_original)>(&gsdk::IScriptVM::SetValue), SetValue_str_detour_callback);
 
 		CreateNetworkStringTables_original = swap_vfunc(gamedll, &gsdk::IServerGameDLL::CreateNetworkStringTables, CreateNetworkStringTables_detour_callback);
 
@@ -835,9 +926,23 @@ namespace vmod
 			return false;
 		}
 
+		auto SetValue_str_it{CSquirrelVM_it->second->find("SetValue(HSCRIPT__*, char const*, char const*)"s)};
+		if(SetValue_str_it == CSquirrelVM_it->second->end()) {
+			error("vmod: missing 'CSquirrelVM::SetValue(HSCRIPT__*, char const*, char const*)' symbol\n"sv);
+			return false;
+		}
+
+		auto SetValue_var_it{CSquirrelVM_it->second->find("SetValue(HSCRIPT__*, char const*, CVariantBase<CVariantDefaultAllocator> const&)"s)};
+		if(SetValue_var_it == CSquirrelVM_it->second->end()) {
+			error("vmod: missing 'CSquirrelVM::SetValue(HSCRIPT__*, char const*, CVariantBase<CVariantDefaultAllocator> const&)' symbol\n"sv);
+			return false;
+		}
+
 		RegisterFunction = RegisterFunction_it->second->mfp<decltype(RegisterFunction)>();
 		RegisterClass = RegisterClass_it->second->mfp<decltype(RegisterClass)>();
 		RegisterInstance = RegisterInstance_it->second->mfp<decltype(RegisterInstance)>();
+		SetValue_str = SetValue_str_it->second->mfp<decltype(SetValue_str)>();
+		SetValue_var = SetValue_var_it->second->mfp<decltype(SetValue_var)>();
 
 		if(!detours_prevm()) {
 			return false;
@@ -1328,10 +1433,12 @@ namespace vmod
 				std::filesystem::path internal_docs{root_dir_/"docs"sv/"internal"sv};
 				bindings::docs::write(internal_docs, internal_vscript_class_bindings, false);
 				bindings::docs::write(internal_docs, internal_vscript_func_bindings, false);
+				bindings::docs::write(internal_docs, internal_vscript_values);
 
 				std::filesystem::path game_docs{root_dir_/"docs"sv/"game"sv};
 				bindings::docs::write(game_docs, game_vscript_class_bindings, false);
 				bindings::docs::write(game_docs, game_vscript_func_bindings, false);
+				bindings::docs::write(game_docs, game_vscript_values);
 
 				gsdk::HSCRIPT const_table;
 				if(vm_->GetValue(nullptr, "Constants", &const_table)) {

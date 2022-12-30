@@ -490,7 +490,66 @@ namespace vmod::bindings::docs
 		}
 
 		std::filesystem::path doc_path{dir};
-		doc_path /= "globals"sv;
+		doc_path /= "global_funcs"sv;
+		doc_path.replace_extension(".txt"sv);
+
+		write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+	}
+
+	value &value::operator=(value &&other) noexcept
+	{
+		type = other.type;
+
+		switch(type) {
+			case type::variant: {
+				var = std::move(other.var);
+			} break;
+			case type::desc: {
+				desc = other.desc;
+			} break;
+		}
+
+		return *this;
+	}
+
+	void write(const std::filesystem::path &dir, const std::unordered_map<std::string, value> &map) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		std::string file;
+
+		gen_date(file);
+
+		for(const auto &it : map) {
+			switch(it.second.type) {
+				case value::type::variant: {
+					const vscript::variant &var{it.second.var};
+					file += detail::datatype_to_str(var.m_type);
+				} break;
+				case value::type::desc: {
+					const gsdk::ScriptClassDesc_t *desc{it.second.desc};
+					file += get_class_desc_name(desc);
+				} break;
+			}
+
+			file += ' ';
+			file += it.first;
+			file += ';';
+
+			if(it.second.type == value::type::variant) {
+				const vscript::variant &var{it.second.var};
+				file += " //"sv;
+				file += var.get<std::string_view>();
+			}
+
+			file += "\n\n"sv;
+		}
+		if(!map.empty()) {
+			file.erase(file.end()-2, file.end());
+		}
+
+		std::filesystem::path doc_path{dir};
+		doc_path /= "global_values"sv;
 		doc_path.replace_extension(".txt"sv);
 
 		write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());

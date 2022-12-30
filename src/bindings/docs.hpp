@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <filesystem>
+#include <unordered_map>
 
 namespace vmod::bindings::docs
 {
@@ -15,10 +16,59 @@ namespace vmod::bindings::docs
 
 	extern std::string_view get_class_desc_name(const gsdk::ScriptClassDesc_t *desc) noexcept;
 
+	struct value final
+	{
+		enum class type : unsigned char
+		{
+			variant,
+			desc
+		};
+
+		enum type type;
+
+		inline value(gsdk::ScriptVariant_t &&var_) noexcept
+			: type{type::variant}, var{std::move(var_)}
+		{
+		}
+
+		inline value(const gsdk::ScriptVariant_t &var_) noexcept
+			: type{type::variant}, var{var_}
+		{
+		}
+
+		inline value(const gsdk::ScriptClassDesc_t *desc_) noexcept
+			: type{type::desc}, desc{std::move(desc_)}
+		{
+		}
+
+		inline ~value() noexcept
+		{
+			if(type == type::variant) {
+				var.~CVariantBase();
+			}
+		}
+
+		inline value(value &&other) noexcept
+		{ operator=(std::move(other)); }
+
+		value &operator=(value &&other) noexcept;
+
+		union {
+			gsdk::ScriptVariant_t var;
+			const gsdk::ScriptClassDesc_t *desc;
+		};
+
+	private:
+		value() = delete;
+		value(const value &) = delete;
+		value &operator=(const value &) = delete;
+	};
+
 	extern bool write(const gsdk::ScriptFunctionBinding_t *func, bool global, std::size_t ident, std::string &file, bool respect_hide) noexcept;
 	extern bool write(const gsdk::ScriptClassDesc_t *desc, bool global, std::size_t ident, std::string &file, bool respect_hide) noexcept;
 	extern void write(const std::filesystem::path &dir, const std::vector<const gsdk::ScriptClassDesc_t *> &vec, bool respect_hide) noexcept;
 	extern void write(const std::filesystem::path &dir, const std::vector<const gsdk::ScriptFunctionBinding_t *> &vec, bool respect_hide) noexcept;
+	extern void write(const std::filesystem::path &dir, const std::unordered_map<std::string, value> &map) noexcept;
 
 	enum class write_enum_how : unsigned char
 	{

@@ -28,25 +28,55 @@ namespace vmod::vscript
 		variant(const variant &other) noexcept = default;
 		variant &operator=(const variant &other) noexcept = default;
 
-		template <typename T>
-		variant(T &&value) noexcept;
+		inline variant(gsdk::ScriptVariant_t &&other) noexcept
+			: gsdk::ScriptVariant_t{std::move(other)}
+		{
+		}
+
+		inline variant &operator=(gsdk::ScriptVariant_t &&other) noexcept
+		{
+			gsdk::ScriptVariant_t::operator=(std::move(other));
+			return *this;
+		}
+
+		inline variant(const gsdk::ScriptVariant_t &other) noexcept
+			: gsdk::ScriptVariant_t{other}
+		{
+		}
+
+		inline variant &operator=(const gsdk::ScriptVariant_t &other) noexcept
+		{
+			gsdk::ScriptVariant_t::operator=(other);
+			return *this;
+		}
 
 		template <typename T>
 		variant &operator=(T &&value) noexcept;
 
 		template <typename T>
-		variant &assign(T &&value) noexcept;
+		inline variant(T &&value) noexcept
+		{ operator=(std::forward<T>(value)); }
 
 		template <typename T>
-		bool operator==(const T &value) const noexcept;
-		template <typename T>
-		bool operator!=(const T &value) const noexcept;
+		inline variant &assign(T &&value) noexcept
+		{
+			operator=(std::forward<T>(value));
+			return *this;
+		}
 
 		template <typename T>
-		explicit operator T() const noexcept;
+		std::remove_reference_t<T> get() const noexcept;
 
 		template <typename T>
-		T get() const noexcept;
+		inline bool operator==(const T &value) const noexcept
+		{ return get<T>() == value; }
+		template <typename T>
+		inline bool operator!=(const T &value) const noexcept
+		{ return !operator==(value); }
+
+		template <typename T>
+		inline explicit operator std::remove_reference_t<T>() const noexcept
+		{ return get<T>(); }
 	};
 
 	static_assert(sizeof(variant) == sizeof(gsdk::ScriptVariant_t));
@@ -166,37 +196,18 @@ namespace vmod::vscript
 	}
 
 	template <typename T>
-	variant::variant(T &&value) noexcept
-	{ to_variant<T>(*this, std::forward<T>(value)); }
-
-	template <typename T>
 	variant &variant::operator=(T &&value) noexcept
 	{
-		free();
-		to_variant<T>(*this, std::forward<T>(value));
+		if constexpr(std::is_base_of_v<gsdk::ScriptVariant_t, std::decay_t<T>>) {
+			gsdk::ScriptVariant_t::operator=(std::forward<T>(value));
+		} else {
+			free();
+			to_variant<T>(*this, std::forward<T>(value));
+		}
 		return *this;
 	}
 
 	template <typename T>
-	variant &variant::assign(T &&value) noexcept
-	{
-		free();
-		to_variant<T>(*this, std::forward<T>(value));
-		return *this;
-	}
-
-	template <typename T>
-	bool variant::operator==(const T &value) const noexcept
-	{ return to_value<T>(*this) == value; }
-	template <typename T>
-	bool variant::operator!=(const T &value) const noexcept
-	{ return to_value<T>(*this) != value; }
-
-	template <typename T>
-	variant::operator T() const noexcept
-	{ return to_value<T>(*this); }
-
-	template <typename T>
-	T variant::get() const noexcept
+	std::remove_reference_t<T> variant::get() const noexcept
 	{ return to_value<T>(*this); }
 }

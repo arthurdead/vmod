@@ -140,6 +140,7 @@ namespace gsdk
 
 		inline CVariantBase &operator=(const CVariantBase &other) noexcept
 		{
+			free();
 			m_type = other.m_type;
 			std::memcpy(m_data, other.m_data, sizeof(m_data));
 			m_flags = other.m_flags & ~SV_FREE;
@@ -151,6 +152,7 @@ namespace gsdk
 
 		inline CVariantBase &operator=(CVariantBase &&other) noexcept
 		{
+			free();
 			m_type = other.m_type;
 			other.m_type = FIELD_VOID;
 			std::memmove(m_data, other.m_data, sizeof(m_data));
@@ -429,7 +431,7 @@ namespace gsdk
 		{ return GenerateUniqueKey(root, buffer, static_cast<int>(S)); }
 		virtual bool ValueExists(HSCRIPT, const char *) = 0;
 		virtual bool SetValue(HSCRIPT, const char *, const char *) = 0;
-	private:
+	public:
 		virtual bool SetValue_impl(HSCRIPT, const char *, const ScriptVariant_t &) = 0;
 	public:
 		bool SetValue(HSCRIPT scope, const char *name, const ScriptVariant_t &var) noexcept;
