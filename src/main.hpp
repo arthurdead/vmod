@@ -121,19 +121,21 @@ namespace vmod
 
 		static vscript::singleton_class_desc<main> desc;
 
-		void script_print(std::string_view str) noexcept;
-		void script_success(std::string_view str) noexcept;
-		void script_error(std::string_view str) noexcept;
-		void script_warning(std::string_view str) noexcept;
-		void script_info(std::string_view str) noexcept;
-		void script_remark(std::string_view str) noexcept;
+		static gsdk::ScriptVariant_t call_to_func(gsdk::HSCRIPT func, gsdk::HSCRIPT value) noexcept;
 
-		void script_printl(std::string_view str) noexcept;
-		void script_successl(std::string_view str) noexcept;
-		void script_errorl(std::string_view str) noexcept;
-		void script_warningl(std::string_view str) noexcept;
-		void script_infol(std::string_view str) noexcept;
-		void script_remarkl(std::string_view str) noexcept;
+		void script_print(const vscript::variant &var) noexcept;
+		void script_success(const vscript::variant &var) noexcept;
+		void script_error(const vscript::variant &var) noexcept;
+		void script_warning(const vscript::variant &var) noexcept;
+		void script_info(const vscript::variant &var) noexcept;
+		void script_remark(const vscript::variant &var) noexcept;
+
+		void script_printl(const vscript::variant &var) noexcept;
+		void script_successl(const vscript::variant &var) noexcept;
+		void script_errorl(const vscript::variant &var) noexcept;
+		void script_warningl(const vscript::variant &var) noexcept;
+		void script_infol(const vscript::variant &var) noexcept;
+		void script_remarkl(const vscript::variant &var) noexcept;
 
 		gsdk::HSCRIPT script_find_plugin(std::string_view name) noexcept;
 		bool script_is_map_loaded() const noexcept;

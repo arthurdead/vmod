@@ -226,28 +226,89 @@ namespace vmod
 		unwatch();
 	}
 
-#if 0
+	plugin::callback_instance::callback_instance(callable *owner_, gsdk::HSCRIPT callback_, bool post_) noexcept
+		: post{post_}, owner{owner_}
+	{
+		gsdk::IScriptVM *vm{main::instance().vm()};
+
+		callback = vm->ReferenceObject(callback_);
+
+		auto &callbacks{post ? owner_->callbacks_post : owner_->callbacks_pre};
+
+		callbacks.emplace(callback, this);
+	}
+
 	plugin::callback_instance::~callback_instance() noexcept
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
-		if(func && func != gsdk::INVALID_HSCRIPT) {
-			if(post) {
-				auto it{callable->callbacks_post.find(func)};
-				if(it != callable->callbacks_post.end()) {
-					callable->callbacks_post.erase(it);
-				}
-			} else {
-				auto it{callable->callbacks_pre.find(func)};
-				if(it != callable->callbacks_pre.end()) {
-					callable->callbacks_pre.erase(it);
+		if(callback && callback != gsdk::INVALID_HSCRIPT) {
+			if(owner && !owner->clearing_callbacks) {
+				auto &callbacks{post ? owner->callbacks_post : owner->callbacks_pre};
+				auto it{callbacks.find(callback)};
+				if(it != callbacks.end()) {
+					callbacks.erase(it);
 				}
 			}
-
-			vm->ReleaseFunction(func);
+			vm->ReleaseFunction(callback);
 		}
 	}
-#endif
+
+	void plugin::callback_instance::callable_destroyed() noexcept
+	{ delete this; }
+
+	plugin::callable::~callable() noexcept
+	{
+		clearing_callbacks = true;
+
+		if(!callbacks_pre.empty()) {
+			for(auto &it : callbacks_pre) {
+				it.second->callable_destroyed();
+			}
+			callbacks_pre.clear();
+		}
+
+		if(!callbacks_post.empty()) {
+			for(auto &it : callbacks_post) {
+				it.second->callable_destroyed();
+			}
+			callbacks_post.clear();
+		}
+
+		clearing_callbacks = false;
+	}
+
+	bool plugin::callable::call(callbacks_t &callbacks, const gsdk::ScriptVariant_t *args, std::size_t num_args) noexcept
+	{
+		if(callbacks.empty()) {
+			return true;
+		}
+
+		gsdk::IScriptVM *vm{main::instance().vm()};
+
+		bool call_orig{true};
+
+		for(auto &it : callbacks) {
+			gsdk::HSCRIPT pl_scope{it.second->owner_scope()};
+
+			vscript::variant ret;
+			if(vm->ExecuteFunction(it.first, args, static_cast<int>(num_args), &ret, pl_scope, true) == gsdk::SCRIPT_ERROR) {
+				continue;
+			}
+
+			return_flags flags{ret.get<return_flags>()};
+
+			if(flags & return_flags::handled) {
+				call_orig = false;
+			}
+
+			if(flags & return_flags::halt) {
+				break;
+			}
+		}
+
+		return call_orig;
+	}
 
 	plugin::owned_instance::~owned_instance() noexcept
 	{
@@ -274,38 +335,43 @@ namespace vmod
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
-		if(target_desc->m_pBaseDesc != &desc) {
-			if(!target_desc->m_pBaseDesc) {
-				target_desc->m_pBaseDesc = &desc;
-			} else {
-				bool found{false};
+		if(target_desc != &desc) {
+			if(target_desc->m_pBaseDesc != &desc) {
+				if(!target_desc->m_pBaseDesc) {
+					target_desc->m_pBaseDesc = &desc;
+				} else {
+					bool found{false};
 
-				gsdk::ScriptClassDesc_t *base_desc{target_desc->m_pBaseDesc};
-				while(base_desc) {
-					if(base_desc == &desc) {
-						found = true;
-						break;
+					gsdk::ScriptClassDesc_t *base_desc{target_desc->m_pBaseDesc};
+					while(base_desc) {
+						if(base_desc == &desc) {
+							found = true;
+							break;
+						}
+
+						base_desc = base_desc->m_pBaseDesc;
 					}
 
-					base_desc = base_desc->m_pBaseDesc;
-				}
-
-				if(!found) {
-					error("vmod: owned instance class '%s' has invalid base\n", target_desc->m_pszClassname);
-					return false;
+					if(!found) {
+						error("vmod: owned instance class '%s' has invalid base\n", target_desc->m_pszClassname);
+						return false;
+					}
 				}
 			}
-		}
 
-		if(!target_desc->m_pfnDestruct) {
-			target_desc->m_pfnDestruct = 
-				[](void *ptr) noexcept -> void {
-					delete reinterpret_cast<owned_instance *>(ptr);
-				}
-			;
-		}
+			if(!target_desc->m_pfnDestruct) {
+				target_desc->m_pfnDestruct = 
+					[](void *ptr) noexcept -> void {
+						delete reinterpret_cast<owned_instance *>(ptr);
+					}
+				;
+			}
 
-		return vm->RegisterClass(target_desc);
+			return vm->RegisterClass(target_desc);
+		} else {
+			error("vmod: tried to register owned instance desc using its helper\n");
+			return false;
+		}
 	}
 
 	bool plugin::owned_instance::register_instance(gsdk::ScriptClassDesc_t *target_desc) noexcept

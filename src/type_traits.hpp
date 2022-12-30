@@ -191,7 +191,7 @@ namespace vmod
 	{
 		template <typename T>
 		concept class_is_singleton =
-			requires () { static_cast<T &(T::*)()>(&T::instance); }
+			requires () { static_cast<T &(*)()>(&T::instance); }
 		;
 	}
 

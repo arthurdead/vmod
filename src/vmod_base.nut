@@ -1,10 +1,6 @@
 function __to_string__(value)
 {
-	if(tostring in value) {
-		return value.tostring();
-	} else {
-		return null;
-	}
+	return value.tostring();
 }
 
 function __to_int__(value)

@@ -4,10 +4,11 @@
 #include "../../vscript/vscript.hpp"
 #include "../../vscript/class_desc.hpp"
 #include "../../ffi.hpp"
+#include "../../plugin.hpp"
 
 namespace vmod::bindings::ent
 {
-	class sendprop final
+	class sendprop final : public plugin::callable
 	{
 		friend class singleton;
 		friend void write_docs(const std::filesystem::path &) noexcept;
@@ -16,7 +17,7 @@ namespace vmod::bindings::ent
 		static bool bindings() noexcept;
 		static void unbindings() noexcept;
 
-		~sendprop() noexcept;
+		~sendprop() noexcept override;
 
 	private:
 		static ffi::cif proxy_cif;

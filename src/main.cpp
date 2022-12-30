@@ -1478,23 +1478,24 @@ namespace vmod
 	namespace detail
 	{
 		static std::string to_str_buffer;
+		static std::string type_of_buffer;
+	}
 
-		static gsdk::ScriptVariant_t call_to_func(gsdk::HSCRIPT func, gsdk::HSCRIPT value) noexcept
-		{
-			gsdk::ScriptVariant_t ret;
-			vscript::variant arg{value};
+	gsdk::ScriptVariant_t main::call_to_func(gsdk::HSCRIPT func, gsdk::HSCRIPT value) noexcept
+	{
+		gsdk::ScriptVariant_t ret;
+		vscript::variant arg{value};
 
-			if(main::instance().vm()->ExecuteFunction(func, &arg, 1, &ret, nullptr, true) == gsdk::SCRIPT_ERROR) {
-				return ret;
-			}
-
-			return ret;
+		if(main::instance().vm()->ExecuteFunction(func, &arg, 1, &ret, nullptr, true) == gsdk::SCRIPT_ERROR) {
+			return {};
 		}
+
+		return ret;
 	}
 
 	std::string_view main::to_string(gsdk::HSCRIPT value) const noexcept
 	{
-		gsdk::ScriptVariant_t ret{detail::call_to_func(to_string_func, value)};
+		gsdk::ScriptVariant_t ret{call_to_func(to_string_func, value)};
 
 		if(ret.m_type != gsdk::FIELD_CSTRING) {
 			return {};
@@ -1504,9 +1505,21 @@ namespace vmod
 		return detail::to_str_buffer;
 	}
 
+	std::string_view main::type_of(gsdk::HSCRIPT value) const noexcept
+	{
+		gsdk::ScriptVariant_t ret{call_to_func(typeof_func, value)};
+
+		if(ret.m_type != gsdk::FIELD_CSTRING) {
+			return {};
+		}
+
+		detail::type_of_buffer = ret.m_ccstr;
+		return detail::type_of_buffer;
+	}
+
 	int main::to_int(gsdk::HSCRIPT value) const noexcept
 	{
-		gsdk::ScriptVariant_t ret{detail::call_to_func(to_int_func, value)};
+		gsdk::ScriptVariant_t ret{call_to_func(to_int_func, value)};
 
 		if(ret.m_type != gsdk::FIELD_INTEGER) {
 			return 0;
@@ -1517,7 +1530,7 @@ namespace vmod
 
 	float main::to_float(gsdk::HSCRIPT value) const noexcept
 	{
-		gsdk::ScriptVariant_t ret{detail::call_to_func(to_float_func, value)};
+		gsdk::ScriptVariant_t ret{call_to_func(to_float_func, value)};
 
 		if(ret.m_type != gsdk::FIELD_FLOAT) {
 			return 0.0f;
@@ -1528,24 +1541,13 @@ namespace vmod
 
 	bool main::to_bool(gsdk::HSCRIPT value) const noexcept
 	{
-		gsdk::ScriptVariant_t ret{detail::call_to_func(to_bool_func, value)};
+		gsdk::ScriptVariant_t ret{call_to_func(to_bool_func, value)};
 
 		if(ret.m_type != gsdk::FIELD_BOOLEAN) {
 			return false;
 		}
 
 		return ret.m_bool;
-	}
-
-	std::string_view main::type_of(gsdk::HSCRIPT value) const noexcept
-	{
-		gsdk::ScriptVariant_t ret{detail::call_to_func(typeof_func, value)};
-
-		if(ret.m_type != gsdk::FIELD_CSTRING) {
-			return {};
-		}
-
-		return ret.m_ccstr;
 	}
 
 	static gsdk::ScriptFunctionBinding_t developer_desc;

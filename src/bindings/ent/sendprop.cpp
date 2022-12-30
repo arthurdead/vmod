@@ -80,7 +80,30 @@ namespace vmod::bindings::ent
 	{
 		sendprop *prop{static_cast<sendprop *>(userptr)};
 
-		
+		if(prop->empty()) {
+			ffi_call(closure_cif, reinterpret_cast<void(*)()>(prop->old_proxy), ret, args);
+			return;
+		}
+
+		gsdk::DVariant *dvar{*static_cast<gsdk::DVariant **>(args[3])};
+
+		vscript::variant vargs[]{
+			prop->instance,
+			*static_cast<void **>            (args[1]),
+			*static_cast<void **>            (args[2]),
+			&dvar->m_data,
+			*static_cast<int *>              (args[4]),
+			*static_cast<int *>              (args[5]),
+			nullptr,
+		};
+
+		std::memset(dvar->m_data, 0, sizeof(gsdk::DVariant::m_data));
+
+		if(prop->call_pre(vargs, std::size(vargs))) {
+			ffi_call(closure_cif, reinterpret_cast<void(*)()>(prop->old_proxy), ret, args);
+		}
+
+		prop->call_post(vargs, std::size(vargs));
 	}
 
 	gsdk::HSCRIPT sendprop::script_hook_proxy(gsdk::HSCRIPT callback, bool post, bool per_client) noexcept
@@ -92,15 +115,19 @@ namespace vmod::bindings::ent
 			return nullptr;
 		}
 
-		vm->RaiseException("vmod: not implemented yet");
-		return nullptr;
+		plugin::callback_instance *clbk_instance{new plugin::callback_instance{this, callback, post}};
+		if(!clbk_instance->initialize()) {
+			delete clbk_instance;
+			return nullptr;
+		}
 
 		if(!initialize_closure()) {
+			delete clbk_instance;
 			vm->RaiseException("vmod: failed to initialize closure");
 			return nullptr;
 		}
 
-		return nullptr;
+		return clbk_instance->instance;
 	}
 
 	ffi_type *sendprop::guess_type(const gsdk::SendProp *prop, gsdk::SendVarProxyFn proxy, const gsdk::SendTable *table) noexcept

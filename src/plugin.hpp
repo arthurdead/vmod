@@ -136,7 +136,7 @@ namespace vmod
 			inline gsdk::HSCRIPT owner_scope() noexcept
 			{ return owner_ ? owner_->private_scope_ : nullptr; }
 
-		protected:
+		public:
 			gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
 
 		private:
@@ -157,28 +157,50 @@ namespace vmod
 			owned_instance &operator=(owned_instance &&) = delete;
 		};
 
-	#if 0
 		class callable;
 
 		class callback_instance : public owned_instance
 		{
+			friend class callable;
+
+		public:
 			~callback_instance() noexcept override;
 
-			gsdk::HSCRIPT callback{gsdk::INVALID_HSCRIPT};
-			bool post;
+		public:
+			callback_instance(callable *owner_, gsdk::HSCRIPT callback_, bool post_) noexcept;
 
-			class callable *callable;
+			inline bool initialize() noexcept
+			{ return register_instance(&owned_instance::desc); }
+
+		private:
+			void callable_destroyed() noexcept;
+
+			gsdk::HSCRIPT callback;
+			bool post;
+			callable *owner;
+
+		private:
+			callback_instance() = delete;
+			callback_instance(const callback_instance &) = delete;
+			callback_instance &operator=(const callback_instance &) = delete;
+			callback_instance(callback_instance &&) noexcept = delete;
+			callback_instance &operator=(callback_instance &&) = delete;
 		};
-	#endif
 
 		class callable
 		{
+			friend class callback_instance;
+
 		public:
+			callable() noexcept = default;
+			virtual ~callable() noexcept;
+
 			enum class return_flags : unsigned char
 			{
 				ignored =          0,
-				halt =       (1 << 0),
-				handled =    (1 << 1)
+				error =      (1 << 1),
+				halt =       (1 << 2),
+				handled =    (1 << 3)
 			};
 			friend constexpr inline bool operator&(return_flags lhs, return_flags rhs) noexcept
 			{ return static_cast<bool>(static_cast<unsigned char>(lhs) & static_cast<unsigned char>(rhs)); }
@@ -187,9 +209,29 @@ namespace vmod
 
 			static_assert(static_cast<unsigned char>(return_flags::ignored) == 0);
 
+			inline bool empty() const noexcept
+			{ return (callbacks_pre.empty() && callbacks_post.empty()); }
+
+			inline bool call_pre(const gsdk::ScriptVariant_t *args, std::size_t num_args) noexcept
+			{ return call(callbacks_pre, args, num_args); }
+			inline bool call_post(const gsdk::ScriptVariant_t *args, std::size_t num_args) noexcept
+			{ return call(callbacks_post, args, num_args); }
+
 		private:
-			//std::unordered_map<gsdk::HSCRIPT, callback_instance *> callbacks_pre;
-			//std::unordered_map<gsdk::HSCRIPT, callback_instance *> callbacks_post;
+			using callbacks_t = std::unordered_map<gsdk::HSCRIPT, callback_instance *>;
+
+			bool call(callbacks_t &callbacks, const gsdk::ScriptVariant_t *args, std::size_t num_args) noexcept;
+
+			callbacks_t callbacks_pre;
+			callbacks_t callbacks_post;
+
+			bool clearing_callbacks{false};
+
+		private:
+			callable(const callable &) = delete;
+			callable &operator=(const callable &) = delete;
+			callable(callable &&) noexcept = delete;
+			callable &operator=(callable &&) = delete;
 		};
 
 	private:

@@ -282,31 +282,79 @@ namespace vmod
 		return nullptr;
 	}
 
-	void main::script_print(std::string_view str) noexcept
-	{ print("%s", str.data()); }
-	void main::script_success(std::string_view str) noexcept
-	{ success("%s", str.data()); }
-	void main::script_error(std::string_view str) noexcept
-	{ error("%s", str.data()); }
-	void main::script_warning(std::string_view str) noexcept
-	{ warning("%s", str.data()); }
-	void main::script_info(std::string_view str) noexcept
-	{ info("%s", str.data()); }
-	void main::script_remark(std::string_view str) noexcept
-	{ remark("%s", str.data()); }
+	void main::script_print(const vscript::variant &var) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+		std::string_view str{var.get<std::string_view>()};
+		print("%s"sv, str.data());
+	}
+	void main::script_success(const vscript::variant &var) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+		std::string_view str{var.get<std::string_view>()};
+		success("%s"sv, str.data());
+	}
+	void main::script_error(const vscript::variant &var) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+		std::string_view str{var.get<std::string_view>()};
+		error("%s"sv, str.data());
+	}
+	void main::script_warning(const vscript::variant &var) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+		std::string_view str{var.get<std::string_view>()};
+		warning("%s"sv, str.data());
+	}
+	void main::script_info(const vscript::variant &var) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+		std::string_view str{var.get<std::string_view>()};
+		info("%s"sv, str.data());
+	}
+	void main::script_remark(const vscript::variant &var) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+		std::string_view str{var.get<std::string_view>()};
+		remark("%s"sv, str.data());
+	}
 
-	void main::script_printl(std::string_view str) noexcept
-	{ print("%s\n", str.data()); }
-	void main::script_successl(std::string_view str) noexcept
-	{ success("%s\n", str.data()); }
-	void main::script_errorl(std::string_view str) noexcept
-	{ error("%s\n", str.data()); }
-	void main::script_warningl(std::string_view str) noexcept
-	{ warning("%s\n", str.data()); }
-	void main::script_infol(std::string_view str) noexcept
-	{ info("%s\n", str.data()); }
-	void main::script_remarkl(std::string_view str) noexcept
-	{ remark("%s\n", str.data()); }
+	void main::script_printl(const vscript::variant &var) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+		std::string_view str{var.get<std::string_view>()};
+		print("%s\n"sv, str.data());
+	}
+	void main::script_successl(const vscript::variant &var) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+		std::string_view str{var.get<std::string_view>()};
+		success("%s\n"sv, str.data());
+	}
+	void main::script_errorl(const vscript::variant &var) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+		std::string_view str{var.get<std::string_view>()};
+		error("%s\n"sv, str.data());
+	}
+	void main::script_warningl(const vscript::variant &var) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+		std::string_view str{var.get<std::string_view>()};
+		warning("%s\n"sv, str.data());
+	}
+	void main::script_infol(const vscript::variant &var) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+		std::string_view str{var.get<std::string_view>()};
+		info("%s\n"sv, str.data());
+	}
+	void main::script_remarkl(const vscript::variant &var) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+		std::string_view str{var.get<std::string_view>()};
+		remark("%s\n"sv, str.data());
+	}
 
 	bool main::script_is_map_loaded() const noexcept
 	{ return is_map_loaded; }
