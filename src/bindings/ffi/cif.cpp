@@ -58,12 +58,12 @@ namespace vmod::bindings::ffi
 
 		if(!target.mfp) {
 			vm->RaiseException("vmod: invalid function");
-			return {};
+			return vscript::null();
 		}
 
 		if(!args || num_args != args_types.size()) {
 			vm->RaiseException("vmod: wrong number of parameters");
-			return {};
+			return vscript::null();
 		}
 
 		for(std::size_t i{0}; i < num_args; ++i) {

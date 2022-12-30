@@ -1,6 +1,10 @@
 #pragma once
 
-//#define GSDK_DT_SUPPORTS_INT64
+#include "../config.hpp"
+
+#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#define GSDK_DT_SUPPORTS_INT64
+#endif
 
 #include "../mathlib/vector.hpp"
 #include <cstring>
@@ -37,16 +41,38 @@ namespace gsdk
 		SPROP_XYZE =                      (1 << 7),
 		SPROP_INSIDEARRAY =               (1 << 8),
 		SPROP_PROXY_ALWAYS_YES =          (1 << 9),
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		SPROP_CHANGES_OFTEN =             (1 << 10),
 		SPROP_IS_A_VECTOR_ELEM =          (1 << 11),
 		SPROP_COLLAPSIBLE =               (1 << 12),
 		SPROP_COORD_MP =                  (1 << 13),
 		SPROP_COORD_MP_LOWPRECISION =     (1 << 14),
 		SPROP_COORD_MP_INTEGRAL =         (1 << 15),
-		SPROP_VARINT =                    SPROP_NORMAL,
+		//SPROP_CELL_COORD =                SPROP_COORD_MP,
+		//SPROP_CELL_COORD_LOWPRECISION =   SPROP_COORD_MP_LOWPRECISION,
+		//SPROP_CELL_COORD_INTEGRAL =       SPROP_COORD_MP_INTEGRAL,
 		SPROP_NUMFLAGBITS_NETWORKED =           16,
 		SPROP_ENCODED_AGAINST_TICKCOUNT = (1 << 16),
-		SPROP_NUMFLAGBITS =                     17
+		SPROP_NUMFLAGBITS =                     17,
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		SPROP_IS_A_VECTOR_ELEM =          (1 << 10),
+		SPROP_COLLAPSIBLE =               (1 << 11),
+		SPROP_COORD_MP =                  (1 << 12),
+		SPROP_COORD_MP_LOWPRECISION =     (1 << 13),
+		SPROP_COORD_MP_INTEGRAL =         (1 << 14),
+		SPROP_CELL_COORD =                (1 << 15),
+		SPROP_CELL_COORD_LOWPRECISION =   (1 << 16),
+		SPROP_CELL_COORD_INTEGRAL =       (1 << 17),
+		SPROP_CHANGES_OFTEN =             (1 << 18),
+		SPROP_NUMFLAGBITS_NETWORKED =           19,
+		SPROP_ENCODED_AGAINST_TICKCOUNT = (1 << 19),
+		SPROP_NUMFLAGBITS =                     20,
+	#else
+		#error
+	#endif
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		SPROP_VARINT =                    SPROP_NORMAL,
+	#endif
 	};
 
 	class DVariant

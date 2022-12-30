@@ -110,15 +110,19 @@ namespace vmod::bindings::cvar
 				return false;
 			}
 
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2
 			if(!vm->SetValue(flags_table, "allowed_in_competitive", vscript::variant{gsdk::FCVAR_ALLOWED_IN_COMPETITIVE})) {
 				error("vmod: failed to set cvar allowed_in_competitive flag value\n"sv);
 				return false;
 			}
+		#endif
 
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2
 			if(!vm->SetValue(flags_table, "internal", vscript::variant{gsdk::FCVAR_INTERNAL_USE})) {
 				error("vmod: failed to set cvar internal flag value\n"sv);
 				return false;
 			}
+		#endif
 
 			if(!vm->SetValue(flags_table, "server_can_exec", vscript::variant{gsdk::FCVAR_SERVER_CAN_EXECUTE})) {
 				error("vmod: failed to set cvar server_can_exec flag value\n"sv);
@@ -135,10 +139,12 @@ namespace vmod::bindings::cvar
 				return false;
 			}
 
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2
 			if(!vm->SetValue(flags_table, "exec_in_default", vscript::variant{gsdk::FCVAR_EXEC_DESPITE_DEFAULT})) {
 				error("vmod: failed to set cvar exec_in_default flag value\n"sv);
 				return false;
 			}
+		#endif
 		}
 
 		if(!vm->SetValue(scope, "flags", flags_table)) {

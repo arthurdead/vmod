@@ -19,14 +19,7 @@ namespace vmod
 		{ initialize<T>(name, gsdk::FCVAR_NONE, std::move(func_)); }
 
 		template <typename T>
-		inline void initialize(std::string_view name, int flags, T &&func_) noexcept
-		{
-			gsdk::ConCommand::CreateBase(name.data(), nullptr, flags);
-
-			func = std::move(func_);
-
-			cvar->RegisterConCommand(this);
-		}
+		void initialize(std::string_view name, int flags, T &&func_) noexcept;
 
 		inline void unregister() noexcept
 		{

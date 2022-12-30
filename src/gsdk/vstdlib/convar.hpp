@@ -51,10 +51,23 @@ namespace gsdk
 		FCVAR_UNLOGGED =                (1 << 11),
 		FCVAR_NEVER_AS_STRING =         (1 << 12),
 		FCVAR_REPLICATED =              (1 << 13),
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		FCVAR_INTERNAL_USE =            (1 << 15),
+	#endif
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		FCVAR_SS =                      (1 << 15),
+	#endif
 		FCVAR_DEMO =                    (1 << 16),
 		FCVAR_DONTRECORD =              (1 << 17),
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		FCVAR_ALLOWED_IN_COMPETITIVE =  (1 << 18),
+	#endif
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		FCVAR_SS_ADDED =                (1 << 18),
+	#endif
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		FCVAR_RELEASE =                 (1 << 19),
+	#endif
 		FCVAR_RELOAD_MATERIALS =        (1 << 20),
 		FCVAR_RELOAD_TEXTURES =         (1 << 21),
 		FCVAR_NOT_CONNECTED =           (1 << 22),
@@ -64,22 +77,29 @@ namespace gsdk
 		FCVAR_SERVER_CAN_EXECUTE =      (1 << 28),
 		FCVAR_SERVER_CANNOT_QUERY =     (1 << 29),
 		FCVAR_CLIENTCMD_CAN_EXECUTE =   (1 << 30),
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		FCVAR_EXEC_DESPITE_DEFAULT =    (1 << 31),
+	#endif
 		FCVAR_MATERIAL_THREAD_MASK =    (FCVAR_RELOAD_MATERIALS|FCVAR_RELOAD_TEXTURES|FCVAR_MATERIAL_SYSTEM_THREAD)
 	};
 #ifdef __clang__
 	#pragma clang diagnostic pop
 #endif
 
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 	class ICVarIterator
 	{
 	public:
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		virtual ~ICVarIterator() = 0;
+	#endif
 		virtual void SetFirst() = 0;
 		virtual void Next() = 0;
-		virtual	bool IsValid() = 0;
+		virtual bool IsValid() = 0;
 		virtual ConCommandBase *Get() = 0;
 	};
+	#pragma GCC diagnostic pop
 
 	constexpr int INVALID_CVAR_DLL_IDENTIFIER{-1};
 
@@ -92,11 +112,15 @@ namespace gsdk
 		virtual bool IsCommand() const;
 		virtual bool IsFlagSet(int flags) const;
 		virtual void AddFlags(int flags) final;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual void RemoveFlags(int flags) final;
+		virtual int GetFlags() const final;
+	#endif
 		virtual const char *GetName() const;
 		virtual const char *GetHelpText() const final;
 		virtual bool IsRegistered() const final;
 		virtual CVarDLLIdentifier_t GetDLLIdentifier() const = 0;
-		virtual void CreateBase(const char *name, const char *help = nullptr, int flags = FCVAR_NONE);
+		virtual void Create(const char *name, const char *help = nullptr, int flags = FCVAR_NONE);
 		virtual void Init() = 0;
 
 		bool IsCompetitiveRestricted() const noexcept;
@@ -123,8 +147,17 @@ namespace gsdk
 		virtual void SetValue(const char *value) = 0;
 		virtual void SetValue(float value) = 0;
 		virtual void SetValue(int value) = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual void SetValue(Color value) = 0;
+	#endif
 		virtual const char *GetName() const = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual const char *GetBaseName() const = 0;
+	#endif
 		virtual bool IsFlagSet(int flags) const = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual int GetSplitScreenPlayerSlot() const = 0;
+	#endif
 	};
 	#pragma GCC diagnostic pop
 
@@ -136,19 +169,38 @@ namespace gsdk
 		ConVar() noexcept = default;
 		~ConVar() override;
 
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual const char *GetBaseName() const final;
+		virtual int GetSplitScreenPlayerSlot() const final;
+	#endif
+		virtual void SetValue(const char *value) final;
+		virtual void SetValue(float value) final;
+		virtual void SetValue(int value) final;
+		void SetValue(bool value) noexcept;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual void SetValue(Color value) final;
+	#endif
 		virtual void InternalSetValue(const char *value) final;
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		virtual void InternalSetFloatValue(float value, bool force = false) final;
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual void InternalSetFloatValue(float value) final;
+	#else
+		#error
+	#endif
 		virtual void InternalSetIntValue(int value) final;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual void InternalSetColorValue(Color value) final;
+	#endif
 		virtual bool ClampValue(float &value) final;
 		bool ClampValue(int &value);
 		virtual void ChangeStringValue(const char *value, float old_float) final;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual void Create(const char *name, const char *default_value, int flags = FCVAR_NONE, const char *help = nullptr, bool has_min = false, float min = 0.0f, bool has_max = false, float max = 0.0f, FnChangeCallback_t callback = nullptr) final;
+	#endif
 
 		void ClearString();
 
-		void SetValue(const char *value) override final;
-		void SetValue(float value) override final;
-		void SetValue(int value) override final;
-		void SetValue(bool value) noexcept;
 		const char *GetName() const override final;
 		bool IsFlagSet(int flags) const override final;
 
@@ -161,7 +213,7 @@ namespace gsdk
 		std::size_t InternalGetStringLength() const noexcept;
 
 		bool IsCommand() const override final;
-		void CreateBase(const char *name, const char *help = nullptr, int flags = FCVAR_NONE) override final;
+		void Create(const char *name, const char *help = nullptr, int flags = FCVAR_NONE) override final;
 
 		ConVar *m_pParent{nullptr};
 		const char *m_pszDefaultValue{nullptr};
@@ -173,11 +225,13 @@ namespace gsdk
 		float m_fMinVal{0.0f};
 		bool m_bHasMax{false};
 		float m_fMaxVal{0.0f};
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		bool m_bHasCompMin{false};
 		float m_fCompMinVal{0.0f};
 		bool m_bHasCompMax{false};
 		float m_fCompMaxVal{0.0f};
 		bool m_bCompetitiveRestrictions{false};
+	#endif
 		FnChangeCallback_t m_fnChangeCallback{nullptr};
 
 	private:
@@ -193,7 +247,13 @@ namespace gsdk
 	class ICvar : public IAppSystem
 	{
 	public:
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		static constexpr std::string_view interface_name{"VEngineCvar004"};
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		static constexpr std::string_view interface_name{"VEngineCvar007"};
+	#else
+		#error
+	#endif
 
 		virtual CVarDLLIdentifier_t AllocateDLLIdentifier() = 0;
 	private:
@@ -218,8 +278,10 @@ namespace gsdk
 		virtual const ConVar *FindVar(const char *) const = 0;
 		virtual ConCommand *FindCommand(const char *) = 0;
 		virtual const ConCommand *FindCommand(const char *) const = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		virtual ConCommandBase *GetCommands() = 0;
 		virtual const ConCommandBase *GetCommands() const = 0;
+	#endif
 		virtual void InstallGlobalChangeCallback(FnChangeCallback_t) = 0;
 		virtual void RemoveGlobalChangeCallback(FnChangeCallback_t) = 0;
 		virtual void CallGlobalChangeCallbacks(ConVar *, const char *, float) = 0;
@@ -230,6 +292,14 @@ namespace gsdk
 		virtual void ConsoleDPrintf(const char *, ...) const = 0;
 		virtual void RevertFlaggedConVars(int) = 0;
 		virtual void InstallCVarQuery(ICvarQuery *) = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual void SetMaxSplitScreenSlots(int) = 0;
+		virtual int GetMaxSplitScreenSlots() const = 0;
+		virtual void AddSplitScreenConVars() = 0;
+		virtual void RemoveSplitScreenConVars(CVarDLLIdentifier_t) = 0;
+		virtual int GetConsoleDisplayFuncCount() const = 0;
+		virtual void GetConsoleText(int, char *, size_t) const = 0;
+	#endif
 		virtual bool IsMaterialThreadSetAllowed() const = 0;
 		virtual void QueueMaterialThreadSetValue(ConVar *, const char *) = 0;
 		virtual void QueueMaterialThreadSetValue(ConVar *, int) = 0;
@@ -276,7 +346,7 @@ namespace gsdk
 		virtual void Dispatch(const CCommand &) = 0;
 
 		bool IsCommand() const override final;
-		void CreateBase(const char *name, const char *help = nullptr, int flags = FCVAR_NONE) override final;
+		void Create(const char *name, const char *help = nullptr, int flags = FCVAR_NONE) override final;
 
 		union
 		{

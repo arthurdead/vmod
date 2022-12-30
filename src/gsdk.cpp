@@ -123,6 +123,7 @@ namespace vmod
 	bool gsdk_server_library::load(const std::filesystem::path &path) noexcept
 	{
 		using namespace std::literals::string_literals;
+		using namespace std::literals::string_view_literals;
 
 		if(!gsdk_library::load(path)) {
 			return false;
@@ -151,18 +152,32 @@ namespace vmod
 			return false;
 		}
 
+		if(!syms.load(path, base())) {
+			err_str = syms.error_string();
+			return false;
+		}
+
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		entityfactorydict = reinterpret_cast<gsdk::CEntityFactoryDictionary *>(servertools->GetEntityFactoryDictionary());
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		const auto &sv_global_qual{syms.global()};
+
+		auto EntityFactoryDictionary_it{sv_global_qual.find("EntityFactoryDictionary()"s)};
+		if(EntityFactoryDictionary_it == sv_global_qual.end()) {
+			error("vmod: missing 'EntityFactoryDictionary' symbol\n"sv);
+			return false;
+		}
+
+		entityfactorydict = reinterpret_cast<gsdk::CEntityFactoryDictionary *>(EntityFactoryDictionary_it->second->func<gsdk::IEntityFactoryDictionary *(*)()>()());
+	#else
+		#error
+	#endif
 		if(!entityfactorydict) {
 			err_str = "EntityFactoryDictionary is null"s;
 			return false;
 		}
 
 		std_proxies = gamedll->GetStandardSendProxies();
-
-		if(!syms.load(path, base())) {
-			err_str = syms.error_string();
-			return false;
-		}
 
 		gsdk::ServerClass *temp_classes{gamedll->GetAllServerClasses()};
 		while(temp_classes) {

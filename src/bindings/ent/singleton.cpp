@@ -41,29 +41,29 @@ namespace vmod::bindings::ent
 
 		if(facname.empty()) {
 			vm->RaiseException("vmod: invalid name");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		if(size == 0 || size == static_cast<std::size_t>(-1)) {
 			vm->RaiseException("vmod: invalid size");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		if(!callback || callback == gsdk::INVALID_HSCRIPT) {
 			vm->RaiseException("vmod: null function");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		gsdk::IEntityFactory *factory{entityfactorydict->FindFactory(facname.data())};
 		if(factory) {
 			vm->RaiseException("vmod: name already in use");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		factory_impl *sfac{new factory_impl{}};
 		if(!sfac->initialize(facname, callback)) {
 			delete sfac;
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		return sfac->instance;
@@ -75,12 +75,12 @@ namespace vmod::bindings::ent
 
 		if(facname.empty()) {
 			vm->RaiseException("vmod: invalid name");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		gsdk::IEntityFactory *factory{entityfactorydict->FindFactory(facname.data())};
 		if(!factory) {
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		factory_impl *impl{dynamic_cast<factory_impl *>(factory)};
@@ -91,7 +91,7 @@ namespace vmod::bindings::ent
 		factory_ref *sfac{new factory_ref{factory}};
 		if(!sfac->initialize()) {
 			delete sfac;
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		return sfac->instance;
@@ -103,7 +103,7 @@ namespace vmod::bindings::ent
 
 		if(!ptr) {
 			vm->RaiseException("vmod: invalid ptr");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		return ptr->GetScriptInstance();
@@ -115,7 +115,7 @@ namespace vmod::bindings::ent
 
 		if(path.empty()) {
 			vm->RaiseException("vmod: invalid path");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		prop_result res;
@@ -127,14 +127,14 @@ namespace vmod::bindings::ent
 			prop_tree_flags::lazy
 		};
 		if(!walk_prop_tree(path, flags, res)) {
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		auto it{sendprops.find(res.sendprop)};
 		if(it == sendprops.end()) {
 			std::unique_ptr<sendprop> prop{new sendprop{res.sendprop}};
 			if(!prop->initialize()) {
-				return nullptr;
+				return gsdk::INVALID_HSCRIPT;
 			}
 
 			it = sendprops.emplace(res.sendprop, std::move(prop)).first;

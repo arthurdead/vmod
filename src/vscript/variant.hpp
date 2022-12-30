@@ -8,6 +8,7 @@ namespace vmod::vscript
 	{
 		var.m_type = gsdk::FIELD_VOID;
 		std::memset(var.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
+		var.m_object = gsdk::INVALID_HSCRIPT;
 		var.m_flags = gsdk::SV_NOFLAGS;
 	}
 

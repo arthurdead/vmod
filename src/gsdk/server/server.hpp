@@ -31,6 +31,7 @@ namespace gsdk
 	class IEntityFactory;
 	class IServerNetworkable;
 	struct edict_t;
+	class CEntityRespawnInfo;
 
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
@@ -47,7 +48,13 @@ namespace gsdk
 	class IServerTools : public IBaseInterface
 	{
 	public:
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		static constexpr std::string_view interface_name{"VSERVERTOOLS003"};
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		static constexpr std::string_view interface_name{"VSERVERTOOLS001"};
+	#else
+		#error
+	#endif
 
 		virtual IServerEntity *GetIServerEntity(IClientEntity *) = 0;
 		virtual bool SnapPlayerToPosition(const Vector &, const QAngle &, IClientEntity * = nullptr) = 0;
@@ -64,10 +71,20 @@ namespace gsdk
 		virtual bool SetKeyValue(CBaseEntity *, const char *, const Vector &) = 0;
 		virtual CBaseEntity *CreateEntityByName(const char *) = 0;
 		virtual void DispatchSpawn(CBaseEntity *) = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual bool RespawnEntitiesWithEdits(CEntityRespawnInfo *, int) = 0;
+	#endif
 		virtual void ReloadParticleDefintions(const char *, const void *, int) = 0;
 		virtual void AddOriginToPVS(const Vector &) = 0;
 		virtual void MoveEngineViewTo(const Vector &, const QAngle &) = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		virtual bool DestroyEntityByHammerId(int) = 0;
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual void RemoveEntity(int) = 0;
+	#else
+		#error
+	#endif
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		virtual CBaseEntity *GetBaseEntityByEntIndex(int) = 0;
 		virtual void RemoveEntity(CBaseEntity *) = 0;
 		virtual void RemoveEntityImmediate(CBaseEntity *) = 0;
@@ -100,6 +117,7 @@ namespace gsdk
 		virtual CBaseEntity *FindEntityNearestFacing(const Vector &, const Vector &, float) = 0;
 		virtual CBaseEntity *FindEntityClassNearestFacing(const Vector &, const Vector &, float, char *) = 0;
 		virtual CBaseEntity *FindEntityProcedural(const char *, CBaseEntity * = nullptr, CBaseEntity * = nullptr, CBaseEntity * = nullptr) = 0;
+	#endif
 	};
 
 	#pragma GCC diagnostic push
@@ -107,10 +125,18 @@ namespace gsdk
 	class IServerGameDLL
 	{
 	public:
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		static constexpr std::string_view interface_name{"ServerGameDLL012"};
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		static constexpr std::string_view interface_name{"ServerGameDLL005"};
+	#else
+		#error
+	#endif
 
 		virtual bool DLLInit(CreateInterfaceFn, CreateInterfaceFn, CreateInterfaceFn, CGlobalVars *) = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		virtual bool ReplayInit(CreateInterfaceFn) = 0;
+	#endif
 		virtual bool GameInit() = 0;
 		virtual bool LevelInit(const char *, const char *, const char *, const char *, bool, bool) = 0;
 		virtual void ServerActivate(edict_t *, int, int) = 0;
@@ -135,6 +161,9 @@ namespace gsdk
 		virtual void ReadRestoreHeaders(CSaveRestoreData *) = 0;
 		virtual void Restore(CSaveRestoreData *, bool) = 0;
 		virtual bool IsRestoring() = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual bool SupportsSaveRestore() = 0;
+	#endif
 		virtual int CreateEntityTransitionList(CSaveRestoreData *, int) = 0;
 		virtual void BuildAdjacentMapList() = 0;
 		virtual bool GetUserMessageInfo(int, char *, int, int &) = 0;
@@ -145,6 +174,15 @@ namespace gsdk
 		virtual bool ShouldHideServer() = 0;
 		virtual void InvalidateMdlCache() = 0;
 		virtual void OnQueryCvarValueFinished(QueryCvarCookie_t, edict_t *, EQueryCvarValueStatus, const char *, const char *) = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual void PostToolsInit() = 0;
+		virtual void ApplyGameSettings(KeyValues *) = 0;
+		virtual void GetMatchmakingTags(char *, size_t) = 0;
+		virtual void ServerHibernationUpdate(bool) = 0;
+		virtual void GenerateLumpFileName(const char *, char *, int, int) = 0;
+		virtual void GetMatchmakingGameData(char *, size_t) = 0; 
+	#endif
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		virtual void GameServerSteamAPIActivated() = 0;
 		virtual void GameServerSteamAPIShutdown() = 0;
 		virtual void SetServerHibernation(bool) = 0;
@@ -157,6 +195,7 @@ namespace gsdk
 		virtual eCanProvideLevelResult CanProvideLevel(char *, int) = 0;
 		virtual bool IsManualMapChangeOkay(const char **) = 0;
 		virtual bool GetWorkshopMap(unsigned int, WorkshopMapDesc_t *) = 0;
+	#endif
 	};
 	#pragma GCC diagnostic pop
 }

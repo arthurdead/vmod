@@ -535,6 +535,17 @@ namespace vmod
 
 								return true;
 							}
+							case DEMANGLE_COMPONENT_TEMPLATE: {
+								switch(component->u.s_binary.left->u.s_binary.left->type) {
+									case DEMANGLE_COMPONENT_NAME: break;
+									default: {
+										name_it = global_qual.names.end();
+										qual_it = qualifications.end();
+										return false;
+									}
+								}
+								[[fallthrough]];
+							}
 							case DEMANGLE_COMPONENT_NAME: {
 								unmangled_buffer = cplus_demangle_print(base_demangle_flags, component, guessed_name_length, &allocated);
 								if(!unmangled_buffer) {

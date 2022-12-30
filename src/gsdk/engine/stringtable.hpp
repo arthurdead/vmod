@@ -1,19 +1,29 @@
 #pragma once
 
 #include <string_view>
+#include "../config.hpp"
 
 namespace gsdk
 {
-	static constexpr auto DOWNLOADABLE_FILE_TABLENAME{"downloadables"};
-	static constexpr auto MODEL_PRECACHE_TABLENAME{"modelprecache"};
-	static constexpr auto GENERIC_PRECACHE_TABLENAME{"genericprecache"};
-	static constexpr auto SOUND_PRECACHE_TABLENAME{"soundprecache"};
-	static constexpr auto DECAL_PRECACHE_TABLENAME{"decalprecache"};
+	constexpr auto DOWNLOADABLE_FILE_TABLENAME{"downloadables"};
+	constexpr auto MODEL_PRECACHE_TABLENAME{"modelprecache"};
+	constexpr auto GENERIC_PRECACHE_TABLENAME{"genericprecache"};
+	constexpr auto SOUND_PRECACHE_TABLENAME{"soundprecache"};
+	constexpr auto DECAL_PRECACHE_TABLENAME{"decalprecache"};
 
 	class INetworkStringTable;
 
 	using TABLEID = int;
 	using pfnStringChanged = void(*)(void *, INetworkStringTable *, int, const char *, const void *);
+	
+	constexpr unsigned short INVALID_STRING_INDEX{static_cast<unsigned short>(-1)};
+	constexpr int INVALID_STRING_TABLE{-1};
+
+	enum ENetworkStringtableFlags : int
+	{
+		NSF_NONE = 0,
+		NSF_DICTIONARY_ENABLED  = (1 << 0)
+	};
 
 	class INetworkStringTable
 	{
@@ -38,13 +48,22 @@ namespace gsdk
 	{
 	public:
 		virtual ~INetworkStringTableContainer() = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		virtual INetworkStringTable *CreateStringTable(const char *, int, int = 0, int = 0) = 0;
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual INetworkStringTable *CreateStringTable(const char *, int, int = 0, int = 0, int = NSF_NONE) = 0;
+	#endif
 		virtual void RemoveAllTables() = 0;
 		virtual INetworkStringTable *FindTable(const char *) const = 0;
 		virtual INetworkStringTable *GetTable(TABLEID) const = 0;
 		virtual int GetNumTables() const = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		virtual INetworkStringTable *CreateStringTableEx(const char *, int, int = 0, int = 0, bool = false) = 0;
+	#endif
 		virtual void SetAllowClientSideAddString(INetworkStringTable *, bool) = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual void CreateDictionary(const char *) = 0;
+	#endif
 	};
 
 	class IServerNetworkStringTableContainer : public INetworkStringTableContainer

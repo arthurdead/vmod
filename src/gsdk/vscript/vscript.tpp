@@ -5,7 +5,8 @@ namespace gsdk
 	{
 		if(m_flags & SV_FREE) {
 			switch(m_type) {
-				case FIELD_VOID: break;
+				case FIELD_VOID:
+				case FIELD_TYPEUNKNOWN: break;
 				case FIELD_POSITION_VECTOR:
 				case FIELD_VECTOR: {
 					delete m_vector;
@@ -23,7 +24,8 @@ namespace gsdk
 					//delete m_utlstringtoken;
 				} break;
 				case FIELD_CSTRING: {
-					std::free(m_cstr);
+					//std::free(m_cstr);
+					delete[] m_cstr;
 				} break;
 				case FIELD_HSCRIPT_NEW_INSTANCE:
 				case FIELD_HSCRIPT: {
@@ -36,7 +38,8 @@ namespace gsdk
 
 			m_flags = SV_NOFLAGS;
 			std::memset(m_data, 0, sizeof(m_data));
-			m_type = FIELD_VOID;
+			m_object = INVALID_HSCRIPT;
+			m_type = FIELD_TYPEUNKNOWN;
 		}
 	}
 }

@@ -25,6 +25,10 @@ namespace vmod
 	template <typename T>
 	void detour_base<T>::enable() noexcept
 	{
+		if(!old_target) {
+			return;
+		}
+
 		unsigned char *bytes{reinterpret_cast<unsigned char *>(old_target.mfp.addr)};
 
 		bytes[0] = 0xE9;

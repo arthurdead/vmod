@@ -1,10 +1,13 @@
 #pragma once
 
+#include "../config.hpp"
+
 namespace gsdk
 {
 	class ISaveRestoreOps;
 	struct inputdata_t;
 	class CBaseEntity;
+	struct optimized_datamap_t;
 
 	enum fieldtype_t : int
 	{
@@ -26,7 +29,9 @@ namespace gsdk
 		FIELD_POSITION_VECTOR,
 		FIELD_TIME,
 		FIELD_TICK,
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		FIELD_MODELNAME,
+	#endif
 		FIELD_SOUNDNAME,
 		FIELD_INPUT,
 		FIELD_FUNCTION,
@@ -34,10 +39,25 @@ namespace gsdk
 		FIELD_VMATRIX_WORLDSPACE,
 		FIELD_MATRIX3X4_WORLDSPACE,
 		FIELD_INTERVAL,
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		FIELD_UNUSED,
+	#endif
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		FIELD_MODELINDEX,
 		FIELD_MATERIALINDEX,
+	#endif
 		FIELD_VECTOR2D,
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		FIELD_INTEGER64,
+		FIELD_VECTOR4D,
+		FIELD_RESOURCE,
+	#endif
 		FIELD_TYPECOUNT,
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		FIELD_MODELNAME = 45,
+		FIELD_MODELINDEX,
+		FIELD_MATERIALINDEX
+	#endif
 	};
 
 	struct datamap_t;
@@ -75,7 +95,13 @@ namespace gsdk
 	{
 		fieldtype_t fieldType{FIELD_VOID};
 		const char *fieldName{nullptr};
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		int fieldOffset[TD_OFFSET_COUNT]{0,0};
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		int fieldOffset{0};
+	#else
+		#error
+	#endif
 		unsigned short fieldSize{0};
 		short flags{0};
 		const char *externalName{nullptr};
@@ -86,6 +112,10 @@ namespace gsdk
 		typedescription_t *override_field{nullptr};
 		int override_count{0};
 		float fieldTolerance{0.0f};
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		int flatOffset[TD_OFFSET_COUNT]{0,0};
+		unsigned short flatGroup{0};
+	#endif
 
 	private:
 		typedescription_t() = delete;
@@ -101,9 +131,15 @@ namespace gsdk
 		int dataNumFields{0};
 		const char *dataClassName{nullptr};
 		datamap_t *baseMap{nullptr};
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		int packed_size{0};
+		optimized_datamap_t *m_pOptimizedDataMap{nullptr};
+	#endif
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		bool chains_validated{false};
 		bool packed_offsets_computed{false};
 		int packed_size{0};
+	#endif
 
 	private:
 		datamap_t() = delete;

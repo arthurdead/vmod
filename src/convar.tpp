@@ -4,11 +4,27 @@
 namespace vmod
 {
 	template <typename T>
+	void ConCommand::initialize(std::string_view name, int flags, T &&func_) noexcept
+	{
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		flags |= gsdk::FCVAR_RELEASE;
+	#endif
+
+		gsdk::ConCommand::Create(name.data(), nullptr, flags);
+
+		func = std::move(func_);
+
+		cvar->RegisterConCommand(this);
+	}
+
+	template <typename T>
 	void ConVar::initialize(std::string_view name, T &&value, int flags) noexcept
 	{
 		using namespace std::literals::string_literals;
 
-		gsdk::ConVar::CreateBase(name.data(), nullptr, flags);
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		flags |= gsdk::FCVAR_RELEASE;
+	#endif
 
 		using decay_t = std::decay_t<T>;
 
@@ -42,6 +58,14 @@ namespace vmod
 			static_assert(false_t<T>::value);
 		}
 
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		gsdk::ConVar::Create(name.data(), m_pszDefaultValue, flags, nullptr, false, 0.0f, false, 0.0f, nullptr);
+	#elif GSDK_ENGINE == GSDK_ENGINE_TF2
+		gsdk::ConVar::Create(name.data(), nullptr, flags);
+	#else
+		#error
+	#endif
+
 		set(std::forward<T>(value));
 
 		cvar->RegisterConCommand(this);
@@ -59,7 +83,7 @@ namespace vmod
 		} else if constexpr(std::is_same_v<decay_t, std::filesystem::path>) {
 			gsdk::ConVar::SetValue(value.c_str());
 		} else if constexpr(std::is_same_v<decay_t, bool>) {
-			gsdk::ConVar::SetValue(value ? 1 : 0);
+			gsdk::ConVar::SetValue(std::forward<T>(value));
 		} else if constexpr(std::is_integral_v<decay_t> || std::is_floating_point_v<decay_t>) {
 			gsdk::ConVar::SetValue(std::forward<T>(value));
 		} else {

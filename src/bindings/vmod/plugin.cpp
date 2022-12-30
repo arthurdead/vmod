@@ -39,6 +39,8 @@ namespace vmod
 		gsdk::ScriptVariant_t var;
 		if(vm->GetValue(private_scope_, val_name.data(), &var)) {
 			vm->SetValue(values_table, val_name.data(), var);
+		} else {
+			vscript::null(var);
 		}
 
 		return var;
@@ -77,7 +79,7 @@ namespace vmod
 
 		gsdk::HSCRIPT func{vm->LookupFunction(func_name.data(), private_scope_)};
 		if(!func || func == gsdk::INVALID_HSCRIPT) {
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		vm->SetValue(functions_table, func_name.data(), func);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../tier1/interface.hpp"
+#include "../config.hpp"
 
 namespace gsdk
 {
@@ -13,6 +14,9 @@ namespace gsdk
 
 		virtual void Sys_Printf(const char *) = 0;
 		virtual void RunServer() = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual bool IsGuiDedicatedServer() = 0;
+	#endif
 	};
 	#pragma GCC diagnostic pop
 }

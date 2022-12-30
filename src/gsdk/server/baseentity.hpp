@@ -5,6 +5,7 @@
 #include "../engine/dt_send.hpp"
 #include "../engine/sv_engine.hpp"
 #include "../tier1/utldict.hpp"
+#include "../engine/stringtable.hpp"
 
 namespace gsdk
 {
@@ -63,11 +64,18 @@ namespace gsdk
 	class ServerClass
 	{
 	public:
-		const char *m_pNetworkName;
-		SendTable *m_pTable;
-		ServerClass *m_pNext;
-		int m_ClassID;
-		int m_InstanceBaselineIndex;
+		const char *m_pNetworkName{nullptr};
+		SendTable *m_pTable{nullptr};
+		ServerClass *m_pNext{nullptr};
+		int m_ClassID{-1};
+		int m_InstanceBaselineIndex{INVALID_STRING_INDEX};
+
+	private:
+		ServerClass() = delete;
+		ServerClass(const ServerClass &) = delete;
+		ServerClass &operator=(const ServerClass &) = delete;
+		ServerClass(ServerClass &&) = delete;
+		ServerClass &operator=(ServerClass &&) = delete;
 	};
 
 	class CBaseEntity : public IServerEntity

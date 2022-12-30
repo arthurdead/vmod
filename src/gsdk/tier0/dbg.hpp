@@ -3,12 +3,20 @@
 #include <cstdarg>
 #include "../config.hpp"
 
-struct alignas(unsigned int) Color
+union alignas(unsigned int) Color
 {
-	unsigned char r;
-	unsigned char g;
-	unsigned char b;
-	unsigned char a;
+	constexpr Color(unsigned char r_, unsigned char g_, unsigned char b_, unsigned char a_) noexcept
+		: r{r_}, g{g_}, b{b_}, a{a_}
+	{
+	}
+
+	struct {
+		unsigned char r;
+		unsigned char g;
+		unsigned char b;
+		unsigned char a;
+	};
+	unsigned int value;
 };
 
 static_assert(sizeof(Color) == sizeof(unsigned int));

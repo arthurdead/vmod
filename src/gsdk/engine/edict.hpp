@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../config.hpp"
+
 #define GSDK_LITTLE_ENDIAN
 
 namespace gsdk
@@ -12,12 +14,18 @@ namespace gsdk
 	public:
 		int m_fStateFlags;
 
-	#ifdef GSDK_LITTLE_ENDIAN
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		#ifdef GSDK_LITTLE_ENDIAN
 		short m_NetworkSerialNumber;
 		short m_EdictIndex;
+		#else
+		short m_EdictIndex;
+		short m_NetworkSerialNumber;
+		#endif
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		int m_NetworkSerialNumber;
 	#else
-		short m_EdictIndex;
-		short m_NetworkSerialNumber;
+		#error
 	#endif
 
 		IServerNetworkable *m_pNetworkable;
@@ -27,6 +35,8 @@ namespace gsdk
 
 	struct edict_t : public CBaseEdict
 	{
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		float freetime;
+	#endif
 	};
 }

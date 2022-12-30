@@ -251,14 +251,14 @@ namespace vmod::bindings::mem
 
 		if(size == 0 || size == static_cast<std::size_t>(-1)) {
 			vm->RaiseException("vmod: invalid size");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		container *block{new container{size}};
 
 		if(!block->initialize()) {
 			delete block;
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		return block->instance;
@@ -270,19 +270,19 @@ namespace vmod::bindings::mem
 
 		if(size == 0 || size == static_cast<std::size_t>(-1)) {
 			vm->RaiseException("vmod: invalid size");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		if(static_cast<std::size_t>(align) == 0 || align == static_cast<std::align_val_t>(-1) || (static_cast<std::size_t>(align) % 2) != 0) {
 			vm->RaiseException("vmod: invalid align");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		container *block{new container{align, size}};
 
 		if(!block->initialize()) {
 			delete block;
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		return block->instance;
@@ -294,30 +294,30 @@ namespace vmod::bindings::mem
 
 		if(!type_table || type_table == gsdk::INVALID_HSCRIPT) {
 			vm->RaiseException("vmod: invalid type");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		if(!vm->IsTable(type_table)) {
 			vm->RaiseException("vmod: invalid type");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		vscript::variant type_var;
 		if(!vm->GetValue(type_table, "__internal_ptr__", &type_var)) {
 			vm->RaiseException("vmod: invalid type");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		ffi_type *type{type_var.get<ffi_type *>()};
 		if(!type) {
 			vm->RaiseException("vmod: invalid type");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		container *block{new container{static_cast<std::align_val_t>(type->alignment), type->size}};
 		if(!block->initialize()) {
 			delete block;
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		return block->instance;
@@ -329,18 +329,18 @@ namespace vmod::bindings::mem
 
 		if(size == 0 || size == static_cast<std::size_t>(-1)) {
 			vm->RaiseException("vmod: invalid size");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		if(num == 0 || num == static_cast<std::size_t>(-1)) {
 			vm->RaiseException("vmod: invalid num");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		container *block{new container{num, size}};
 		if(!block->initialize()) {
 			delete block;
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		return block->instance;
@@ -352,29 +352,29 @@ namespace vmod::bindings::mem
 
 		if(!ptr) {
 			vm->RaiseException("vmod: invalid ptr");
-			return {};
+			return vscript::null();
 		}
 
 		if(!type_table || type_table == gsdk::INVALID_HSCRIPT) {
 			vm->RaiseException("vmod: invalid type");
-			return {};
+			return vscript::null();
 		}
 
 		if(!vm->IsTable(type_table)) {
 			vm->RaiseException("vmod: invalid type");
-			return {};
+			return vscript::null();
 		}
 
 		vscript::variant type_var;
 		if(!vm->GetValue(type_table, "__internal_ptr__", &type_var)) {
 			vm->RaiseException("vmod: invalid type");
-			return {};
+			return vscript::null();
 		}
 
 		ffi_type *type{type_var.get<ffi_type *>()};
 		if(!type) {
 			vm->RaiseException("vmod: invalid type");
-			return {};
+			return vscript::null();
 		}
 
 		gsdk::ScriptVariant_t ret;

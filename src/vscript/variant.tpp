@@ -487,7 +487,7 @@ namespace vmod::vscript
 			case gsdk::FIELD_HSCRIPT: {
 				return var.m_object;
 			}
-			default: return {};
+			default: return gsdk::INVALID_HSCRIPT;
 		}
 	}
 
@@ -592,7 +592,7 @@ namespace vmod::vscript
 			#error
 		#endif
 			return var.m_ptr;
-			default: return {};
+			default: return nullptr;
 		}
 	}
 
@@ -624,7 +624,7 @@ namespace vmod::vscript
 			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_FUNCTION:
 			return reinterpret_cast<generic_func_t>(var.m_ptr);
-			default: return {};
+			default: return nullptr;
 		}
 	}
 
@@ -647,7 +647,7 @@ namespace vmod::vscript
 			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_FUNCTION:
 			return reinterpret_cast<generic_plain_mfp_t>(var.m_ptr);
-			default: return {};
+			default: return nullptr;
 		}
 	}
 
@@ -673,7 +673,7 @@ namespace vmod::vscript
 				generic_internal_mfp_t internal{static_cast<std::uint64_t>(var.m_ulonglong)};
 				return internal.func;
 			}
-			default: return {};
+			default: return nullptr;
 		}
 	}
 
@@ -698,7 +698,7 @@ namespace vmod::vscript
 				generic_internal_mfp_t internal{static_cast<std::uint64_t>(var.m_ulonglong)};
 				return internal;
 			}
-			default: return {};
+			default: return nullptr;
 		}
 	}
 
@@ -723,7 +723,7 @@ namespace vmod::vscript
 				generic_internal_mfp_va_t internal{static_cast<std::uint64_t>(var.m_ulonglong)};
 				return internal;
 			}
-			default: return {};
+			default: return nullptr;
 		}
 	}
 
@@ -749,7 +749,7 @@ namespace vmod::vscript
 				internal.mfp = static_cast<std::uint64_t>(var.m_ulonglong);
 				return internal;
 			}
-			default: return {};
+			default: return nullptr;
 		}
 	}
 
@@ -786,7 +786,7 @@ namespace vmod::vscript
 			#error
 		#endif
 			return static_cast<generic_vtable_t>(var.m_ptr);
-			default: return {};
+			default: return nullptr;
 		}
 	}
 
@@ -809,7 +809,7 @@ namespace vmod::vscript
 			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_CLASSPTR:
 			return static_cast<generic_object_t *>(var.m_ptr);
-			default: return {};
+			default: return nullptr;
 		}
 	}
 
@@ -831,15 +831,15 @@ namespace vmod::vscript
 		switch(var.m_type) {
 			//TODO!!!!
 			case gsdk::FIELD_EHANDLE:
-			return {};
+			return nullptr;
 			case gsdk::FIELD_EDICT:
-			return {};
+			return nullptr;
 			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_CLASSPTR:
 			return static_cast<gsdk::CBaseEntity *>(var.m_ptr);
 			case gsdk::FIELD_HSCRIPT:
 			return gsdk::CBaseEntity::from_instance(var.m_object);
-			default: return {};
+			default: return nullptr;
 		}
 	}
 

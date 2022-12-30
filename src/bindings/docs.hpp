@@ -14,6 +14,8 @@ namespace vmod::bindings::docs
 
 	extern void gen_date(std::string &file) noexcept;
 
+	extern std::string_view type_name(gsdk::ScriptDataType_t type) noexcept;
+
 	extern std::string_view get_class_desc_name(const gsdk::ScriptClassDesc_t *desc) noexcept;
 
 	struct value final

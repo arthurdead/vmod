@@ -286,16 +286,16 @@ namespace vmod
 	}
 
 	template <typename R, typename C, typename ...Args>
-	inline auto mfp_from_func(R(*addr)(C *, Args..., ...)) noexcept -> R(C::*)(Args..., ...)
+	inline auto mfp_from_func(R(__attribute__((__thiscall__)) *addr)(C *, Args...), std::size_t adjustor) noexcept -> R(C::*)(Args...)
 	{
-		mfp_internal_va_t<R, C, Args...> internal{addr};
+		mfp_internal_t<R, C, Args...> internal{addr, adjustor};
 		return internal.func;
 	}
 
 	template <typename R, typename C, typename ...Args>
-	inline auto mfp_from_func(R(__attribute__((__thiscall__)) *addr)(C *, Args...), std::size_t adjustor) noexcept -> R(C::*)(Args...)
+	inline auto mfp_from_func(R(*addr)(C *, Args..., ...)) noexcept -> R(C::*)(Args..., ...)
 	{
-		mfp_internal_t<R, C, Args...> internal{addr, adjustor};
+		mfp_internal_va_t<R, C, Args...> internal{addr};
 		return internal.func;
 	}
 
@@ -388,16 +388,16 @@ namespace vmod
 		}
 
 		inline ~detour_base() noexcept
-		{
-			if(old_target) {
-				disable();
-			}
-		}
+		{ disable(); }
 
 		void enable() noexcept;
 
 		inline void disable() noexcept
 		{
+			if(!old_target) {
+				return;
+			}
+
 			unsigned char *bytes{reinterpret_cast<unsigned char *>(old_target.mfp.addr)};
 			std::memcpy(bytes, old_bytes, sizeof(old_bytes));
 		}

@@ -84,7 +84,7 @@ namespace vmod::bindings::syms
 		qualification_it *script_it{new qualification_it{it}};
 		if(!script_it->initialize()) {
 			delete script_it;
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		return script_it->instance;
@@ -95,7 +95,7 @@ namespace vmod::bindings::syms
 		name_it *script_it{new name_it{it}};
 		if(!script_it->initialize()) {
 			delete script_it;
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		return script_it->instance;
@@ -107,13 +107,13 @@ namespace vmod::bindings::syms
 
 		if(symname.empty()) {
 			vm->RaiseException("vmod: invalid name");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		std::string symname_tmp{symname};
 		auto tmp_it{it->second->find(symname_tmp)};
 		if(tmp_it == it->second->end()) {
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		return script_lookup_shared(tmp_it);
@@ -125,13 +125,13 @@ namespace vmod::bindings::syms
 
 		if(symname.empty()) {
 			vm->RaiseException("vmod: invalid name");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		std::string symname_tmp{symname};
 		auto tmp_it{it->second->find(symname_tmp)};
 		if(tmp_it == it->second->end()) {
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		return script_lookup_shared(tmp_it);
@@ -145,7 +145,7 @@ namespace vmod::bindings::syms
 
 		if(symname.empty()) {
 			vm->RaiseException("vmod: invalid name");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		const symbol_cache &syms{cache()};
@@ -153,7 +153,7 @@ namespace vmod::bindings::syms
 		std::string symname_tmp{symname};
 		auto it{syms.find(symname_tmp)};
 		if(it == syms.end()) {
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		return script_lookup_shared(it);
@@ -165,7 +165,7 @@ namespace vmod::bindings::syms
 
 		if(symname.empty()) {
 			vm->RaiseException("vmod: invalid name");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		const symbol_cache::qualification_info &syms{cache().global()};
@@ -173,7 +173,7 @@ namespace vmod::bindings::syms
 		std::string symname_tmp{symname};
 		auto it{syms.find(symname_tmp)};
 		if(it == syms.end()) {
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		return script_lookup_shared(it);

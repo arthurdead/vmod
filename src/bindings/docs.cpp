@@ -123,68 +123,6 @@ namespace vmod::bindings::docs
 			}
 		}
 
-		static std::string_view datatype_to_str(gsdk::ScriptDataType_t type) noexcept
-		{
-			using namespace std::literals::string_view_literals;
-
-			switch(type) {
-				case gsdk::FIELD_VOID:
-				return "void"sv;
-				case gsdk::FIELD_CHARACTER:
-				return "char"sv;
-				case gsdk::FIELD_SHORT:
-				case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
-				case gsdk::FIELD_INTEGER:
-				case gsdk::FIELD_UINT:
-				case gsdk::FIELD_INTEGER64:
-				case gsdk::FIELD_UINT64:
-				case gsdk::FIELD_MODELINDEX:
-				case gsdk::FIELD_MATERIALINDEX:
-				case gsdk::FIELD_TICK:
-				return "int"sv;
-				case gsdk::FIELD_DOUBLE:
-				case gsdk::FIELD_FLOAT:
-				case gsdk::FIELD_INTERVAL:
-				case gsdk::FIELD_TIME:
-				return "float"sv;
-				case gsdk::FIELD_BOOLEAN:
-				return "bool"sv;
-				case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
-				case gsdk::FIELD_HSCRIPT:
-				return "handle"sv;
-				case gsdk::FIELD_POSITION_VECTOR:
-				case gsdk::FIELD_VECTOR:
-				return "Vector"sv;
-				case gsdk::FIELD_VECTOR2D:
-				return "Vector2D"sv;
-				case gsdk::FIELD_VECTOR4D:
-				return "Vector4D"sv;
-				case gsdk::FIELD_QANGLE:
-				return "QAngle"sv;
-				case gsdk::FIELD_QUATERNION:
-				return "Quaternion"sv;
-				case gsdk::FIELD_STRING:
-				case gsdk::FIELD_CSTRING:
-				case gsdk::FIELD_MODELNAME:
-				case gsdk::FIELD_SOUNDNAME:
-				return "string"sv;
-				case gsdk::FIELD_VARIANT:
-				return "variant"sv;
-				case gsdk::FIELD_EHANDLE:
-				return "ehandle"sv;
-				case gsdk::FIELD_EDICT:
-				return "edict"sv;
-				case gsdk::FIELD_FUNCTION:
-				return "function"sv;
-				case gsdk::FIELD_CLASSPTR:
-				return "object"sv;
-				case gsdk::FIELD_TYPEUNKNOWN:
-				return "unknown"sv;
-				default:
-				return datatype_to_raw_str(type);
-			}
-		}
-
 		static std::string_view get_func_desc_desc(const gsdk::ScriptFuncDescriptor_t *desc, std::string &alias, std::vector<std::string_view> &params_names) noexcept
 		{
 			const char *description{desc->m_pszDescription};
@@ -208,7 +146,7 @@ namespace vmod::bindings::docs
 			const char *base_description{description};
 
 			auto parse_args{
-				[&description,&params_names]() noexcept -> bool {
+				[&description,&params_names,base_description]() noexcept -> bool {
 					if(*description == '(') {
 						++description;
 						while(*description == ' ') { ++description; }
@@ -216,7 +154,15 @@ namespace vmod::bindings::docs
 						while(true) {
 							const char *name_begin{description};
 
-							while(std::isalpha(*description)) {
+							if(!std::isalpha(*description) && *description != '_') {
+								description = base_description;
+								params_names.clear();
+								return false;
+							} else {
+								++description;
+							}
+
+							while(std::isalnum(*description) || *description == '_') {
 								++description;
 							}
 
@@ -234,41 +180,77 @@ namespace vmod::bindings::docs
 								++description;
 								return true;
 							} else {
+								description = base_description;
 								params_names.clear();
 								return false;
 							}
 						}
 					} else {
+						description = base_description;
 						params_names.clear();
 						return false;
 					}
 				}
 			};
 
+			bool started_with_params{false};
 			if(std::strncmp(description, "Arguments: ", 11) == 0) {
+				started_with_params = true;
 				description += 11;
+			} else if(std::strncmp(description, "Params: ", 8) == 0) {
+				started_with_params = true;
+				description += 8;
+			}
+			if(started_with_params) {
 				if(parse_args()) {
 					if(std::strncmp(description, " - ", 3) == 0) {
+						description += 3;
+					} else if(std::strncmp(description, " : ", 3) == 0) {
 						description += 3;
 					} else if(*description != '\0') {
 						params_names.clear();
 						return base_description;
 					}
-				}
-			} else if(parse_args()) {
-				if(std::strncmp(description, " - ", 3) == 0) {
-					description += 3;
-				} else if(*description != '\0') {
+				} else {
 					params_names.clear();
 					return base_description;
 				}
 			} else {
+				bool started_with_binding{false};
+				if(std::strncmp(description, "Binding_", 8) == 0) {
+					description += 8;
+					started_with_binding = true;
+				}
 				std::size_t name_len{std::strlen(desc->m_pszScriptName)};
 				if(std::strncmp(description, desc->m_pszScriptName, name_len) == 0) {
 					description += name_len;
 					if(parse_args()) {
 						if(std::strncmp(description, " : ", 3) == 0) {
 							description += 3;
+						} else if(std::strncmp(description, ": ", 2) == 0) {
+							description += 2;
+						} else {
+							params_names.clear();
+							return base_description;
+						}
+					} else {
+						params_names.clear();
+						return base_description;
+					}
+				} else {
+					if(started_with_binding) {
+						params_names.clear();
+						return base_description;
+					} else {
+						if(parse_args()) {
+							if(std::strncmp(description, " - ", 3) == 0) {
+								description += 3;
+							} else if(*description == ' ') {
+								++description;
+							} else if(*description != '\0') {
+								params_names.clear();
+								return base_description;
+							}
 						} else {
 							params_names.clear();
 							return base_description;
@@ -293,6 +275,68 @@ namespace vmod::bindings::docs
 			}
 
 			return description;
+		}
+	}
+
+	std::string_view type_name(gsdk::ScriptDataType_t type) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		switch(type) {
+			case gsdk::FIELD_VOID:
+			return "void"sv;
+			case gsdk::FIELD_CHARACTER:
+			return "char"sv;
+			case gsdk::FIELD_SHORT:
+			case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
+			case gsdk::FIELD_INTEGER:
+			case gsdk::FIELD_UINT:
+			case gsdk::FIELD_INTEGER64:
+			case gsdk::FIELD_UINT64:
+			case gsdk::FIELD_MODELINDEX:
+			case gsdk::FIELD_MATERIALINDEX:
+			case gsdk::FIELD_TICK:
+			return "int"sv;
+			case gsdk::FIELD_DOUBLE:
+			case gsdk::FIELD_FLOAT:
+			case gsdk::FIELD_INTERVAL:
+			case gsdk::FIELD_TIME:
+			return "float"sv;
+			case gsdk::FIELD_BOOLEAN:
+			return "bool"sv;
+			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
+			case gsdk::FIELD_HSCRIPT:
+			return "handle"sv;
+			case gsdk::FIELD_POSITION_VECTOR:
+			case gsdk::FIELD_VECTOR:
+			return "Vector"sv;
+			case gsdk::FIELD_VECTOR2D:
+			return "Vector2D"sv;
+			case gsdk::FIELD_VECTOR4D:
+			return "Vector4D"sv;
+			case gsdk::FIELD_QANGLE:
+			return "QAngle"sv;
+			case gsdk::FIELD_QUATERNION:
+			return "Quaternion"sv;
+			case gsdk::FIELD_STRING:
+			case gsdk::FIELD_CSTRING:
+			case gsdk::FIELD_MODELNAME:
+			case gsdk::FIELD_SOUNDNAME:
+			return "string"sv;
+			case gsdk::FIELD_VARIANT:
+			return "variant"sv;
+			case gsdk::FIELD_EHANDLE:
+			return "ehandle"sv;
+			case gsdk::FIELD_EDICT:
+			return "edict"sv;
+			case gsdk::FIELD_FUNCTION:
+			return "function"sv;
+			case gsdk::FIELD_CLASSPTR:
+			return "object"sv;
+			case gsdk::FIELD_TYPEUNKNOWN:
+			return "unknown"sv;
+			default:
+			return detail::datatype_to_raw_str(type);
 		}
 	}
 
@@ -343,7 +387,7 @@ namespace vmod::bindings::docs
 				ret_str += "static "sv;
 			}
 		}
-		ret_str += detail::datatype_to_str(func_desc.m_ReturnType);
+		ret_str += type_name(func_desc.m_ReturnType);
 		ret_str += ' ';
 
 		std::string params_str;
@@ -351,7 +395,7 @@ namespace vmod::bindings::docs
 		//TODO!!!! skip va args
 		std::size_t num_args{func_desc.m_Parameters.size()};
 		for(std::size_t j{0}; j < num_args; ++j) {
-			params_str += detail::datatype_to_str(func_desc.m_Parameters[j]);
+			params_str += type_name(func_desc.m_Parameters[j]);
 			if(j < params_names.size()) {
 				params_str += ' ';
 				params_str += params_names[j];
@@ -524,7 +568,7 @@ namespace vmod::bindings::docs
 			switch(it.second.type) {
 				case value::type::variant: {
 					const vscript::variant &var{it.second.var};
-					file += detail::datatype_to_str(var.m_type);
+					file += type_name(var.m_type);
 				} break;
 				case value::type::desc: {
 					const gsdk::ScriptClassDesc_t *desc{it.second.desc};

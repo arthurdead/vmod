@@ -35,18 +35,19 @@ namespace gsdk
 		SendVarProxyFn m_Int8ToInt32;
 		SendVarProxyFn m_Int16ToInt32;
 		SendVarProxyFn m_Int32ToInt32;
+	#ifdef GSDK_DT_SUPPORTS_INT64
+		SendVarProxyFn m_Int64ToInt64;
+	#endif
 
 		SendVarProxyFn m_UInt8ToInt32;
 		SendVarProxyFn m_UInt16ToInt32;
 		SendVarProxyFn m_UInt32ToInt32;
+	#ifdef GSDK_DT_SUPPORTS_INT64
+		SendVarProxyFn m_UInt64ToInt64;
+	#endif
 
 		SendVarProxyFn m_FloatToFloat;
 		SendVarProxyFn m_VectorToVector;
-
-	#ifdef GSDK_DT_SUPPORTS_INT64
-		SendVarProxyFn m_Int64ToInt64;
-		SendVarProxyFn m_UInt64ToInt64;
-	#endif
 
 	private:
 		CStandardSendProxiesV1() = delete;
@@ -94,6 +95,10 @@ namespace gsdk
 
 		const char *m_pVarName;
 		float m_fHighLowMul;
+
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		unsigned char m_priority;
+	#endif
 
 		int m_Flags;
 

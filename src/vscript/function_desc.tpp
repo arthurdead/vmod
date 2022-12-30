@@ -13,7 +13,7 @@ namespace vmod::vscript
 		m_desc.m_pszFunction = name.data();
 		m_desc.m_pszScriptName = script_name.data();
 
-		m_desc.m_ReturnType = type_to_field<std::decay_t<R>>();
+		m_desc.m_ReturnType = gsdk::IScriptVM::fixup_var_field(type_to_field<std::decay_t<R>>());
 		(m_desc.m_Parameters.emplace_back(gsdk::IScriptVM::fixup_var_field(type_to_field<std::decay_t<Args>>())), ...);
 
 		if constexpr(num_args > 0) {
@@ -54,7 +54,7 @@ namespace vmod::vscript
 	}
 
 	template <typename R, typename C, typename ...Args>
-	bool function_desc::binding_member_singleton(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *obj_ptr, const gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret) noexcept
+	bool function_desc::binding_member_singleton(gsdk::ScriptFunctionBindingStorageType_t func_storage, void *obj_ptr, const gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret) noexcept
 	{
 		if(!obj_ptr) {
 			if constexpr(class_is_singleton_v<C>) {
@@ -65,11 +65,11 @@ namespace vmod::vscript
 			}
 		}
 
-		return binding_member<R, C, Args...>(binding_func, obj_ptr, args, num_args, ret);
+		return binding_member<R, C, Args...>(func_storage, obj_ptr, args, num_args, ret);
 	}
 
 	template <typename R, typename C, typename ...Args>
-	bool function_desc::binding_member(gsdk::ScriptFunctionBindingStorageType_t binding_func, void *obj_ptr, const gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret) noexcept
+	bool function_desc::binding_member(gsdk::ScriptFunctionBindingStorageType_t func_storage, void *obj_ptr, const gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret) noexcept
 	{
 		constexpr std::size_t num_required_args{sizeof...(Args)};
 
@@ -94,7 +94,13 @@ namespace vmod::vscript
 
 		#pragma GCC diagnostic push
 		#pragma GCC diagnostic ignored "-Wcast-function-type"
-		R(C::*func)(Args...){reinterpret_cast<R(C::*)(Args...)>(binding_func.mfp)};
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		R(C::*func)(Args...){reinterpret_cast<R(C::*)(Args...)>(func_storage.mfp)};
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		R(C::*func)(Args...){mfp_from_func(reinterpret_cast<R(__attribute__((__thiscall__)) *)(C *, Args...)>(func_storage.plain))};
+	#else
+		#error
+	#endif
 		#pragma GCC diagnostic pop
 
 		if constexpr(std::is_void_v<R>) {
@@ -240,7 +246,13 @@ namespace vmod::vscript
 
 		#pragma GCC diagnostic push
 		#pragma GCC diagnostic ignored "-Wcast-function-type"
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		R(C::*func)(Args..., ...){reinterpret_cast<R(C::*)(Args..., ...)>(func_storage.mfp)};
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		R(C::*func)(Args..., ...){mfp_from_func(reinterpret_cast<R(*)(C *, Args..., ...)>(func_storage.plain))};
+	#else
+		#error
+	#endif
 		#pragma GCC diagnostic pop
 
 		if constexpr(std::is_void_v<R>) {
@@ -330,7 +342,13 @@ namespace vmod::vscript
 	{
 		#pragma GCC diagnostic push
 		#pragma GCC diagnostic ignored "-Wcast-function-type"
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		m_pFunction.mfp = reinterpret_cast<generic_mfp_t>(func);
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		m_pFunction.plain = reinterpret_cast<generic_plain_mfp_t>(mfp_to_func(func).first);
+	#else
+		#error
+	#endif
 		#pragma GCC diagnostic pop
 		m_pfnBinding = static_cast<gsdk::ScriptBindingFunc_t>(binding_member<R, C, Args...>);
 		m_flags = gsdk::SF_MEMBER_FUNC;
@@ -342,7 +360,13 @@ namespace vmod::vscript
 	{
 		#pragma GCC diagnostic push
 		#pragma GCC diagnostic ignored "-Wcast-function-type"
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		m_pFunction.mfp = reinterpret_cast<generic_mfp_t>(func);
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		m_pFunction.plain = reinterpret_cast<generic_plain_mfp_t>(mfp_to_func(func).first);
+	#else
+		#error
+	#endif
 		#pragma GCC diagnostic pop
 		m_pfnBinding = static_cast<gsdk::ScriptBindingFunc_t>(binding_member_va<R, C, Args...>);
 		m_flags = gsdk::SF_MEMBER_FUNC;

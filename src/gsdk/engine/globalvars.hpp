@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../string_t.hpp"
+#include "../config.hpp"
 
 namespace gsdk
 {
@@ -8,6 +9,7 @@ namespace gsdk
 	class IServerUnknown;
 	class CSaveRestoreData;
 	enum MapLoadType_t : int;
+	struct edict_t;
 
 	class CGlobalVarsBase
 	{
@@ -49,6 +51,9 @@ namespace gsdk
 		bool teamplay;
 		int maxEntities;
 		int serverCount;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		edict_t *pEdicts;
+	#endif
 
 	private:
 		CGlobalVars() = delete;

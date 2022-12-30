@@ -263,18 +263,18 @@ namespace vmod::bindings::ffi
 
 		if(!ret) {
 			vm->RaiseException("vmod: invalid ret");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		std::vector<ffi_type *> args_types;
 		if(!script_create_cif_shared(args_types, args)) {
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		caller *cif{new caller{ret, std::move(args_types)}};
 		if(!cif->initialize(abi)) {
 			delete cif;
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		return cif->instance;
@@ -286,12 +286,12 @@ namespace vmod::bindings::ffi
 
 		if(!ret) {
 			vm->RaiseException("vmod: invalid ret");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		std::vector<ffi_type *> args_types;
 		if(!script_create_cif_shared(args_types, args)) {
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		args_types.insert(args_types.begin(), &ffi_type_pointer);
@@ -299,7 +299,7 @@ namespace vmod::bindings::ffi
 		caller *cif{new caller{ret, std::move(args_types)}};
 		if(!cif->initialize(abi)) {
 			delete cif;
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		return cif->instance;
@@ -354,22 +354,22 @@ namespace vmod::bindings::ffi
 
 		if(!old_target) {
 			vm->RaiseException("vmod: null function");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		if(!callback || callback == gsdk::INVALID_HSCRIPT) {
 			vm->RaiseException("vmod: null function");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		detour *det{script_create_detour_shared(ret, args, true)};
 		if(!det) {
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		if(!det->initialize(old_target, callback, abi)) {
 			delete det;
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		return det->instance;
@@ -381,22 +381,22 @@ namespace vmod::bindings::ffi
 
 		if(!old_target) {
 			vm->RaiseException("vmod: null function");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		if(!callback || callback == gsdk::INVALID_HSCRIPT) {
 			vm->RaiseException("vmod: null function");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		detour *det{script_create_detour_shared(ret, args, false)};
 		if(!det) {
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		if(!det->initialize(old_target, callback, abi)) {
 			delete det;
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		return det->instance;

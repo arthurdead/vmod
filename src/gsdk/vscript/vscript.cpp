@@ -16,6 +16,7 @@ namespace gsdk
 
 	IScriptVM *g_pScriptVM{nullptr};
 
+#if GSDK_ENGINE == GSDK_ENGINE_TF2
 	void(IScriptVM::*IScriptVM::CreateArray_ptr)(ScriptVariant_t &) {nullptr};
 	int(IScriptVM::*IScriptVM::GetArrayCount_ptr)(HSCRIPT) const {nullptr};
 	bool(IScriptVM::*IScriptVM::IsArray_ptr)(HSCRIPT) const {nullptr};
@@ -58,6 +59,7 @@ namespace gsdk
 
 		return (this->*IsTable_ptr)(table);
 	}
+#endif
 
 	HSCRIPT IScriptVM::ReferenceObject(HSCRIPT object) noexcept
 	{
@@ -126,6 +128,10 @@ namespace gsdk
 
 	bool IScriptVM::SetValue(HSCRIPT scope, const char *name, HSCRIPT object) noexcept
 	{
+		if(scope == INVALID_HSCRIPT) {
+			return false;
+		}
+
 		if(!object || object == INVALID_HSCRIPT) {
 			return false;
 		}
@@ -194,9 +200,6 @@ namespace gsdk
 		}
 
 		ScriptVariant_t tmp;
-		tmp.m_type = FIELD_VOID;
-		tmp.m_flags = SV_NOFLAGS;
-		std::memset(tmp.m_data, 0, sizeof(ScriptVariant_t::m_data));
 		return GetKeyValue(array, it, &tmp, value);
 	}
 
@@ -207,11 +210,8 @@ namespace gsdk
 		}
 
 		ScriptVariant_t tmp;
-		tmp.m_type = FIELD_VOID;
-		tmp.m_flags = SV_NOFLAGS;
-		std::memset(tmp.m_data, 0, sizeof(ScriptVariant_t::m_data));
 		bool ret{GetValue(scope, name, &tmp)};
-		if(ret && tmp.m_type == FIELD_HSCRIPT && tmp.m_object) {
+		if(ret && tmp.m_type == FIELD_HSCRIPT && (tmp.m_object && tmp.m_object != INVALID_HSCRIPT)) {
 			*object = tmp.m_object;
 		} else {
 			*object = INVALID_HSCRIPT;
@@ -286,6 +286,7 @@ namespace gsdk
 			case FIELD_FUNCTION:
 			case FIELD_UINT:
 			case FIELD_UINT64:
+			case FIELD_INTEGER64:
 			case FIELD_SHORT:
 			return FIELD_INTEGER;
 			default:

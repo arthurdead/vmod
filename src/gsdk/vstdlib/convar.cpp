@@ -3,8 +3,6 @@
 #include <cstring>
 #include <cstdlib>
 
-#include <cstdio>
-
 namespace gsdk
 {
 	ConCommandBase::~ConCommandBase() {}
@@ -18,6 +16,9 @@ namespace gsdk
 	void ConVar::SetValue(const char *value) { ConVar::InternalSetValue(value); }
 	void ConVar::SetValue(float value) { ConVar::InternalSetFloatValue(value); }
 	void ConVar::SetValue(int value) { ConVar::InternalSetIntValue(value); }
+#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	void ConVar::SetValue(Color value) { ConVar::InternalSetColorValue(value); }
+#endif
 	const char *ConVar::GetName() const { return ConCommandBase::GetName(); }
 	bool ConVar::IsFlagSet(int flags) const { return ConCommandBase::IsFlagSet(flags); }
 
@@ -75,6 +76,34 @@ namespace gsdk
 		m_nFlags |= flags;
 	}
 
+#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	void ConCommandBase::RemoveFlags(int flags)
+	{
+		flags &= ~FCVAR_UNREGISTERED;
+
+		if(!IsCommand()) {
+			const ConVar *var{static_cast<const ConVar *>(this)};
+			if(var->m_pParent && var->m_pParent != var) {
+				var->m_pParent->ConCommandBase::RemoveFlags(flags);
+			}
+		}
+
+		m_nFlags &= ~flags;
+	}
+
+	int ConCommandBase::GetFlags() const
+	{
+		if(!IsCommand()) {
+			const ConVar *var{static_cast<const ConVar *>(this)};
+			if(var->m_pParent && var->m_pParent != var) {
+				return var->m_pParent->ConCommandBase::GetFlags();
+			}
+		}
+
+		return m_nFlags;
+	}
+#endif
+
 	bool ConCommandBase::IsRegistered() const
 	{
 		if(!IsCommand()) {
@@ -87,16 +116,16 @@ namespace gsdk
 		return (m_bRegistered && !(m_nFlags & FCVAR_UNREGISTERED));
 	}
 
-	void ConCommandBase::CreateBase(const char *name, const char *help, int flags)
+	void ConCommandBase::Create(const char *name, const char *help, int flags)
 	{
 		m_pszName = name;
 		m_pszHelpString = help ? help : "";
 		m_nFlags = flags|FCVAR_UNREGISTERED;
 	}
 
-	void ConCommand::CreateBase(const char *name, const char *help, int flags)
+	void ConCommand::Create(const char *name, const char *help, int flags)
 	{
-		ConCommandBase::CreateBase(name, help, flags);
+		ConCommandBase::Create(name, help, flags);
 	}
 
 	bool ConCommandBase::IsCompetitiveRestricted() const noexcept
@@ -107,27 +136,74 @@ namespace gsdk
 				return var->ConCommandBase::IsCompetitiveRestricted();
 			}
 
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2
 			if(var->m_bHasCompMin || var->m_bHasCompMax) {
 				return true;
 			}
+		#endif
 		}
 
-		if(m_nFlags & (FCVAR_HIDDEN|FCVAR_DEVELOPMENTONLY|FCVAR_INTERNAL_USE|FCVAR_GAMEDLL|FCVAR_REPLICATED|FCVAR_CHEAT)) {
+		if(m_nFlags & (FCVAR_HIDDEN|FCVAR_DEVELOPMENTONLY|FCVAR_GAMEDLL|FCVAR_REPLICATED|FCVAR_CHEAT)) {
 			return false;
 		}
 
-		if(m_nFlags & (FCVAR_ARCHIVE|FCVAR_ALLOWED_IN_COMPETITIVE)) {
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		if(m_nFlags & FCVAR_INTERNAL_USE) {
 			return false;
 		}
+	#endif
+
+		if(m_nFlags & FCVAR_ARCHIVE) {
+			return false;
+		}
+
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		if(m_nFlags & FCVAR_ALLOWED_IN_COMPETITIVE) {
+			return false;
+		}
+	#endif
 
 		return true;
 	}
 
-	void ConVar::CreateBase(const char *name, const char *help, int flags)
+	void ConVar::Create(const char *name, const char *help, int flags)
 	{
-		ConCommandBase::CreateBase(name, help, flags);
-		m_pParent = this;
+		Create(name, nullptr, flags, help, false, 0.0f, false, 0.0f, nullptr);
 	}
+
+#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	void ConVar::Create(const char *name, const char *default_value, int flags, const char *help, bool has_min, float min, bool has_max, float max, FnChangeCallback_t callback)
+	{
+		ConCommandBase::Create(name, help, flags);
+		m_pParent = this;
+		m_pszDefaultValue = default_value;
+		m_bHasMin = has_min;
+		m_fMinVal = min;
+		m_bHasMax = has_max;
+		m_fMaxVal = max;
+		m_fnChangeCallback = callback;
+	}
+#endif
+
+#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	const char *ConVar::GetBaseName() const
+	{
+		if(m_pParent && m_pParent != this) {
+			return m_pParent->ConVar::GetBaseName();
+		}
+
+		return ConVar::GetName();
+	}
+
+	int ConVar::GetSplitScreenPlayerSlot() const
+	{
+		if(m_pParent && m_pParent != this) {
+			return m_pParent->ConVar::GetSplitScreenPlayerSlot();
+		}
+
+		return 0;
+	}
+#endif
 
 	bool ConVar::ClampValue(float &value)
 	{
@@ -135,6 +211,7 @@ namespace gsdk
 			return m_pParent->ConVar::ClampValue(value);
 		}
 
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		if(m_bCompetitiveRestrictions && ConVar::IsCompetitiveRestricted()) {
 			if(m_bHasCompMin && value < m_fCompMinVal) {
 				value = m_fCompMinVal;
@@ -154,6 +231,7 @@ namespace gsdk
 				return true;
 			}
 		}
+	#endif
 
 		if(m_bHasMin && value < m_fMinVal) {
 			value = m_fMinVal;
@@ -189,7 +267,7 @@ namespace gsdk
 		if(m_pszString) {
 			m_pszString = static_cast<char *>(std::realloc(m_pszString, 2));
 		} else {
-			m_pszString = new char[2];
+			m_pszString = static_cast<char *>(std::malloc(2));
 		}
 
 		m_pszString[0] = '\0';
@@ -242,10 +320,22 @@ namespace gsdk
 		}
 	}
 
+#if GSDK_ENGINE == GSDK_ENGINE_TF2
 	void ConVar::InternalSetFloatValue(float value, bool force)
+#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	void ConVar::InternalSetFloatValue(float value)
+#else
+	#error
+#endif
 	{
 		if(m_pParent && m_pParent != this) {
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2
 			m_pParent->ConVar::InternalSetFloatValue(value, force);
+		#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+			m_pParent->ConVar::InternalSetFloatValue(value);
+		#else
+			#error
+		#endif
 		}
 
 		if(!ConCommandBase::IsFlagSet(FCVAR_NEVER_AS_STRING)) {
@@ -263,7 +353,7 @@ namespace gsdk
 			std::to_chars_result tc_res{std::to_chars(begin, end, value)};
 			tc_res.ptr[0] = '\0';
 
-			m_StringLength = static_cast<int>(len);
+			m_StringLength = static_cast<int>(std::strlen(begin));
 		} else {
 			ClearString();
 		}
@@ -325,7 +415,7 @@ namespace gsdk
 			std::to_chars_result tc_res{std::to_chars(begin, end, value)};
 			tc_res.ptr[0] = '\0';
 
-			m_StringLength = static_cast<int>(len);
+			m_StringLength = static_cast<int>(std::strlen(begin));
 		} else {
 			ClearString();
 		}
@@ -337,13 +427,78 @@ namespace gsdk
 		ConVar::ClampValue(m_nValue);
 	}
 
+#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	void ConVar::InternalSetColorValue(Color value)
+	{
+		if(m_pParent && m_pParent != this) {
+			m_pParent->ConVar::InternalSetColorValue(value);
+		}
+
+		if(!ConCommandBase::IsFlagSet(FCVAR_NEVER_AS_STRING)) {
+			constexpr std::size_t len{(3+1) * 4};
+
+			if(m_pszString) {
+				m_pszString = static_cast<char *>(std::realloc(m_pszString, len+1));
+			} else {
+				m_pszString = static_cast<char *>(std::malloc(len+1));
+			}
+
+			{
+				char *begin{m_pszString};
+				char *end{begin + (1 * 3)};
+
+				std::to_chars_result tc_res{std::to_chars(begin, end, value.r)};
+				tc_res.ptr[0] = ' ';
+			}
+
+			{
+				char *begin{m_pszString};
+				char *end{begin + ((2 * 3) + 1)};
+
+				std::to_chars_result tc_res{std::to_chars(begin, end, value.g)};
+				tc_res.ptr[0] = ' ';
+			}
+
+			{
+				char *begin{m_pszString};
+				char *end{begin + ((3 * 3) + 1)};
+
+				std::to_chars_result tc_res{std::to_chars(begin, end, value.b)};
+				tc_res.ptr[0] = ' ';
+			}
+
+			{
+				char *begin{m_pszString};
+				char *end{begin + ((4 * 3) + 1)};
+
+				std::to_chars_result tc_res{std::to_chars(begin, end, value.a)};
+				tc_res.ptr[0] = '\0';
+			}
+
+			m_StringLength = static_cast<int>(std::strlen(m_pszString));
+		} else {
+			ClearString();
+		}
+
+	#ifdef __clang__
+		#pragma clang diagnostic push
+		#pragma clang diagnostic ignored "-Wundefined-reinterpret-cast"
+	#endif
+		m_fValue = *reinterpret_cast<float *>(&value.value);
+		m_nValue = *reinterpret_cast<int *>(&value.value);
+	#ifdef __clang__
+		#pragma clang diagnostic pop
+	#endif
+	}
+#endif
+
 	void ConVar::ChangeStringValue(const char *value, [[maybe_unused]] float)
 	{ ConVar::InternalSetValue(value); }
 
 	ConVar::~ConVar()
 	{
 		if(m_pszString) {
-			free(m_pszString);
+			std::free(m_pszString);
 		}
 	}
 

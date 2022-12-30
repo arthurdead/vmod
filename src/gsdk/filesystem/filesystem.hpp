@@ -37,6 +37,10 @@ namespace gsdk
 	using FSDirtyDiskReportFunc_t = void(*)();
 	struct FileHash_t;
 	struct MD5Value_t;
+	class CUtlString;
+	using CRC32_t = unsigned int;
+	template <typename T>
+	class CUtlVector;
 
 	enum PathTypeFilter_t : int
 	{
@@ -81,10 +85,16 @@ namespace gsdk
 	class IFileSystem : public IAppSystem, public IBaseFileSystem
 	{
 	public:
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		static constexpr std::string_view interface_name{"VFileSystem022"};
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		static constexpr std::string_view interface_name{"VFileSystem018"};
+	#else
+		#error
+	#endif
 
 		virtual bool IsSteam() const = 0;
-		virtual	FilesystemMountRetval_t MountSteamContent(int = -1) = 0;
+		virtual FilesystemMountRetval_t MountSteamContent(int = -1) = 0;
 		virtual void AddSearchPath(const char *, const char *, SearchPathAdd_t = PATH_ADD_TO_TAIL) = 0;
 		virtual bool RemoveSearchPath(const char *, const char * = nullptr) = 0;
 		virtual void RemoveAllSearchPaths() = 0;
@@ -93,6 +103,9 @@ namespace gsdk
 		virtual const char *RelativePathToFullPath(const char *, const char *, char *, int, PathTypeFilter_t = FILTER_NONE, PathTypeQuery_t * = nullptr) = 0;
 		virtual int GetSearchPath(const char *, bool, char *, int) = 0;
 		virtual bool AddPackFile(const char *, const char *) = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual bool IsLocalizedPath(const char *) = 0;
+	#endif
 		virtual void RemoveFile(const char *, const char * = nullptr) = 0;
 		virtual bool RenameFile(const char *, const char *, const char * = nullptr) = 0;
 		virtual void CreateDirHierarchy( const char *, const char * = nullptr) = 0;
@@ -110,28 +123,33 @@ namespace gsdk
 		virtual bool FindIsDirectory(FileFindHandle_t) = 0;
 		virtual void FindClose(FileFindHandle_t) = 0;
 		virtual const char *FindFirstEx(const char *, const char *, FileFindHandle_t *) = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual void FindFileAbsoluteList(CUtlVector<CUtlString> &, const char *, const char *) = 0;
+	#endif
 		virtual const char *GetLocalPath(const char *, char *, int) = 0;
 		virtual bool FullPathToRelativePath(const char *, char *, int) = 0;
 		virtual bool GetCurrentDirectory(char *, int) = 0;
 		virtual FileNameHandle_t FindOrAddFileName(const char *) = 0;
 		virtual bool String(const FileNameHandle_t &, char *, int) = 0;
-		virtual FSAsyncStatus_t	AsyncReadMultiple(const FileAsyncRequest_t *, int,  FSAsyncControl_t * = nullptr) = 0;
-		virtual FSAsyncStatus_t	AsyncAppend(const char *, const void *, int, bool, FSAsyncControl_t * = nullptr) = 0;
-		virtual FSAsyncStatus_t	AsyncAppendFile(const char *, const char *, FSAsyncControl_t * = nullptr) = 0;
+		virtual FSAsyncStatus_t AsyncReadMultiple(const FileAsyncRequest_t *, int,  FSAsyncControl_t * = nullptr) = 0;
+		virtual FSAsyncStatus_t AsyncAppend(const char *, const void *, int, bool, FSAsyncControl_t * = nullptr) = 0;
+		virtual FSAsyncStatus_t AsyncAppendFile(const char *, const char *, FSAsyncControl_t * = nullptr) = 0;
 		virtual void AsyncFinishAll(int = 0) = 0;
 		virtual void AsyncFinishAllWrites() = 0;
-		virtual FSAsyncStatus_t	AsyncFlush() = 0;
+		virtual FSAsyncStatus_t AsyncFlush() = 0;
 		virtual bool AsyncSuspend() = 0;
 		virtual bool AsyncResume() = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		virtual void AsyncAddFetcher(IAsyncFileFetch *) = 0;
 		virtual void AsyncRemoveFetcher(IAsyncFileFetch *) = 0;
-		virtual FSAsyncStatus_t	AsyncBeginRead(const char *, FSAsyncFile_t *) = 0;
-		virtual FSAsyncStatus_t	AsyncEndRead(FSAsyncFile_t) = 0;
-		virtual FSAsyncStatus_t	AsyncFinish(FSAsyncControl_t, bool = true) = 0;
-		virtual FSAsyncStatus_t	AsyncGetResult(FSAsyncControl_t, void **, int *) = 0;
-		virtual FSAsyncStatus_t	AsyncAbort(FSAsyncControl_t) = 0;
-		virtual FSAsyncStatus_t	AsyncStatus(FSAsyncControl_t) = 0;
-		virtual FSAsyncStatus_t	AsyncSetPriority(FSAsyncControl_t, int) = 0;
+	#endif
+		virtual FSAsyncStatus_t AsyncBeginRead(const char *, FSAsyncFile_t *) = 0;
+		virtual FSAsyncStatus_t AsyncEndRead(FSAsyncFile_t) = 0;
+		virtual FSAsyncStatus_t AsyncFinish(FSAsyncControl_t, bool = true) = 0;
+		virtual FSAsyncStatus_t AsyncGetResult(FSAsyncControl_t, void **, int *) = 0;
+		virtual FSAsyncStatus_t AsyncAbort(FSAsyncControl_t) = 0;
+		virtual FSAsyncStatus_t AsyncStatus(FSAsyncControl_t) = 0;
+		virtual FSAsyncStatus_t AsyncSetPriority(FSAsyncControl_t, int) = 0;
 		virtual void AsyncAddRef(FSAsyncControl_t) = 0;
 		virtual void AsyncRelease(FSAsyncControl_t) = 0;
 		virtual WaitForResourcesHandle_t WaitForResources(const char *) = 0;
@@ -161,14 +179,15 @@ namespace gsdk
 		virtual void LoadCompiledKeyValues(KeyValuesPreloadType_t, const char *) = 0;
 		virtual KeyValues *LoadKeyValues(KeyValuesPreloadType_t, const char *, const char * = nullptr) = 0;
 		virtual bool LoadKeyValues(KeyValues &, KeyValuesPreloadType_t, const char *, const char * = nullptr) = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		virtual bool ExtractRootKeyName(KeyValuesPreloadType_t, char *, size_t, const char *, const char *pPathID = nullptr) = 0;
+	#endif
 		virtual FSAsyncStatus_t AsyncWrite(const char *, const void *, int, bool, bool = false, FSAsyncControl_t * = nullptr ) = 0;
 		virtual FSAsyncStatus_t AsyncWriteFile(const char *, const CUtlBuffer *, int, bool, bool = false, FSAsyncControl_t *pControl = nullptr) = 0;
 		virtual FSAsyncStatus_t AsyncReadMultipleCreditAlloc(const FileAsyncRequest_t *, int, const char *, int, FSAsyncControl_t * = nullptr) = 0;
 		virtual bool GetFileTypeForFullPath(const char *, wchar_t *, size_t) = 0;
 		virtual bool ReadToBuffer(FileHandle_t, CUtlBuffer &, int = 0, FSAllocFunc_t = nullptr) = 0;
 		virtual bool GetOptimalIOConstraints(FileHandle_t, unsigned *, unsigned *, unsigned *) = 0;
-		inline unsigned GetOptimalReadSize(FileHandle_t, unsigned);
 		virtual void *AllocOptimalReadBuffer(FileHandle_t, unsigned = 0, unsigned = 0) = 0;
 		virtual void FreeOptimalReadBuffer(void *) = 0;
 		virtual void BeginMapAccess() = 0;
@@ -186,6 +205,7 @@ namespace gsdk
 		virtual int GetWhitelistSpewFlags() = 0;
 		virtual void SetWhitelistSpewFlags(int) = 0;
 		virtual void InstallDirtyDiskReportFunc(FSDirtyDiskReportFunc_t) = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		virtual FileCacheHandle_t CreateFileCache() = 0;
 		virtual void AddFilesToFileCache(FileCacheHandle_t, const char **, int, const char *) = 0;
 		virtual bool IsFileCacheFileLoaded(FileCacheHandle_t, const char *) = 0;
@@ -197,6 +217,31 @@ namespace gsdk
 		virtual bool CheckVPKFileHash(int, int, int, MD5Value_t &) = 0;
 		virtual void NotifyFileUnloaded(const char *, const char *) = 0;
 		virtual bool GetCaseCorrectFullPath_Ptr(const char *, char *, int) = 0;
+	#endif
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual bool IsLaunchedFromXboxHDD() = 0;
+		virtual bool IsInstalledToXboxHDDCache() = 0;
+		virtual bool IsDVDHosted() = 0;
+		virtual bool IsInstallAllowed() = 0;
+		virtual int GetSearchPathID(char *, int) = 0;
+		virtual bool FixupSearchPathsAfterInstall() = 0;
+		virtual FSDirtyDiskReportFunc_t GetDirtyDiskReportFunc() = 0;
+		virtual void AddVPKFile(const char *, SearchPathAdd_t = PATH_ADD_TO_TAIL) = 0;
+		virtual void RemoveVPKFile(const char * ) = 0;
+		virtual void GetVPKFileNames(CUtlVector<CUtlString> &) = 0;
+		virtual void RemoveAllMapSearchPaths() = 0;
+		virtual void SyncDvdDevCache() = 0;
+		virtual bool GetStringFromKVPool(CRC32_t, unsigned int, char *, int) = 0;
+		virtual bool DiscoverDLC(int) = 0;
+		virtual int IsAnyDLCPresent(bool * = nullptr) = 0;
+		virtual bool GetAnyDLCInfo(int, unsigned int *, wchar_t *, int) = 0;
+		virtual int IsAnyCorruptDLC() = 0;
+		virtual bool GetAnyCorruptDLCInfo(int, wchar_t *, int) = 0;
+		virtual bool AddDLCSearchPaths() = 0;
+		virtual bool IsSpecificDLCPresent(unsigned int) = 0;
+		virtual void SetIODelayAlarm(float) = 0;
+		virtual void AddXLSPUpdateSearchPath(const void *, int) = 0;
+	#endif
 	};
 	#pragma GCC diagnostic pop
 }
