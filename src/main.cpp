@@ -67,6 +67,7 @@ namespace vmod
 
 	static const unsigned char *g_Script_init{nullptr};
 	static const unsigned char *g_Script_vscript_server{nullptr};
+	static const unsigned char *g_Script_spawn_helper{nullptr};
 	static gsdk::IScriptVM **g_pScriptVM_ptr{nullptr};
 	static bool(*VScriptServerInit)() {nullptr};
 	static void(*VScriptServerTerm)() {nullptr};
@@ -724,6 +725,8 @@ namespace vmod
 			return false;
 		}
 
+		auto g_Script_spawn_helper_it{sv_global_qual.find("g_Script_spawn_helper"s)};
+
 		auto g_pScriptVM_it{sv_global_qual.find("g_pScriptVM"s)};
 		if(g_pScriptVM_it == sv_global_qual.end()) {
 			error("vmod: missing 'g_pScriptVM' symbol\n"sv);
@@ -929,6 +932,10 @@ namespace vmod
 
 		if(g_Script_init_it != vscript_global_qual.end()) {
 			g_Script_init = g_Script_init_it->second->addr<const unsigned char *>();
+		}
+
+		if(g_Script_spawn_helper_it != sv_global_qual.end()) {
+			g_Script_spawn_helper = g_Script_spawn_helper_it->second->addr<const unsigned char *>();
 		}
 
 		RegisterScriptFunctions = RegisterScriptFunctions_it->second->mfp<decltype(RegisterScriptFunctions)>();
@@ -1280,6 +1287,10 @@ namespace vmod
 			[this](const gsdk::CCommand &) noexcept -> void {
 				if(g_Script_init) {
 					write_file(root_dir_/"internal_scripts"sv/"init.nut"sv, g_Script_init, std::strlen(reinterpret_cast<const char *>(g_Script_init)+1));
+				}
+
+				if(g_Script_spawn_helper) {
+					write_file(root_dir_/"internal_scripts"sv/"spawn_helper.nut"sv, g_Script_spawn_helper, std::strlen(reinterpret_cast<const char *>(g_Script_spawn_helper)+1));
 				}
 
 				write_file(root_dir_/"internal_scripts"sv/"vscript_server.nut"sv, g_Script_vscript_server, std::strlen(reinterpret_cast<const char *>(g_Script_vscript_server)+1));
