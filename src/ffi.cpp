@@ -100,6 +100,9 @@ namespace vmod::ffi
 			case FFI_TYPE_STRUCT: {
 				debugtrap();
 			} break;
+			default: {
+				debugtrap();
+			} break;
 		}
 	}
 
@@ -186,7 +189,7 @@ namespace vmod::ffi
 
 	bool cif::initialize(ffi_abi abi) noexcept
 	{
-		if(ffi_prep_cif(&impl, abi, args_types.size(), ret_type, const_cast<ffi_type **>(args_types.data())) != FFI_OK) {
+		if(ffi_prep_cif(&impl, abi, args_types.size(), ret_type, args_types.data()) != FFI_OK) {
 			return false;
 		}
 
@@ -208,6 +211,6 @@ namespace vmod::ffi
 
 	void cif::call(void(*func)()) noexcept
 	{
-		ffi_call(&impl, func, static_cast<void *>(ret_storage.get()), const_cast<void **>(args_ptrs.data()));
+		ffi_call(&impl, func, static_cast<void *>(ret_storage.get()), args_ptrs.data());
 	}
 }

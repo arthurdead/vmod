@@ -352,9 +352,21 @@ namespace vmod::bindings::docs
 
 	void gen_date(std::string &file) noexcept
 	{
+		using namespace std::literals::string_view_literals;
+
 		std::time_t time{std::time(nullptr)};
-		std::strftime(detail::time_str_buffer, sizeof(detail::time_str_buffer), "//Generated on %Y-%m-%d %H:%M:%S UTC\n\n", std::gmtime(&time));
+		std::strftime(detail::time_str_buffer, sizeof(detail::time_str_buffer), "//date: %Y-%m-%d %H:%M:%S UTC\n", std::gmtime(&time));
 		file += detail::time_str_buffer;
+
+		file += "//engine: "sv;
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		file += "tf2"sv;
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		file += "l4d2"sv;
+	#else
+		#error
+	#endif
+		file += "\n\n"sv;
 	}
 
 	bool write(const gsdk::ScriptFunctionBinding_t *func, bool global, std::size_t depth, std::string &file, bool respect_hide) noexcept
@@ -551,6 +563,9 @@ namespace vmod::bindings::docs
 			case type::desc: {
 				desc = other.desc;
 			} break;
+		#ifndef __clang__
+			default: break;
+		#endif
 		}
 
 		return *this;
@@ -574,6 +589,9 @@ namespace vmod::bindings::docs
 					const gsdk::ScriptClassDesc_t *desc{it.second.desc};
 					file += get_class_desc_name(desc);
 				} break;
+			#ifndef __clang__
+				default: break;
+			#endif
 			}
 
 			file += ' ';

@@ -181,7 +181,9 @@ namespace gsdk
 		m_fMinVal = min;
 		m_bHasMax = has_max;
 		m_fMaxVal = max;
-		m_fnChangeCallback = callback;
+		if(callback) {
+			m_fnChangeCallbacks.emplace_back(callback);
+		}
 	}
 #endif
 
@@ -372,17 +374,15 @@ namespace gsdk
 		}
 
 		if(!ConCommandBase::IsFlagSet(FCVAR_NEVER_AS_STRING)) {
-			std::size_t len{value ? 4u : 5u};
-
 			if(m_pszString) {
-				m_pszString = static_cast<char *>(std::realloc(m_pszString, len+1));
+				m_pszString = static_cast<char *>(std::realloc(m_pszString, 2));
 			} else {
-				m_pszString = static_cast<char *>(std::malloc(len+1));
+				m_pszString = static_cast<char *>(std::malloc(2));
 			}
 
-			std::strncpy(m_pszString, value ? "true" : "false", len);
-			m_pszString[len] = '\0';
-			m_StringLength = static_cast<int>(len);
+			std::strncpy(m_pszString, value ? "1" : "0", 1);
+			m_pszString[1] = '\0';
+			m_StringLength = 1;
 		} else {
 			ClearString();
 		}

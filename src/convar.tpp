@@ -10,6 +10,10 @@ namespace vmod
 		flags |= gsdk::FCVAR_RELEASE;
 	#endif
 
+		if(sv_engine->IsDedicatedServer()) {
+			flags |= gsdk::FCVAR_GAMEDLL;
+		}
+
 		gsdk::ConCommand::Create(name.data(), nullptr, flags);
 
 		func = std::move(func_);
@@ -26,6 +30,10 @@ namespace vmod
 		flags |= gsdk::FCVAR_RELEASE;
 	#endif
 
+		if(sv_engine->IsDedicatedServer()) {
+			flags |= gsdk::FCVAR_GAMEDLL;
+		}
+
 		using decay_t = std::decay_t<T>;
 
 		if constexpr(std::is_same_v<decay_t, std::string_view>) {
@@ -38,12 +46,12 @@ namespace vmod
 			def_value_str = value.c_str();
 			m_pszDefaultValue = def_value_str.c_str();
 		} else if constexpr(std::is_same_v<decay_t, bool>) {
-			def_value_str = value ? "true"s : "false"s;
-			m_pszDefaultValue = value ? "true" : "false";
+			def_value_str = value ? "1"s : "0"s;
+			m_pszDefaultValue = value ? "1" : "0";
 		} else if constexpr(std::is_integral_v<decay_t> || std::is_floating_point_v<decay_t>) {
 			gsdk::ConVar::SetValue(std::forward<T>(value));
 
-			constexpr std::size_t len{6 + 6};
+			std::size_t len{6 + 6};
 
 			def_value_str.resize(len);
 
@@ -52,6 +60,9 @@ namespace vmod
 
 			std::to_chars_result tc_res{std::to_chars(begin, end, value)};
 			tc_res.ptr[0] = '\0';
+
+			len = std::strlen(begin);
+			def_value_str.resize(len);
 
 			m_pszDefaultValue = def_value_str.c_str();
 		} else {
@@ -66,7 +77,12 @@ namespace vmod
 		#error
 	#endif
 
-		set(std::forward<T>(value));
+		const char *cmdline_value{cvar->GetCommandLineValue(name.data())};
+		if(cmdline_value) {
+			set(cmdline_value);
+		} else {
+			set(std::forward<T>(value));
+		}
 
 		cvar->RegisterConCommand(this);
 	}
@@ -78,6 +94,8 @@ namespace vmod
 
 		if constexpr(std::is_same_v<decay_t, std::string_view>) {
 			gsdk::ConVar::SetValue(value.data());
+		} else if constexpr(std::is_same_v<decay_t, const char *>) {
+			gsdk::ConVar::SetValue(std::forward<T>(value));
 		} else if constexpr(std::is_same_v<decay_t, std::string>) {
 			gsdk::ConVar::SetValue(value.c_str());
 		} else if constexpr(std::is_same_v<decay_t, std::filesystem::path>) {

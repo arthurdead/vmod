@@ -28,7 +28,14 @@ namespace vmod::bindings::ffi
 
 		inline void disable() noexcept
 		{
+		#ifndef __clang__
+			#pragma GCC diagnostic push
+			#pragma GCC diagnostic ignored "-Wconditionally-supported"
+		#endif
 			unsigned char *bytes{reinterpret_cast<unsigned char *>(old_target.mfp.addr)};
+		#ifndef __clang__
+			#pragma GCC diagnostic pop
+		#endif
 			std::memcpy(bytes, old_bytes, sizeof(old_bytes));
 		}
 

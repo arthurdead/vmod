@@ -94,8 +94,8 @@ namespace vmod
 
 	static vscript::variant game_sq_versionnumber;
 	static vscript::variant game_sq_version;
-	static SQInteger game_sq_ver{static_cast<SQInteger>(-1)};
-	static SQInteger curr_sq_ver{static_cast<SQInteger>(-1)};
+	static SQInteger game_sq_ver{-1};
+	static SQInteger curr_sq_ver{-1};
 
 	static bool in_vscript_server_init{false};
 	static bool in_vscript_print{false};
@@ -280,7 +280,11 @@ namespace vmod
 
 	static char __vscript_printfunc_buffer[2048];
 	static detour<decltype(PrintFunc)> PrintFunc_detour;
+#ifndef __clang__
+	static __attribute__((__format__(__gnu_printf__, 2, 3))) void PrintFunc_detour_callback(HSQUIRRELVM m_hVM, const SQChar *s, ...)
+#else
 	static void PrintFunc_detour_callback(HSQUIRRELVM m_hVM, const SQChar *s, ...)
+#endif
 	{
 		va_list varg_list;
 		va_start(varg_list, s);
@@ -300,7 +304,11 @@ namespace vmod
 
 	static char __vscript_errorfunc_buffer[2048];
 	static detour<decltype(ErrorFunc)> ErrorFunc_detour;
+#ifndef __clang__
+	static __attribute__((__format__(__gnu_printf__, 2, 3))) void ErrorFunc_detour_callback(HSQUIRRELVM m_hVM, const SQChar *s, ...)
+#else
 	static void ErrorFunc_detour_callback(HSQUIRRELVM m_hVM, const SQChar *s, ...)
+#endif
 	{
 		va_list varg_list;
 		va_start(varg_list, s);
@@ -632,11 +640,18 @@ namespace vmod
 		sq_setparamscheck_detour.initialize(sq_setparamscheck, sq_setparamscheck_detour_callback);
 		sq_setparamscheck_detour.enable();
 
+	#ifndef __clang__
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wsuggest-attribute=format"
+	#endif
 		PrintFunc_detour.initialize(PrintFunc, PrintFunc_detour_callback);
 		PrintFunc_detour.enable();
 
 		ErrorFunc_detour.initialize(ErrorFunc, ErrorFunc_detour_callback);
 		ErrorFunc_detour.enable();
+	#ifndef __clang__
+		#pragma GCC diagnostic pop
+	#endif
 
 		VScriptServerInit_detour.initialize(VScriptServerInit, VScriptServerInit_detour_callback);
 		VScriptServerInit_detour.enable();
@@ -704,6 +719,9 @@ namespace vmod
 			case gsdk::SL_SQUIRREL: scripts_extension = ".nut"sv; break;
 			case gsdk::SL_LUA: scripts_extension = ".lua"sv; break;
 			case gsdk::SL_PYTHON: scripts_extension = ".py"sv; break;
+		#ifndef __clang__
+			default: break;
+		#endif
 		}
 
 		if(!symbol_cache::initialize()) {
@@ -780,6 +798,33 @@ namespace vmod
 			return false;
 		}
 
+		//TODO!!!
+	#if 0
+		{
+			int appid{sv_engine->GetAppID()};
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2
+			if(appid != 440 && appid != 232250) {
+				error("vmod: unsupported appid: %i for tf2\n"sv, appid);
+				return false;
+			}
+		#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+			if(appid != 550 && appid != 222860) {
+				error("vmod: unsupported appid: %i for l4d2\n"sv, appid);
+				return false;
+			}
+		#else
+			#error
+		#endif
+		}
+	#endif
+
+		{
+			char gamedir[PATH_MAX];
+			sv_engine->GetGameDir(gamedir, sizeof(gamedir));
+
+			game_dir_ = gamedir;
+		}
+
 		std::string_view filesystem_lib_name{"filesystem_stdio.so"sv};
 		if(sv_engine->IsDedicatedServer()) {
 			filesystem_lib_name = "dedicated_srv.so"sv;
@@ -799,13 +844,6 @@ namespace vmod
 		}
 
 		cvar_dll_id_ = cvar->AllocateDLLIdentifier();
-
-		{
-			char gamedir[PATH_MAX];
-			sv_engine->GetGameDir(gamedir, sizeof(gamedir));
-
-			game_dir_ = gamedir;
-		}
 
 		root_dir_ = game_dir_;
 		root_dir_ /= "addons/vmod"sv;
@@ -1029,8 +1067,20 @@ namespace vmod
 				return false;
 			}
 
+			SQInteger _versionnumber_{game_sq_versionnumber.get<SQInteger>()};
+			if(_versionnumber_ != curr_sq_ver) {
+				error("vmod: mismatched squirrel versions '%i' vs '%i'\n"sv, _versionnumber_, curr_sq_ver);
+				return false;
+			}
+
 			if(!vm_->GetValue(nullptr, "_version_", &game_sq_version)) {
 				error("vmod: failed to get _version_ value\n"sv);
+				return false;
+			}
+
+			std::string_view _version_{game_sq_version.get<std::string_view>()};
+			if(_version_ != SQUIRREL_VERSION) {
+				error("vmod: mismatched squirrel versions '%s' vs '%s'\n"sv, _version_.data(), SQUIRREL_VERSION);
 				return false;
 			}
 		}
@@ -1140,16 +1190,16 @@ namespace vmod
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		gsdk::ScriptClassDesc_t *tmp_desc{*sv_classdesc_pHead};
 		while(tmp_desc) {
-			std::string name{tmp_desc->m_pszClassname};
-			sv_script_class_descs.emplace(std::move(name), tmp_desc);
+			std::string classname{tmp_desc->m_pszClassname};
+			sv_script_class_descs.emplace(std::move(classname), tmp_desc);
 			tmp_desc = tmp_desc->m_pNextDesc;
 		}
 	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
 		for(const auto &it : sv_global_qual) {
 			if(it.first.starts_with("ScriptClassDesc_t* GetScriptDesc<"sv)) {
 				gsdk::ScriptClassDesc_t *tmp_desc{it.second->func<gsdk::ScriptClassDesc_t *(*)(generic_object_t *)>()(nullptr)};
-				std::string name{tmp_desc->m_pszClassname};
-				sv_script_class_descs.emplace(std::move(name), tmp_desc);
+				std::string classname{tmp_desc->m_pszClassname};
+				sv_script_class_descs.emplace(std::move(classname), tmp_desc);
 			}
 		}
 	#else
@@ -1290,13 +1340,13 @@ namespace vmod
 
 		vscript_server_init_called = true;
 
-		auto get_func_from_base_script{[this](gsdk::HSCRIPT &func, std::string_view name) noexcept -> bool {
-			func = vm_->LookupFunction(name.data(), base_script_scope);
+		auto get_func_from_base_script{[this](gsdk::HSCRIPT &func, std::string_view funcname) noexcept -> bool {
+			func = vm_->LookupFunction(funcname.data(), base_script_scope);
 			if(!func || func == gsdk::INVALID_HSCRIPT) {
 				if(base_script_from_file) {
-					error("vmod: base script '%s' missing '%s' function\n"sv, base_script_path.c_str(), name.data());
+					error("vmod: base script '%s' missing '%s' function\n"sv, base_script_path.c_str(), funcname.data());
 				} else {
-					error("vmod: base script missing '%s' function\n"sv, name.data());
+					error("vmod: base script missing '%s' function\n"sv, funcname.data());
 				}
 				return false;
 			}
@@ -1607,10 +1657,11 @@ namespace vmod
 		{
 			auto CBaseEntity_desc_it{sv_script_class_descs.find("CBaseEntity"s)};
 			if(CBaseEntity_desc_it == sv_script_class_descs.end()) {
-				warning("vmod: failed to find baseentity script class\n"sv);
-			} else {
-				gsdk::CBaseEntity::g_pScriptDesc = CBaseEntity_desc_it->second;
+				error("vmod: failed to find baseentity script class\n"sv);
+				return false;
 			}
+
+			gsdk::CBaseEntity::g_pScriptDesc = CBaseEntity_desc_it->second;
 		}
 
 		return true;
@@ -1625,9 +1676,9 @@ namespace vmod
 		std::error_code ec;
 		for(const auto &file : std::filesystem::directory_iterator{dir, ec}) {
 			std::filesystem::path path{file.path()};
-			std::filesystem::path name{path.filename()};
+			std::filesystem::path filename{path.filename()};
 
-			if(name.native()[0] == '.') {
+			if(filename.native()[0] == '.') {
 				continue;
 			}
 
@@ -1636,21 +1687,21 @@ namespace vmod
 					continue;
 				}
 
-				if(name == "include"sv) {
+				if(filename == "include"sv) {
 					if(dir_name == "assets"sv) {
 						remark("vmod: include folder inside assets folder: '%s'\n"sv, path.c_str());
 					} else if(dir_name == "docs"sv) {
 						remark("vmod: include folder inside docs folder: '%s'\n"sv, path.c_str());
 					}
 					continue;
-				} else if(name == "docs"sv) {
+				} else if(filename == "docs"sv) {
 					if(dir_name == "assets"sv) {
 						remark("vmod: docs folder inside assets folder: '%s'\n"sv, path.c_str());
 					} else if(dir_name == "include"sv) {
 						remark("vmod: docs folder inside include folder: '%s'\n"sv, path.c_str());
 					}
 					continue;
-				} else if(name == "assets"sv) {
+				} else if(filename == "assets"sv) {
 					if(!(flags & load_plugins_flags::src_folder)) {
 						filesystem->AddSearchPath(path.c_str(), "GAME");
 						filesystem->AddSearchPath(path.c_str(), "mod");
@@ -1659,7 +1710,7 @@ namespace vmod
 						remark("vmod: assets folder inside src folder: '%s'\n"sv, path.c_str());
 					}
 					continue;
-				} else if(name == "src"sv) {
+				} else if(filename == "src"sv) {
 					if(!(flags & load_plugins_flags::src_folder)) {
 						load_plugins(path, load_plugins_flags::src_folder|load_plugins_flags::no_recurse);
 					} else {
@@ -1676,7 +1727,7 @@ namespace vmod
 				continue;
 			}
 
-			if(name.extension() != scripts_extension) {
+			if(filename.extension() != scripts_extension) {
 				continue;
 			}
 
@@ -2068,6 +2119,8 @@ namespace vmod
 
 namespace vmod
 {
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 	class vsp final : public gsdk::IServerPluginCallbacks
 	{
 	public:
@@ -2092,6 +2145,7 @@ namespace vmod
 		bool load_return;
 		bool unloaded;
 	};
+	#pragma GCC diagnostic pop
 
 	const char *vsp::GetPluginDescription()
 	{ return "vmod"; }
@@ -2129,7 +2183,7 @@ namespace vmod
 	void vsp::LevelShutdown()
 	{ main::instance().map_unloaded(); }
 
-	static class vsp vsp;
+	static vsp vsp;
 
 	class vsp &vsp::instance() noexcept
 	{ return ::vmod::vsp; }

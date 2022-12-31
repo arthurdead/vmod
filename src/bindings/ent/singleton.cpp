@@ -284,20 +284,20 @@ namespace vmod::bindings::ent
 				}
 
 				++name_start;
-				std::string_view name{path.substr(name_start, name_end-name_start)};
+				std::string_view membername{path.substr(name_start, name_end-name_start)};
 
-				std::size_t subscript_start{name.find('[')};
+				std::size_t subscript_start{membername.find('[')};
 				if(subscript_start != std::string_view::npos) {
-					std::size_t subscript_end{name.find(']', subscript_start+1)};
+					std::size_t subscript_end{membername.find(']', subscript_start+1)};
 					if(subscript_end == std::string_view::npos) {
 						error("vmod: subscript started but not ended\n"sv);
 						return false;
-					} else if(subscript_end != name.length()) {
+					} else if(subscript_end != membername.length()) {
 						error("vmod: subscript ending must be the last character\n"sv);
 						return false;
 					}
 
-					std::string_view subscript_num{name.substr(subscript_start, subscript_end-subscript_start)};
+					std::string_view subscript_num{membername.substr(subscript_start, subscript_end-subscript_start)};
 
 					const char *num_begin{subscript_num.data()};
 					const char *num_end{num_begin + subscript_num.length()};
@@ -327,7 +327,7 @@ namespace vmod::bindings::ent
 						gsdk::SendTable *temp_table{curr_sendtable};
 
 						std::function<void()> loop_props{
-							[flags,&full_path,&send_found,&temp_table,&curr_sendprop,name,&loop_props]() noexcept -> void {
+							[flags,&full_path,&send_found,&temp_table,&curr_sendprop,membername,&loop_props]() noexcept -> void {
 								gsdk::SendTable *baseclass{nullptr};
 								std::vector<std::pair<const char *, gsdk::SendTable *>> check_later;
 
@@ -340,7 +340,7 @@ namespace vmod::bindings::ent
 										}
 									}
 
-									if(std::strncmp(prop.m_pVarName, name.data(), name.length()) == 0) {
+									if(std::strncmp(prop.m_pVarName, membername.data(), membername.length()) == 0) {
 										curr_sendprop = &prop;
 										send_found = true;
 										return;
@@ -391,7 +391,7 @@ namespace vmod::bindings::ent
 						}
 
 						if(!send_found) {
-							error("vmod: member '%.*s' was not found in '%.*s'\n"sv, name.length(), name.data(), last_send_name.length(), last_send_name.data());
+							error("vmod: member '%.*s' was not found in '%.*s'\n"sv, membername.length(), membername.data(), last_send_name.length(), last_send_name.data());
 							return false;
 						}
 					}
@@ -402,10 +402,10 @@ namespace vmod::bindings::ent
 						gsdk::datamap_t *temp_table{curr_datamap};
 
 						std::function<void()> loop_props{
-							[flags,&full_path,&data_found,&temp_table,&curr_dataprop,&curr_datamap,name,&loop_props]() noexcept -> void {
+							[flags,&full_path,&data_found,&temp_table,&curr_dataprop,&curr_datamap,membername,&loop_props]() noexcept -> void {
 								gsdk::datamap_t *baseclass{temp_table->baseMap};
 
-								if(name == "baseclass"sv) {
+								if(membername == "baseclass"sv) {
 									if(baseclass) {
 										curr_datamap = baseclass;
 										data_found = true;
@@ -420,7 +420,7 @@ namespace vmod::bindings::ent
 								std::size_t num_props{static_cast<std::size_t>(temp_table->dataNumFields)};
 								for(std::size_t i{0}; i < num_props; ++i) {
 									gsdk::typedescription_t &prop{temp_table->dataDesc[i]};
-									if(std::strncmp(prop.fieldName, name.data(), name.length()) == 0) {
+									if(std::strncmp(prop.fieldName, membername.data(), membername.length()) == 0) {
 										curr_dataprop = &prop;
 										data_found = true;
 										return;
@@ -472,7 +472,7 @@ namespace vmod::bindings::ent
 						}
 
 						if(!data_found) {
-							error("vmod: member '%.*s' was not found in '%.*s'\n"sv, name.length(), name.data(), last_data_name.length(), last_data_name.data());
+							error("vmod: member '%.*s' was not found in '%.*s'\n"sv, membername.length(), membername.data(), last_data_name.length(), last_data_name.data());
 							return false;
 						}
 					}
@@ -503,8 +503,8 @@ namespace vmod::bindings::ent
 					}
 				}
 
-				last_send_name = name;
-				last_data_name = name;
+				last_send_name = membername;
+				last_data_name = membername;
 
 				name_start = name_end;
 

@@ -147,6 +147,26 @@ namespace vmod
 			return false;
 		}
 
+		if(!bindings::cvar::create_get()) {
+			return false;
+		}
+
+		if(!bindings::mem::create_get()) {
+			return false;
+		}
+
+		if(!bindings::ffi::create_get()) {
+			return false;
+		}
+
+		if(!bindings::fs::create_get()) {
+			return false;
+		}
+
+		if(!bindings::ent::create_get()) {
+			return false;
+		}
+
 		return true;
 	}
 

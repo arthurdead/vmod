@@ -17,6 +17,11 @@ link_args = [
 ]
 
 cpp_args = [
+	'-Wno-padded',
+	'-Wno-switch-enum'
+]
+
+cpp_args += [
 	'-Wno-error=unused-variable',
 	'-Wno-error=unused-parameter',
 	'-Wno-error=unused-function',
@@ -32,10 +37,8 @@ if compiler.get_id() == 'clang'
 	cpp_args += [
 		'-Wno-c++98-compat',
 		'-Wno-c++98-compat-pedantic',
-		'-Wno-padded',
 		'-Wno-global-constructors',
 		'-Wno-exit-time-destructors',
-		'-Wno-switch-enum',
 		'-Wno-reserved-macro-identifier',
 		'-Wno-reserved-identifier'
 	]
@@ -57,7 +60,16 @@ if compiler.get_id() == 'clang'
 	]
 elif compiler.get_id() == 'gcc'
 	cpp_args += [
-		'-Wno-error=cpp'
+		'-Wno-multiple-inheritance',
+		'-Wno-ctor-dtor-privacy',
+		'-Wno-effc++',
+		'-Wno-abi-tag',
+		'-Wno-unused-const-variable'
+	]
+
+	cpp_args += [
+		'-Wno-error=cpp',
+		'-Wno-error=useless-cast'
 	]
 endif
 
@@ -262,7 +274,6 @@ lib = shared_library('vmod',
 		join_paths('src','bindings','docs.cpp'),
 		join_paths('src','bindings','singleton.cpp'),
 		join_paths('src','ffi.cpp'),
-		join_paths('src','hacking.cpp'),
 		join_paths('src','symbol_cache.cpp'),
 		join_paths('src','gsdk','server','baseentity.cpp'),
 		join_paths('src','gsdk','vscript','vscript.cpp'),

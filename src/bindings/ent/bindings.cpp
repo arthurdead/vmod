@@ -28,6 +28,15 @@ namespace vmod::bindings::ent
 		return true;
 	}
 
+	bool create_get() noexcept
+	{
+		if(!singleton::instance().create_get()) {
+			return false;
+		}
+
+		return true;
+	}
+
 	void unbindings() noexcept
 	{
 		factory_impl::unbindings();

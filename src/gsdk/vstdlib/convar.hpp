@@ -4,6 +4,7 @@
 #include "../tier0/dbg.hpp"
 #include <string_view>
 #include <cstring>
+#include "../tier1/utlvector.hpp"
 
 namespace gsdk
 {
@@ -138,9 +139,14 @@ namespace gsdk
 		ConCommandBase &operator=(ConCommandBase &&) = delete;
 	};
 
+#ifdef __clang__
+	#pragma clang diagnostic push
+	#pragma clang diagnostic ignored "-Wnon-virtual-dtor"
+	#pragma clang diagnostic ignored "-Wweak-vtables"
+#else
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
-	#pragma GCC diagnostic ignored "-Wweak-vtables"
+#endif
 	class IConVar
 	{
 	public:
@@ -159,7 +165,11 @@ namespace gsdk
 		virtual int GetSplitScreenPlayerSlot() const = 0;
 	#endif
 	};
+#ifdef __clang__
+	#pragma clang diagnostic pop
+#else
 	#pragma GCC diagnostic pop
+#endif
 
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
@@ -232,7 +242,13 @@ namespace gsdk
 		float m_fCompMaxVal{0.0f};
 		bool m_bCompetitiveRestrictions{false};
 	#endif
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		FnChangeCallback_t m_fnChangeCallback{nullptr};
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		CUtlVector<FnChangeCallback_t> m_fnChangeCallbacks;
+	#else
+		#error
+	#endif
 
 	private:
 		ConVar(const ConVar &) = delete;
@@ -262,8 +278,8 @@ namespace gsdk
 	public:
 		inline void RegisterConCommand(ConCommandBase *cmd) noexcept
 		{
-			RegisterConCommand_impl(cmd);
 			cmd->m_nFlags &= ~FCVAR_UNREGISTERED;
+			RegisterConCommand_impl(cmd);
 		}
 		inline void UnregisterConCommand(ConCommandBase *cmd) noexcept
 		{

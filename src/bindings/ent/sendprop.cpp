@@ -69,9 +69,16 @@ namespace vmod::bindings::ent
 			return false;
 		}
 
+	#ifndef __clang__
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wconditionally-supported"
+	#endif
 		if(ffi_prep_closure_loc(closure, &proxy_cif, closure_binding, this, reinterpret_cast<void *>(prop->m_ProxyFn)) != FFI_OK) {
 			return false;
 		}
+	#ifndef __clang__
+		#pragma GCC diagnostic pop
+	#endif
 
 		return true;
 	}
@@ -207,11 +214,14 @@ namespace vmod::bindings::ent
 			case gsdk::DPT_Float:
 			return &ffi_type_float;
 			case gsdk::DPT_Vector: {
+				#pragma GCC diagnostic push
+				#pragma GCC diagnostic ignored "-Wfloat-equal"
 				if(prop->m_fLowValue == 0.0f && prop->m_fHighValue == 360.0f) {
 					return &ffi_type_qangle;
 				} else {
 					return &ffi_type_vector;
 				}
+				#pragma GCC diagnostic pop
 			}
 			case gsdk::DPT_VectorXY:
 			return &ffi_type_vector;

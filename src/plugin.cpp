@@ -42,7 +42,7 @@ namespace vmod
 				return load_status::error;
 			}
 
-			script = vm->CompileScript(reinterpret_cast<const char *>(script_data.c_str()), path.c_str());
+			script = vm->CompileScript(script_data.c_str(), path.c_str());
 		}
 
 		if(script == gsdk::INVALID_HSCRIPT) {
@@ -226,14 +226,14 @@ namespace vmod
 		unwatch();
 	}
 
-	plugin::callback_instance::callback_instance(callable *owner_, gsdk::HSCRIPT callback_, bool post_) noexcept
-		: post{post_}, owner{owner_}
+	plugin::callback_instance::callback_instance(callable *caller_, gsdk::HSCRIPT callback_, bool post_) noexcept
+		: post{post_}, caller{caller_}
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		callback = vm->ReferenceObject(callback_);
 
-		auto &callbacks{post ? owner_->callbacks_post : owner_->callbacks_pre};
+		auto &callbacks{post ? caller->callbacks_post : caller->callbacks_pre};
 
 		callbacks.emplace(callback, this);
 	}
@@ -243,8 +243,8 @@ namespace vmod
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(callback && callback != gsdk::INVALID_HSCRIPT) {
-			if(owner && !owner->clearing_callbacks) {
-				auto &callbacks{post ? owner->callbacks_post : owner->callbacks_pre};
+			if(caller && !caller->clearing_callbacks) {
+				auto &callbacks{post ? caller->callbacks_post : caller->callbacks_pre};
 				auto it{callbacks.find(callback)};
 				if(it != callbacks.end()) {
 					callbacks.erase(it);

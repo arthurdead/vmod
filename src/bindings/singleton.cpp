@@ -66,6 +66,17 @@ namespace vmod::bindings
 			return false;
 		}
 
+		return true;
+	}
+
+	bool singleton_base::create_get() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		gsdk::IScriptVM *vm{main::instance().vm()};
+
+		gsdk::HSCRIPT target_scope{root ? nullptr : main::instance().scope};
+
 		get_impl = vm->MakeSquirrelMetamethod_Get(target_scope, name.data(), this, false);
 		if(!get_impl) {
 			error("vmod: failed to create '%s' _get metamethod\n"sv, name.data());

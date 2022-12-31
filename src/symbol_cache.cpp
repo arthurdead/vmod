@@ -38,24 +38,54 @@ namespace vmod
 
 	void symbol_cache::qualification_info::name_info::resolve(void *base) noexcept
 	{
+	#ifndef __clang__
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wconditionally-supported"
+	#endif
 		mfp_.addr = reinterpret_cast<generic_plain_mfp_t>(static_cast<unsigned char *>(base) + offset_);
+	#ifndef __clang__
+		#pragma GCC diagnostic pop
+	#endif
 		mfp_.adjustor = 0;
 	}
 
 	void symbol_cache::class_info::ctor_info::resolve(void *base) noexcept
 	{
+	#ifndef __clang__
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wconditionally-supported"
+	#endif
 		generic_plain_mfp_t temp{reinterpret_cast<generic_plain_mfp_t>(static_cast<unsigned char *>(base) + offset_)};
+	#ifndef __clang__
+		#pragma GCC diagnostic pop
+	#endif
 		mfp_ = mfp_from_func<void, generic_object_t>(temp);
 	}
 
 	void symbol_cache::class_info::dtor_info::resolve(void *base) noexcept
 	{
+	#ifndef __clang__
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wconditionally-supported"
+	#endif
 		generic_plain_mfp_t temp{reinterpret_cast<generic_plain_mfp_t>(static_cast<unsigned char *>(base) + offset_)};
+	#ifndef __clang__
+		#pragma GCC diagnostic pop
+	#endif
 		mfp_ = mfp_from_func<void, generic_object_t>(temp);
 	}
 
 	void symbol_cache::class_info::vtable_info::resolve(void *base) noexcept
-	{ prefix = reinterpret_cast<__cxxabiv1::vtable_prefix *>(static_cast<unsigned char *>(base) + offset); }
+	{
+	#ifndef __clang__
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wcast-align"
+	#endif
+		prefix = reinterpret_cast<__cxxabiv1::vtable_prefix *>(static_cast<unsigned char *>(base) + offset);
+	#ifndef __clang__
+		#pragma GCC diagnostic pop
+	#endif
+	}
 
 	void symbol_cache::qualification_info::resolve(void *base) noexcept
 	{
@@ -482,6 +512,9 @@ namespace vmod
 											case gnu_v3_object_ctor_group: {
 												func_name += " (group)"sv;
 											} break;
+										#ifndef __clang__
+											default: break;
+										#endif
 										}
 
 										class_info::ctor_info *ctor_info{new class_info::ctor_info};
@@ -507,6 +540,9 @@ namespace vmod
 											case gnu_v3_object_dtor_group: {
 												func_name += " (group)"sv;
 											} break;
+										#ifndef __clang__
+											default: break;
+										#endif
 										}
 
 										class_info::dtor_info *dtor_info{new class_info::dtor_info};

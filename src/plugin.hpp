@@ -167,7 +167,7 @@ namespace vmod
 			~callback_instance() noexcept override;
 
 		public:
-			callback_instance(callable *owner_, gsdk::HSCRIPT callback_, bool post_) noexcept;
+			callback_instance(callable *caller_, gsdk::HSCRIPT callback_, bool post_) noexcept;
 
 			inline bool initialize() noexcept
 			{ return register_instance(&owned_instance::desc); }
@@ -177,7 +177,7 @@ namespace vmod
 
 			gsdk::HSCRIPT callback;
 			bool post;
-			callable *owner;
+			callable *caller;
 
 		private:
 			callback_instance() = delete;

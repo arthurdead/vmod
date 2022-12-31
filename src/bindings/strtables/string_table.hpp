@@ -3,6 +3,7 @@
 #include <string_view>
 #include "../../vscript/class_desc.hpp"
 #include "../../gsdk/engine/stringtable.hpp"
+#include "bindings.hpp"
 #include <cstddef>
 
 namespace vmod

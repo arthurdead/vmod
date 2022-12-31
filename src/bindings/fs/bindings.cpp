@@ -14,6 +14,15 @@ namespace vmod::bindings::fs
 		return true;
 	}
 
+	bool create_get() noexcept
+	{
+		if(!singleton::instance().create_get()) {
+			return false;
+		}
+
+		return true;
+	}
+
 	void unbindings() noexcept
 	{
 		singleton::instance().unbindings();

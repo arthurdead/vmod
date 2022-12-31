@@ -36,6 +36,10 @@
 #pragma GCC diagnostic ignored "-Wextra-semi"
 #pragma GCC diagnostic ignored "-Wdeprecated-copy"
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
+#pragma GCC diagnostic ignored "-Wredundant-tags"
+#pragma GCC diagnostic ignored "-Weffc++"
+#pragma GCC diagnostic ignored "-Wuseless-cast"
+#pragma GCC diagnostic ignored "-Wswitch-enum"
 #endif
 #include <sqvm.h>
 #include <sqobject.h>
@@ -496,6 +500,10 @@ namespace gsdk
 		virtual int GetKeyValue(HSCRIPT, int, ScriptVariant_t *, ScriptVariant_t *) = 0;
 		int GetArrayValue(HSCRIPT array, int it, ScriptVariant_t *value) noexcept;
 		virtual bool GetValue(HSCRIPT, const char *, ScriptVariant_t *) = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		virtual bool GetValue(HSCRIPT, int, ScriptVariant_t *) = 0;
+		virtual bool GetScalarValue(HSCRIPT, ScriptVariant_t *) = 0;
+	#endif
 		bool GetValue(HSCRIPT scope, const char *name, HSCRIPT *object) noexcept;
 		virtual void ReleaseValue(ScriptVariant_t &) = 0;
 		void ReleaseValue(HSCRIPT object) noexcept;

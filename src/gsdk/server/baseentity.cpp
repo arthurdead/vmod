@@ -27,10 +27,6 @@ namespace gsdk
 			return nullptr;
 		}
 
-		if(!g_pScriptDesc) {
-			return nullptr;
-		}
-
 		return static_cast<CBaseEntity *>(g_pScriptVM->GetInstanceValue(instance, g_pScriptDesc));
 	}
 }

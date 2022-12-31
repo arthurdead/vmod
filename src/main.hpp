@@ -31,7 +31,7 @@ namespace vmod
 	class main final : public bindings::singleton_base
 	{
 		friend class vsp;
-		friend void bindings::strtables::write_docs(const std::filesystem::path &dir) noexcept;
+		friend void bindings::strtables::write_docs(const std::filesystem::path &) noexcept;
 
 	public:
 		inline main() noexcept
@@ -137,7 +137,7 @@ namespace vmod
 		void script_infol(const vscript::variant &var) noexcept;
 		void script_remarkl(const vscript::variant &var) noexcept;
 
-		gsdk::HSCRIPT script_find_plugin(std::string_view name) noexcept;
+		gsdk::HSCRIPT script_find_plugin(std::string_view plname) noexcept;
 		bool script_is_map_loaded() const noexcept;
 		bool script_is_map_active() const noexcept;
 		bool script_are_stringtables_created() const noexcept;
@@ -147,7 +147,7 @@ namespace vmod
 		void recreate_script_stringtables() noexcept;
 		bool create_script_stringtables() noexcept;
 		void clear_script_stringtables() noexcept;
-		bool create_script_stringtable(std::string &&name) noexcept;
+		bool create_script_stringtable(std::string &&tablename) noexcept;
 
 		bool create_script_symbols() noexcept;
 

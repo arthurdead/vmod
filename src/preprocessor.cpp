@@ -16,6 +16,7 @@
 #pragma GCC diagnostic ignored "-Wcomment"
 #pragma GCC diagnostic ignored "-Wdeprecated-enum-enum-conversion"
 #pragma GCC diagnostic ignored "-Wint-in-bool-context"
+#pragma GCC diagnostic ignored "-Wuseless-cast"
 #endif
 #include <tpp.h>
 #ifdef __clang__
@@ -68,7 +69,13 @@ namespace vmod
 			};
 		TPPLexer_Current->l_callbacks.c_unknown_file = nullptr;
 		TPPLexer_Current->l_callbacks.c_warn =
-			[](const char *fmt, va_list args) noexcept -> void {
+		#ifndef __clang__
+			[](const char *fmt, va_list args) noexcept __attribute__((__format__(__gnu_printf__, 2, 0))) -> void
+		#else
+			[](const char *fmt, va_list args) noexcept -> void
+		#endif
+			{
+		
 				#pragma GCC diagnostic push
 				#pragma GCC diagnostic ignored "-Wformat-nonliteral"
 				std::vsnprintf(msg_buff, sizeof(msg_buff), fmt, args);
@@ -84,19 +91,24 @@ namespace vmod
 				}
 
 				switch(current->print_state) {
-					case print_state::unknown:
-					info("%s", msg_buff);
-					break;
 					case print_state::warning:
 					warning("%s", msg_buff);
 					break;
 					case print_state::error:
 					error("%s", msg_buff);
 					break;
+					default:
+					info("%s", msg_buff);
+					break;
 				}
 			};
 		TPPLexer_Current->l_callbacks.c_message =
-			[](const char *fmt, va_list args) noexcept -> void {
+		#ifndef __clang__
+			[](const char *fmt, va_list args) noexcept __attribute__((__format__(__gnu_printf__, 2, 0))) -> void
+		#else
+			[](const char *fmt, va_list args) noexcept -> void
+		#endif
+			{
 				#pragma GCC diagnostic push
 				#pragma GCC diagnostic ignored "-Wformat-nonliteral"
 				std::vsnprintf(msg_buff, sizeof(msg_buff), fmt, args);

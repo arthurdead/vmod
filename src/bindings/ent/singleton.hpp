@@ -81,7 +81,7 @@ namespace vmod::bindings::ent
 				both
 			};
 
-			enum which which;
+			which which;
 
 			prop_result_type type;
 

@@ -29,7 +29,14 @@ namespace vmod
 			return;
 		}
 
+	#ifndef __clang__
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wconditionally-supported"
+	#endif
 		unsigned char *bytes{reinterpret_cast<unsigned char *>(old_target.mfp.addr)};
+	#ifndef __clang__
+		#pragma GCC diagnostic pop
+	#endif
 
 		bytes[0] = 0xE9;
 
@@ -40,10 +47,24 @@ namespace vmod
 	template <typename T>
 	void detour_base<T>::backup_bytes() noexcept
 	{
+	#ifndef __clang__
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wconditionally-supported"
+	#endif
 		page_info func_page{reinterpret_cast<void *>(old_target.mfp.addr), sizeof(old_bytes)};
+	#ifndef __clang__
+		#pragma GCC diagnostic pop
+	#endif
 		func_page.protect(PROT_READ|PROT_WRITE|PROT_EXEC);
 
+	#ifndef __clang__
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wconditionally-supported"
+	#endif
 		unsigned char *bytes{reinterpret_cast<unsigned char *>(old_target.mfp.addr)};
+	#ifndef __clang__
+		#pragma GCC diagnostic pop
+	#endif
 
 		std::memcpy(old_bytes, bytes, sizeof(old_bytes));
 	}

@@ -24,6 +24,15 @@ namespace vmod::bindings::ffi
 		return true;
 	}
 
+	bool create_get() noexcept
+	{
+		if(!singleton::instance().create_get()) {
+			return false;
+		}
+
+		return true;
+	}
+
 	void unbindings() noexcept
 	{
 		detour::unbindings();

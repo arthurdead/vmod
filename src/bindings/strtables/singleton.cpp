@@ -53,7 +53,7 @@ namespace vmod
 		set_table_value("Scenes"s, g_pStringTableClientSideChoreoScenes);
 	}
 
-	bool main::create_script_stringtable(std::string &&name) noexcept
+	bool main::create_script_stringtable(std::string &&tablename) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -64,12 +64,12 @@ namespace vmod
 			return false;
 		}
 
-		if(!vm_->SetValue(stringtable_table, name.c_str(), ptr->instance)) {
+		if(!vm_->SetValue(stringtable_table, tablename.c_str(), ptr->instance)) {
 			error("vmod: failed to set string table '%s' value\n"sv);
 			return false;
 		}
 
-		script_stringtables.emplace(std::move(name), std::move(ptr));
+		script_stringtables.emplace(std::move(tablename), std::move(ptr));
 
 		return true;
 	}

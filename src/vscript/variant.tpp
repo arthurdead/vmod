@@ -611,7 +611,14 @@ namespace vmod::vscript
 	inline void initialize_impl(gsdk::ScriptVariant_t &var, generic_func_t value) noexcept
 	{
 		if(value) {
+		#ifndef __clang__
+			#pragma GCC diagnostic push
+			#pragma GCC diagnostic ignored "-Wconditionally-supported"
+		#endif
 			var.m_ptr = reinterpret_cast<void *>(value);
+		#ifndef __clang__
+			#pragma GCC diagnostic pop
+		#endif
 		} else {
 			var.m_type = gsdk::FIELD_VOID;
 			var.m_ptr = nullptr;
@@ -623,7 +630,14 @@ namespace vmod::vscript
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_FUNCTION:
+		#ifndef __clang__
+			#pragma GCC diagnostic push
+			#pragma GCC diagnostic ignored "-Wconditionally-supported"
+		#endif
 			return reinterpret_cast<generic_func_t>(var.m_ptr);
+		#ifndef __clang__
+			#pragma GCC diagnostic pop
+		#endif
 			default: return nullptr;
 		}
 	}
@@ -634,7 +648,14 @@ namespace vmod::vscript
 	inline void initialize_impl(gsdk::ScriptVariant_t &var, generic_plain_mfp_t value) noexcept
 	{
 		if(value) {
+		#ifndef __clang__
+			#pragma GCC diagnostic push
+			#pragma GCC diagnostic ignored "-Wconditionally-supported"
+		#endif
 			var.m_ptr = reinterpret_cast<void *>(value);
+		#ifndef __clang__
+			#pragma GCC diagnostic pop
+		#endif
 		} else {
 			var.m_type = gsdk::FIELD_VOID;
 			var.m_ptr = nullptr;
@@ -646,7 +667,14 @@ namespace vmod::vscript
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_FUNCTION:
+		#ifndef __clang__
+			#pragma GCC diagnostic push
+			#pragma GCC diagnostic ignored "-Wconditionally-supported"
+		#endif
 			return reinterpret_cast<generic_plain_mfp_t>(var.m_ptr);
+		#ifndef __clang__
+			#pragma GCC diagnostic pop
+		#endif
 			default: return nullptr;
 		}
 	}
@@ -658,7 +686,7 @@ namespace vmod::vscript
 	{
 		if(value) {
 			generic_internal_mfp_t internal{value};
-			var.m_ulonglong = static_cast<unsigned long long>(internal.value);
+			var.m_ulonglong = internal.value;
 		} else {
 			var.m_type = gsdk::FIELD_VOID;
 			var.m_ulonglong = 0;
@@ -670,7 +698,7 @@ namespace vmod::vscript
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_FUNCTION: {
-				generic_internal_mfp_t internal{static_cast<std::uint64_t>(var.m_ulonglong)};
+				generic_internal_mfp_t internal{var.m_ulonglong};
 				return internal.func;
 			}
 			default: return nullptr;
@@ -683,7 +711,7 @@ namespace vmod::vscript
 	inline void initialize_impl(gsdk::ScriptVariant_t &var, generic_internal_mfp_t value) noexcept
 	{
 		if(value) {
-			var.m_ulonglong = static_cast<unsigned long long>(value.value);
+			var.m_ulonglong = value.value;
 		} else {
 			var.m_type = gsdk::FIELD_VOID;
 			var.m_ulonglong = 0;
@@ -695,7 +723,7 @@ namespace vmod::vscript
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_FUNCTION: {
-				generic_internal_mfp_t internal{static_cast<std::uint64_t>(var.m_ulonglong)};
+				generic_internal_mfp_t internal{var.m_ulonglong};
 				return internal;
 			}
 			default: return nullptr;
@@ -708,7 +736,7 @@ namespace vmod::vscript
 	inline void initialize_impl(gsdk::ScriptVariant_t &var, generic_internal_mfp_va_t value) noexcept
 	{
 		if(value) {
-			var.m_ulonglong = static_cast<unsigned long long>(value.value);
+			var.m_ulonglong = value.value;
 		} else {
 			var.m_type = gsdk::FIELD_VOID;
 			var.m_ulonglong = 0;
@@ -720,7 +748,7 @@ namespace vmod::vscript
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_FUNCTION: {
-				generic_internal_mfp_va_t internal{static_cast<std::uint64_t>(var.m_ulonglong)};
+				generic_internal_mfp_va_t internal{var.m_ulonglong};
 				return internal;
 			}
 			default: return nullptr;
@@ -733,7 +761,7 @@ namespace vmod::vscript
 	inline void initialize_impl(gsdk::ScriptVariant_t &var, mfp_or_func_t value) noexcept
 	{
 		if(value) {
-			var.m_ulonglong = static_cast<unsigned long long>(value.mfp.value);
+			var.m_ulonglong = value.mfp.value;
 		} else {
 			var.m_type = gsdk::FIELD_VOID;
 			var.m_ulonglong = 0;
@@ -746,7 +774,7 @@ namespace vmod::vscript
 			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_FUNCTION: {
 				mfp_or_func_t internal;
-				internal.mfp = static_cast<std::uint64_t>(var.m_ulonglong);
+				internal.mfp = var.m_ulonglong;
 				return internal;
 			}
 			default: return nullptr;

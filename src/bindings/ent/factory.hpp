@@ -46,6 +46,8 @@ namespace vmod::bindings::ent
 		factory_ref &operator=(factory_ref &&) = delete;
 	};
 
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 	class factory_impl final : public gsdk::IEntityFactory, public factory_ref
 	{
 		friend class singleton;
@@ -86,4 +88,5 @@ namespace vmod::bindings::ent
 		factory_impl(factory_impl &&) = delete;
 		factory_impl &operator=(factory_impl &&) = delete;
 	};
+	#pragma GCC diagnostic pop
 }

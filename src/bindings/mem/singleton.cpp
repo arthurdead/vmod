@@ -273,7 +273,7 @@ namespace vmod::bindings::mem
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		if(static_cast<std::size_t>(align) == 0 || align == static_cast<std::align_val_t>(-1) || (static_cast<std::size_t>(align) % 2) != 0) {
+		if(static_cast<std::size_t>(align) == 0 || static_cast<std::size_t>(align) == static_cast<std::size_t>(-1) || (static_cast<std::size_t>(align) % 2) != 0) {
 			vm->RaiseException("vmod: invalid align");
 			return gsdk::INVALID_HSCRIPT;
 		}

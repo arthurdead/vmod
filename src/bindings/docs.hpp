@@ -26,7 +26,7 @@ namespace vmod::bindings::docs
 			desc
 		};
 
-		enum type type;
+		type type;
 
 		inline value(gsdk::ScriptVariant_t &&var_) noexcept
 			: type{type::variant}, var{std::move(var_)}

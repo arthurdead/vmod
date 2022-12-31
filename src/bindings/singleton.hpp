@@ -8,6 +8,9 @@ namespace vmod::bindings
 {
 	class singleton_base : public gsdk::ISquirrelMetamethodDelegate
 	{
+	public:
+		bool create_get() noexcept;
+
 	protected:
 		inline singleton_base(std::string_view name_, bool root_ = false) noexcept
 			: name{name_}, root{root_}

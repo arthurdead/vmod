@@ -51,23 +51,23 @@ namespace vmod::vscript::detail
 	{
 	public:
 		template <typename R, typename ...Args>
-		inline function_desc &func(R(*func)(Args...), std::string_view name, std::string_view script_name) noexcept
+		inline function_desc &func(R(*func_)(Args...), std::string_view name, std::string_view script_name) noexcept
 		{
-			function_desc temp{func, name, script_name};
+			function_desc temp{func_, name, script_name};
 			return static_cast<function_desc &>(m_FunctionBindings.emplace_back(std::move(temp)));
 		}
 
 		template <typename R, typename ...Args>
-		inline function_desc &func(R(*func)(Args..., ...), std::string_view name, std::string_view script_name) noexcept
+		inline function_desc &func(R(*func_)(Args..., ...), std::string_view name, std::string_view script_name) noexcept
 		{
-			function_desc temp{func, name, script_name};
+			function_desc temp{func_, name, script_name};
 			return static_cast<function_desc &>(m_FunctionBindings.emplace_back(std::move(temp)));
 		}
 
 		template <typename R, typename ...Args>
-		inline function_desc &func(R(T::*func)(Args...), std::string_view name, std::string_view script_name) noexcept
+		inline function_desc &func(R(T::*func_)(Args...), std::string_view name, std::string_view script_name) noexcept
 		{
-			function_desc temp{func, name, script_name};
+			function_desc temp{func_, name, script_name};
 			return static_cast<function_desc &>(m_FunctionBindings.emplace_back(std::move(temp)));
 		}
 
@@ -76,9 +76,9 @@ namespace vmod::vscript::detail
 		{ return func<R, Args...>(reinterpret_cast<R(T::*)(Args...)>(func_), name, script_name); }
 
 		template <typename R, typename ...Args>
-		inline function_desc &func(R(T::*func)(Args..., ...), std::string_view name, std::string_view script_name) noexcept
+		inline function_desc &func(R(T::*func_)(Args..., ...), std::string_view name, std::string_view script_name) noexcept
 		{
-			function_desc temp{func, name, script_name};
+			function_desc temp{func_, name, script_name};
 			return static_cast<function_desc &>(m_FunctionBindings.emplace_back(std::move(temp)));
 		}
 

@@ -91,60 +91,60 @@ namespace vmod
 	template <typename R, typename C, typename ...Args>
 	union alignas(std::uint64_t) mfp_internal_t
 	{
-		mfp_internal_t() noexcept = default;
+		constexpr mfp_internal_t() noexcept = default;
 
-		inline mfp_internal_t(std::nullptr_t) noexcept
+		constexpr inline mfp_internal_t(std::nullptr_t) noexcept
 			: func{nullptr}
 		{
 		}
 
-		inline mfp_internal_t(std::uint64_t value_) noexcept
+		constexpr inline mfp_internal_t(std::uint64_t value_) noexcept
 			: value{value_}
 		{
 		}
 
-		inline mfp_internal_t(R(C::*func_)(Args...)) noexcept
+		constexpr inline mfp_internal_t(R(C::*func_)(Args...)) noexcept
 			: func{func_}
 		{
 		}
 
-		inline mfp_internal_t(R(__attribute__((__thiscall__)) *addr_)(C *, Args...)) noexcept
+		constexpr inline mfp_internal_t(R(__attribute__((__thiscall__)) *addr_)(C *, Args...)) noexcept
 			: addr{addr_}, adjustor{0}
 		{
 		}
 
-		inline mfp_internal_t(R(__attribute__((__thiscall__)) *addr_)(C *, Args...), std::size_t adjustor_) noexcept
+		constexpr inline mfp_internal_t(R(__attribute__((__thiscall__)) *addr_)(C *, Args...), std::size_t adjustor_) noexcept
 			: addr{addr_}, adjustor{adjustor_}
 		{
 		}
 
-		inline mfp_internal_t &operator=(std::uint64_t value_) noexcept
+		constexpr inline mfp_internal_t &operator=(std::uint64_t value_) noexcept
 		{
 			value = value_;
 			return *this;
 		}
 
-		inline mfp_internal_t &operator=(R(C::*func_)(Args...)) noexcept
+		constexpr inline mfp_internal_t &operator=(R(C::*func_)(Args...)) noexcept
 		{
 			func = func_;
 			return *this;
 		}
 
-		inline mfp_internal_t &operator=(R(__attribute__((__thiscall__)) *addr_)(C *, Args...)) noexcept
+		constexpr inline mfp_internal_t &operator=(R(__attribute__((__thiscall__)) *addr_)(C *, Args...)) noexcept
 		{
 			addr = addr_;
 			adjustor = 0;
 			return *this;
 		}
 
-		mfp_internal_t(mfp_internal_t &&) noexcept = default;
-		mfp_internal_t &operator=(mfp_internal_t &&) noexcept = default;
-		mfp_internal_t(const mfp_internal_t &) noexcept = default;
-		mfp_internal_t &operator=(const mfp_internal_t &) noexcept = default;
+		constexpr mfp_internal_t(mfp_internal_t &&) noexcept = default;
+		constexpr mfp_internal_t &operator=(mfp_internal_t &&) noexcept = default;
+		constexpr mfp_internal_t(const mfp_internal_t &) noexcept = default;
+		constexpr mfp_internal_t &operator=(const mfp_internal_t &) noexcept = default;
 
-		inline operator bool() const noexcept
+		constexpr inline operator bool() const noexcept
 		{ return addr; }
-		inline bool operator!() const noexcept
+		constexpr inline bool operator!() const noexcept
 		{ return !addr; }
 
 		std::uint64_t value;
@@ -158,60 +158,60 @@ namespace vmod
 	template <typename R, typename C, typename ...Args>
 	union alignas(std::uint64_t) mfp_internal_va_t
 	{
-		mfp_internal_va_t() noexcept = default;
+		constexpr mfp_internal_va_t() noexcept = default;
 
-		inline mfp_internal_va_t(std::nullptr_t) noexcept
+		constexpr inline mfp_internal_va_t(std::nullptr_t) noexcept
 			: func{nullptr}
 		{
 		}
 
-		inline mfp_internal_va_t(std::uint64_t value_) noexcept
+		constexpr inline mfp_internal_va_t(std::uint64_t value_) noexcept
 			: value{value_}
 		{
 		}
 
-		inline mfp_internal_va_t(R(C::*func_)(Args..., ...)) noexcept
+		constexpr inline mfp_internal_va_t(R(C::*func_)(Args..., ...)) noexcept
 			: func{func_}
 		{
 		}
 
-		inline mfp_internal_va_t(R(*addr_)(C *, Args..., ...)) noexcept
+		constexpr inline mfp_internal_va_t(R(*addr_)(C *, Args..., ...)) noexcept
 			: addr{addr_}, adjustor{0}
 		{
 		}
 
-		inline mfp_internal_va_t(R(*addr_)(C *, Args..., ...), std::size_t adjustor_) noexcept
+		constexpr inline mfp_internal_va_t(R(*addr_)(C *, Args..., ...), std::size_t adjustor_) noexcept
 			: addr{addr_}, adjustor{adjustor_}
 		{
 		}
 
-		inline mfp_internal_va_t &operator=(std::uint64_t value_) noexcept
+		constexpr inline mfp_internal_va_t &operator=(std::uint64_t value_) noexcept
 		{
 			value = value_;
 			return *this;
 		}
 
-		inline mfp_internal_va_t &operator=(R(C::*func_)(Args..., ...)) noexcept
+		constexpr inline mfp_internal_va_t &operator=(R(C::*func_)(Args..., ...)) noexcept
 		{
 			func = func_;
 			return *this;
 		}
 
-		inline mfp_internal_va_t &operator=(R(*addr_)(C *, Args..., ...)) noexcept
+		constexpr inline mfp_internal_va_t &operator=(R(*addr_)(C *, Args..., ...)) noexcept
 		{
 			addr = addr_;
 			adjustor = 0;
 			return *this;
 		}
 
-		mfp_internal_va_t(mfp_internal_va_t &&) noexcept = default;
-		mfp_internal_va_t &operator=(mfp_internal_va_t &&) noexcept = default;
-		mfp_internal_va_t(const mfp_internal_va_t &) noexcept = default;
-		mfp_internal_va_t &operator=(const mfp_internal_va_t &) noexcept = default;
+		constexpr mfp_internal_va_t(mfp_internal_va_t &&) noexcept = default;
+		constexpr mfp_internal_va_t &operator=(mfp_internal_va_t &&) noexcept = default;
+		constexpr mfp_internal_va_t(const mfp_internal_va_t &) noexcept = default;
+		constexpr mfp_internal_va_t &operator=(const mfp_internal_va_t &) noexcept = default;
 
-		inline operator bool() const noexcept
+		constexpr inline operator bool() const noexcept
 		{ return addr; }
-		inline bool operator!() const noexcept
+		constexpr inline bool operator!() const noexcept
 		{ return !addr; }
 
 		std::uint64_t value;
@@ -233,14 +233,14 @@ namespace vmod
 
 	union mfp_or_func_t
 	{
-		mfp_or_func_t() noexcept = default;
+		constexpr mfp_or_func_t() noexcept = default;
 
-		mfp_or_func_t(mfp_or_func_t &&) noexcept = default;
-		mfp_or_func_t &operator=(mfp_or_func_t &&) noexcept = default;
-		mfp_or_func_t(const mfp_or_func_t &) noexcept = default;
-		mfp_or_func_t &operator=(const mfp_or_func_t &) noexcept = default;
+		constexpr mfp_or_func_t(mfp_or_func_t &&) noexcept = default;
+		constexpr mfp_or_func_t &operator=(mfp_or_func_t &&) noexcept = default;
+		constexpr mfp_or_func_t(const mfp_or_func_t &) noexcept = default;
+		constexpr mfp_or_func_t &operator=(const mfp_or_func_t &) noexcept = default;
 
-		inline mfp_or_func_t(std::nullptr_t) noexcept
+		constexpr inline mfp_or_func_t(std::nullptr_t) noexcept
 			: mfp{nullptr}
 		{
 		}
@@ -249,72 +249,78 @@ namespace vmod
 		generic_plain_mfp_t plain;
 		generic_internal_mfp_t mfp{};
 
-		inline operator bool() const noexcept
+		constexpr inline operator bool() const noexcept
 		{ return static_cast<bool>(mfp); }
-		inline bool operator!() const noexcept
+		constexpr inline bool operator!() const noexcept
 		{ return !mfp; }
 	};
 
 	using generic_vtable_t = generic_plain_mfp_t *;
 
 	template <typename R, typename C, typename ...Args>
-	inline mfp_internal_t<R, C, Args...> get_internal_mfp(R(C::*func)(Args...)) noexcept
+	constexpr inline mfp_internal_t<R, C, Args...> get_internal_mfp(R(C::*func)(Args...)) noexcept
 	{
 		mfp_internal_t<R, C, Args...> internal{func};
 		return internal;
 	}
 
 	template <typename R, typename C, typename ...Args>
-	inline std::pair<R(__attribute__((__thiscall__)) *)(C *, Args...), std::size_t> mfp_to_func(R(C::*func)(Args...)) noexcept
+	constexpr inline std::pair<R(__attribute__((__thiscall__)) *)(C *, Args...), std::size_t> mfp_to_func(R(C::*func)(Args...)) noexcept
 	{
 		mfp_internal_t<R, C, Args...> internal{func};
 		return {internal.addr, internal.adjustor};
 	}
 
 	template <typename R, typename C, typename ...Args>
-	inline std::pair<R(*)(C *, Args..., ...), std::size_t> mfp_to_func(R(C::*func)(Args..., ...)) noexcept
+	constexpr inline std::pair<R(*)(C *, Args..., ...), std::size_t> mfp_to_func(R(C::*func)(Args..., ...)) noexcept
 	{
 		mfp_internal_va_t<R, C, Args...> internal{func};
 		return {internal.addr, internal.adjustor};
 	}
 
 	template <typename R, typename C, typename ...Args>
-	inline auto mfp_from_func(R(__attribute__((__thiscall__)) *addr)(C *, Args...)) noexcept -> R(C::*)(Args...)
+	constexpr inline auto mfp_from_func(R(__attribute__((__thiscall__)) *addr)(C *, Args...)) noexcept -> R(C::*)(Args...)
 	{
 		mfp_internal_t<R, C, Args...> internal{addr};
 		return internal.func;
 	}
 
 	template <typename R, typename C, typename ...Args>
-	inline auto mfp_from_func(R(__attribute__((__thiscall__)) *addr)(C *, Args...), std::size_t adjustor) noexcept -> R(C::*)(Args...)
+	constexpr inline auto mfp_from_func(R(__attribute__((__thiscall__)) *addr)(C *, Args...), std::size_t adjustor) noexcept -> R(C::*)(Args...)
 	{
 		mfp_internal_t<R, C, Args...> internal{addr, adjustor};
 		return internal.func;
 	}
 
 	template <typename R, typename C, typename ...Args>
-	inline auto mfp_from_func(R(*addr)(C *, Args..., ...)) noexcept -> R(C::*)(Args..., ...)
+	constexpr inline auto mfp_from_func(R(*addr)(C *, Args..., ...)) noexcept -> R(C::*)(Args..., ...)
 	{
 		mfp_internal_va_t<R, C, Args...> internal{addr};
 		return internal.func;
 	}
 
 	template <typename R, typename C, typename ...Args>
-	inline auto mfp_from_func(R(*addr)(C *, Args..., ...), std::size_t adjustor) noexcept -> R(C::*)(Args..., ...)
+	constexpr inline auto mfp_from_func(R(*addr)(C *, Args..., ...), std::size_t adjustor) noexcept -> R(C::*)(Args..., ...)
 	{
 		mfp_internal_va_t<R, C, Args...> internal{addr, adjustor};
 		return internal.func;
 	}
 
 	template <typename R, typename C, typename ...Args>
-	inline std::size_t vfunc_index(R(C::*func)(Args...)) noexcept
+	constexpr inline std::size_t vfunc_index(R(C::*func)(Args...)) noexcept
 	{
 		mfp_internal_t<R, C, Args...> internal{func};
-		std::uintptr_t addr_value{reinterpret_cast<std::uintptr_t>(internal.addr)};
+		std::uintptr_t addr_value{0};
+		if(std::is_constant_evaluated()) {
+			addr_value = (__builtin_bit_cast(std::uint64_t, internal.func) & 0xFFFFFFFF);
+		} else {
+			addr_value = reinterpret_cast<std::uintptr_t>(internal.addr);
+		}
 		if(!(addr_value & 1)) {
 			return static_cast<std::size_t>(-1);
+		} else {
+			return ((addr_value-1) / sizeof(generic_plain_mfp_t));
 		}
-		return ((addr_value-1) / sizeof(generic_plain_mfp_t));
 	}
 
 	template <typename C>
@@ -323,10 +329,15 @@ namespace vmod
 	#ifdef __clang__
 		#pragma clang diagnostic push
 		#pragma clang diagnostic ignored "-Wundefined-reinterpret-cast"
+	#else
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wcast-align"
 	#endif
 		return *reinterpret_cast<generic_plain_mfp_t **>(ptr);
 	#ifdef __clang__
 		#pragma clang diagnostic pop
+	#else
+		#pragma GCC diagnostic pop
 	#endif
 	}
 
@@ -398,7 +409,14 @@ namespace vmod
 				return;
 			}
 
+		#ifndef __clang__
+			#pragma GCC diagnostic push
+			#pragma GCC diagnostic ignored "-Wconditionally-supported"
+		#endif
 			unsigned char *bytes{reinterpret_cast<unsigned char *>(old_target.mfp.addr)};
+		#ifndef __clang__
+			#pragma GCC diagnostic pop
+		#endif
 			std::memcpy(bytes, old_bytes, sizeof(old_bytes));
 		}
 

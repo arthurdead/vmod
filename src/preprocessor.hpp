@@ -31,7 +31,7 @@ namespace vmod
 			error
 		};
 
-		enum print_state print_state{print_state::unknown};
+		print_state print_state{print_state::unknown};
 
 		char path_buff[PATH_MAX];
 		static constexpr std::size_t msg_buff_max{4026};

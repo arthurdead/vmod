@@ -31,17 +31,31 @@ namespace vmod
 			}
 			return false;
 		} else {
+		#ifndef __clang__
+			#pragma GCC diagnostic push
+			#pragma GCC diagnostic ignored "-Wconditionally-supported"
+		#endif
 			iface_fac = reinterpret_cast<gsdk::CreateInterfaceFn>(dlsym(dl, "CreateInterface"));
+		#ifndef __clang__
+			#pragma GCC diagnostic pop
+		#endif
 			if(!iface_fac) {
 				err_str = "missing CreateInterface export"s;
 				return false;
 			}
 
 			Dl_info base_info;
+		#ifndef __clang__
+			#pragma GCC diagnostic push
+			#pragma GCC diagnostic ignored "-Wconditionally-supported"
+		#endif
 			if(dladdr(reinterpret_cast<const void *>(iface_fac), &base_info) == 0) {
 				err_str = "failed to get base address"s;
 				return false;
 			}
+		#ifndef __clang__
+			#pragma GCC diagnostic pop
+		#endif
 
 			base_addr = base_info.dli_fbase;
 		}
@@ -213,7 +227,14 @@ namespace vmod
 				return false;
 			}
 
+		#ifndef __clang__
+			#pragma GCC diagnostic push
+			#pragma GCC diagnostic ignored "-Wconditionally-supported"
+		#endif
 			gsdk::CreateInterfaceFn FileSystemFactory{reinterpret_cast<gsdk::CreateInterfaceFn>(static_cast<unsigned char *>(base()) + offset)};
+		#ifndef __clang__
+			#pragma GCC diagnostic pop
+		#endif
 
 			int status{gsdk::IFACE_OK};
 			filesystem = static_cast<gsdk::IFileSystem *>(FileSystemFactory(gsdk::IFileSystem::interface_name.data(), &status));
