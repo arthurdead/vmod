@@ -37,6 +37,27 @@ namespace gsdk
 		inline std::size_t size() const noexcept
 		{ return static_cast<std::size_t>(m_Size); }
 
+		inline T *data() noexcept
+		{ return m_Memory.m_pMemory; }
+		inline const T *data() const noexcept
+		{ return m_Memory.m_pMemory; }
+
+		using iterator = T *;
+		using const_iterator = const  T *;
+
+		inline iterator begin() noexcept
+		{ return m_Memory.m_pMemory; }
+		inline iterator end() noexcept
+		{ return m_Memory.m_pMemory + static_cast<std::size_t>(m_Size); }
+		inline const_iterator begin() const noexcept
+		{ return m_Memory.m_pMemory; }
+		inline const_iterator end() const noexcept
+		{ return m_Memory.m_pMemory + static_cast<std::size_t>(m_Size); }
+		inline const_iterator cbegin() const noexcept
+		{ return m_Memory.m_pMemory; }
+		inline const_iterator cend() const noexcept
+		{ return m_Memory.m_pMemory + static_cast<std::size_t>(m_Size); }
+
 		CUtlMemory<T> m_Memory;
 		int m_Size{0};
 		T *m_pElements{nullptr};

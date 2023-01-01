@@ -17,7 +17,7 @@ namespace vmod::vscript
 			case gsdk::FIELD_FLOAT: {
 				return var.m_float > 0.0f;
 			}
-			case gsdk::FIELD_DOUBLE: {
+			case gsdk::FIELD_FLOAT64: {
 				return var.m_double > 0.0;
 			}
 			case gsdk::FIELD_STRING: {
@@ -60,12 +60,14 @@ namespace vmod::vscript
 			case gsdk::FIELD_INTEGER: {
 				return var.m_int > 0;
 			}
-			case gsdk::FIELD_UINT: {
+			case gsdk::FIELD_UINT32: {
 				return var.m_uint > 0;
 			}
+		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 			case gsdk::FIELD_INTEGER64: {
 				return var.m_longlong > 0;
 			}
+		#endif
 			case gsdk::FIELD_UINT64: {
 				return var.m_ulonglong > 0;
 			}

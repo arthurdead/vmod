@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <string_view>
 #include <string>
 #include <vector>
@@ -146,17 +147,46 @@ namespace vmod
 			qualification_info &operator=(const qualification_info &) = delete;
 		};
 
+	private:
+		using qualifications_t = std::unordered_map<std::string, std::unique_ptr<qualification_info>>;
+
+	public:
+		struct pair_t
+		{
+			qualifications_t::const_iterator qual;
+			qualification_info::names_t::const_iterator func;
+		};
+
 		struct class_info final : qualification_info
 		{
-		private:
-			friend class symbol_cache;
-
-			void resolve(void *base) noexcept override;
-
-			class_info() noexcept = default;
-
+		public:
 			struct vtable_info final
 			{
+			private:
+				using funcs_t = std::vector<pair_t>;
+
+			public:
+				using const_iterator = funcs_t::const_iterator;
+
+				inline const_iterator begin() const noexcept
+				{ return funcs_.cbegin(); }
+				inline const_iterator end() const noexcept
+				{ return funcs_.cend(); }
+
+				inline const_iterator cbegin() const noexcept
+				{ return funcs_.cbegin(); }
+				inline const_iterator cend() const noexcept
+				{ return funcs_.cend(); }
+
+				inline std::size_t size() const noexcept
+				{ return size_; }
+
+				inline funcs_t::value_type operator[](std::size_t i) const noexcept
+				{ return funcs_[i]; }
+
+				inline const funcs_t &funcs() const noexcept
+				{ return funcs_; }
+
 			private:
 				friend class symbol_cache;
 
@@ -167,7 +197,7 @@ namespace vmod
 				std::ptrdiff_t offset{0};
 				std::size_t size_{0};
 				__cxxabiv1::vtable_prefix *prefix{nullptr};
-				std::vector<names_t::const_iterator> funcs;
+				funcs_t funcs_;
 
 			private:
 				vtable_info(const vtable_info &) = delete;
@@ -175,6 +205,16 @@ namespace vmod
 				vtable_info(vtable_info &&) = delete;
 				vtable_info &operator=(vtable_info &&) = delete;
 			};
+
+			inline const vtable_info &vtable() const noexcept
+			{ return vtable_; }
+
+		private:
+			friend class symbol_cache;
+
+			void resolve(void *base) noexcept override;
+
+			class_info() noexcept = default;
 
 			struct ctor_info final : name_info
 			{
@@ -216,7 +256,7 @@ namespace vmod
 				dtor_info &operator=(dtor_info &&) = delete;
 			};
 
-			vtable_info vtable;
+			vtable_info vtable_;
 
 		private:
 			class_info(const class_info &) = delete;
@@ -224,9 +264,6 @@ namespace vmod
 			class_info(class_info &&) = delete;
 			class_info &operator=(class_info &&) = delete;
 		};
-
-	private:
-		using qualifications_t = std::unordered_map<std::string, std::unique_ptr<qualification_info>>;
 
 	public:
 		using const_iterator = qualifications_t::const_iterator;
@@ -256,7 +293,7 @@ namespace vmod
 
 		bool handle_component(std::string_view name_mangled, int base_demangle_flags, demangle_component *component, qualifications_t::iterator &qual_it, qualification_info::names_t::iterator &name_it, GElf_Sym &&sym, void *base) noexcept;
 
-		std::unordered_map<std::ptrdiff_t, qualification_info::names_t::const_iterator> offset_map;
+		std::unordered_map<std::ptrdiff_t, pair_t> offset_map;
 
 		qualifications_t qualifications;
 		qualification_info global_qual;

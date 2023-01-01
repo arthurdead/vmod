@@ -284,9 +284,11 @@ namespace gsdk
 		switch(field) {
 			case FIELD_CLASSPTR:
 			case FIELD_FUNCTION:
-			case FIELD_UINT:
+			case FIELD_UINT32:
 			case FIELD_UINT64:
+		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 			case FIELD_INTEGER64:
+		#endif
 			case FIELD_SHORT:
 			return FIELD_INTEGER;
 			default:

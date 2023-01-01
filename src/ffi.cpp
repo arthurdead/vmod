@@ -121,9 +121,9 @@ namespace vmod::ffi
 			case FFI_TYPE_FLOAT:
 			return gsdk::FIELD_FLOAT;
 			case FFI_TYPE_DOUBLE:
-			return gsdk::FIELD_DOUBLE;
+			return gsdk::FIELD_FLOAT64;
 			case FFI_TYPE_LONGDOUBLE:
-			return gsdk::FIELD_DOUBLE;
+			return gsdk::FIELD_FLOAT64;
 			case FFI_TYPE_UINT8:
 			return gsdk::FIELD_SHORT;
 			case FFI_TYPE_SINT8:
@@ -133,16 +133,22 @@ namespace vmod::ffi
 			case FFI_TYPE_SINT16:
 			return gsdk::FIELD_SHORT;
 			case FFI_TYPE_UINT32:
-			return gsdk::FIELD_UINT;
+			return gsdk::FIELD_UINT32;
 			case FFI_TYPE_SINT32:
 			return gsdk::FIELD_INTEGER;
 			case FFI_TYPE_UINT64:
 			return gsdk::FIELD_UINT64;
 			case FFI_TYPE_SINT64:
+		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 			return gsdk::FIELD_INTEGER64;
+		#elif GSDK_ENGINE == GSDK_ENGINE_TF2
+			return gsdk::FIELD_INTEGER;
+		#else
+			#error
+		#endif
 			case FFI_TYPE_POINTER:
 		#if __SIZEOF_POINTER__ == __SIZEOF_INT__
-			return gsdk::FIELD_UINT;
+			return gsdk::FIELD_UINT32;
 		#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
 			return gsdk::FIELD_UINT64;
 		#else

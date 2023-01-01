@@ -193,9 +193,19 @@ namespace vmod::bindings::mem
 			}
 		}
 
-		if(table && table != gsdk::INVALID_HSCRIPT) {
-			vm->ReleaseTable(table);
+		if(table_ && table_ != gsdk::INVALID_HSCRIPT) {
+			vm->ReleaseTable(table_);
 		}
+	}
+
+	singleton::type *singleton::find_type(ffi_type *ptr) noexcept
+	{
+		auto it{types.find(ptr)};
+		if(it == types.end()) {
+			return nullptr;
+		}
+
+		return it->second.get();
 	}
 
 	bool singleton::register_type(ffi_type *ptr, std::string_view type_name) noexcept
@@ -210,37 +220,39 @@ namespace vmod::bindings::mem
 			return false;
 		}
 
-		types.emplace_back(type{type_name, ptr, table});
+		{
+			if(!vm->SetValue(table, "size", vscript::variant{ptr->size})) {
+				error("vmod: failed to set type '%s' size value\n", type_name.data());
+				return false;
+			}
 
-		if(!vm->SetValue(table, "size", vscript::variant{ptr->size})) {
-			error("vmod: failed to set type '%s' size value\n", type_name.data());
-			return false;
+			if(!vm->SetValue(table, "alignment", vscript::variant{ptr->alignment})) {
+				error("vmod: failed to set type '%s' alignment value\n", type_name.data());
+				return false;
+			}
+
+			if(!vm->SetValue(table, "id", vscript::variant{ptr->type})) {
+				error("vmod: failed to set type '%s' id value\n", type_name.data());
+				return false;
+			}
+
+			if(!vm->SetValue(table, "__internal_ptr__", vscript::variant{ptr})) {
+				error("vmod: failed to set type '%s' internal ptr value\n", type_name.data());
+				return false;
+			}
+
+			if(!vm->SetValue(table, "name", vscript::variant{type_name})) {
+				error("vmod: failed to set type '%s' name value\n", type_name.data());
+				return false;
+			}
+
+			if(!vm->SetValue(types_table, type_name.data(), table)) {
+				error("vmod: failed to set type '%s' name value\n", type_name.data());
+				return false;
+			}
 		}
 
-		if(!vm->SetValue(table, "alignment", vscript::variant{ptr->alignment})) {
-			error("vmod: failed to set type '%s' alignment value\n", type_name.data());
-			return false;
-		}
-
-		if(!vm->SetValue(table, "id", vscript::variant{ptr->type})) {
-			error("vmod: failed to set type '%s' id value\n", type_name.data());
-			return false;
-		}
-
-		if(!vm->SetValue(table, "__internal_ptr__", vscript::variant{ptr})) {
-			error("vmod: failed to set type '%s' internal ptr value\n", type_name.data());
-			return false;
-		}
-
-		if(!vm->SetValue(table, "name", vscript::variant{type_name})) {
-			error("vmod: failed to set type '%s' name value\n", type_name.data());
-			return false;
-		}
-
-		if(!vm->SetValue(types_table, type_name.data(), table)) {
-			error("vmod: failed to set type '%s' name value\n", type_name.data());
-			return false;
-		}
+		types.emplace(ptr, new type{type_name, ptr, table});
 
 		return true;
 	}

@@ -19,6 +19,7 @@ namespace vmod::bindings::ent
 		}
 
 		desc.func(&sendprop::script_hook_proxy, "script_hook_proxy"sv, "hook_proxy"sv);
+		desc.func(&sendprop::script_type, "script_type"sv, "type"sv);
 
 		if(!vm->RegisterClass(&desc)) {
 			error("vmod: failed to register sendprop script class\n"sv);
@@ -31,6 +32,12 @@ namespace vmod::bindings::ent
 	void sendprop::unbindings() noexcept
 	{
 		
+	}
+
+	sendprop::sendprop(gsdk::SendProp *prop_) noexcept
+		: prop{prop_}, old_proxy{prop_->m_ProxyFn}, type_ptr{guess_type(prop_, prop_->m_ProxyFn, nullptr)}
+	{
+		type = mem::singleton::instance().find_type(type_ptr);
 	}
 
 	bool sendprop::initialize() noexcept
@@ -49,13 +56,16 @@ namespace vmod::bindings::ent
 
 	sendprop::~sendprop() noexcept
 	{
-		if(closure) {
-			ffi_closure_free(closure);
-		}
+		remove_closure();
 
 		if(instance && instance != gsdk::INVALID_HSCRIPT) {
 			main::instance().vm()->RemoveInstance(instance);
 		}
+	}
+
+	void sendprop::on_empty() noexcept
+	{
+		remove_closure();
 	}
 
 	bool sendprop::initialize_closure() noexcept
@@ -83,6 +93,16 @@ namespace vmod::bindings::ent
 		return true;
 	}
 
+	void sendprop::remove_closure() noexcept
+	{
+		if(closure) {
+			ffi_closure_free(closure);
+			closure = nullptr;
+		}
+
+		prop->m_ProxyFn = old_proxy;
+	}
+
 	void sendprop::closure_binding(ffi_cif *closure_cif, void *ret, void *args[], void *userptr) noexcept
 	{
 		sendprop *prop{static_cast<sendprop *>(userptr)};
@@ -105,6 +125,7 @@ namespace vmod::bindings::ent
 		};
 
 		std::memset(dvar->m_data, 0, sizeof(gsdk::DVariant::m_data));
+		dvar->m_Type = prop->prop->m_Type;
 
 		if(prop->call_pre(vargs, std::size(vargs))) {
 			ffi_call(closure_cif, reinterpret_cast<void(*)()>(prop->old_proxy), ret, args);

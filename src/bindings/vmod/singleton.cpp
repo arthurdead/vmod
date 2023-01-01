@@ -167,6 +167,10 @@ namespace vmod
 			return false;
 		}
 
+		if(!create_get()) {
+			return false;
+		}
+
 		return true;
 	}
 

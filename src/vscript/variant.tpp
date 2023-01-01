@@ -22,7 +22,7 @@ namespace vmod::vscript
 				case gsdk::FIELD_FLOAT: {
 					return static_cast<T>(var.m_float);
 				}
-				case gsdk::FIELD_DOUBLE: {
+				case gsdk::FIELD_FLOAT64: {
 					return static_cast<T>(var.m_double);
 				}
 				case gsdk::FIELD_STRING: {
@@ -66,12 +66,14 @@ namespace vmod::vscript
 				case gsdk::FIELD_INTEGER: {
 					return static_cast<T>(var.m_int);
 				}
-				case gsdk::FIELD_UINT: {
+				case gsdk::FIELD_UINT32: {
 					return static_cast<T>(var.m_uint);
 				}
+			#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 				case gsdk::FIELD_INTEGER64: {
 					return static_cast<T>(var.m_longlong);
 				}
+			#endif
 				case gsdk::FIELD_UINT64: {
 					return static_cast<T>(var.m_ulonglong);
 				}
@@ -103,7 +105,7 @@ namespace vmod::vscript
 				case gsdk::FIELD_FLOAT: {
 					return static_cast<T>(var.m_float);
 				}
-				case gsdk::FIELD_DOUBLE: {
+				case gsdk::FIELD_FLOAT64: {
 					return static_cast<T>(var.m_double);
 				}
 				case gsdk::FIELD_STRING: {
@@ -146,12 +148,14 @@ namespace vmod::vscript
 				case gsdk::FIELD_INTEGER: {
 					return static_cast<T>(var.m_int);
 				}
-				case gsdk::FIELD_UINT: {
+				case gsdk::FIELD_UINT32: {
 					return static_cast<T>(var.m_uint);
 				}
+			#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 				case gsdk::FIELD_INTEGER64: {
 					return static_cast<T>(var.m_longlong);
 				}
+			#endif
 				case gsdk::FIELD_UINT64: {
 					return static_cast<T>(var.m_ulonglong);
 				}
@@ -204,7 +208,7 @@ namespace vmod::vscript
 					tc_res.ptr[0] = '\0';
 					return begin;
 				}
-				case gsdk::FIELD_DOUBLE: {
+				case gsdk::FIELD_FLOAT64: {
 					char *begin{variant_str_buffer};
 					char *end{begin + buffers_size};
 
@@ -232,7 +236,7 @@ namespace vmod::vscript
 					tc_res.ptr[0] = '\0';
 					return begin;
 				}
-				case gsdk::FIELD_UINT: {
+				case gsdk::FIELD_UINT32: {
 					char *begin{variant_str_buffer};
 					char *end{begin + buffers_size};
 
@@ -256,6 +260,7 @@ namespace vmod::vscript
 					tc_res.ptr[0] = '\0';
 					return begin;
 				}
+			#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 				case gsdk::FIELD_INTEGER64: {
 					char *begin{variant_str_buffer};
 					char *end{begin + buffers_size};
@@ -264,6 +269,7 @@ namespace vmod::vscript
 					tc_res.ptr[0] = '\0';
 					return begin;
 				}
+			#endif
 				case gsdk::FIELD_UINT64: {
 					char *begin{variant_str_buffer};
 					char *end{begin + buffers_size};
@@ -354,7 +360,7 @@ namespace vmod::vscript
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<unsigned int>() noexcept
-	{ return gsdk::FIELD_UINT; }
+	{ return gsdk::FIELD_UINT32; }
 	inline void initialize_impl(gsdk::ScriptVariant_t &var, unsigned int value) noexcept
 	{ var.m_uint = value; }
 	template <>
@@ -392,7 +398,7 @@ namespace vmod::vscript
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<unsigned long>() noexcept
 	{
 	#if __SIZEOF_LONG__ == __SIZEOF_INT__
-		return gsdk::FIELD_UINT;
+		return gsdk::FIELD_UINT32;
 	#elif __SIZEOF_LONG__ == __SIZEOF_LONG_LONG__
 		return gsdk::FIELD_UINT64;
 	#else
@@ -411,7 +417,13 @@ namespace vmod::vscript
 	#if __SIZEOF_LONG__ == __SIZEOF_INT__
 		return gsdk::FIELD_INTEGER;
 	#elif __SIZEOF_LONG__ == __SIZEOF_LONG_LONG__
+		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 		return gsdk::FIELD_INTEGER64;
+		#elif GSDK_ENGINE == GSDK_ENGINE_TF2
+		return gsdk::FIELD_INTEGER;
+		#else
+			#error
+		#endif
 	#else
 		#error
 	#endif
@@ -433,7 +445,15 @@ namespace vmod::vscript
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<long long>() noexcept
-	{ return gsdk::FIELD_INTEGER64; }
+	{
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		return gsdk::FIELD_INTEGER64;
+	#elif GSDK_ENGINE == GSDK_ENGINE_TF2
+		return gsdk::FIELD_INTEGER;
+	#else
+		#error
+	#endif
+	}
 	inline void initialize_impl(gsdk::ScriptVariant_t &var, long long value) noexcept
 	{ var.m_longlong = value; }
 	template <>
@@ -451,7 +471,7 @@ namespace vmod::vscript
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<double>() noexcept
-	{ return gsdk::FIELD_DOUBLE; }
+	{ return gsdk::FIELD_FLOAT64; }
 	inline void initialize_impl(gsdk::ScriptVariant_t &var, double value) noexcept
 	{ var.m_double = value; }
 	template <>
@@ -460,7 +480,7 @@ namespace vmod::vscript
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<long double>() noexcept
-	{ return gsdk::FIELD_DOUBLE; }
+	{ return gsdk::FIELD_FLOAT64; }
 	inline void initialize_impl(gsdk::ScriptVariant_t &var, long double value) noexcept
 	{ var.m_double = static_cast<double>(value); }
 	template <>
@@ -563,7 +583,7 @@ namespace vmod::vscript
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<void *>() noexcept
 	{
 	#if __SIZEOF_POINTER__ == __SIZEOF_INT__
-		return gsdk::FIELD_UINT;
+		return gsdk::FIELD_UINT32;
 	#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
 		return gsdk::FIELD_UINT64;
 	#else
@@ -585,7 +605,7 @@ namespace vmod::vscript
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
 		#if __SIZEOF_POINTER__ == __SIZEOF_INT__
-			case gsdk::FIELD_UINT:
+			case gsdk::FIELD_UINT32:
 		#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
 			case gsdk::FIELD_UINT64:
 		#else
@@ -785,7 +805,7 @@ namespace vmod::vscript
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<generic_vtable_t>() noexcept
 	{
 	#if __SIZEOF_POINTER__ == __SIZEOF_INT__
-		return gsdk::FIELD_UINT;
+		return gsdk::FIELD_UINT32;
 	#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
 		return gsdk::FIELD_UINT64;
 	#else
@@ -807,7 +827,7 @@ namespace vmod::vscript
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
 		#if __SIZEOF_POINTER__ == __SIZEOF_INT__
-			case gsdk::FIELD_UINT:
+			case gsdk::FIELD_UINT32:
 		#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
 			case gsdk::FIELD_UINT64:
 		#else

@@ -215,6 +215,18 @@ namespace vmod
 		ConCommand vmod_dump_squirrel_ver;
 		ConVar vmod_auto_dump_squirrel_ver;
 
+		ConCommand vmod_dump_netprops;
+		ConVar vmod_auto_dump_netprops;
+
+		ConCommand vmod_dump_datamaps;
+		ConVar vmod_auto_dump_datamaps;
+
+		ConCommand vmod_dump_entity_classes;
+		ConVar vmod_auto_dump_entity_classes;
+
+		ConCommand vmod_dump_entity_vtables;
+		ConVar vmod_auto_dump_entity_vtables;
+
 		bool can_gen_docs{false};
 		ConCommand vmod_gen_docs;
 		ConVar vmod_auto_gen_docs;

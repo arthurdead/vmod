@@ -89,22 +89,22 @@ namespace vmod::bindings::docs
 				return "FIELD_VARIANT"sv;
 				case gsdk::FIELD_UINT64:
 				return "FIELD_UINT64"sv;
-				case gsdk::FIELD_DOUBLE:
-				return "FIELD_DOUBLE"sv;
+				case gsdk::FIELD_FLOAT64:
+				return "FIELD_FLOAT64"sv;
 				case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
 				return "FIELD_POSITIVEINTEGER_OR_NULL"sv;
 				case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
 				return "FIELD_HSCRIPT_NEW_INSTANCE"sv;
-				case gsdk::FIELD_UINT:
-				return "FIELD_UINT"sv;
+				case gsdk::FIELD_UINT32:
+				return "FIELD_UINT32"sv;
 				case gsdk::FIELD_UTLSTRINGTOKEN:
 				return "FIELD_UTLSTRINGTOKEN"sv;
 				case gsdk::FIELD_QANGLE:
 				return "FIELD_QANGLE"sv;
+			#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 				case gsdk::FIELD_INTEGER64:
 				return "FIELD_INTEGER64"sv;
-				case gsdk::FIELD_VECTOR4D:
-				return "FIELD_VECTOR4D"sv;
+			#endif
 				default: {
 					datatype_str_buffer = "<<unknown: "sv;
 
@@ -288,16 +288,26 @@ namespace vmod::bindings::docs
 			case gsdk::FIELD_CHARACTER:
 			return "char"sv;
 			case gsdk::FIELD_SHORT:
+			return "short"sv;
+			case gsdk::FIELD_UINT32:
+			return "unsigned int"sv;
+		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+			case gsdk::FIELD_INTEGER64:
+			return "long long"sv;
+		#endif
+			case gsdk::FIELD_UINT64:
+			return "unsigned long long"sv;
 			case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
 			case gsdk::FIELD_INTEGER:
-			case gsdk::FIELD_UINT:
-			case gsdk::FIELD_INTEGER64:
-			case gsdk::FIELD_UINT64:
+			return "int"sv;
 			case gsdk::FIELD_MODELINDEX:
+			return "model_index"sv;
 			case gsdk::FIELD_MATERIALINDEX:
+			return "material_index"sv;
 			case gsdk::FIELD_TICK:
 			return "int"sv;
-			case gsdk::FIELD_DOUBLE:
+			case gsdk::FIELD_FLOAT64:
+			return "double"sv;
 			case gsdk::FIELD_FLOAT:
 			case gsdk::FIELD_INTERVAL:
 			case gsdk::FIELD_TIME:
@@ -312,27 +322,34 @@ namespace vmod::bindings::docs
 			return "Vector"sv;
 			case gsdk::FIELD_VECTOR2D:
 			return "Vector2D"sv;
-			case gsdk::FIELD_VECTOR4D:
-			return "Vector4D"sv;
 			case gsdk::FIELD_QANGLE:
 			return "QAngle"sv;
 			case gsdk::FIELD_QUATERNION:
 			return "Quaternion"sv;
 			case gsdk::FIELD_STRING:
+			return "string_t"sv;
 			case gsdk::FIELD_CSTRING:
+			return "char[]"sv;
 			case gsdk::FIELD_MODELNAME:
+			return "model_path"sv;
 			case gsdk::FIELD_SOUNDNAME:
-			return "string"sv;
+			return "sound_path"sv;
 			case gsdk::FIELD_VARIANT:
 			return "variant"sv;
 			case gsdk::FIELD_EHANDLE:
-			return "ehandle"sv;
+			return "EHANDLE"sv;
 			case gsdk::FIELD_EDICT:
 			return "edict"sv;
 			case gsdk::FIELD_FUNCTION:
 			return "function"sv;
 			case gsdk::FIELD_CLASSPTR:
 			return "object"sv;
+			case gsdk::FIELD_COLOR32:
+			return "color32"sv;
+			case gsdk::FIELD_EMBEDDED:
+			return "struct"sv;
+			case gsdk::FIELD_CUSTOM:
+			return "unknown"sv;
 			case gsdk::FIELD_TYPEUNKNOWN:
 			return "unknown"sv;
 			default:

@@ -249,6 +249,9 @@ namespace vmod
 				if(it != callbacks.end()) {
 					callbacks.erase(it);
 				}
+				if(caller->empty()) {
+					caller->on_empty();
+				}
 			}
 			vm->ReleaseFunction(callback);
 		}
@@ -256,6 +259,8 @@ namespace vmod
 
 	void plugin::callback_instance::callable_destroyed() noexcept
 	{ delete this; }
+
+	void plugin::callable::on_empty() noexcept {}
 
 	plugin::callable::~callable() noexcept
 	{

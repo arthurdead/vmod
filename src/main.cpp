@@ -13,6 +13,7 @@
 #include "gsdk/server/datamap.hpp"
 
 #include <filesystem>
+#include <iterator>
 #include <string_view>
 #include <climits>
 
@@ -273,6 +274,10 @@ namespace vmod
 		in_vscript_server_term = true;
 		//VScriptServerTerm_detour();
 		gsdk::IScriptVM *vm{main::instance().vm()};
+		vm->CollectGarbage(nullptr, false);
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		vm->RemoveOrphanInstances();
+	#endif
 		*g_pScriptVM_ptr = vm;
 		gsdk::g_pScriptVM = vm;
 		in_vscript_server_term = false;
@@ -1190,16 +1195,16 @@ namespace vmod
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		gsdk::ScriptClassDesc_t *tmp_desc{*sv_classdesc_pHead};
 		while(tmp_desc) {
-			std::string classname{tmp_desc->m_pszClassname};
-			sv_script_class_descs.emplace(std::move(classname), tmp_desc);
+			std::string descname{tmp_desc->m_pszClassname};
+			sv_script_class_descs.emplace(std::move(descname), tmp_desc);
 			tmp_desc = tmp_desc->m_pNextDesc;
 		}
 	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
 		for(const auto &it : sv_global_qual) {
 			if(it.first.starts_with("ScriptClassDesc_t* GetScriptDesc<"sv)) {
 				gsdk::ScriptClassDesc_t *tmp_desc{it.second->func<gsdk::ScriptClassDesc_t *(*)(generic_object_t *)>()(nullptr)};
-				std::string classname{tmp_desc->m_pszClassname};
-				sv_script_class_descs.emplace(std::move(classname), tmp_desc);
+				std::string descname{tmp_desc->m_pszClassname};
+				sv_script_class_descs.emplace(std::move(descname), tmp_desc);
 			}
 		}
 	#else
@@ -1214,6 +1219,9 @@ namespace vmod
 
 			info_it->second.sv_class = it.second;
 			info_it->second.sendtable = it.second->m_pTable;
+
+			std::string tablename{it.second->m_pTable->m_pNetTableName};
+			sv_sendtables.emplace(std::move(tablename), it.second->m_pTable);
 
 			auto script_desc_it{sv_script_class_descs.find(it.first)};
 			if(script_desc_it != sv_script_class_descs.end()) {
@@ -1231,6 +1239,9 @@ namespace vmod
 				using GetDataDescMap_t = gsdk::datamap_t *(gsdk::CBaseEntity::*)();
 				GetDataDescMap_t GetDataDescMap{GetDataDescMap_it->second->mfp<GetDataDescMap_t>()};
 				gsdk::datamap_t *map{(reinterpret_cast<gsdk::CBaseEntity *>(uninitialized_memory)->*GetDataDescMap)()};
+
+				std::string dataname{map->dataClassName};
+				sv_datamaps.emplace(std::move(dataname), map);
 
 				info_it->second.datamap = map;
 			}
@@ -1532,22 +1543,6 @@ namespace vmod
 			}
 		);
 
-		vmod_auto_dump_internal_scripts.initialize("vmod_auto_dump_internal_scripts"sv, false);
-
-		vmod_dump_internal_scripts.initialize("vmod_dump_internal_scripts"sv,
-			[this](const gsdk::CCommand &) noexcept -> void {
-				if(g_Script_init) {
-					write_file(root_dir_/"internal_scripts"sv/"init.nut"sv, g_Script_init, std::strlen(reinterpret_cast<const char *>(g_Script_init)+1));
-				}
-
-				if(g_Script_spawn_helper) {
-					write_file(root_dir_/"internal_scripts"sv/"spawn_helper.nut"sv, g_Script_spawn_helper, std::strlen(reinterpret_cast<const char *>(g_Script_spawn_helper)+1));
-				}
-
-				write_file(root_dir_/"internal_scripts"sv/"vscript_server.nut"sv, g_Script_vscript_server, std::strlen(reinterpret_cast<const char *>(g_Script_vscript_server)+1));
-			}
-		);
-
 		vmod_auto_dump_squirrel_ver.initialize("vmod_auto_dump_squirrel_ver"sv, false);
 
 		vmod_dump_squirrel_ver.initialize("vmod_dump_squirrel_ver"sv,
@@ -1635,16 +1630,262 @@ namespace vmod
 			}
 		);
 
+		vmod_auto_dump_internal_scripts.initialize("vmod_auto_dump_internal_scripts"sv, false);
+
+		vmod_dump_internal_scripts.initialize("vmod_dump_internal_scripts"sv,
+			[this](const gsdk::CCommand &) noexcept -> void {
+				std::filesystem::path dump_dir{root_dir_/"dumps"sv/"internal_scripts"sv};
+
+				if(g_Script_init) {
+					write_file(dump_dir/"init.nut"sv, g_Script_init, std::strlen(reinterpret_cast<const char *>(g_Script_init)+1));
+				}
+
+				if(g_Script_spawn_helper) {
+					write_file(dump_dir/"spawn_helper.nut"sv, g_Script_spawn_helper, std::strlen(reinterpret_cast<const char *>(g_Script_spawn_helper)+1));
+				}
+
+				write_file(dump_dir/"vscript_server.nut"sv, g_Script_vscript_server, std::strlen(reinterpret_cast<const char *>(g_Script_vscript_server)+1));
+			}
+		);
+
+		vmod_auto_dump_netprops.initialize("vmod_auto_dump_netprops"sv, false);
+
+		vmod_dump_netprops.initialize("vmod_dump_netprops"sv,
+			[this](const gsdk::CCommand &) noexcept -> void {
+				std::filesystem::path dump_dir{root_dir_/"dumps"sv/"netprops"sv};
+
+				for(const auto &it : sv_sendtables) {
+					std::string file;
+
+					bindings::docs::gen_date(file);
+
+					std::size_t num_props{static_cast<std::size_t>(it.second->m_nProps)};
+					for(std::size_t i{0}; i < num_props; ++i) {
+						gsdk::SendProp &prop{it.second->m_pProps[i]};
+						file += prop.m_pVarName;
+						file += '\n';
+					}
+
+					std::filesystem::path dump_path{dump_dir};
+					dump_path /= it.first;
+					dump_path.replace_extension(".txt"sv);
+
+					write_file(dump_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+				}
+			}
+		);
+
+		vmod_auto_dump_datamaps.initialize("vmod_auto_dump_datamaps"sv, false);
+
+		vmod_dump_datamaps.initialize("vmod_dump_datamaps"sv,
+			[this](const gsdk::CCommand &) noexcept -> void {
+				std::filesystem::path dump_dir{root_dir_/"dumps"sv/"datamaps"sv};
+
+				for(const auto &it : sv_datamaps) {
+					std::string file;
+
+					bindings::docs::gen_date(file);
+
+					file += "class "sv;
+					file += it.first;
+					
+					if(it.second->baseMap) {
+						file += " : "sv;
+						file += it.second->baseMap->dataClassName;
+					}
+
+					file += "\n{\n"sv;
+
+					std::size_t num_props{static_cast<std::size_t>(it.second->dataNumFields)};
+					for(std::size_t i{0}; i < num_props; ++i) {
+						gsdk::typedescription_t &prop{it.second->dataDesc[i]};
+
+						if(num_props == 1 && i == 0 && !prop.fieldName) {
+							break;
+						}
+
+						std::function<void(gsdk::typedescription_t &, std::string_view)> write_prop{
+							[&file](gsdk::typedescription_t &target, std::string_view name) noexcept -> void {
+								bindings::docs::ident(file, 1);
+
+								gsdk::fieldtype_t type{target.fieldType};
+
+								switch(type) {
+									case gsdk::FIELD_VOID: {
+										if(target.flags & gsdk::FTYPEDESC_FUNCTIONTABLE ||
+											target.flags & gsdk::FTYPEDESC_INPUT) {
+											type = gsdk::FIELD_FUNCTION;
+										}
+									} break;
+									case gsdk::FIELD_EMBEDDED: {
+										if(target.flags & gsdk::FTYPEDESC_PTR) {
+											type = gsdk::FIELD_CLASSPTR;
+										}
+									} break;
+									case gsdk::FIELD_CUSTOM: {
+										if(target.flags & gsdk::FTYPEDESC_OUTPUT) {
+											type = gsdk::FIELD_FUNCTION;
+										}
+									} break;
+									default: {
+										if(target.flags & gsdk::FTYPEDESC_INPUT) {
+											type = gsdk::FIELD_FUNCTION;
+										}
+									} break;
+								}
+
+								file += bindings::docs::type_name(type);
+								file += ' ';
+
+								file += name;
+
+								if(target.flags & gsdk::FTYPEDESC_INPUT) {
+									file += '(';
+									file += bindings::docs::type_name(target.fieldType);
+									file += ')';
+								}
+
+								file += ';';
+
+								if(target.flags != 0) {
+									std::string flags{" ["s};
+									//TODO!!!
+									if(flags.length() > 2) {
+										flags.pop_back();
+										flags += ']';
+										file += std::move(flags);
+									}
+								}
+
+								file += "\n\n"sv;
+							}
+						};
+
+						if(prop.flags & gsdk::FTYPEDESC_INPUT ||
+							prop.flags & gsdk::FTYPEDESC_OUTPUT) {
+							write_prop(prop, prop.externalName);
+						} else if(prop.flags & gsdk::FTYPEDESC_FUNCTIONTABLE) {
+							std::string funcname{prop.fieldName};
+							funcname.erase(0, it.first.length());
+							write_prop(prop, funcname);
+						} else {
+							write_prop(prop, prop.fieldName);
+						}
+					}
+
+					file += "};"sv;
+
+					std::filesystem::path dump_path{dump_dir};
+					dump_path /= it.first;
+					dump_path.replace_extension(".txt"sv);
+
+					write_file(dump_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+				}
+			}
+		);
+
+		vmod_auto_dump_entity_classes.initialize("vmod_auto_dump_entity_classes"sv, false);
+
+		vmod_dump_entity_classes.initialize("vmod_dump_entity_classes"sv,
+			[this](const gsdk::CCommand &) noexcept -> void {
+				std::filesystem::path dump_dir{root_dir_/"dumps"sv/"classes"sv};
+
+				std::string file;
+
+				for(const auto &it : sv_classes) {
+					file += it.first;
+					file += ' ';
+					file += it.second->m_pNetworkName;
+					file += '\n';
+				}
+
+				std::filesystem::path dump_path{dump_dir};
+				dump_path /= "classes"sv;
+				dump_path.replace_extension(".txt"sv);
+
+				write_file(dump_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+			}
+		);
+
+		vmod_auto_dump_entity_vtables.initialize("vmod_auto_dump_entity_vtables"sv, false);
+
+		vmod_dump_entity_vtables.initialize("vmod_dump_entity_vtables"sv,
+			[this,&sv_symbols = std::as_const(sv_symbols)](const gsdk::CCommand &) noexcept -> void {
+				std::filesystem::path dump_dir{root_dir_/"dumps"sv/"vtables"sv};
+
+				for(const auto &it : sv_classes) {
+					auto sv_sym_it{sv_symbols.find(it.first)};
+					if(sv_sym_it == sv_symbols.end()) {
+						error("vmod: missing '%s' symbols\n"sv, it.first.c_str());
+						continue;
+					}
+
+					const symbol_cache::class_info *class_info{dynamic_cast<const symbol_cache::class_info *>(sv_sym_it->second.get())};
+					const symbol_cache::class_info::vtable_info &vtable_info{class_info->vtable()};
+
+					std::string file;
+
+					bindings::docs::gen_date(file);
+
+					file += "class "sv;
+					file += it.first;
+
+					std::size_t start{0};
+
+					auto data_it{sv_datamaps.find(it.first)};
+					if(data_it != sv_datamaps.end()) {
+						if(data_it->second->baseMap) {
+							std::string basename{data_it->second->baseMap->dataClassName};
+
+							file += " : "sv;
+							file += basename;
+
+							auto base_sym_it{sv_symbols.find(basename)};
+							if(base_sym_it != sv_symbols.end()) {
+								const symbol_cache::class_info *base_class_info{dynamic_cast<const symbol_cache::class_info *>(base_sym_it->second.get())};
+								const symbol_cache::class_info::vtable_info &base_vtable_info{base_class_info->vtable()};
+
+								start = base_vtable_info.size();
+							}
+						}
+					}
+
+					file += "\n{\n"sv;
+
+					for(std::size_t i{start}; i < vtable_info.size(); ++i) {
+						const auto &func_it{vtable_info[i]};
+						bindings::docs::ident(file, 1);
+
+						if(func_it.qual != sv_symbols.end()) {
+							if(func_it.qual->first != it.first) {
+								file += func_it.qual->first;
+								file += "::"sv;
+							}
+						} else {
+							file += "<<unknown>>::"sv;
+						}
+
+						if(func_it.func != class_info->end()) {
+							file += func_it.func->first;
+							file += ";\n"sv;
+						} else {
+							file += "<<unknown>>\n"sv;
+						}
+					}
+
+					file += "};"sv;
+
+					std::filesystem::path dump_path{dump_dir};
+					dump_path /= it.first;
+					dump_path.replace_extension(".txt"sv);
+
+					write_file(dump_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+				}
+			}
+		);
+
 		sv_engine->InsertServerCommand("exec vmod/load.cfg\n");
 		sv_engine->ServerExecute();
-
-		if(vmod_auto_dump_squirrel_ver.get<bool>()) {
-			vmod_dump_squirrel_ver();
-		}
-
-		if(vmod_auto_dump_internal_scripts.get<bool>()) {
-			vmod_dump_internal_scripts();
-		}
 
 		return true;
 	}
@@ -1981,6 +2222,30 @@ namespace vmod
 
 		sv_engine->InsertServerCommand("exec vmod/load_late.cfg\n");
 		sv_engine->ServerExecute();
+
+		if(vmod_auto_dump_squirrel_ver.get<bool>()) {
+			vmod_dump_squirrel_ver();
+		}
+
+		if(vmod_auto_dump_internal_scripts.get<bool>()) {
+			vmod_dump_internal_scripts();
+		}
+
+		if(vmod_auto_dump_netprops.get<bool>()) {
+			vmod_dump_netprops();
+		}
+
+		if(vmod_auto_dump_datamaps.get<bool>()) {
+			vmod_dump_datamaps();
+		}
+
+		if(vmod_auto_dump_entity_classes.get<bool>()) {
+			vmod_dump_entity_classes();
+		}
+
+		if(vmod_auto_dump_entity_vtables.get<bool>()) {
+			vmod_dump_entity_vtables();
+		}
 
 		if(vmod_auto_gen_docs.get<bool>()) {
 			vmod_gen_docs();

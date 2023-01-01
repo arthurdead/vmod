@@ -7,7 +7,7 @@
 #include "../../vscript/singleton_class_desc.hpp"
 #include "../singleton.hpp"
 #include <cstddef>
-#include <vector>
+#include <unordered_map>
 #include <string>
 #include <string_view>
 
@@ -30,6 +30,50 @@ namespace vmod::bindings::mem
 
 		static singleton &instance() noexcept;
 
+		struct type final
+		{
+			friend class singleton;
+
+		public:
+			~type() noexcept;
+
+			inline type(type &&other) noexcept
+			{ operator=(std::move(other)); }
+
+			inline type &operator=(type &&other) noexcept
+			{
+				ptr = other.ptr;
+				other.ptr = nullptr;
+				name_ = std::move(other.name_);
+				table_ = other.table_;
+				other.table_ = gsdk::INVALID_HSCRIPT;
+				return *this;
+			}
+
+			inline const std::string &name() const noexcept
+			{ return name_; }
+
+			inline gsdk::HSCRIPT table() noexcept
+			{ return table_; }
+
+		private:
+			inline type(std::string_view name__, ffi_type *type_, gsdk::HSCRIPT table__) noexcept
+				: ptr{type_}, name_{name__}, table_{table__}
+			{
+			}
+
+			ffi_type *ptr;
+			std::string name_;
+			gsdk::HSCRIPT table_;
+
+		private:
+			type() noexcept = delete;
+			type(const type &) = delete;
+			type &operator=(const type &) = delete;
+		};
+
+		type *find_type(ffi_type *ptr) noexcept;
+
 	private:
 		static vscript::singleton_class_desc<singleton> desc;
 
@@ -47,48 +91,9 @@ namespace vmod::bindings::mem
 		static generic_vtable_t script_get_vtable(generic_object_t *obj) noexcept;
 		static generic_plain_mfp_t script_get_vfunc(generic_object_t *obj, std::size_t index) noexcept;
 
-		struct type final
-		{
-			friend class singleton;
-
-		public:
-			~type() noexcept;
-
-			inline type(type &&other) noexcept
-			{ operator=(std::move(other)); }
-
-			inline type &operator=(type &&other) noexcept
-			{
-				ptr = other.ptr;
-				other.ptr = nullptr;
-				name_ = std::move(other.name_);
-				table = other.table;
-				other.table = gsdk::INVALID_HSCRIPT;
-				return *this;
-			}
-
-			inline const std::string &name() const noexcept
-			{ return name_; }
-
-		private:
-			inline type(std::string_view name__, ffi_type *type_, gsdk::HSCRIPT table_) noexcept
-				: ptr{type_}, name_{name__}, table{table_}
-			{
-			}
-
-			ffi_type *ptr;
-			std::string name_;
-			gsdk::HSCRIPT table;
-
-		private:
-			type() noexcept = delete;
-			type(const type &) = delete;
-			type &operator=(const type &) = delete;
-		};
-
 		bool register_type(ffi_type *ptr, std::string_view type_name) noexcept;
 
-		std::vector<type> types;
+		std::unordered_map<ffi_type *, std::unique_ptr<type>> types;
 		gsdk::HSCRIPT types_table{gsdk::INVALID_HSCRIPT};
 
 	private:

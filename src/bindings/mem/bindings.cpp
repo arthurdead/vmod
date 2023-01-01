@@ -73,7 +73,7 @@ namespace vmod::bindings::mem
 		for(const auto &it : singleton::instance().types) {
 			docs::ident(file, 2);
 			file += "type "sv;
-			file += it.name();
+			file += it.second->name();
 			file += ";\n"sv;
 		}
 		docs::ident(file, 1);

@@ -168,7 +168,14 @@ namespace gsdk
 
 	void ConVar::Create(const char *name, const char *help, int flags)
 	{
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 		Create(name, nullptr, flags, help, false, 0.0f, false, 0.0f, nullptr);
+	#elif GSDK_ENGINE == GSDK_ENGINE_TF2
+		ConCommandBase::Create(name, help, flags);
+		m_pParent = this;
+	#else
+		#error
+	#endif
 	}
 
 #if GSDK_ENGINE == GSDK_ENGINE_L4D2

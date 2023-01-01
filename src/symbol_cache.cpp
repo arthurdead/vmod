@@ -1,5 +1,6 @@
 #include "symbol_cache.hpp"
 #include "gsdk.hpp"
+#include <string_view>
 #include <unistd.h>
 #include <fcntl.h>
 #include <cstring>
@@ -98,7 +99,7 @@ namespace vmod
 	{
 		qualification_info::resolve(base);
 
-		vtable.resolve(base);
+		vtable_.resolve(base);
 	}
 
 	void symbol_cache::resolve(void *base) noexcept
@@ -111,6 +112,7 @@ namespace vmod
 	bool symbol_cache::read_elf(int fd, void *base) noexcept
 	{
 		using namespace std::literals::string_literals;
+		using namespace std::literals::string_view_literals;
 
 		Elf *elf{elf_begin(fd, ELF_C_READ, nullptr)};
 		if(!elf) {
@@ -157,11 +159,6 @@ namespace vmod
 			for(std::size_t i{0}; i < count; ++i) {
 				gelf_getsym(scn_data, static_cast<int>(i), &sym);
 
-				switch(GELF_ST_BIND(sym.st_info)) {
-					case STB_LOCAL: break;
-					default: continue;
-				}
-
 				switch(GELF_ST_TYPE(sym.st_info)) {
 					case STT_OBJECT:
 					case STT_FUNC: break;
@@ -175,6 +172,26 @@ namespace vmod
 
 				std::string_view name_mangled{elf_strptr(elf, scn_hdr.sh_link, sym.st_name)};
 				if(name_mangled.empty()) {
+					continue;
+				}
+
+				int bind{GELF_ST_BIND(sym.st_info)};
+				switch(bind) {
+					case STB_LOCAL:
+					case STB_GLOBAL: break;
+					default: continue;
+				}
+
+				if(bind == STB_GLOBAL) {
+					if(name_mangled == "__cxa_pure_virtual"sv) {
+						std::unique_ptr<qualification_info::name_info> info{new qualification_info::name_info};
+						std::ptrdiff_t offset{static_cast<std::ptrdiff_t>(sym.st_value)};
+						info->offset_ = offset;
+						info->size_ = static_cast<std::size_t>(sym.st_size);
+						info->resolve(base);
+						auto name_it{global_qual.names.emplace(name_mangled, std::move(info)).first};
+						offset_map.emplace(offset, pair_t{qualifications.end(),name_it});
+					}
 					continue;
 				}
 
@@ -209,22 +226,21 @@ namespace vmod
 		for(auto &it : qualifications) {
 			class_info *info{dynamic_cast<class_info *>(it.second.get())};
 			if(info) {
-				std::size_t vtable_size{info->vtable.size_};
+				std::size_t vtable_size{info->vtable_.size_};
 				if(vtable_size == 0) {
 					continue;
 				}
 
-				info->vtable.funcs.resize(vtable_size, info->names.end());
+				info->vtable_.funcs_.resize(vtable_size, {qualifications.end(),info->names.end()});
 
-				generic_vtable_t vtable{reinterpret_cast<generic_vtable_t>(const_cast<void **>(&info->vtable.prefix->origin))};
+				generic_vtable_t vtable{reinterpret_cast<generic_vtable_t>(const_cast<void **>(&info->vtable_.prefix->origin))};
 				for(std::size_t i{0}; i < vtable_size; ++i) {
 					generic_plain_mfp_t func{vtable[i]};
 					std::ptrdiff_t off{reinterpret_cast<std::ptrdiff_t>(func) - reinterpret_cast<std::ptrdiff_t>(base)};
 					auto map_it{offset_map.find(off)};
 					if(map_it != offset_map.end()) {
-						auto func_it{map_it->second};
-						func_it->second->vindex = i;
-						info->vtable.funcs[i] = func_it;
+						map_it->second.func->second->vindex = i;
+						info->vtable_.funcs_[i] = map_it->second;
 					}
 				}
 			}
@@ -308,9 +324,9 @@ namespace vmod
 
 				class_info *info{dynamic_cast<class_info *>(this_qual_it->second.get())};
 				if(info) {
-					info->vtable.offset = static_cast<std::ptrdiff_t>(sym.st_value);
-					info->vtable.size_ = ((static_cast<std::size_t>(sym.st_size) - (sizeof(__cxxabiv1::vtable_prefix) - sizeof(const void *))) / sizeof(generic_plain_mfp_t));
-					info->vtable.resolve(base);
+					info->vtable_.offset = static_cast<std::ptrdiff_t>(sym.st_value);
+					info->vtable_.size_ = ((static_cast<std::size_t>(sym.st_size) - (sizeof(__cxxabiv1::vtable_prefix) - sizeof(__cxxabiv1::vtable_prefix::origin))) / sizeof(generic_plain_mfp_t));
+					info->vtable_.resolve(base);
 				}
 
 				name_it = global_qual.names.end();
@@ -449,6 +465,85 @@ namespace vmod
 				switch(component->u.s_binary.right->type) {
 					case DEMANGLE_COMPONENT_FUNCTION_TYPE: {
 						switch(component->u.s_binary.left->type) {
+							case DEMANGLE_COMPONENT_RESTRICT_THIS:
+							case DEMANGLE_COMPONENT_VOLATILE_THIS:
+							case DEMANGLE_COMPONENT_CONST_THIS:
+							case DEMANGLE_COMPONENT_REFERENCE_THIS:
+							case DEMANGLE_COMPONENT_RVALUE_REFERENCE_THIS: {
+								unmangled_buffer = cplus_demangle_print(base_demangle_flags, component->u.s_binary.left->u.s_binary.left->u.s_binary.left, guessed_name_length, &allocated);
+								if(!unmangled_buffer) {
+									name_it = global_qual.names.end();
+									qual_it = qualifications.end();
+									return false;
+								}
+
+								std::string qual_name{unmangled_buffer};
+								std::free(unmangled_buffer);
+
+								if(ignored_qual(qual_name)) {
+									name_it = global_qual.names.end();
+									qual_it = qualifications.end();
+									return false;
+								}
+
+								unmangled_buffer = cplus_demangle_print(base_demangle_flags, component->u.s_binary.left->u.s_binary.left->u.s_binary.right, guessed_name_length, &allocated);
+								if(!unmangled_buffer) {
+									name_it = global_qual.names.end();
+									qual_it = qualifications.end();
+									return false;
+								}
+
+								std::string func_name{unmangled_buffer};
+								std::free(unmangled_buffer);
+
+								unmangled_buffer = cplus_demangle_print(base_demangle_flags, component->u.s_binary.right, guessed_name_length, &allocated);
+								if(!unmangled_buffer) {
+									name_it = global_qual.names.end();
+									qual_it = qualifications.end();
+									return false;
+								}
+
+								func_name += unmangled_buffer;
+								std::free(unmangled_buffer);
+
+								switch(component->u.s_binary.left->type) {
+									case DEMANGLE_COMPONENT_RESTRICT_THIS:
+									func_name += " restrict"sv;
+									break;
+									case DEMANGLE_COMPONENT_VOLATILE_THIS:
+									func_name += " volatile"sv;
+									break;
+									case DEMANGLE_COMPONENT_CONST_THIS:
+									func_name += " const"sv;
+									break;
+									case DEMANGLE_COMPONENT_REFERENCE_THIS:
+									func_name += " &"sv;
+									break;
+									case DEMANGLE_COMPONENT_RVALUE_REFERENCE_THIS:
+									func_name += " &&"sv;
+									break;
+									default: break;
+								}
+
+								auto this_qual_it{qualifications.find(qual_name)};
+								if(this_qual_it == qualifications.end()) {
+									this_qual_it = qualifications.emplace(std::move(qual_name), new class_info{}).first;
+								}
+
+								std::unique_ptr<qualification_info::name_info> info{new qualification_info::name_info};
+
+								std::ptrdiff_t offset{static_cast<std::ptrdiff_t>(sym.st_value)};
+								info->offset_ = offset;
+								info->size_ = static_cast<std::size_t>(sym.st_size);
+								info->resolve(base);
+
+								name_it = this_qual_it->second->names.insert_or_assign(std::move(func_name), std::move(info)).first;
+								qual_it = this_qual_it;
+
+								offset_map.emplace(offset, pair_t{qual_it,name_it});
+
+								return true;
+							}
 							case DEMANGLE_COMPONENT_QUAL_NAME: {
 								unmangled_buffer = cplus_demangle_print(base_demangle_flags, component->u.s_binary.left->u.s_binary.left, guessed_name_length, &allocated);
 								if(!unmangled_buffer) {
@@ -566,7 +661,7 @@ namespace vmod
 								qual_it = this_qual_it;
 
 								if(dynamic_cast<class_info::ctor_info *>(info.get()) == nullptr) {
-									offset_map.emplace(offset, name_it);
+									offset_map.emplace(offset, pair_t{qual_it,name_it});
 								}
 
 								return true;

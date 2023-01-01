@@ -217,6 +217,9 @@ namespace vmod
 			inline bool call_post(const gsdk::ScriptVariant_t *args, std::size_t num_args) noexcept
 			{ return call(callbacks_post, args, num_args); }
 
+		protected:
+			virtual void on_empty() noexcept;
+
 		private:
 			using callbacks_t = std::unordered_map<gsdk::HSCRIPT, callback_instance *>;
 

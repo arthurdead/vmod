@@ -24,8 +24,13 @@ namespace gsdk
 					//delete m_utlstringtoken;
 				} break;
 				case FIELD_CSTRING: {
-					//std::free(m_cstr);
+				#if GSDK_ENGINE == GSDK_ENGINE_TF2
+					std::free(m_cstr);
+				#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
 					delete[] m_cstr;
+				#else
+					#error
+				#endif
 				} break;
 				case FIELD_HSCRIPT_NEW_INSTANCE:
 				case FIELD_HSCRIPT: {
