@@ -11,10 +11,16 @@ namespace vmod::bindings::strtables
 
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
-		desc.func(&string_table::script_find_index, "script_find_index"sv, "find"sv);
+		desc.func(&string_table::script_find_index, "script_find_index"sv, "find"sv)
+		.desc("(str)"sv);
+
 		desc.func(&string_table::script_num_strings, "script_num_strings"sv, "num"sv);
-		desc.func(&string_table::script_get_string, "script_get_string"sv, "get"sv);
-		desc.func(&string_table::script_add_string, "script_add_string"sv, "add"sv);
+
+		desc.func(&string_table::script_get_string, "script_get_string"sv, "get"sv)
+		.desc("(i)"sv);
+
+		desc.func(&string_table::script_add_string, "script_add_string"sv, "add"sv)
+		.desc("(str, num_bytes, ptr|bytes)"sv);
 
 		if(!vm->RegisterClass(&desc)) {
 			error("vmod: failed to register stringtable script class\n"sv);

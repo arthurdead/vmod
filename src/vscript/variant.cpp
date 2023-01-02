@@ -13,13 +13,10 @@ namespace vmod::vscript
 		using namespace std::literals::string_view_literals;
 
 		switch(var.m_type) {
-			case gsdk::FIELD_INTERVAL:
-			case gsdk::FIELD_FLOAT: {
-				return var.m_float > 0.0f;
-			}
-			case gsdk::FIELD_FLOAT64: {
-				return var.m_double > 0.0;
-			}
+			case gsdk::FIELD_FLOAT:
+			return var.m_float > 0.0f;
+			case gsdk::FIELD_FLOAT64:
+			return var.m_double > 0.0;
 			case gsdk::FIELD_STRING: {
 				const char *ccstr{gsdk::vscript::STRING(var.m_tstr)};
 
@@ -50,34 +47,26 @@ namespace vmod::vscript
 				std::from_chars(begin, end, ret);
 				return ret > 0;
 			}
-			case gsdk::FIELD_CHARACTER: {
-				return var.m_char > 0;
-			}
-			case gsdk::FIELD_SHORT: {
-				return var.m_short > 0.0f;
-			}
+			case gsdk::FIELD_CHARACTER:
+			return var.m_char > 0;
+			case gsdk::FIELD_SHORT:
+			return var.m_short > 0.0f;
 			case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
-			case gsdk::FIELD_INTEGER: {
-				return var.m_int > 0;
-			}
-			case gsdk::FIELD_UINT32: {
-				return var.m_uint > 0;
-			}
+			case gsdk::FIELD_INTEGER:
+			return var.m_int > 0;
+			case gsdk::FIELD_UINT32:
+			return var.m_uint > 0;
 		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
-			case gsdk::FIELD_INTEGER64: {
-				return var.m_longlong > 0;
-			}
+			case gsdk::FIELD_INTEGER64:
+			return var.m_longlong > 0;
 		#endif
-			case gsdk::FIELD_UINT64: {
-				return var.m_ulonglong > 0;
-			}
-			case gsdk::FIELD_BOOLEAN: {
-				return var.m_bool;
-			}
+			case gsdk::FIELD_UINT64:
+			return var.m_ulonglong > 0;
+			case gsdk::FIELD_BOOLEAN:
+			return var.m_bool;
 			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
-			case gsdk::FIELD_HSCRIPT: {
-				return detail::to_bool(var.m_object);
-			}
+			case gsdk::FIELD_HSCRIPT:
+			return detail::to_bool(var.m_object);
 			default: return {};
 		}
 	}
@@ -86,7 +75,13 @@ namespace vmod::vscript
 	{
 		if(!value.empty()) {
 			std::size_t len{value.length()};
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2
+			var.m_cstr = static_cast<char *>(std::malloc(len+1));
+		#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
 			var.m_cstr = new char[len+1];
+		#else
+			#error
+		#endif
 			std::strncpy(var.m_cstr, value.c_str(), len);
 			var.m_cstr[len] = '\0';
 			var.m_flags |= gsdk::SV_FREE;
@@ -99,7 +94,13 @@ namespace vmod::vscript
 	{
 		if(!value.empty()) {
 			std::size_t len{value.native().length()};
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2
+			var.m_cstr = static_cast<char *>(std::malloc(len+1));
+		#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
 			var.m_cstr = new char[len+1];
+		#else
+			#error
+		#endif
 			std::strncpy(var.m_cstr, value.c_str(), len);
 			var.m_cstr[len] = '\0';
 			var.m_flags |= gsdk::SV_FREE;

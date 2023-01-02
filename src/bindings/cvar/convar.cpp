@@ -10,11 +10,21 @@ namespace vmod::bindings::cvar
 	{
 		using namespace std::literals::string_view_literals;
 
-		desc.func(&convar::script_set, "script_set"sv, "set"sv);
-		desc.func(&convar::script_set_string, "script_set_string"sv, "set_string"sv);
-		desc.func(&convar::script_set_float, "script_set_float"sv, "set_float"sv);
-		desc.func(&convar::script_set_int, "script_set_int"sv, "set_int"sv);
-		desc.func(&convar::script_set_bool, "script_set_bool"sv, "set_bool"sv);
+		desc.func(&convar::script_set, "script_set"sv, "set"sv)
+		.desc("(value)"sv);
+
+		desc.func(&convar::script_set_string, "script_set_string"sv, "set_string"sv)
+		.desc("(value)"sv);
+
+		desc.func(&convar::script_set_float, "script_set_float"sv, "set_float"sv)
+		.desc("(value)"sv);
+
+		desc.func(&convar::script_set_int, "script_set_int"sv, "set_int"sv)
+		.desc("(value)"sv);
+
+		desc.func(&convar::script_set_bool, "script_set_bool"sv, "set_bool"sv)
+		.desc("(value)"sv);
+
 		desc.func(&convar::script_get, "script_get"sv, "get"sv);
 		desc.func(&convar::script_get_string, "script_get_string"sv, "string"sv);
 		desc.func(&convar::script_get_float, "script_get_float"sv, "float"sv);

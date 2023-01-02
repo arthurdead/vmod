@@ -63,50 +63,64 @@ namespace vmod::bindings::ent
 	ffi_type *detail::dataprop_base::guess_type(const gsdk::typedescription_t *prop, [[maybe_unused]] const gsdk::datamap_t *) noexcept
 	{
 		switch(prop->fieldType) {
-			case gsdk::FIELD_INTERVAL:
 			case gsdk::FIELD_MODELINDEX:
 			case gsdk::FIELD_MATERIALINDEX:
 			case gsdk::FIELD_TICK:
+			return &ffi_type_sint;
 			case gsdk::FIELD_INTEGER: {
-				return &ffi_type_sint;
+				switch(prop->fieldSizeInBytes) {
+					case sizeof(char):
+					return &ffi_type_schar;
+					case sizeof(short):
+					return &ffi_type_sshort;
+					case sizeof(int):
+					return &ffi_type_sint;
+					case sizeof(long long):
+					return &ffi_type_sint64;
+					default: return nullptr;
+				}
 			}
+			case gsdk::FIELD_UINT32:
+			return &ffi_type_uint32;
 		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
-			case gsdk::FIELD_INTEGER64: {
-				return &ffi_type_sint64;
-			}
+			case gsdk::FIELD_INTEGER64:
+			return &ffi_type_sint64;
 		#endif
+			case gsdk::FIELD_UINT64:
+			return &ffi_type_uint64;
 			case gsdk::FIELD_FLOAT: {
-				return &ffi_type_float;
+				switch(prop->fieldSizeInBytes) {
+					case sizeof(float):
+					return &ffi_type_float;
+					case sizeof(double):
+					return &ffi_type_double;
+					case sizeof(long double):
+					return &ffi_type_longdouble;
+					default: return nullptr;
+				}
 			}
-			case gsdk::FIELD_SHORT: {
-				return &ffi_type_sshort;
-			}
-			case gsdk::FIELD_BOOLEAN: {
-				return &ffi_type_bool;
-			}
-			case gsdk::FIELD_CHARACTER: {
-				return &ffi_type_schar;
-			}
-			case gsdk::FIELD_COLOR32: {
-				return &ffi_type_color32;
-			}
+			case gsdk::FIELD_FLOAT64:
+			return &ffi_type_double;
+			case gsdk::FIELD_SHORT:
+			return &ffi_type_sshort;
+			case gsdk::FIELD_BOOLEAN:
+			return &ffi_type_bool;
+			case gsdk::FIELD_CHARACTER:
+			return &ffi_type_schar;
+			case gsdk::FIELD_COLOR32:
+			return &ffi_type_color32;
 			case gsdk::FIELD_VECTOR:
-			case gsdk::FIELD_POSITION_VECTOR: {
-				return &ffi_type_vector;
-			}
-			case gsdk::FIELD_EHANDLE: {
-				return &ffi_type_ehandle;
-			}
-			case gsdk::FIELD_TIME: {
-				return &ffi_type_float;
-			}
-			case gsdk::FIELD_STRING: {
-				return &ffi_type_object_tstr;
-			}
+			case gsdk::FIELD_POSITION_VECTOR:
+			return &ffi_type_vector;
+			case gsdk::FIELD_EHANDLE:
+			return &ffi_type_ehandle;
+			case gsdk::FIELD_TIME:
+			return &ffi_type_float;
+			case gsdk::FIELD_STRING:
+			return &ffi_type_object_tstr;
 			case gsdk::FIELD_MODELNAME:
-			case gsdk::FIELD_SOUNDNAME: {
-				return &ffi_type_cstr;
-			}
+			case gsdk::FIELD_SOUNDNAME:
+			return &ffi_type_cstr;
 			default:
 			return nullptr;
 		}

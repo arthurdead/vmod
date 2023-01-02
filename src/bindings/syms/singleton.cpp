@@ -18,8 +18,11 @@ namespace vmod::bindings::syms
 
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
-		desc.func(&singleton::script_lookup, "script_lookup"sv, "lookup"sv);
-		desc.func(&singleton::script_lookup_global, "script_lookup_global"sv, "lookup_global"sv);
+		desc.func(&singleton::script_lookup, "script_lookup"sv, "lookup"sv)
+		.desc("[qualification](class)"sv);
+
+		desc.func(&singleton::script_lookup_global, "script_lookup_global"sv, "lookup_global"sv)
+		.desc("[name](sig)"sv);
 
 		if(!vm->RegisterClass(&desc)) {
 			error("vmod: failed to register syms singleton class\n"sv);
@@ -38,8 +41,10 @@ namespace vmod::bindings::syms
 	{
 		using namespace std::literals::string_view_literals;
 
-		desc.func(&qualification_it::script_name, "script_name"sv, "name"sv);
-		desc.func(&qualification_it::script_lookup, "script_lookup"sv, "lookup"sv);
+		desc.func(&qualification_it::script_name, "script_name"sv, "signature"sv);
+
+		desc.func(&qualification_it::script_lookup, "script_lookup"sv, "lookup"sv)
+		.desc("[name](sig)"sv);
 
 		if(!plugin::owned_instance::register_class(&desc)) {
 			error("vmod: failed to register syms qualification class\n"sv);
@@ -59,12 +64,21 @@ namespace vmod::bindings::syms
 		using namespace std::literals::string_view_literals;
 
 		desc.func(&name_it::script_name, "script_name"sv, "name"sv);
-		desc.func(&name_it::script_addr, "script_addr"sv, "addr"sv);
-		desc.func(&name_it::script_func, "script_func"sv, "func"sv);
-		desc.func(&name_it::script_mfp, "script_mfp"sv, "mfp"sv);
+
+		desc.func(&name_it::script_addr, "script_addr"sv, "addr"sv)
+		.desc("[ptr]"sv);
+
+		desc.func(&name_it::script_func, "script_func"sv, "func"sv)
+		.desc("[fp]"sv);
+
+		desc.func(&name_it::script_mfp, "script_mfp"sv, "mfp"sv)
+		.desc("[mfp]"sv);
+
 		desc.func(&name_it::script_size, "script_size"sv, "size"sv);
 		desc.func(&name_it::script_vindex, "script_vindex"sv, "vidx"sv);
-		desc.func(&name_it::script_lookup, "script_lookup"sv, "lookup"sv);
+
+		desc.func(&name_it::script_lookup, "script_lookup"sv, "lookup"sv)
+		.desc("[name](sig)"sv);
 
 		if(!plugin::owned_instance::register_class(&desc)) {
 			error("vmod: failed to register syms name class\n"sv);

@@ -2,6 +2,7 @@
 #include "gsdk.hpp"
 #include "main.hpp"
 #include "filesystem.hpp"
+#include <cstddef>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -119,6 +120,49 @@ namespace vmod
 		include_dir /= "vscripts"sv;
 		std::strncpy(path_buff, include_dir.c_str(), include_dir.native().length());
 		TPPLexer_AddIncludePath(path_buff, include_dir.native().length());
+
+		auto add_define{
+			[](std::string_view name, auto &&value) noexcept -> bool {
+				using decayed_t = std::decay_t<decltype(value)>;
+
+				const char *value_ptr{nullptr};
+				std::size_t value_size{0};
+
+				if constexpr(std::is_same_v<decayed_t, std::nullptr_t>) {
+					
+				} else if constexpr(std::is_same_v<decayed_t, std::string_view>) {
+					value_ptr = value.data();
+					value_size = value.size();
+				} else if constexpr(std::is_integral_v<decayed_t>) {
+					char *begin{msg_buff};
+					char *end{begin + (6 + 6)};
+
+					std::to_chars_result tc_res{std::to_chars(begin, end, value)};
+					tc_res.ptr[0] = '\0';
+
+					value_ptr = begin;
+					value_size = std::strlen(begin);
+				} else {
+					static_assert(false_t<decayed_t>::value);
+				}
+
+				return (TPPLexer_Define(name.data(), name.size(), value_ptr, value_size, TPPLEXER_DEFINE_FLAG_BUILTIN) > 0);
+			}
+		};
+
+		add_define("GSDK_ENGINE_TF2"sv, GSDK_ENGINE_TF2);
+		add_define("GSDK_ENGINE_L4D2"sv, GSDK_ENGINE_L4D2);
+		add_define("GSDK_ENGINE_PORTAL2"sv, GSDK_ENGINE_PORTAL2);
+		add_define("GSDK_ENGINE"sv, GSDK_ENGINE);
+
+		add_define("GSDK_DLL_HYBRID"sv, GSDK_DLL_HYBRID);
+		add_define("GSDK_DLL_SERVER"sv, GSDK_DLL_SERVER);
+		add_define("GSDK_DLL_CLIENT"sv, GSDK_DLL_CLIENT);
+		add_define("GSDK_DLL"sv, GSDK_DLL);
+
+	#ifdef GSDK_NO_SYMBOLS
+		add_define("GSDK_NO_SYMBOLS"sv, nullptr);
+	#endif
 
 		return true;
 	}

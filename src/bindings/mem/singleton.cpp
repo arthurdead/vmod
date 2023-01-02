@@ -29,13 +29,13 @@ namespace vmod::bindings::mem
 		.desc("[container](num, size)"sv);
 
 		desc.func(&singleton::script_allocate_type, "script_allocate_type"sv, "allocate_type"sv)
-		.desc("[container](type|type)"sv);
+		.desc("[container](types::type|type)"sv);
 
 		desc.func(&singleton::script_read, "script_read"sv, "read"sv)
-		.desc("(ptr|, type|type)"sv);
+		.desc("(ptr|, types::type|type)"sv);
 
 		desc.func(&singleton::script_write, "script_write"sv, "write"sv)
-		.desc("(ptr|, type|type, value)"sv);
+		.desc("(ptr|, types::type|type, value)"sv);
 
 		desc.func(&singleton::script_add, "script_add"sv, "add"sv)
 		.desc("[ptr](ptr|, offset)"sv);

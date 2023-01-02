@@ -52,16 +52,6 @@ namespace vmod::bindings::ffi
 
 		file += "namespace ffi\n{\n"sv;
 
-		docs::write(&detour::desc, true, 1, file, false);
-		file += "\n\n"sv;
-
-		docs::write(&caller::desc, true, 1, file, false);
-		file += "\n\n"sv;
-
-		docs::write(&singleton::desc, false, 1, file, false);
-
-		file += '\n';
-
 		docs::ident(file, 1);
 		file += "enum class types\n"sv;
 		docs::ident(file, 1);
@@ -76,7 +66,17 @@ namespace vmod::bindings::ffi
 		file += "{\n"sv;
 		docs::write(file, 2, singleton::instance().abi_table, docs::write_enum_how::normal);
 		docs::ident(file, 1);
-		file += "};\n}"sv;
+		file += "};\n\n"sv;
+
+		docs::write(&detour::desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		docs::write(&caller::desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		docs::write(&singleton::desc, false, 1, file, false);
+
+		file += '}';
 
 		std::filesystem::path doc_path{dir};
 		doc_path /= "ffi"sv;

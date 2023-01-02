@@ -23,3 +23,20 @@
 #define GSDK_DLL_CLIENT 2
 
 #define GSDK_DLL GSDK_DLL_HYBRID
+
+#if GSDK_DLL == GSDK_DLL_CLIENT
+	#error "not supported yet"
+#endif
+
+#if GSDK_ENGINE == GSDK_ENGINE_PORTAL2
+	#define GSDK_NO_SYMBOLS
+#elif GSDK_ENGINE == GSDK_ENGINE_TF2 || \
+		GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_DLL == GSDK_DLL_CLIENT
+		#define GSDK_NO_SYMBOLS
+	#endif
+#endif
+
+#ifdef GSDK_NO_SYMBOLS
+	#error "not supported yet"
+#endif

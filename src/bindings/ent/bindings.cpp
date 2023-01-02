@@ -93,6 +93,21 @@ namespace vmod::bindings::ent
 		docs::write(&dataprop::desc, true, 1, file, false);
 		file += "\n\n"sv;
 
+		docs::ident(file, 1);
+		file += "struct dataprop_description\n"sv;
+		docs::ident(file, 1);
+		file += "{\n"sv;
+		docs::ident(file, 2);
+		file += "char[] name;\n"sv;
+		docs::ident(file, 2);
+		file += "mem::types::type type;\n"sv;
+		docs::ident(file, 2);
+		file += "optional<char[]> external_name;\n"sv;
+		docs::ident(file, 2);
+		file += "optional<int> num;\n"sv;
+		docs::ident(file, 1);
+		file += "};\n\n"sv;
+
 		docs::write(&singleton::desc, false, 1, file, false);
 
 		file += '}';

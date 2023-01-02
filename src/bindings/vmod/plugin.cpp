@@ -12,8 +12,11 @@ namespace vmod
 
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
-		desc.func(&plugin::script_lookup_function, "script_lookup_function"sv, "lookup_function"sv);
-		desc.func(&plugin::script_lookup_value, "script_lookup_value"sv, "lookup_value"sv);
+		desc.func(&plugin::script_lookup_function, "script_lookup_function"sv, "lookup_function"sv)
+		.desc("[function](name)"sv);
+
+		desc.func(&plugin::script_lookup_value, "script_lookup_value"sv, "lookup_value"sv)
+		.desc("(name)"sv);
 
 		if(!vm->RegisterClass(&desc)) {
 			error("vmod: failed to register plugin script class\n"sv);

@@ -2,7 +2,6 @@
 #include <cstddef>
 #include <functional>
 #include <iostream>
-#include "symbol_cache.hpp"
 #include "vscript/vscript.hpp"
 #include "gsdk/engine/vsp.hpp"
 #include "gsdk/tier0/dbg.hpp"
@@ -725,10 +724,12 @@ namespace vmod
 		#endif
 		}
 
+	#ifndef GSDK_NO_SYMBOLS
 		if(!symbol_cache::initialize()) {
 			std::cout << "\033[0;31m"sv << "vmod: failed to initialize symbol cache\n"sv << "\033[0m"sv;
 			return false;
 		}
+	#endif
 
 		std::filesystem::path exe_filename;
 
@@ -880,6 +881,7 @@ namespace vmod
 			return false;
 		}
 
+	#ifndef GSDK_NO_SYMBOLS
 		const auto &eng_symbols{engine_lib.symbols()};
 		const auto &eng_global_qual{eng_symbols.global()};
 
@@ -979,6 +981,7 @@ namespace vmod
 			return false;
 		}
 	#endif
+	#endif
 
 		std::string_view vscript_lib_name{"vscript.so"sv};
 		if(sv_engine->IsDedicatedServer()) {
@@ -989,6 +992,7 @@ namespace vmod
 			return false;
 		}
 
+	#ifndef GSDK_NO_SYMBOLS
 		const auto &vscript_symbols{vscript_lib.symbols()};
 		const auto &vscript_global_qual{vscript_symbols.global()};
 
@@ -1003,7 +1007,9 @@ namespace vmod
 			error("vmod: missing 'sq_getversion' symbol\n"sv);
 			return false;
 		}
+	#endif
 
+	#ifndef GSDK_NO_SYMBOLS
 		auto RegisterFunction_it{CSquirrelVM_it->second->find("RegisterFunction(ScriptFunctionBinding_t*)"s)};
 		if(RegisterFunction_it == CSquirrelVM_it->second->end()) {
 			warning("vmod: missing 'CSquirrelVM::RegisterFunction(ScriptFunctionBinding_t*)' symbol\n"sv);
@@ -1038,6 +1044,7 @@ namespace vmod
 		} else {
 			SetValue_var = SetValue_var_it->second->mfp<decltype(SetValue_var)>();
 		}
+	#endif
 
 		if(!detours_prevm()) {
 			return false;
@@ -1050,7 +1057,11 @@ namespace vmod
 		}
 
 		{
+		#ifndef GSDK_NO_SYMBOLS
 			game_sq_ver = sq_getversion_it->second->func<decltype(::sq_getversion)>()();
+		#else
+			#error
+		#endif
 			curr_sq_ver = ::sq_getversion();
 
 			if(curr_sq_ver != SQUIRREL_VERSION_NUMBER) {
@@ -1086,6 +1097,7 @@ namespace vmod
 			}
 		}
 
+	#ifndef GSDK_NO_SYMBOLS
 		auto g_Script_init_it{vscript_global_qual.find("g_Script_init"s)};
 
 		auto sq_setparamscheck_it{vscript_global_qual.find("sq_setparamscheck"s)};
@@ -1143,7 +1155,9 @@ namespace vmod
 			error("vmod: missing 'g_SendTables' symbol\n"sv);
 			return false;
 		}
+	#endif
 
+	#ifndef GSDK_NO_SYMBOLS
 		if(g_Script_init_it == vscript_global_qual.end()) {
 			warning("vmod: missing 'g_Script_init' symbol\n");
 		} else {
@@ -1155,6 +1169,7 @@ namespace vmod
 		} else {
 			g_Script_spawn_helper = g_Script_spawn_helper_it->second->addr<const unsigned char *>();
 		}
+	#endif
 
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		RegisterScriptFunctions = RegisterScriptFunctions_it->second->mfp<decltype(RegisterScriptFunctions)>();
@@ -1228,11 +1243,15 @@ namespace vmod
 				info_it->second.script_desc = script_desc_it->second;
 			}
 
+		#ifndef GSDK_NO_SYMBOLS
 			auto sv_sym_it{sv_symbols.find(it.first)};
 			if(sv_sym_it == sv_symbols.end()) {
 				error("vmod: missing '%s' symbols\n"sv, it.first.c_str());
 				return false;
 			}
+		#else
+			#error
+		#endif
 
 			auto GetDataDescMap_it{sv_sym_it->second->find("GetDataDescMap()"s)};
 			if(GetDataDescMap_it != sv_sym_it->second->end()) {
@@ -1719,6 +1738,8 @@ namespace vmod
 
 										gsdk::fieldtype_t type{targetprop.fieldType};
 
+										std::size_t size{static_cast<std::size_t>(targetprop.fieldSizeInBytes)};
+
 										if(targetprop.fieldType == gsdk::FIELD_EMBEDDED) {
 											file += targetprop.td->dataClassName;
 										} else {
@@ -1746,7 +1767,7 @@ namespace vmod
 												} break;
 											}
 
-											file += bindings::docs::type_name(type);
+											file += bindings::docs::type_name(type, size);
 										}
 
 										file += ' ';
@@ -1771,7 +1792,7 @@ namespace vmod
 										if(targetprop.fieldType != gsdk::FIELD_EMBEDDED) {
 											if(targetprop.flags & gsdk::FTYPEDESC_INPUT) {
 												file += '(';
-												file += bindings::docs::type_name(targetprop.fieldType);
+												file += bindings::docs::type_name(targetprop.fieldType, size);
 												file += ')';
 											}
 										}

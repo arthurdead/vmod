@@ -45,9 +45,6 @@ namespace vmod::bindings::cvar
 
 		file += "namespace cvar\n{\n"sv;
 
-		docs::write(&convar::desc, true, 1, file, false);
-		file += "\n\n"sv;
-
 		docs::ident(file, 1);
 		file += "enum class flags\n"sv;
 		docs::ident(file, 1);
@@ -55,6 +52,9 @@ namespace vmod::bindings::cvar
 		docs::write(file, 2, singleton::instance().flags_table, docs::write_enum_how::flags);
 		docs::ident(file, 1);
 		file += "};\n\n"sv;
+
+		docs::write(&convar::desc, true, 1, file, false);
+		file += "\n\n"sv;
 
 		docs::write(&singleton::desc, false, 1, file, false);
 

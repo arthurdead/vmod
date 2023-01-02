@@ -45,13 +45,6 @@ namespace vmod::bindings::mem
 
 		file += "namespace mem\n{\n"sv;
 
-		docs::write(&container::desc, true, 1, file, false);
-		file += "\n\n"sv;
-
-		docs::write(&singleton::desc, false, 1, file, false);
-
-		file += '\n';
-
 		docs::ident(file, 1);
 		file += "namespace types\n"sv;
 		docs::ident(file, 1);
@@ -73,7 +66,14 @@ namespace vmod::bindings::mem
 			file += ";\n"sv;
 		}
 		docs::ident(file, 1);
-		file += "}\n}"sv;
+		file += "}\n\n"sv;
+
+		docs::write(&container::desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		docs::write(&singleton::desc, false, 1, file, false);
+
+		file += "}\n"sv;
 
 		std::filesystem::path doc_path{dir};
 		doc_path /= "mem"sv;

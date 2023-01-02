@@ -61,6 +61,9 @@ namespace gsdk
 		FIELD_QANGLE
 	};
 
+	static_assert(sizeof(fieldtype_t) == sizeof(int));
+	static_assert(sizeof(ExtendedFieldType) == sizeof(int));
+
 #if GSDK_ENGINE == GSDK_ENGINE_TF2
 	static_assert(FIELD_VOID ==    0);
 	static_assert(FIELD_FLOAT ==   1);
@@ -129,7 +132,7 @@ namespace gsdk
 		bool operator!=(const typedescription_t &) const noexcept = default;
 		#pragma GCC diagnostic pop
 
-		fieldtype_t fieldType{FIELD_VOID};
+		int fieldType{FIELD_VOID};
 		const char *fieldName{nullptr};
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		int fieldOffset[TD_OFFSET_COUNT]{0,0};

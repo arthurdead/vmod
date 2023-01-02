@@ -41,13 +41,13 @@ namespace vmod::bindings::syms
 
 		file += "namespace syms\n{\n"sv;
 
-		docs::write(&singleton::desc, true, 1, file, false);
+		docs::write(&singleton::name_it::desc, true, 1, file, false);
 		file += "\n\n"sv;
 
 		docs::write(&singleton::qualification_it::desc, true, 1, file, false);
 		file += "\n\n"sv;
 
-		docs::write(&singleton::name_it::desc, true, 1, file, false);
+		docs::write(&singleton::desc, true, 1, file, false);
 		file += "\n\n"sv;
 
 		docs::ident(file, 1);

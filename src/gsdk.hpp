@@ -14,7 +14,9 @@
 #include "gsdk/vscript/vscript.hpp"
 #include "gsdk/tier0/dbg.hpp"
 #include "gsdk/server/baseentity.hpp"
+#ifndef GSDK_NO_SYMBOLS
 #include "symbol_cache.hpp"
+#endif
 
 namespace vmod
 {
@@ -179,11 +181,13 @@ namespace vmod
 
 		bool load(const std::filesystem::path &path) noexcept override;
 
+	#ifndef GSDK_NO_SYMBOLS
 		inline const symbol_cache &symbols() const noexcept
 		{ return syms; }
 
 	private:
 		symbol_cache syms;
+	#endif
 
 	private:
 		gsdk_engine_library(const gsdk_engine_library &) = delete;
@@ -199,11 +203,13 @@ namespace vmod
 
 		bool load(const std::filesystem::path &path) noexcept override;
 
+	#ifndef GSDK_NO_SYMBOLS
 		inline const symbol_cache &symbols() const noexcept
 		{ return syms; }
 
 	private:
 		symbol_cache syms;
+	#endif
 
 	private:
 		gsdk_server_library(const gsdk_server_library &) = delete;
@@ -231,11 +237,13 @@ namespace vmod
 
 		bool load(const std::filesystem::path &path) noexcept override;
 
+	#ifndef GSDK_NO_SYMBOLS
 		inline const symbol_cache &symbols() const noexcept
 		{ return syms; }
 
 	private:
 		symbol_cache syms;
+	#endif
 
 	private:
 		gsdk_vscript_library(const gsdk_vscript_library &) = delete;

@@ -19,7 +19,8 @@ namespace vmod::bindings::fs
 
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
-		desc.func(&singleton::script_join_paths, "script_join_paths"sv, "join_paths"sv);
+		desc.func(&singleton::script_join_paths, "script_join_paths"sv, "join_paths"sv)
+		.desc("[path]"sv);
 
 		desc.func(&singleton::script_glob, "script_glob"sv, "glob"sv)
 		.desc("[array<path>](pattern)"sv);

@@ -70,11 +70,13 @@ namespace vmod
 		inline squirrel_preprocessor &preprocessor() noexcept
 		{ return pp; }
 
+	#ifndef GSDK_NO_SYMBOLS
 		inline gsdk::HSCRIPT symbols_table() noexcept
 		{ return symbols_table_; }
 
 		inline const symbol_cache &sv_syms() const noexcept
 		{ return server_lib.symbols(); }
+	#endif
 
 		static main &instance() noexcept;
 

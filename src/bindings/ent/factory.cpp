@@ -12,7 +12,9 @@ namespace vmod::bindings::ent
 	{
 		using namespace std::literals::string_view_literals;
 
-		desc.func(&factory_ref::script_create, "script_create"sv, "create"sv);
+		desc.func(&factory_ref::script_create, "script_create"sv, "create"sv)
+		.desc("[entity](classname)"sv);
+
 		desc.func(&factory_ref::script_size, "script_size"sv, "size"sv);
 
 		if(!plugin::owned_instance::register_class(&desc)) {
@@ -44,7 +46,9 @@ namespace vmod::bindings::ent
 	{
 		using namespace std::literals::string_view_literals;
 
-		desc.func(&factory_impl::script_create_sized, "script_create_sized"sv, "create_sized"sv);
+		desc.func(&factory_impl::script_create_sized, "script_create_sized"sv, "create_sized"sv)
+		.desc("[entity](classname, size)"sv);
+
 		desc.base(factory_ref::desc);
 
 		if(!plugin::owned_instance::register_class(&desc)) {

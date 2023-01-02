@@ -21,16 +21,16 @@ namespace vmod::bindings::ffi
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		desc.func(&singleton::script_create_static_cif, "script_create_static_cif"sv, "cif_static"sv)
-		.desc("[cif](abi|abi, type|ret, array<type>|args)"sv);
+		.desc("[cif](abi|, types|ret, array<types>|args)"sv);
 
 		desc.func(&singleton::script_create_member_cif, "script_create_member_cif"sv, "cif_member"sv)
-		.desc("[cif](abi|abi, type|ret, array<type>|args)"sv);
+		.desc("[cif](abi|, types|ret, array<types>|args)"sv);
 
 		desc.func(&singleton::script_create_detour_static, "script_create_detour_static"sv, "detour_static"sv)
-		.desc("[detour](mfp|target, function|callback, abi|abi, type|ret, array<type>|args)"sv);
+		.desc("[detour](fp|target, function|callback, abi|, types|ret, array<types>|args)"sv);
 
 		desc.func(&singleton::script_create_detour_member, "script_create_detour_member"sv, "detour_member"sv)
-		.desc("[detour](mfp|target, function|callback, abi|abi, type|ret, array<type>|args)"sv);
+		.desc("[detour](mfp|target, function|callback, abi|, types|ret, array<types>|args)"sv);
 
 		if(!singleton_base::bindings(&desc)) {
 			return false;

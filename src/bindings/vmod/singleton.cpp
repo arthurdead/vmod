@@ -24,7 +24,9 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
-		desc.func(&main::script_find_plugin, "script_find_plugin"sv, "find_plugin"sv);
+		desc.func(&main::script_find_plugin, "script_find_plugin"sv, "find_plugin"sv)
+		.desc("[plugin](path)"sv);
+
 		desc.func(&main::script_is_map_active, "script_is_map_active"sv, "is_map_active"sv);
 		desc.func(&main::script_is_map_loaded, "script_is_map_loaded"sv, "is_map_loaded"sv);
 		desc.func(&main::script_are_stringtables_created, "script_are_stringtables_created"sv, "are_stringtables_created"sv);
@@ -187,9 +189,12 @@ namespace vmod
 		file += '\n';
 
 		bindings::docs::ident(file, 1);
-		file += "string root_dir;\n\n"sv;
+		file += "fs::path root_dir;\n\n"sv;
 
 		bindings::docs::write(&plugin::owned_instance::desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		bindings::docs::write(&plugin::callback_instance::desc, true, 1, file, false);
 		file += "\n\n"sv;
 
 		bindings::docs::write(&plugin::desc, true, 1, file, false);
@@ -220,7 +225,7 @@ namespace vmod
 		bindings::ffi::write_docs(dir);
 
 		bindings::docs::ident(file, 1);
-		file += "namespace ent;\n\n"sv;
+		file += "namespace ent;\n"sv;
 		bindings::ent::write_docs(dir);
 
 		file += '}';

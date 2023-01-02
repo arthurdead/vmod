@@ -390,7 +390,7 @@ namespace vmod::bindings::docs
 		}
 	}
 
-	std::string_view type_name(gsdk::ScriptDataType_t type) noexcept
+	std::string_view type_name(gsdk::ScriptDataType_t type, std::size_t size) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -410,8 +410,22 @@ namespace vmod::bindings::docs
 			case gsdk::FIELD_UINT64:
 			return "unsigned long long"sv;
 			case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
-			case gsdk::FIELD_INTEGER:
-			return "int"sv;
+			case gsdk::FIELD_INTEGER: {
+				switch(size) {
+					case sizeof(char):
+					return "char"sv;
+					case sizeof(short):
+					return "short"sv;
+					case sizeof(int):
+					return "int"sv;
+					case sizeof(long long):
+					return "long long"sv;
+					case static_cast<std::size_t>(-1):
+					return "int"sv;
+					default:
+					return "<<unknown>>"sv;
+				}
+			}
 			case gsdk::FIELD_MODELINDEX:
 			return "model_index"sv;
 			case gsdk::FIELD_MATERIALINDEX:
@@ -420,8 +434,22 @@ namespace vmod::bindings::docs
 			return "int"sv;
 			case gsdk::FIELD_FLOAT64:
 			return "double"sv;
-			case gsdk::FIELD_FLOAT:
+			case gsdk::FIELD_FLOAT: {
+				switch(size) {
+					case sizeof(float):
+					return "float"sv;
+					case sizeof(double):
+					return "double"sv;
+					case sizeof(long double):
+					return "long double"sv;
+					case static_cast<std::size_t>(-1):
+					return "float"sv;
+					default:
+					return "<<unknown>>"sv;
+				}
+			}
 			case gsdk::FIELD_INTERVAL:
+			return "interval_t"sv;
 			case gsdk::FIELD_TIME:
 			return "float"sv;
 			case gsdk::FIELD_BOOLEAN:
@@ -461,12 +489,17 @@ namespace vmod::bindings::docs
 			case gsdk::FIELD_EMBEDDED:
 			return "struct"sv;
 			case gsdk::FIELD_CUSTOM:
-			return "unknown"sv;
+			return "<<unknown>>"sv;
 			case gsdk::FIELD_TYPEUNKNOWN:
-			return "unknown"sv;
+			return "<<unknown>>"sv;
 			default:
 			return detail::datatype_to_raw_str(type);
 		}
+	}
+
+	std::string_view type_name(gsdk::ScriptDataType_t type) noexcept
+	{
+		return type_name(type, static_cast<std::size_t>(-1));
 	}
 
 	std::string_view get_class_desc_name(const gsdk::ScriptClassDesc_t *desc) noexcept

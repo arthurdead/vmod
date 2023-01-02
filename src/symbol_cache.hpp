@@ -1,5 +1,9 @@
 #pragma once
 
+#include "gsdk/config.hpp"
+
+#ifndef GSDK_NO_SYMBOLS
+
 #include <cstddef>
 #include <string_view>
 #include <string>
@@ -305,3 +309,5 @@ namespace vmod
 		symbol_cache &operator=(symbol_cache &&) = delete;
 	};
 }
+
+#endif

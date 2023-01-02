@@ -38,11 +38,14 @@ namespace vmod::bindings::fs
 
 		file += "namespace fs\n{\n"sv;
 
+		docs::ident(file, 1);
+		file += "using path = char[];\n\n"sv;
+
 		docs::write(&singleton::desc, false, 1, file, false);
 		file += '\n';
 
 		docs::ident(file, 1);
-		file += "string game_dir;\n"sv;
+		file += "path game_dir;\n"sv;
 
 		file += '}';
 

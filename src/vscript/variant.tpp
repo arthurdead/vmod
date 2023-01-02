@@ -18,13 +18,10 @@ namespace vmod::vscript
 
 			switch(var.m_type) {
 				case gsdk::FIELD_TIME:
-				case gsdk::FIELD_INTERVAL:
-				case gsdk::FIELD_FLOAT: {
-					return static_cast<T>(var.m_float);
-				}
-				case gsdk::FIELD_FLOAT64: {
-					return static_cast<T>(var.m_double);
-				}
+				case gsdk::FIELD_FLOAT:
+				return static_cast<T>(var.m_float);
+				case gsdk::FIELD_FLOAT64:
+				return static_cast<T>(var.m_double);
 				case gsdk::FIELD_STRING: {
 					const char *ccstr{gsdk::vscript::STRING(var.m_tstr)};
 
@@ -55,35 +52,27 @@ namespace vmod::vscript
 					std::from_chars(begin, end, ret);
 					return ret;
 				}
-				case gsdk::FIELD_CHARACTER: {
-					return static_cast<T>(var.m_char);
-				}
-				case gsdk::FIELD_SHORT: {
-					return static_cast<T>(var.m_short);
-				}
+				case gsdk::FIELD_CHARACTER:
+				return static_cast<T>(var.m_char);
+				case gsdk::FIELD_SHORT:
+				return static_cast<T>(var.m_short);
 				case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
 				case gsdk::FIELD_TICK:
-				case gsdk::FIELD_INTEGER: {
-					return static_cast<T>(var.m_int);
-				}
-				case gsdk::FIELD_UINT32: {
-					return static_cast<T>(var.m_uint);
-				}
+				case gsdk::FIELD_INTEGER:
+				return static_cast<T>(var.m_int);
+				case gsdk::FIELD_UINT32:
+				return static_cast<T>(var.m_uint);
 			#if GSDK_ENGINE == GSDK_ENGINE_L4D2
-				case gsdk::FIELD_INTEGER64: {
-					return static_cast<T>(var.m_longlong);
-				}
+				case gsdk::FIELD_INTEGER64:
+				return static_cast<T>(var.m_longlong);
 			#endif
-				case gsdk::FIELD_UINT64: {
-					return static_cast<T>(var.m_ulonglong);
-				}
-				case gsdk::FIELD_BOOLEAN: {
-					return var.m_bool ? static_cast<T>(1.0f) : static_cast<T>(0.0f);
-				}
+				case gsdk::FIELD_UINT64:
+				return static_cast<T>(var.m_ulonglong);
+				case gsdk::FIELD_BOOLEAN:
+				return var.m_bool ? static_cast<T>(1.0f) : static_cast<T>(0.0f);
 				case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
-				case gsdk::FIELD_HSCRIPT: {
-					return static_cast<T>(to_float(var.m_object));
-				}
+				case gsdk::FIELD_HSCRIPT:
+				return static_cast<T>(to_float(var.m_object));
 				default: return {};
 			}
 		}
@@ -100,14 +89,11 @@ namespace vmod::vscript
 			using namespace std::literals::string_view_literals;
 
 			switch(var.m_type) {
-				case gsdk::FIELD_INTERVAL:
 				case gsdk::FIELD_TIME:
-				case gsdk::FIELD_FLOAT: {
-					return static_cast<T>(var.m_float);
-				}
-				case gsdk::FIELD_FLOAT64: {
-					return static_cast<T>(var.m_double);
-				}
+				case gsdk::FIELD_FLOAT:
+				return static_cast<T>(var.m_float);
+				case gsdk::FIELD_FLOAT64:
+				return static_cast<T>(var.m_double);
 				case gsdk::FIELD_STRING: {
 					const char *ccstr{gsdk::vscript::STRING(var.m_tstr)};
 
@@ -138,34 +124,26 @@ namespace vmod::vscript
 					std::from_chars(begin, end, ret);
 					return ret;
 				}
-				case gsdk::FIELD_CHARACTER: {
-					return static_cast<T>(var.m_char);
-				}
-				case gsdk::FIELD_SHORT: {
-					return static_cast<T>(var.m_short);
-				}
+				case gsdk::FIELD_CHARACTER:
+				return static_cast<T>(var.m_char);
+				case gsdk::FIELD_SHORT:
+				return static_cast<T>(var.m_short);
 				case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
-				case gsdk::FIELD_INTEGER: {
-					return static_cast<T>(var.m_int);
-				}
-				case gsdk::FIELD_UINT32: {
-					return static_cast<T>(var.m_uint);
-				}
+				case gsdk::FIELD_INTEGER:
+				return static_cast<T>(var.m_int);
+				case gsdk::FIELD_UINT32:
+				return static_cast<T>(var.m_uint);
 			#if GSDK_ENGINE == GSDK_ENGINE_L4D2
-				case gsdk::FIELD_INTEGER64: {
-					return static_cast<T>(var.m_longlong);
-				}
+				case gsdk::FIELD_INTEGER64:
+				return static_cast<T>(var.m_longlong);
 			#endif
-				case gsdk::FIELD_UINT64: {
-					return static_cast<T>(var.m_ulonglong);
-				}
-				case gsdk::FIELD_BOOLEAN: {
-					return var.m_bool ? static_cast<T>(1) : static_cast<T>(0);
-				}
+				case gsdk::FIELD_UINT64:
+				return static_cast<T>(var.m_ulonglong);
+				case gsdk::FIELD_BOOLEAN:
+				return var.m_bool ? static_cast<T>(1) : static_cast<T>(0);
 				case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
-				case gsdk::FIELD_HSCRIPT: {
-					return static_cast<T>(to_int(var.m_object));
-				}
+				case gsdk::FIELD_HSCRIPT:
+				return static_cast<T>(to_int(var.m_object));
 				default: return {};
 			}
 		}
@@ -198,7 +176,6 @@ namespace vmod::vscript
 			constexpr std::size_t buffers_size{variant_str_buffer_max / 5};
 
 			switch(var.m_type) {
-				case gsdk::FIELD_INTERVAL:
 				case gsdk::FIELD_TIME:
 				case gsdk::FIELD_FLOAT: {
 					char *begin{variant_str_buffer};
@@ -221,9 +198,8 @@ namespace vmod::vscript
 				}
 				case gsdk::FIELD_MODELNAME:
 				case gsdk::FIELD_SOUNDNAME:
-				case gsdk::FIELD_CSTRING: {
-					return var.m_ccstr;
-				}
+				case gsdk::FIELD_CSTRING:
+				return var.m_ccstr;
 				case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
 				case gsdk::FIELD_MODELINDEX:
 				case gsdk::FIELD_MATERIALINDEX:

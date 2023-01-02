@@ -1,3 +1,7 @@
+#include "gsdk/config.hpp"
+
+#ifndef GSDK_NO_SYMBOLS
+
 #include "symbol_cache.hpp"
 #include "gsdk.hpp"
 #include <string_view>
@@ -808,3 +812,5 @@ namespace vmod
 		return offset;
 	}
 }
+
+#endif

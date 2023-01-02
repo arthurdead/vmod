@@ -41,7 +41,7 @@ namespace vmod::bindings::ent
 		.desc("[datatable](name, datatable|base, array<dataprop_description>|props)"sv);
 
 		desc.func(&singleton::script_from_ptr, "script_from_ptr"sv, "from_ptr"sv)
-		.desc("(ptr)"sv);
+		.desc("[entity](ptr|)"sv);
 
 		desc.func(&singleton::script_find_factory, "script_find_factory"sv, "find_factory"sv)
 		.desc("[factory_ref](name)"sv);
