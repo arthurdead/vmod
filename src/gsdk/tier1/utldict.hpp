@@ -1,6 +1,8 @@
 #pragma once
 
 #include "utlmemory.hpp"
+#include <cstddef>
+#include <iterator>
 
 namespace gsdk
 {
@@ -37,6 +39,7 @@ namespace gsdk
 		};
 
 		using key_type = typename T::key_type;
+		using element_type = typename T::element_type;
 
 		static constexpr std::size_t npos{M::npos};
 
@@ -74,10 +77,71 @@ namespace gsdk
 		inline bool is_root(std::size_t i) const noexcept
 		{ return static_cast<I>(i) == m_Root; }
 
+		inline std::size_t size() const noexcept
+		{ return static_cast<std::size_t>(m_NumElements); }
+
 		inline const T &operator[](std::size_t i) const noexcept
 		{ return m_Elements[i].m_Data; }
 		inline const T &element(std::size_t i) const noexcept
 		{ return m_Elements[i].m_Data; }
+
+		using node_t = UtlRBTreeNode_t<T, I>;
+
+		struct const_iterator
+		{
+			friend class CUtlRBTree;
+
+		public:
+			const_iterator() = default;
+			const_iterator(const const_iterator &) noexcept = default;
+			const_iterator &operator=(const const_iterator &) noexcept = default;
+			const_iterator(const_iterator &&) noexcept = default;
+			const_iterator &operator=(const_iterator &&) noexcept = default;
+
+			inline const T &operator*() const noexcept
+			{ return base[i].m_Data; }
+			inline const T *operator->() const noexcept
+			{ return &base[i].m_Data; }
+
+			inline const_iterator &operator++() noexcept
+			{
+				++i;
+				return *this;
+			}
+
+			inline const_iterator operator++(int) noexcept
+			{
+				const_iterator tmp{*this};
+				operator++();
+				return tmp;
+			}
+
+			inline bool operator==(const_iterator other) const noexcept
+			{ return (base == other.base && i == other.i); }
+			inline bool operator!=(const_iterator other) const noexcept
+			{ return (base != other.base || i != other.i); }
+
+		private:
+			using base_t = const node_t *;
+
+			inline const_iterator(base_t base_, std::size_t i_) noexcept
+				: base{base_}, i{i_}
+			{
+			}
+
+			base_t base{nullptr};
+			std::size_t i{static_cast<std::size_t>(-1)};
+		};
+
+		inline const_iterator begin() const noexcept
+		{ return const_iterator{m_Elements.data(), 0}; }
+		inline const_iterator end() const noexcept
+		{ return const_iterator{m_Elements.data(), size()}; }
+
+		inline const_iterator cbegin() const noexcept
+		{ return const_iterator{m_Elements.data(), 0}; }
+		inline const_iterator cend() const noexcept
+		{ return const_iterator{m_Elements.data(), size()}; }
 
 		void rotate_left(std::size_t i) noexcept;
 		void rotate_right(std::size_t i) noexcept;
@@ -87,13 +151,11 @@ namespace gsdk
 
 		less_func_t m_LessFunc;
 
-		using node_t = UtlRBTreeNode_t<T, I>;
-
 		M m_Elements;
 		I m_Root;
 		I m_NumElements;
 		I m_FirstFree;
-		typename M::iterator m_LastAlloc;
+		typename M::iterator_t m_LastAlloc;
 
 		node_t *m_pElements{nullptr};
 
@@ -114,16 +176,28 @@ namespace gsdk
 			using key_type = K;
 			using element_type = T;
 
-			K key;
-			T elem;
+			K first;
+			T second;
 		};
 
 		using tree_t = CUtlRBTree<node_t, I>;
 
 		static constexpr std::size_t npos{tree_t::npos};
 
+		using const_iterator = typename tree_t::const_iterator;
+
+		inline const_iterator begin() const noexcept
+		{ return m_Tree.begin(); }
+		inline const_iterator end() const noexcept
+		{ return m_Tree.end(); }
+
+		inline const_iterator cbegin() const noexcept
+		{ return m_Tree.cbegin(); }
+		inline const_iterator cend() const noexcept
+		{ return m_Tree.cend(); }
+
 		inline const K &key(std::size_t i) const noexcept
-		{ return m_Tree[i].key; }
+		{ return m_Tree[i].first; }
 
 		inline std::size_t find(const K &key) const noexcept
 		{ return m_Tree.find(key); }
@@ -148,6 +222,18 @@ namespace gsdk
 		using map_t = CUtlMap<const char *, T, I>;
 
 		static constexpr std::size_t npos{map_t::npos};
+
+		using const_iterator = typename map_t::const_iterator;
+
+		inline const_iterator begin() const noexcept
+		{ return m_Elements.begin(); }
+		inline const_iterator end() const noexcept
+		{ return m_Elements.end(); }
+
+		inline const_iterator cbegin() const noexcept
+		{ return m_Elements.cbegin(); }
+		inline const_iterator cend() const noexcept
+		{ return m_Elements.cend(); }
 
 		inline std::size_t find(std::string_view name) const noexcept
 		{ return m_Elements.find(name.data()); }

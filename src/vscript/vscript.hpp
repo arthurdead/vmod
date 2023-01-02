@@ -12,6 +12,6 @@ namespace vmod::vscript
 		extern std::string_view to_string(gsdk::HSCRIPT object) noexcept;
 		extern std::string_view type_of(gsdk::HSCRIPT object) noexcept;
 		extern bool get_scalar(gsdk::HSCRIPT object, gsdk::ScriptVariant_t *var) noexcept;
-		extern void raise_exception(const char *str) noexcept;
+		extern __attribute__((__format__(__printf__, 1, 2))) bool raise_exception(const char *fmt, ...) noexcept;
 	}
 }

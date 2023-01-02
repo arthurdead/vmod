@@ -64,16 +64,12 @@ namespace vmod::bindings::mem
 		file += "int size;\n"sv;
 		docs::ident(file, 3);
 		file += "int alignment;\n"sv;
-		docs::ident(file, 3);
-		file += "int id;\n"sv;
-		docs::ident(file, 3);
-		file += "string name;\n"sv;
 		docs::ident(file, 2);
 		file += "};\n\n"sv;
 		for(const auto &it : singleton::instance().types) {
 			docs::ident(file, 2);
 			file += "type "sv;
-			file += it.second->name();
+			file += it->name();
 			file += ";\n"sv;
 		}
 		docs::ident(file, 1);

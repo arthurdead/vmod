@@ -29,9 +29,15 @@ namespace vmod::bindings::mem
 	{
 		using namespace std::literals::string_view_literals;
 
-		desc.func(&container::script_set_free_callback, "script_set_free_callback"sv, "hook_free"sv);
-		desc.func(&container::script_release, "script_release"sv, "release"sv);
-		desc.func(&container::script_ptr, "script_ptr"sv, "ptr"sv);
+		desc.func(&container::script_set_free_callback, "script_set_free_callback"sv, "hook_free"sv)
+		.desc("(function|callback)"sv);
+
+		desc.func(&container::script_release, "script_release"sv, "release"sv)
+		.desc("[ptr]"sv);
+
+		desc.func(&container::script_ptr, "script_ptr"sv, "ptr"sv)
+		.desc("[ptr]"sv);
+
 		desc.func(&container::script_size, "script_size"sv, "size"sv);
 
 		if(!plugin::owned_instance::register_class(&desc)) {

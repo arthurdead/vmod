@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdarg>
 #include <cstdint>
 #include <string_view>
 #include "../tier1/interface.hpp"
@@ -14,6 +15,7 @@
 #include <squirrel.h>
 
 #include <cassert>
+#include <type_traits>
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsuggest-override"
@@ -170,7 +172,7 @@ namespace gsdk
 			float m_float;
 			double m_double;
 			//long double m_longdouble;
-			string_t m_tstr;
+			vscript::string_t m_tstr;
 			char *m_cstr;
 			const char *m_ccstr;
 			CUtlStringToken *m_utlstringtoken;
@@ -450,7 +452,25 @@ namespace gsdk
 		virtual void SetInstanceUniqeId(HSCRIPT, const char *) = 0;
 		bool SetInstanceUniqeId2(HSCRIPT instance, const char *root) noexcept;
 		virtual void RemoveInstance(HSCRIPT) = 0;
-		virtual void *GetInstanceValue(HSCRIPT, ScriptClassDesc_t * = nullptr) = 0;
+	private:
+		virtual void *GetInstanceValue_impl(HSCRIPT, ScriptClassDesc_t * = nullptr) = 0;
+	public:
+		template <typename T>
+		inline T *GetInstanceValue(HSCRIPT instance, ScriptClassDesc_t *desc) noexcept
+		{ return reinterpret_cast<T *>(GetInstanceValue_impl(instance, desc)); }
+		template <typename T>
+		inline T *GetInstanceValue(HSCRIPT instance) noexcept
+		{
+			using desc_t = decltype(T::desc);
+
+			static_assert(std::is_base_of_v<ScriptClassDesc_t, desc_t>);
+
+			if constexpr(std::is_pointer_v<desc_t>) {
+				return static_cast<T *>(GetInstanceValue_impl(instance, T::desc));
+			} else {
+				return static_cast<T *>(GetInstanceValue_impl(instance, &T::desc));
+			}
+		}
 		virtual bool GenerateUniqueKey(const char *, char *, int) = 0;
 		template <std::size_t S>
 		bool GenerateUniqueKey(const char *root, char (&buffer)[S]) noexcept
@@ -516,7 +536,11 @@ namespace gsdk
 		virtual void DumpState() = 0;
 		virtual void SetOutputCallback(ScriptOutputFunc_t) = 0;
 		virtual void SetErrorCallback(ScriptErrorFunc_t) = 0;
-		virtual bool RaiseException(const char *) = 0;
+	private:
+		virtual bool RaiseException_impl(const char *) = 0;
+	public:
+		__attribute__((__format__(__printf__, 2, 3))) bool RaiseException(const char *fmt, ...) noexcept;
+		__attribute__((__format__(__printf__, 2, 0))) bool RaiseExceptionv(const char *fmt, va_list vargs) noexcept;
 	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 		virtual HSCRIPT GetRootTable() = 0;
 		virtual HSCRIPT CopyHandle(HSCRIPT) = 0;

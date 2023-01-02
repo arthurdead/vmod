@@ -1,4 +1,4 @@
-#include "sendprop.hpp"
+#include "sendtable.hpp"
 #include "../../main.hpp"
 
 namespace vmod::bindings::ent
@@ -6,6 +6,7 @@ namespace vmod::bindings::ent
 	ffi::cif sendprop::proxy_cif{&ffi_type_void, {&ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_pointer, &ffi_type_sint, &ffi_type_sint}};
 
 	vscript::class_desc<sendprop> sendprop::desc{"ent::sendprop"};
+	vscript::class_desc<sendtable> sendtable::desc{"ent::sendtable"};
 
 	bool sendprop::bindings() noexcept
 	{
@@ -18,8 +19,11 @@ namespace vmod::bindings::ent
 			return false;
 		}
 
-		desc.func(&sendprop::script_hook_proxy, "script_hook_proxy"sv, "hook_proxy"sv);
-		desc.func(&sendprop::script_type, "script_type"sv, "type"sv);
+		desc.func(&sendprop::script_hook_proxy, "script_hook_proxy"sv, "hook_proxy"sv)
+		.desc("[callback_instance](function|callback, post, per_client)"sv);
+
+		desc.func(&sendprop::script_type, "script_type"sv, "type"sv)
+		.desc("[mem::types::type]"sv);
 
 		if(!vm->RegisterClass(&desc)) {
 			error("vmod: failed to register sendprop script class\n"sv);
@@ -134,12 +138,12 @@ namespace vmod::bindings::ent
 		prop->call_post(vargs, std::size(vargs));
 	}
 
-	gsdk::HSCRIPT sendprop::script_hook_proxy(gsdk::HSCRIPT callback, bool post, bool per_client) noexcept
+	gsdk::HSCRIPT sendprop::script_hook_proxy(gsdk::HSCRIPT callback, bool post, [[maybe_unused]] bool per_client) noexcept
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(!callback || callback == gsdk::INVALID_HSCRIPT) {
-			vm->RaiseException("vmod: invalid function");
+			vm->RaiseException("vmod: invalid callback");
 			return nullptr;
 		}
 
@@ -255,6 +259,51 @@ namespace vmod::bindings::ent
 			return nullptr;
 			default:
 			return nullptr;
+		}
+	}
+
+	bool sendtable::bindings() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		gsdk::IScriptVM *vm{main::instance().vm()};
+
+		if(!vm->RegisterClass(&desc)) {
+			error("vmod: failed to register sendtable script class\n"sv);
+			return false;
+		}
+
+		return true;
+	}
+
+	void sendtable::unbindings() noexcept
+	{
+		
+	}
+
+	sendtable::sendtable(gsdk::SendTable *table_) noexcept
+		: table{table_}
+	{
+	}
+
+	bool sendtable::initialize() noexcept
+	{
+		gsdk::IScriptVM *vm{main::instance().vm()};
+
+		instance = vm->RegisterInstance(&desc, this);
+		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+			return false;
+		}
+
+		//TODO!! SetInstanceUniqueID
+
+		return true;
+	}
+
+	sendtable::~sendtable() noexcept
+	{
+		if(instance && instance != gsdk::INVALID_HSCRIPT) {
+			main::instance().vm()->RemoveInstance(instance);
 		}
 	}
 }

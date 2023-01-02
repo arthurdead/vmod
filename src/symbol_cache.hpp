@@ -104,7 +104,7 @@ namespace vmod
 				virtual void resolve(void *base) noexcept;
 
 				std::ptrdiff_t offset_{0};
-				std::size_t vindex{0};
+				std::size_t vindex{static_cast<std::size_t>(-1)};
 				std::size_t size_{0};
 				union {
 					void *addr_;

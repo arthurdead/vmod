@@ -12,8 +12,12 @@ namespace vmod::bindings::ffi
 		using namespace std::literals::string_view_literals;
 
 		desc.func(&caller::script_call, "script_call"sv, "call"sv);
-		desc.func(&caller::script_set_func, "script_set_func"sv, "set_func"sv);
-		desc.func(&caller::script_set_mfp, "script_set_mfp"sv, "set_mfp"sv);
+
+		desc.func(&caller::script_set_func, "script_set_func"sv, "set_func"sv)
+		.desc("(fp|target)"sv);
+
+		desc.func(&caller::script_set_mfp, "script_set_mfp"sv, "set_mfp"sv)
+		.desc("(mfp|target)"sv);
 
 		if(!plugin::owned_instance::register_class(&desc)) {
 			error("vmod: failed to register ffi cif class\n"sv);
@@ -61,8 +65,9 @@ namespace vmod::bindings::ffi
 			return vscript::null();
 		}
 
-		if(!args || num_args != args_types.size()) {
-			vm->RaiseException("vmod: wrong number of parameters");
+		std::size_t required_args{args_types.size()};
+		if(!args || num_args != required_args) {
+			vm->RaiseException("vmod: wrong number of parameters expected %zu got %i", num_args, required_args);
 			return vscript::null();
 		}
 

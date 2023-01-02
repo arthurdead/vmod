@@ -25,16 +25,44 @@ namespace gsdk
 
 		static constexpr std::size_t npos{static_cast<I>(-1)};
 
-		inline const T &operator[](std::size_t i) const noexcept
+		using value_type = T;
+
+		inline const value_type &operator[](std::size_t i) const noexcept
 		{ return m_pMemory[i]; }
-		inline T &operator[](std::size_t i) noexcept
+		inline value_type &operator[](std::size_t i) noexcept
 		{ return m_pMemory[i]; }
+
+		inline std::size_t size() const noexcept
+		{ return static_cast<std::size_t>(m_nAllocationCount); }
+
+		using iterator = value_type *;
+		using const_iterator = const value_type *;
+
+		inline iterator begin() noexcept
+		{ return m_pMemory; }
+		inline iterator end() noexcept
+		{ return (m_pMemory + size()); }
+
+		inline const_iterator begin() const noexcept
+		{ return m_pMemory; }
+		inline const_iterator end() const noexcept
+		{ return (m_pMemory + size()); }
+
+		inline const_iterator cbegin() const noexcept
+		{ return m_pMemory; }
+		inline const_iterator cend() const noexcept
+		{ return (m_pMemory + size()); }
+
+		inline value_type *data() noexcept
+		{ return m_pMemory; }
+		inline const value_type *data() const noexcept
+		{ return m_pMemory; }
 
 		void resize(std::size_t num) noexcept;
 
 		~CUtlMemory() noexcept;
 
-		struct iterator
+		struct iterator_t
 		{
 			I index;
 		};

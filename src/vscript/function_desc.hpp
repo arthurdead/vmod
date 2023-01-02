@@ -36,6 +36,13 @@ namespace vmod::vscript
 		static_assert(gsdk::SF_MEMBER_FUNC == (1 << 0));
 		static_assert(gsdk::SF_NUM_FLAGS == 1);
 
+		void desc(std::string &&description) = delete;
+
+		inline void desc(std::string_view description) noexcept
+		{
+			m_desc.m_pszDescription = description.data();
+		}
+
 	private:
 		function_desc(function_desc &&other) noexcept = default;
 		function_desc &operator=(function_desc &&other) noexcept = default;

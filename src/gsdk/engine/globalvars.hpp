@@ -41,9 +41,9 @@ namespace gsdk
 	class CGlobalVars : public CGlobalVarsBase
 	{
 	public:
-		string_t mapname;
+		engine::string_t mapname;
 		int mapversion;
-		string_t startspot;
+		engine::string_t startspot;
 		MapLoadType_t eLoadType;
 		bool bMapLoadFailed;
 		bool deathmatch;

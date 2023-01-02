@@ -20,10 +20,17 @@ namespace vmod::bindings::ffi
 
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
-		desc.func(&singleton::script_create_static_cif, "script_create_static_cif"sv, "cif_static"sv);
-		desc.func(&singleton::script_create_member_cif, "script_create_member_cif"sv, "cif_member"sv);
-		desc.func(&singleton::script_create_detour_static, "script_create_detour_static"sv, "detour_static"sv);
-		desc.func(&singleton::script_create_detour_member, "script_create_detour_member"sv, "detour_member"sv);
+		desc.func(&singleton::script_create_static_cif, "script_create_static_cif"sv, "cif_static"sv)
+		.desc("[cif](abi|abi, type|ret, array<type>|args)"sv);
+
+		desc.func(&singleton::script_create_member_cif, "script_create_member_cif"sv, "cif_member"sv)
+		.desc("[cif](abi|abi, type|ret, array<type>|args)"sv);
+
+		desc.func(&singleton::script_create_detour_static, "script_create_detour_static"sv, "detour_static"sv)
+		.desc("[detour](mfp|target, function|callback, abi|abi, type|ret, array<type>|args)"sv);
+
+		desc.func(&singleton::script_create_detour_member, "script_create_detour_member"sv, "detour_member"sv)
+		.desc("[detour](mfp|target, function|callback, abi|abi, type|ret, array<type>|args)"sv);
 
 		if(!singleton_base::bindings(&desc)) {
 			return false;
@@ -150,6 +157,21 @@ namespace vmod::bindings::ffi
 				error("vmod: failed to set ffi cstr type value\n"sv);
 				return false;
 			}
+
+			if(!vm->SetValue(types_table, "tstr_obj", vscript::variant{&ffi_type_object_tstr})) {
+				error("vmod: failed to set ffi tstr type value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(types_table, "tstr_weak", vscript::variant{&ffi_type_weak_tstr})) {
+				error("vmod: failed to set ffi tstr type value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(types_table, "tstr_plain", vscript::variant{&ffi_type_plain_tstr})) {
+				error("vmod: failed to set ffi tstr type value\n"sv);
+				return false;
+			}
 		}
 
 		if(!vm->SetValue(scope, "types", types_table)) {
@@ -236,7 +258,7 @@ namespace vmod::bindings::ffi
 		}
 
 		if(!vm->IsArray(args)) {
-			vm->RaiseException("vmod: invalid args");
+			vm->RaiseException("vmod: args is not a array");
 			return false;
 		}
 
@@ -247,7 +269,7 @@ namespace vmod::bindings::ffi
 
 			ffi_type *type{value.get<ffi_type *>()};
 			if(!type) {
-				vm->RaiseException("vmod: invalid type");
+				vm->RaiseException("vmod: arg %i is invalid", i);
 				return false;
 			}
 
@@ -320,7 +342,7 @@ namespace vmod::bindings::ffi
 		}
 
 		if(!vm->IsArray(args)) {
-			vm->RaiseException("vmod: invalid args");
+			vm->RaiseException("vmod: args is not a array");
 			return nullptr;
 		}
 
@@ -337,7 +359,7 @@ namespace vmod::bindings::ffi
 
 			ffi_type *arg_type{value.get<ffi_type *>()};
 			if(!arg_type) {
-				vm->RaiseException("vmod: invalid args");
+				vm->RaiseException("vmod: arg %i is invalid", i);
 				return nullptr;
 			}
 
@@ -353,12 +375,12 @@ namespace vmod::bindings::ffi
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(!old_target) {
-			vm->RaiseException("vmod: null function");
+			vm->RaiseException("vmod: invalid function");
 			return gsdk::INVALID_HSCRIPT;
 		}
 
 		if(!callback || callback == gsdk::INVALID_HSCRIPT) {
-			vm->RaiseException("vmod: null function");
+			vm->RaiseException("vmod: invalid callback");
 			return gsdk::INVALID_HSCRIPT;
 		}
 
@@ -380,12 +402,12 @@ namespace vmod::bindings::ffi
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(!old_target) {
-			vm->RaiseException("vmod: null function");
+			vm->RaiseException("vmod: invalid function");
 			return gsdk::INVALID_HSCRIPT;
 		}
 
 		if(!callback || callback == gsdk::INVALID_HSCRIPT) {
-			vm->RaiseException("vmod: null function");
+			vm->RaiseException("vmod: invalid callback");
 			return gsdk::INVALID_HSCRIPT;
 		}
 

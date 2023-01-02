@@ -227,6 +227,9 @@ namespace vmod
 		ConCommand vmod_dump_entity_vtables;
 		ConVar vmod_auto_dump_entity_vtables;
 
+		ConCommand vmod_dump_entity_funcs;
+		ConVar vmod_auto_dump_entity_funcs;
+
 		bool can_gen_docs{false};
 		ConCommand vmod_gen_docs;
 		ConVar vmod_auto_gen_docs;

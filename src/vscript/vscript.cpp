@@ -13,8 +13,15 @@ namespace vmod::vscript::detail
 	{ return main::instance().to_string(object); }
 	std::string_view type_of(gsdk::HSCRIPT object) noexcept
 	{ return main::instance().type_of(object); }
-	void raise_exception(const char *str) noexcept
-	{ main::instance().vm()->RaiseException(str); }
 	bool get_scalar(gsdk::HSCRIPT object, gsdk::ScriptVariant_t *var) noexcept
 	{ return main::instance().vm()->GetScalarValue(object, var); }
+
+	__attribute__((__format__(__printf__, 1, 2))) bool raise_exception(const char *fmt, ...) noexcept
+	{
+		va_list vargs;
+		va_start(vargs, fmt);
+		bool ret{main::instance().vm()->RaiseExceptionv(fmt, vargs)};
+		va_end(vargs);
+		return ret;
+	}
 }

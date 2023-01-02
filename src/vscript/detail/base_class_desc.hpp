@@ -36,6 +36,8 @@ namespace vmod::vscript
 		std::string obfuscated_class_name_;
 		std::string obfuscated_name_;
 
+		std::string description_;
+
 	private:
 		extra_class_desc(const extra_class_desc &) = delete;
 		extra_class_desc &operator=(const extra_class_desc &) = delete;
@@ -95,6 +97,18 @@ namespace vmod::vscript::detail
 			static_assert(std::is_base_of_v<U, T>);
 			m_pBaseDesc = &other;
 			return *this;
+		}
+
+		inline void desc(std::string &&description) noexcept
+		{
+			extra_.description_ = std::move(description);
+			m_pszDescription = extra_.description_.c_str();
+		}
+
+		inline void desc(std::string_view description) noexcept
+		{
+			extra_.description_ = description;
+			m_pszDescription = extra_.description_.c_str();
 		}
 
 	protected:

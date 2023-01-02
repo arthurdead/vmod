@@ -25,7 +25,8 @@ cpp_args += [
 	'-Wno-error=unused-variable',
 	'-Wno-error=unused-parameter',
 	'-Wno-error=unused-function',
-	'-Wno-error=unreachable-code'
+	'-Wno-error=unreachable-code',
+	'-Wno-error=unused-lambda-capture'
 ]
 
 cpp_args += [
@@ -269,7 +270,8 @@ lib = shared_library('vmod',
 		join_paths('src','bindings','ffi','detour.cpp'),
 		join_paths('src','bindings','ent','bindings.cpp'),
 		join_paths('src','bindings','ent','singleton.cpp'),
-		join_paths('src','bindings','ent','sendprop.cpp'),
+		join_paths('src','bindings','ent','sendtable.cpp'),
+		join_paths('src','bindings','ent','datamap.cpp'),
 		join_paths('src','bindings','ent','factory.cpp'),
 		join_paths('src','bindings','docs.cpp'),
 		join_paths('src','bindings','singleton.cpp'),

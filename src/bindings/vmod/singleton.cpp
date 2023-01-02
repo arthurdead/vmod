@@ -288,14 +288,17 @@ namespace vmod
 		using namespace std::literals::string_view_literals;
 
 		if(plname.empty()) {
-			vm_->RaiseException("vmod: invalid name");
+			vm_->RaiseException("vmod: invalid path: '%s'", plname.data());
 			return nullptr;
 		}
 
 		std::filesystem::path path{build_plugin_path(plname)};
-		if(path.extension() != scripts_extension) {
-			vm_->RaiseException("vmod: invalid extension");
-			return nullptr;
+		{
+			std::filesystem::path ext{path.extension()};
+			if(ext != scripts_extension) {
+				vm_->RaiseException("vmod: invalid extension expected '%s' got '%s'", scripts_extension.data(), ext.c_str());
+				return nullptr;
+			}
 		}
 
 		auto it{plugins.find(path)};

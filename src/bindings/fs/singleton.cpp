@@ -20,7 +20,9 @@ namespace vmod::bindings::fs
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		desc.func(&singleton::script_join_paths, "script_join_paths"sv, "join_paths"sv);
-		desc.func(&singleton::script_glob, "script_glob"sv, "glob"sv);
+
+		desc.func(&singleton::script_glob, "script_glob"sv, "glob"sv)
+		.desc("[array<path>](pattern)"sv);
 
 		if(!singleton_base::bindings(&desc)) {
 			return false;
@@ -57,7 +59,7 @@ namespace vmod::bindings::fs
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(pattern.empty()) {
-			vm->RaiseException("vmod: invalid pattern");
+			vm->RaiseException("vmod: invalid pattern: '%s'", pattern.c_str());
 			return nullptr;
 		}
 

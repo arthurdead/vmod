@@ -1,5 +1,6 @@
 #include "convar.hpp"
 #include "../../main.hpp"
+#include "../docs.hpp"
 
 namespace vmod::bindings::cvar
 {
@@ -56,7 +57,7 @@ namespace vmod::bindings::cvar
 			var->ConVar::SetValue(value.m_bool);
 			break;
 			default:
-			main::instance().vm()->RaiseException("vmod: invalid type");
+			main::instance().vm()->RaiseException("vmod: invalid type: '%s'", bindings::docs::type_name(value.m_type).data());
 			break;
 		}
 	}

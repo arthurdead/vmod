@@ -25,13 +25,16 @@ extern ffi_type ffi_type_color32;
 extern ffi_type ffi_type_ehandle;
 extern ffi_type ffi_type_bool;
 extern ffi_type ffi_type_cstr;
+extern ffi_type ffi_type_object_tstr;
+#define ffi_type_plain_tstr ffi_type_cstr
+#define ffi_type_weak_tstr ffi_type_sint
 
 namespace vmod::ffi
 {
 	extern void script_var_to_ptr(const vscript::variant &var, void *ptr, ffi_type *type) noexcept;
 	extern void ptr_to_script_var(void *ptr, ffi_type *type, gsdk::ScriptVariant_t &var) noexcept;
 	extern ffi_type *type_id_to_ptr(int id) noexcept;
-	extern short to_script_type(ffi_type *type);
+	extern int to_field_type(ffi_type *type);
 
 	class cif
 	{

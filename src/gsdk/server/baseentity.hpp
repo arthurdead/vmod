@@ -57,7 +57,7 @@ namespace gsdk
 	{
 	public:
 		virtual int GetModelIndex() const = 0;
-		virtual string_t GetModelName() const = 0;
+		virtual engine::string_t GetModelName() const = 0;
 		virtual void SetModelIndex(int) = 0;
 	};
 

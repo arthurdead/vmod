@@ -1,10 +1,14 @@
 #include "docs.hpp"
 #include "../main.hpp"
+#include <cstddef>
+#include <string>
+#include <string_view>
 #include <unordered_map>
 #include "../filesystem.hpp"
 #include "../vscript/variant.hpp"
 #include "../vscript/detail/base_class_desc.hpp"
 #include "../vscript/function_desc.hpp"
+#include "../hacking.hpp"
 
 namespace vmod::bindings::docs
 {
@@ -123,7 +127,28 @@ namespace vmod::bindings::docs
 			}
 		}
 
-		static std::string_view get_func_desc_desc(const gsdk::ScriptFuncDescriptor_t *desc, std::string &alias, std::vector<std::string_view> &params_names) noexcept
+		struct func_info
+		{
+			std::string alias;
+
+			std::string_view ret_type;
+
+			struct param_info
+			{
+				std::string_view type;
+				std::string_view name;
+			};
+
+			std::unordered_map<std::size_t, param_info> params;
+
+			void clear_params() noexcept
+			{
+				ret_type = {};
+				params.clear();
+			}
+		};
+
+		static std::string_view get_func_desc_desc(const gsdk::ScriptFuncDescriptor_t *desc, func_info &info) noexcept
 		{
 			const char *description{desc->m_pszDescription};
 			if(!description) {
@@ -139,30 +164,56 @@ namespace vmod::bindings::docs
 					++description;
 				}
 				const char *end{description};
-				alias.assign(begin, end);
+				info.alias.assign(begin, end);
 				++description;
 			}
 
 			const char *base_description{description};
 
+			auto is_valid_start_id{
+				[](char c) noexcept -> bool {
+					return (
+						std::isalpha(c) ||
+						c == '_' ||
+						c == ':'
+					);
+				}
+			};
+
+			auto is_valid_base_id{
+				[is_valid_start_id](char c) noexcept -> bool {
+					return (
+						is_valid_start_id(c) ||
+						std::isdigit(c) ||
+						(c == '<' || c == '>')
+					);
+				}
+			};
+
 			auto parse_args{
-				[&description,&params_names,base_description]() noexcept -> bool {
+				[&description,&info,base_description,is_valid_start_id,is_valid_base_id]() noexcept -> bool {
 					if(*description == '(') {
 						++description;
 						while(*description == ' ') { ++description; }
 
+						std::size_t i{0};
+
 						while(true) {
 							const char *name_begin{description};
 
-							if(!std::isalpha(*description) && *description != '_') {
+							if(!is_valid_start_id(*description)) {
 								description = base_description;
-								params_names.clear();
+								info.clear_params();
 								return false;
 							} else {
 								++description;
 							}
 
-							while(std::isalnum(*description) || *description == '_') {
+							while(
+								is_valid_base_id(*description) ||
+								*description == '|' ||
+								(*description == '[' || *description == ']')
+							) {
 								++description;
 							}
 
@@ -170,7 +221,20 @@ namespace vmod::bindings::docs
 
 							while(*description == ' ') { ++description; }
 
-							params_names.emplace_back(name_begin, name_end);
+							std::string_view name{name_begin, name_end};
+							std::string_view type{};
+
+							std::size_t type_idx{name.find('|')};
+							if(type_idx != std::string_view::npos) {
+								if(type_idx == name.length()) {
+									name = {};
+								} else {
+									name = {name_begin+type_idx+1, name_end};
+								}
+								type = {name_begin, name_begin+type_idx};
+							}
+
+							info.params.emplace(i++, func_info::param_info{type,name});
 
 							if(*description == ',') {
 								++description;
@@ -181,13 +245,51 @@ namespace vmod::bindings::docs
 								return true;
 							} else {
 								description = base_description;
-								params_names.clear();
+								info.clear_params();
 								return false;
 							}
 						}
 					} else {
-						description = base_description;
-						params_names.clear();
+						return false;
+					}
+				}
+			};
+
+			auto parse_ret{
+				[&description,&info,base_description,is_valid_start_id,is_valid_base_id]() noexcept -> bool {
+					if(*description == '[') {
+						++description;
+						while(*description == ' ') { ++description; }
+
+						const char *name_begin{description};
+
+						if(!is_valid_start_id(*description)) {
+							description = base_description;
+							info.clear_params();
+							return false;
+						} else {
+							++description;
+						}
+
+						while(is_valid_base_id(*description)) {
+							++description;
+						}
+
+						const char *name_end{description};
+
+						while(*description == ' ') { ++description; }
+
+						info.ret_type = std::string_view{name_begin, name_end};
+
+						if(*description == ']') {
+							++description;
+							return true;
+						} else {
+							description = base_description;
+							info.clear_params();
+							return false;
+						}
+					} else {
 						return false;
 					}
 				}
@@ -208,11 +310,11 @@ namespace vmod::bindings::docs
 					} else if(std::strncmp(description, " : ", 3) == 0) {
 						description += 3;
 					} else if(*description != '\0') {
-						params_names.clear();
+						info.clear_params();
 						return base_description;
 					}
 				} else {
-					params_names.clear();
+					info.clear_params();
 					return base_description;
 				}
 			} else {
@@ -230,29 +332,39 @@ namespace vmod::bindings::docs
 						} else if(std::strncmp(description, ": ", 2) == 0) {
 							description += 2;
 						} else {
-							params_names.clear();
+							info.clear_params();
 							return base_description;
 						}
 					} else {
-						params_names.clear();
+						info.clear_params();
 						return base_description;
 					}
 				} else {
 					if(started_with_binding) {
-						params_names.clear();
+						info.clear_params();
 						return base_description;
 					} else {
-						if(parse_args()) {
+						if(parse_ret()) {
+							if(parse_args()) {
+								if(*description != '\0') {
+									info.clear_params();
+									return base_description;
+								}
+							} else if(*description != '\0') {
+								info.clear_params();
+								return base_description;
+							}
+						} else if(parse_args()) {
 							if(std::strncmp(description, " - ", 3) == 0) {
 								description += 3;
 							} else if(*description == ' ') {
 								++description;
 							} else if(*description != '\0') {
-								params_names.clear();
+								info.clear_params();
 								return base_description;
 							}
 						} else {
-							params_names.clear();
+							info.clear_params();
 							return base_description;
 						}
 					}
@@ -398,10 +510,8 @@ namespace vmod::bindings::docs
 			}
 		}
 
-		std::string alias;
-		std::vector<std::string_view> params_names;
-
-		std::string_view description{detail::get_func_desc_desc(&func_desc, alias, params_names)};
+		detail::func_info info;
+		std::string_view description{detail::get_func_desc_desc(&func_desc, info)};
 		if(!description.empty()) {
 			ident(file, depth);
 			file += "//"sv;
@@ -416,7 +526,11 @@ namespace vmod::bindings::docs
 				ret_str += "static "sv;
 			}
 		}
-		ret_str += type_name(func_desc.m_ReturnType);
+		if(!info.ret_type.empty()) {
+			ret_str += info.ret_type;
+		} else {
+			ret_str += type_name(func_desc.m_ReturnType);
+		}
 		ret_str += ' ';
 
 		std::string params_str;
@@ -424,10 +538,19 @@ namespace vmod::bindings::docs
 		//TODO!!!! skip va args
 		std::size_t num_args{func_desc.m_Parameters.size()};
 		for(std::size_t j{0}; j < num_args; ++j) {
-			params_str += type_name(func_desc.m_Parameters[j]);
-			if(j < params_names.size()) {
-				params_str += ' ';
-				params_str += params_names[j];
+			auto param_it{info.params.find(j)};
+			if(param_it != info.params.end()) {
+				if(!param_it->second.type.empty()) {
+					params_str += param_it->second.type;
+				} else {
+					params_str += type_name(func_desc.m_Parameters[j]);
+				}
+				if(!param_it->second.name.empty()) {
+					params_str += ' ';
+					params_str += param_it->second.name;
+				}
+			} else {
+				params_str += type_name(func_desc.m_Parameters[j]);
 			}
 			params_str += ", "sv;
 		}
@@ -444,9 +567,9 @@ namespace vmod::bindings::docs
 		file += func_desc.m_pszScriptName;
 		file += params_str;
 
-		if(!alias.empty()) {
+		if(!info.alias.empty()) {
 			file += ret_str;
-			file += alias;
+			file += info.alias;
 			file += params_str;
 		}
 

@@ -1,4 +1,6 @@
 #include "main.hpp"
+#include <cstddef>
+#include <functional>
 #include <iostream>
 #include "symbol_cache.hpp"
 #include "vscript/vscript.hpp"
@@ -14,6 +16,7 @@
 
 #include <filesystem>
 #include <iterator>
+#include <string>
 #include <string_view>
 #include <climits>
 
@@ -45,6 +48,7 @@ namespace vmod
 	static std::unordered_map<std::string, gsdk::ScriptClassDesc_t *> sv_script_class_descs;
 	static std::unordered_map<std::string, gsdk::datamap_t *> sv_datamaps;
 	static std::unordered_map<std::string, gsdk::SendTable *> sv_sendtables;
+	static std::unordered_map<std::string, gsdk::IEntityFactory *> sv_ent_factories;
 
 	static main main_;
 
@@ -283,13 +287,9 @@ namespace vmod
 		in_vscript_server_term = false;
 	}
 
-	static char __vscript_printfunc_buffer[2048];
+	static char __vscript_printfunc_buffer[gsdk::MAXPRINTMSG];
 	static detour<decltype(PrintFunc)> PrintFunc_detour;
-#ifndef __clang__
-	static __attribute__((__format__(__gnu_printf__, 2, 3))) void PrintFunc_detour_callback(HSQUIRRELVM m_hVM, const SQChar *s, ...)
-#else
-	static void PrintFunc_detour_callback(HSQUIRRELVM m_hVM, const SQChar *s, ...)
-#endif
+	static __attribute__((__format__(__printf__, 2, 3))) void PrintFunc_detour_callback(HSQUIRRELVM m_hVM, const SQChar *s, ...)
 	{
 		va_list varg_list;
 		va_start(varg_list, s);
@@ -307,13 +307,9 @@ namespace vmod
 		va_end(varg_list);
 	}
 
-	static char __vscript_errorfunc_buffer[2048];
+	static char __vscript_errorfunc_buffer[gsdk::MAXPRINTMSG];
 	static detour<decltype(ErrorFunc)> ErrorFunc_detour;
-#ifndef __clang__
-	static __attribute__((__format__(__gnu_printf__, 2, 3))) void ErrorFunc_detour_callback(HSQUIRRELVM m_hVM, const SQChar *s, ...)
-#else
-	static void ErrorFunc_detour_callback(HSQUIRRELVM m_hVM, const SQChar *s, ...)
-#endif
+	static __attribute__((__format__(__printf__, 2, 3))) void ErrorFunc_detour_callback(HSQUIRRELVM m_hVM, const SQChar *s, ...)
 	{
 		va_list varg_list;
 		va_start(varg_list, s);
@@ -1211,6 +1207,10 @@ namespace vmod
 		#error
 	#endif
 
+		for(const auto &it : entityfactorydict->m_Factories) {
+			sv_ent_factories.emplace(it.first, it.second);
+		}
+
 		for(const auto &it : sv_classes) {
 			auto info_it{sv_ent_class_info.find(it.first)};
 			if(info_it == sv_ent_class_info.end()) {
@@ -1686,94 +1686,139 @@ namespace vmod
 
 					bindings::docs::gen_date(file);
 
-					file += "class "sv;
-					file += it.first;
-					
-					if(it.second->baseMap) {
-						file += " : "sv;
-						file += it.second->baseMap->dataClassName;
-					}
+					std::function<void(gsdk::datamap_t &, std::string_view, std::size_t)> write_table{
+						[&file,&write_table](gsdk::datamap_t &targettable, std::string_view tablename, std::size_t depth) noexcept -> void {
+							bindings::docs::ident(file, depth);
+							file += "class "sv;
+							file += tablename;
 
-					file += "\n{\n"sv;
-
-					std::size_t num_props{static_cast<std::size_t>(it.second->dataNumFields)};
-					for(std::size_t i{0}; i < num_props; ++i) {
-						gsdk::typedescription_t &prop{it.second->dataDesc[i]};
-
-						if(num_props == 1 && i == 0 && !prop.fieldName) {
-							break;
-						}
-
-						std::function<void(gsdk::typedescription_t &, std::string_view)> write_prop{
-							[&file](gsdk::typedescription_t &target, std::string_view name) noexcept -> void {
-								bindings::docs::ident(file, 1);
-
-								gsdk::fieldtype_t type{target.fieldType};
-
-								switch(type) {
-									case gsdk::FIELD_VOID: {
-										if(target.flags & gsdk::FTYPEDESC_FUNCTIONTABLE ||
-											target.flags & gsdk::FTYPEDESC_INPUT) {
-											type = gsdk::FIELD_FUNCTION;
-										}
-									} break;
-									case gsdk::FIELD_EMBEDDED: {
-										if(target.flags & gsdk::FTYPEDESC_PTR) {
-											type = gsdk::FIELD_CLASSPTR;
-										}
-									} break;
-									case gsdk::FIELD_CUSTOM: {
-										if(target.flags & gsdk::FTYPEDESC_OUTPUT) {
-											type = gsdk::FIELD_FUNCTION;
-										}
-									} break;
-									default: {
-										if(target.flags & gsdk::FTYPEDESC_INPUT) {
-											type = gsdk::FIELD_FUNCTION;
-										}
-									} break;
-								}
-
-								file += bindings::docs::type_name(type);
-								file += ' ';
-
-								file += name;
-
-								if(target.flags & gsdk::FTYPEDESC_INPUT) {
-									file += '(';
-									file += bindings::docs::type_name(target.fieldType);
-									file += ')';
-								}
-
-								file += ';';
-
-								if(target.flags != 0) {
-									std::string flags{" ["s};
-									//TODO!!!
-									if(flags.length() > 2) {
-										flags.pop_back();
-										flags += ']';
-										file += std::move(flags);
-									}
-								}
-
-								file += "\n\n"sv;
+							if(targettable.baseMap) {
+								file += " : "sv;
+								file += targettable.baseMap->dataClassName;
 							}
-						};
 
-						if(prop.flags & gsdk::FTYPEDESC_INPUT ||
-							prop.flags & gsdk::FTYPEDESC_OUTPUT) {
-							write_prop(prop, prop.externalName);
-						} else if(prop.flags & gsdk::FTYPEDESC_FUNCTIONTABLE) {
-							std::string funcname{prop.fieldName};
-							funcname.erase(0, it.first.length());
-							write_prop(prop, funcname);
-						} else {
-							write_prop(prop, prop.fieldName);
+							file += '\n';
+							bindings::docs::ident(file, depth);
+							file += "{\n"sv;
+
+							std::size_t num_props{static_cast<std::size_t>(targettable.dataNumFields)};
+							for(std::size_t i{0}; i < num_props; ++i) {
+								gsdk::typedescription_t &prop{targettable.dataDesc[i]};
+
+								if(num_props == 1 && i == 0 && !prop.fieldName) {
+									break;
+								}
+
+								std::function<void(gsdk::typedescription_t &, std::string_view, std::size_t)> write_prop{
+									[&file,&write_table](gsdk::typedescription_t &targetprop, std::string_view name, std::size_t funcdepth) noexcept -> void {
+										if(targetprop.fieldType == gsdk::FIELD_EMBEDDED) {
+											write_table(*targetprop.td, targetprop.td->dataClassName, funcdepth);
+										}
+
+										bindings::docs::ident(file, funcdepth);
+
+										gsdk::fieldtype_t type{targetprop.fieldType};
+
+										if(targetprop.fieldType == gsdk::FIELD_EMBEDDED) {
+											file += targetprop.td->dataClassName;
+										} else {
+											switch(type) {
+												case gsdk::FIELD_VOID: {
+													if(targetprop.flags & gsdk::FTYPEDESC_FUNCTIONTABLE ||
+														targetprop.flags & gsdk::FTYPEDESC_INPUT) {
+														type = gsdk::FIELD_FUNCTION;
+													}
+												} break;
+												case gsdk::FIELD_EMBEDDED: {
+													if(targetprop.flags & gsdk::FTYPEDESC_PTR) {
+														type = gsdk::FIELD_CLASSPTR;
+													}
+												} break;
+												case gsdk::FIELD_CUSTOM: {
+													if(targetprop.flags & gsdk::FTYPEDESC_OUTPUT) {
+														type = gsdk::FIELD_FUNCTION;
+													}
+												} break;
+												default: {
+													if(targetprop.flags & gsdk::FTYPEDESC_INPUT) {
+														type = gsdk::FIELD_FUNCTION;
+													}
+												} break;
+											}
+
+											file += bindings::docs::type_name(type);
+										}
+
+										file += ' ';
+										file += name;
+
+										if(targetprop.fieldSize > 1) {
+											file += '[';
+
+											std::string num_str;
+											num_str.resize(6 + 6);
+
+											char *begin{num_str.data()};
+											char *end{begin + num_str.size()};
+
+											std::to_chars_result tc_res{std::to_chars(begin, end, targetprop.fieldSize)};
+											tc_res.ptr[0] = '\0';
+
+											file += begin;
+											file += ']';
+										}
+
+										if(targetprop.fieldType != gsdk::FIELD_EMBEDDED) {
+											if(targetprop.flags & gsdk::FTYPEDESC_INPUT) {
+												file += '(';
+												file += bindings::docs::type_name(targetprop.fieldType);
+												file += ')';
+											}
+										}
+
+										file += ';';
+
+										if(targetprop.flags != 0) {
+											std::string flags{" ["s};
+											//TODO!!!
+											if(flags.length() > 2) {
+												flags.pop_back();
+												flags += ']';
+												file += std::move(flags);
+											}
+										}
+
+										file += '\n';
+									}
+								};
+
+								if(prop.flags & gsdk::FTYPEDESC_INPUT ||
+									prop.flags & gsdk::FTYPEDESC_OUTPUT) {
+									write_prop(prop, prop.externalName, depth+1);
+								} else if(prop.flags & gsdk::FTYPEDESC_FUNCTIONTABLE) {
+									std::string funcname{prop.fieldName};
+									funcname.erase(0, tablename.length());
+									write_prop(prop, funcname, depth+1);
+								} else if(prop.flags & gsdk::FTYPEDESC_KEY) {
+									bindings::docs::ident(file, depth+1);
+									file += "union\n"sv;
+									bindings::docs::ident(file, depth+1);
+									file += "{\n"sv;
+									write_prop(prop, prop.fieldName, depth+2);
+									write_prop(prop, prop.externalName, depth+2);
+									bindings::docs::ident(file, depth+1);
+									file += "};\n"sv;
+								} else {
+									write_prop(prop, prop.fieldName, depth+1);
+								}
+							}
+
+							bindings::docs::ident(file, depth);
+							file += "};\n"sv;
 						}
-					}
+					};
 
-					file += "};"sv;
+					write_table(*it.second, it.second->dataClassName, 0);
 
 					std::filesystem::path dump_path{dump_dir};
 					dump_path /= it.first;
@@ -1792,10 +1837,10 @@ namespace vmod
 
 				std::string file;
 
-				for(const auto &it : sv_classes) {
+				bindings::docs::gen_date(file);
+
+				for(const auto &it : sv_ent_factories) {
 					file += it.first;
-					file += ' ';
-					file += it.second->m_pNetworkName;
 					file += '\n';
 				}
 
@@ -1871,6 +1916,60 @@ namespace vmod
 						} else {
 							file += "<<unknown>>\n"sv;
 						}
+					}
+
+					file += "};"sv;
+
+					std::filesystem::path dump_path{dump_dir};
+					dump_path /= it.first;
+					dump_path.replace_extension(".txt"sv);
+
+					write_file(dump_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
+				}
+			}
+		);
+
+		vmod_auto_dump_entity_funcs.initialize("vmod_auto_dump_entity_funcs"sv, false);
+
+		vmod_dump_entity_funcs.initialize("vmod_dump_entity_funcs"sv,
+			[this,&sv_symbols = std::as_const(sv_symbols)](const gsdk::CCommand &) noexcept -> void {
+				std::filesystem::path dump_dir{root_dir_/"dumps"sv/"funcs"sv};
+
+				for(const auto &it : sv_classes) {
+					auto sv_sym_it{sv_symbols.find(it.first)};
+					if(sv_sym_it == sv_symbols.end()) {
+						error("vmod: missing '%s' symbols\n"sv, it.first.c_str());
+						continue;
+					}
+
+					const symbol_cache::class_info *class_info{dynamic_cast<const symbol_cache::class_info *>(sv_sym_it->second.get())};
+
+					std::string file;
+
+					bindings::docs::gen_date(file);
+
+					file += "class "sv;
+					file += it.first;
+
+					auto data_it{sv_datamaps.find(it.first)};
+					if(data_it != sv_datamaps.end()) {
+						if(data_it->second->baseMap) {
+							std::string basename{data_it->second->baseMap->dataClassName};
+
+							file += " : "sv;
+							file += std::move(basename);
+						}
+					}
+
+					file += "\n{\n"sv;
+
+					for(const auto &func_it : *class_info) {
+						bindings::docs::ident(file, 1);
+						if(func_it.second->virtual_index() != static_cast<std::size_t>(-1)) {
+							file += "virtual "sv;
+						}
+						file += func_it.first;
+						file += ";\n"sv;
 					}
 
 					file += "};"sv;
@@ -2245,6 +2344,10 @@ namespace vmod
 
 		if(vmod_auto_dump_entity_vtables.get<bool>()) {
 			vmod_dump_entity_vtables();
+		}
+
+		if(vmod_auto_dump_entity_funcs.get<bool>()) {
+			vmod_dump_entity_funcs();
 		}
 
 		if(vmod_auto_gen_docs.get<bool>()) {

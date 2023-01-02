@@ -34,8 +34,7 @@ namespace vmod
 		print_state print_state{print_state::unknown};
 
 		char path_buff[PATH_MAX];
-		static constexpr std::size_t msg_buff_max{4026};
-		static char msg_buff[msg_buff_max];
+		static char msg_buff[gsdk::MAXPRINTMSG];
 
 		std::vector<std::filesystem::path> *curr_incs{nullptr};
 		const std::filesystem::path *curr_path{nullptr};

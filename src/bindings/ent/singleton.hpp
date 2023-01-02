@@ -5,21 +5,23 @@
 #include "../../vscript/variant.hpp"
 #include "../../vscript/singleton_class_desc.hpp"
 #include "../../gsdk/server/baseentity.hpp"
-#include "../../gsdk/engine/dt_send.hpp"
 #include "../singleton.hpp"
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <memory>
+#include "datamap.hpp"
+#include "sendtable.hpp"
 
 namespace vmod::bindings::ent
 {
-	class sendprop;
-
 	class singleton final : public singleton_base
 	{
 		friend void write_docs(const std::filesystem::path &) noexcept;
+		friend class allocated_datamap;
+		friend class allocated_dataprop;
 
 	public:
 		inline singleton() noexcept
@@ -40,6 +42,12 @@ namespace vmod::bindings::ent
 		static gsdk::HSCRIPT script_from_ptr(gsdk::CBaseEntity *ptr) noexcept;
 
 		gsdk::HSCRIPT script_lookup_sendprop(std::string_view path) noexcept;
+		gsdk::HSCRIPT script_lookup_sendtable(std::string_view path) noexcept;
+
+		gsdk::HSCRIPT script_lookup_dataprop(std::string_view path) noexcept;
+		gsdk::HSCRIPT script_lookup_datatable(std::string_view path) noexcept;
+
+		gsdk::HSCRIPT script_create_datamap(std::string &&name, gsdk::HSCRIPT base, gsdk::HSCRIPT props_array) noexcept;
 
 		static gsdk::HSCRIPT script_find_factory(std::string_view name) noexcept;
 		static gsdk::HSCRIPT script_create_factory(std::string_view name, gsdk::HSCRIPT func, std::size_t size) noexcept;
@@ -53,9 +61,26 @@ namespace vmod::bindings::ent
 
 		struct prop_data_result
 		{
+			inline prop_data_result(prop_result_type type_, std::uintptr_t value_) noexcept
+				: type{type_}, value{value_}
+			{
+			}
+
+			inline prop_data_result(gsdk::datamap_t *table_) noexcept
+				: type{prop_result_type::table}, table{table_}
+			{
+			}
+
+			inline prop_data_result(gsdk::typedescription_t *prop_) noexcept
+				: type{prop_result_type::prop}, prop{prop_}
+			{
+			}
+
 			prop_result_type type;
 
 			union {
+				std::uintptr_t value;
+
 				gsdk::datamap_t *table;
 				gsdk::typedescription_t *prop;
 			};
@@ -63,9 +88,26 @@ namespace vmod::bindings::ent
 
 		struct prop_send_result
 		{
+			inline prop_send_result(prop_result_type type_, std::uintptr_t value_) noexcept
+				: type{type_}, value{value_}
+			{
+			}
+
+			inline prop_send_result(gsdk::SendTable *table_) noexcept
+				: type{prop_result_type::table}, table{table_}
+			{
+			}
+
+			inline prop_send_result(gsdk::SendProp *prop_) noexcept
+				: type{prop_result_type::prop}, prop{prop_}
+			{
+			}
+
 			prop_result_type type;
 
 			union {
+				std::uintptr_t value;
+
 				gsdk::SendTable *table;
 				gsdk::SendProp *prop;
 			};
@@ -86,6 +128,8 @@ namespace vmod::bindings::ent
 			prop_result_type type;
 
 			union {
+				std::uintptr_t value;
+
 				gsdk::datamap_t *datatable;
 				gsdk::typedescription_t *dataprop;
 
@@ -97,9 +141,9 @@ namespace vmod::bindings::ent
 			prop_result &operator+=(const prop_send_result &other) noexcept;
 
 			inline explicit operator prop_data_result() const noexcept
-			{ return prop_data_result{type, {datatable}}; }
+			{ return prop_data_result{type, value}; }
 			inline explicit operator prop_send_result() const noexcept
-			{ return prop_send_result{type, {sendtable}}; }
+			{ return prop_send_result{type, value}; }
 		};
 
 		enum class prop_tree_flags : unsigned char
@@ -131,11 +175,22 @@ namespace vmod::bindings::ent
 			std::unordered_map<std::string, prop_send_result> send;
 
 			std::unordered_map<std::string, std::string> lazy_to_full;
+
+			std::unordered_map<std::uintptr_t, std::string> ptr_to_path;
 		};
 
 		prop_tree_cache_t prop_tree_cache;
 
 		std::unordered_map<gsdk::SendProp *, std::unique_ptr<sendprop>> sendprops;
+		std::unordered_map<gsdk::SendTable *, std::unique_ptr<sendtable>> sendtables;
+
+		std::unordered_map<gsdk::typedescription_t *, std::unique_ptr<dataprop>> dataprops;
+		std::unordered_map<gsdk::datamap_t *, std::unique_ptr<datamap>> datatables;
+
+		void erase(std::uintptr_t value) noexcept;
+
+		void erase(gsdk::datamap_t *map) noexcept;
+		void erase(gsdk::typedescription_t *prop) noexcept;
 
 	private:
 		singleton(const singleton &) = delete;

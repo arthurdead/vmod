@@ -17,3 +17,9 @@
 #else
 	#error
 #endif
+
+#define GSDK_DLL_HYBRID 0
+#define GSDK_DLL_SERVER 1
+#define GSDK_DLL_CLIENT 2
+
+#define GSDK_DLL GSDK_DLL_HYBRID

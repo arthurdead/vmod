@@ -21,7 +21,7 @@ namespace vmod::vscript
 				return var.m_double > 0.0;
 			}
 			case gsdk::FIELD_STRING: {
-				const char *ccstr{gsdk::STRING(var.m_tstr)};
+				const char *ccstr{gsdk::vscript::STRING(var.m_tstr)};
 
 				if(std::strcmp(ccstr, "true") == 0) {
 					return true;

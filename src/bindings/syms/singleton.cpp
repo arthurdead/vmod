@@ -106,7 +106,7 @@ namespace vmod::bindings::syms
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(symname.empty()) {
-			vm->RaiseException("vmod: invalid name");
+			vm->RaiseException("vmod: invalid name: '%s'", symname.data());
 			return gsdk::INVALID_HSCRIPT;
 		}
 
@@ -124,7 +124,7 @@ namespace vmod::bindings::syms
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(symname.empty()) {
-			vm->RaiseException("vmod: invalid name");
+			vm->RaiseException("vmod: invalid name: '%s'", symname.data());
 			return gsdk::INVALID_HSCRIPT;
 		}
 
@@ -144,7 +144,7 @@ namespace vmod::bindings::syms
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(symname.empty()) {
-			vm->RaiseException("vmod: invalid name");
+			vm->RaiseException("vmod: invalid name: '%s'", symname.data());
 			return gsdk::INVALID_HSCRIPT;
 		}
 
@@ -164,7 +164,7 @@ namespace vmod::bindings::syms
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(symname.empty()) {
-			vm->RaiseException("vmod: invalid name");
+			vm->RaiseException("vmod: invalid name: '%s'", symname.data());
 			return gsdk::INVALID_HSCRIPT;
 		}
 
@@ -187,7 +187,7 @@ namespace vmod::bindings::syms
 
 		instance = vm->RegisterInstance(&desc, this);
 		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
-			error("vmod: failed to register syms singleton '%s' instance\n"sv, name.data());
+			error("vmod: failed to register '%s' syms singleton instance\n"sv, name.data());
 			return false;
 		}
 
@@ -197,7 +197,7 @@ namespace vmod::bindings::syms
 			const vscript::extra_class_desc &extra{reinterpret_cast<const vscript::detail::base_class_desc<generic_class> *>(&desc)->extra()};
 			obfuscated_name = extra.obfuscated_name();
 		} else {
-			error("vmod: invalid class desc for syms singleton '%s'\n", name.data());
+			error("vmod: invalid class desc for '%s' syms singleton\n", name.data());
 			return false;
 		}
 
@@ -206,13 +206,13 @@ namespace vmod::bindings::syms
 			id_root += "_instance"sv;
 
 			if(!vm->SetInstanceUniqeId2(instance, id_root.data())) {
-				vm->RaiseException("vmod: failed to generate unique id");
+				error("vmod: failed to generate unique id for '%s' syms singleton\n", name.data());
 				return false;
 			}
 		}
 
-		if(!vm->SetValue(main::instance().symbols_table(), "sv", instance)) {
-			error("vmod: failed to set syms '%s' table value\n"sv);
+		if(!vm->SetValue(main::instance().symbols_table(), name.data(), instance)) {
+			error("vmod: failed to set syms '%s' table value\n"sv, name.data());
 			return false;
 		}
 

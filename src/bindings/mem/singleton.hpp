@@ -7,6 +7,7 @@
 #include "../../vscript/singleton_class_desc.hpp"
 #include "../singleton.hpp"
 #include <cstddef>
+#include <ffi.h>
 #include <unordered_map>
 #include <string>
 #include <string_view>
@@ -74,6 +75,8 @@ namespace vmod::bindings::mem
 
 		type *find_type(ffi_type *ptr) noexcept;
 
+		static ffi_type *read_type(gsdk::HSCRIPT type_table) noexcept;
+
 	private:
 		static vscript::singleton_class_desc<singleton> desc;
 
@@ -93,7 +96,7 @@ namespace vmod::bindings::mem
 
 		bool register_type(ffi_type *ptr, std::string_view type_name) noexcept;
 
-		std::unordered_map<ffi_type *, std::unique_ptr<type>> types;
+		std::vector<std::unique_ptr<type>> types;
 		gsdk::HSCRIPT types_table{gsdk::INVALID_HSCRIPT};
 
 	private:

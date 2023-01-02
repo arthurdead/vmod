@@ -21,8 +21,11 @@ namespace vmod::bindings::cvar
 
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
-		desc.func(&singleton::script_create_cvar, "script_create_cvar"sv, "create_var"sv);
-		desc.func(&singleton::script_find_cvar, "script_find_cvar"sv, "find_var"sv);
+		desc.func(&singleton::script_create_cvar, "script_create_cvar"sv, "create_var"sv)
+		.desc("[convar](name, value)"sv);
+
+		desc.func(&singleton::script_find_cvar, "script_find_cvar"sv, "find_var"sv)
+		.desc("[convar](name)"sv);
 
 		if(!singleton_base::bindings(&desc)) {
 			return false;
@@ -175,12 +178,12 @@ namespace vmod::bindings::cvar
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(varname.empty()) {
-			vm->RaiseException("vmod: invalid name");
+			vm->RaiseException("vmod: invalid name: '%s'", varname.data());
 			return nullptr;
 		}
 
 		if(vmod::cvar->FindCommandBase(varname.data()) != nullptr) {
-			vm->RaiseException("vmod: name already in use");
+			vm->RaiseException("vmod: name already in use: '%s'", varname.data());
 			return nullptr;
 		}
 
@@ -202,7 +205,7 @@ namespace vmod::bindings::cvar
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(varname.empty()) {
-			vm->RaiseException("vmod: invalid name");
+			vm->RaiseException("vmod: invalid name: '%s'", varname.data());
 			return nullptr;
 		}
 

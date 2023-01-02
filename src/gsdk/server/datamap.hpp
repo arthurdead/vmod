@@ -116,6 +116,19 @@ namespace gsdk
 
 	struct typedescription_t
 	{
+		typedescription_t() noexcept = default;
+
+		typedescription_t(typedescription_t &&) noexcept = default;
+		typedescription_t &operator=(typedescription_t &&) noexcept = default;
+
+		//static typedescription_t empty;
+
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wfloat-equal"
+		bool operator==(const typedescription_t &) const noexcept = default;
+		bool operator!=(const typedescription_t &) const noexcept = default;
+		#pragma GCC diagnostic pop
+
 		fieldtype_t fieldType{FIELD_VOID};
 		const char *fieldName{nullptr};
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
@@ -141,15 +154,14 @@ namespace gsdk
 	#endif
 
 	private:
-		typedescription_t() = delete;
 		typedescription_t(const typedescription_t &) = delete;
 		typedescription_t &operator=(const typedescription_t &) = delete;
-		typedescription_t(typedescription_t &&) = delete;
-		typedescription_t &operator=(typedescription_t &&) = delete;
 	};
 
 	struct datamap_t
 	{
+		datamap_t() noexcept = default;
+
 		typedescription_t *dataDesc{nullptr};
 		int dataNumFields{0};
 		const char *dataClassName{nullptr};
@@ -165,7 +177,6 @@ namespace gsdk
 	#endif
 
 	private:
-		datamap_t() = delete;
 		datamap_t(const datamap_t &) = delete;
 		datamap_t &operator=(const datamap_t &) = delete;
 		datamap_t(datamap_t &&) = delete;

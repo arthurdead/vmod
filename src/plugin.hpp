@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gsdk/vscript/vscript.hpp"
 #include "vscript/vscript.hpp"
 #include "vscript/class_desc.hpp"
 #include "vscript/variant.hpp"
@@ -136,6 +137,17 @@ namespace vmod
 			inline gsdk::HSCRIPT owner_scope() noexcept
 			{ return owner_ ? owner_->private_scope_ : nullptr; }
 
+			inline owned_instance(owned_instance &&other) noexcept
+			{ operator=(std::move(other)); }
+			inline owned_instance &operator=(owned_instance &&other) noexcept
+			{
+				instance = other.instance;
+				other.instance = gsdk::INVALID_HSCRIPT;
+				owner_ = other.owner_;
+				other.owner_ = nullptr;
+				return *this;
+			}
+
 		public:
 			gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
 
@@ -153,8 +165,6 @@ namespace vmod
 		private:
 			owned_instance(const owned_instance &) = delete;
 			owned_instance &operator=(const owned_instance &) = delete;
-			owned_instance(owned_instance &&) noexcept = delete;
-			owned_instance &operator=(owned_instance &&) = delete;
 		};
 
 		class callable;

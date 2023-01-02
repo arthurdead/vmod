@@ -1,10 +1,12 @@
 #include "vscript.hpp"
+#include "../engine/sv_engine.hpp"
 
 namespace gsdk
 {
 	namespace detail
 	{
 		static char vscript_uniqueid_buffer[IScriptVM::unique_id_max];
+		static char vscript_exception_buffer[MAXPRINTMSG];
 	}
 
 	ISquirrelMetamethodDelegate::~ISquirrelMetamethodDelegate() {}
@@ -15,6 +17,29 @@ namespace gsdk
 	{ return ptr; }
 
 	IScriptVM *g_pScriptVM{nullptr};
+
+	__attribute__((__format__(__printf__, 2, 0))) bool IScriptVM::RaiseExceptionv(const char *fmt, va_list vargs) noexcept
+	{
+	#ifdef __clang__
+		#pragma clang diagnostic push
+		#pragma clang diagnostic ignored "-Wformat-nonliteral"
+	#endif
+		std::vsnprintf(detail::vscript_exception_buffer, sizeof(detail::vscript_exception_buffer), fmt, vargs);
+	#ifdef __clang__
+		#pragma clang diagnostic pop
+	#endif
+		bool ret{RaiseException_impl(detail::vscript_exception_buffer)};
+		return ret;
+	}
+
+	__attribute__((__format__(__printf__, 2, 3))) bool IScriptVM::RaiseException(const char *fmt, ...) noexcept
+	{
+		va_list vargs;
+		va_start(vargs, fmt);
+		bool ret{RaiseExceptionv(fmt, vargs)};
+		va_end(vargs);
+		return ret;
+	}
 
 #if GSDK_ENGINE == GSDK_ENGINE_TF2
 	void(IScriptVM::*IScriptVM::CreateArray_ptr)(ScriptVariant_t &) {nullptr};

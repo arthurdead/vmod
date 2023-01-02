@@ -1,7 +1,9 @@
 #include "ffi.hpp"
 #include "gsdk/mathlib/vector.hpp"
+#include "gsdk/string_t.hpp"
 #include "gsdk/tier0/dbg.hpp"
 #include "hacking.hpp"
+#include "gsdk/server/datamap.hpp"
 
 static ffi_type *ffi_type_vector_elements[3]{
 	&ffi_type_float, &ffi_type_float, &ffi_type_float
@@ -14,6 +16,9 @@ static ffi_type *ffi_type_color32_elements[4]{
 };
 static ffi_type *ffi_type_ehandle_elements[1]{
 	&ffi_type_ulong
+};
+static ffi_type *ffi_type_tstr_object_elements[1]{
+	&ffi_type_cstr
 };
 
 ffi_type ffi_type_vector{
@@ -51,6 +56,12 @@ ffi_type ffi_type_cstr{
 	alignof(const char *),
 	FFI_TYPE_POINTER,
 	nullptr
+};
+ffi_type ffi_type_object_tstr{
+	sizeof(gsdk::detail::string_t::object::string_t),
+	alignof(gsdk::detail::string_t::object::string_t),
+	FFI_TYPE_STRUCT,
+	ffi_type_tstr_object_elements
 };
 
 namespace vmod::ffi
@@ -110,10 +121,10 @@ namespace vmod::ffi
 	{
 		std::memset(var.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
 		std::memcpy(var.m_data, ptr, type->size);
-		var.m_type = to_script_type(type);
+		var.m_type = static_cast<short>(to_field_type(type));
 	}
 
-	short to_script_type(ffi_type *type)
+	int to_field_type(ffi_type *type)
 	{
 		switch(type->type) {
 			case FFI_TYPE_INT:
@@ -125,9 +136,9 @@ namespace vmod::ffi
 			case FFI_TYPE_LONGDOUBLE:
 			return gsdk::FIELD_FLOAT64;
 			case FFI_TYPE_UINT8:
-			return gsdk::FIELD_SHORT;
+			return gsdk::FIELD_CHARACTER;
 			case FFI_TYPE_SINT8:
-			return gsdk::FIELD_SHORT;
+			return gsdk::FIELD_CHARACTER;
 			case FFI_TYPE_UINT16:
 			return gsdk::FIELD_SHORT;
 			case FFI_TYPE_SINT16:

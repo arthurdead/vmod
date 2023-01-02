@@ -237,7 +237,7 @@ namespace gsdk
 	std::size_t CUtlRBTree<T, I, L, M>::find(const key_type &key) const noexcept
 	{
 		T tmp;
-		tmp.key = key;
+		tmp.first = key;
 
 		std::size_t current{m_Root};
 		while(current != M::npos) {

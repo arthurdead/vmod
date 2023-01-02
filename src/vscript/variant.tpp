@@ -26,7 +26,7 @@ namespace vmod::vscript
 					return static_cast<T>(var.m_double);
 				}
 				case gsdk::FIELD_STRING: {
-					const char *ccstr{gsdk::STRING(var.m_tstr)};
+					const char *ccstr{gsdk::vscript::STRING(var.m_tstr)};
 
 					if(std::strcmp(ccstr, "true") == 0) {
 						return static_cast<T>(1.0f);
@@ -109,7 +109,7 @@ namespace vmod::vscript
 					return static_cast<T>(var.m_double);
 				}
 				case gsdk::FIELD_STRING: {
-					const char *ccstr{gsdk::STRING(var.m_tstr)};
+					const char *ccstr{gsdk::vscript::STRING(var.m_tstr)};
 
 					if(std::strcmp(ccstr, "true") == 0) {
 						return static_cast<T>(1);
@@ -217,7 +217,7 @@ namespace vmod::vscript
 					return begin;
 				}
 				case gsdk::FIELD_STRING: {
-					return gsdk::STRING(var.m_tstr);
+					return gsdk::vscript::STRING(var.m_tstr);
 				}
 				case gsdk::FIELD_MODELNAME:
 				case gsdk::FIELD_SOUNDNAME:
@@ -560,7 +560,7 @@ namespace vmod::vscript
 	{
 		switch(var.m_type) {
 			case gsdk::FIELD_STRING: {
-				return gsdk::STRING(var.m_tstr);
+				return gsdk::vscript::STRING(var.m_tstr);
 			}
 			case gsdk::FIELD_MODELNAME:
 			case gsdk::FIELD_SOUNDNAME:

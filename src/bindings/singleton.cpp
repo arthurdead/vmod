@@ -43,7 +43,7 @@ namespace vmod::bindings
 			id_root += "_instance"sv;
 
 			if(!vm->SetInstanceUniqeId2(instance, id_root.data())) {
-				vm->RaiseException("vmod: failed to generate unique id");
+				error("vmod: failed to generate unique id for '%s' singleton\n", name.data());
 				return false;
 			}
 		}

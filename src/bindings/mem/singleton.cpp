@@ -19,16 +19,35 @@ namespace vmod::bindings::mem
 
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
-		desc.func(&singleton::script_allocate, "script_allocate"sv, "allocate"sv);
-		desc.func(&singleton::script_allocate_aligned, "script_allocate_aligned"sv, "allocate_aligned"sv);
-		desc.func(&singleton::script_allocate_zero, "script_allocate_zero"sv, "allocate_zero"sv);
-		desc.func(&singleton::script_allocate_type, "script_allocate_type"sv, "allocate_type"sv);
-		desc.func(&singleton::script_read, "script_read"sv, "read"sv);
-		desc.func(&singleton::script_write, "script_write"sv, "write"sv);
-		desc.func(&singleton::script_add, "script_add"sv, "add"sv);
-		desc.func(&singleton::script_sub, "script_sub"sv, "sub"sv);
-		desc.func(&singleton::script_get_vtable, "script_get_vtable"sv, "get_vtable"sv);
-		desc.func(&singleton::script_get_vfunc, "script_get_vfunc"sv, "get_vfunc"sv);
+		desc.func(&singleton::script_allocate, "script_allocate"sv, "allocate"sv)
+		.desc("[container](size)"sv);
+
+		desc.func(&singleton::script_allocate_aligned, "script_allocate_aligned"sv, "allocate_aligned"sv)
+		.desc("[container](align, size)"sv);
+
+		desc.func(&singleton::script_allocate_zero, "script_allocate_zero"sv, "allocate_zero"sv)
+		.desc("[container](num, size)"sv);
+
+		desc.func(&singleton::script_allocate_type, "script_allocate_type"sv, "allocate_type"sv)
+		.desc("[container](type|type)"sv);
+
+		desc.func(&singleton::script_read, "script_read"sv, "read"sv)
+		.desc("(ptr|, type|type)"sv);
+
+		desc.func(&singleton::script_write, "script_write"sv, "write"sv)
+		.desc("(ptr|, type|type, value)"sv);
+
+		desc.func(&singleton::script_add, "script_add"sv, "add"sv)
+		.desc("[ptr](ptr|, offset)"sv);
+
+		desc.func(&singleton::script_sub, "script_sub"sv, "sub"sv)
+		.desc("[ptr](ptr|, offset)"sv);
+
+		desc.func(&singleton::script_get_vtable, "script_get_vtable"sv, "get_vtable"sv)
+		.desc("[vtable](ptr|)"sv);
+
+		desc.func(&singleton::script_get_vfunc, "script_get_vfunc"sv, "get_vfunc"sv)
+		.desc("[fp](ptr|, index)"sv);
 
 		if(!singleton_base::bindings(&desc)) {
 			return false;
@@ -155,6 +174,21 @@ namespace vmod::bindings::mem
 				error("vmod: failed to register mem cstr type\n"sv);
 				return false;
 			}
+
+			if(!register_type(&ffi_type_object_tstr, "tstr_obj"sv)) {
+				error("vmod: failed to register mem tstr type\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_plain_tstr, "tstr_plain"sv)) {
+				error("vmod: failed to register mem tstr type\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_weak_tstr, "tstr_weak"sv)) {
+				error("vmod: failed to register mem tstr type\n"sv);
+				return false;
+			}
 		}
 
 		if(!vm->SetValue(scope, "types", types_table)) {
@@ -200,12 +234,42 @@ namespace vmod::bindings::mem
 
 	singleton::type *singleton::find_type(ffi_type *ptr) noexcept
 	{
-		auto it{types.find(ptr)};
-		if(it == types.end()) {
+		for(const auto &it :types) {
+			if(it->ptr == ptr) {
+				return it.get();
+			}
+		}
+
+		return nullptr;
+	}
+
+	ffi_type *singleton::read_type(gsdk::HSCRIPT type_table) noexcept
+	{
+		gsdk::IScriptVM *vm{main::instance().vm()};
+
+		if(!type_table || type_table == gsdk::INVALID_HSCRIPT) {
+			vm->RaiseException("vmod: invalid type");
 			return nullptr;
 		}
 
-		return it->second.get();
+		if(!vm->IsTable(type_table)) {
+			vm->RaiseException("vmod: type is not a table");
+			return nullptr;
+		}
+
+		vscript::variant value;
+		if(!vm->GetValue(type_table, "__internal_ptr__", &value)) {
+			vm->RaiseException("vmod: type table missing __internal_ptr__ key");
+			return nullptr;
+		}
+
+		ffi_type *type{value.get<ffi_type *>()};
+		if(!type) {
+			vm->RaiseException("vmod: failed to read type");
+			return nullptr;
+		}
+
+		return type;
 	}
 
 	bool singleton::register_type(ffi_type *ptr, std::string_view type_name) noexcept
@@ -231,28 +295,18 @@ namespace vmod::bindings::mem
 				return false;
 			}
 
-			if(!vm->SetValue(table, "id", vscript::variant{ptr->type})) {
-				error("vmod: failed to set type '%s' id value\n", type_name.data());
-				return false;
-			}
-
 			if(!vm->SetValue(table, "__internal_ptr__", vscript::variant{ptr})) {
 				error("vmod: failed to set type '%s' internal ptr value\n", type_name.data());
 				return false;
 			}
-
-			if(!vm->SetValue(table, "name", vscript::variant{type_name})) {
-				error("vmod: failed to set type '%s' name value\n", type_name.data());
-				return false;
-			}
-
-			if(!vm->SetValue(types_table, type_name.data(), table)) {
-				error("vmod: failed to set type '%s' name value\n", type_name.data());
-				return false;
-			}
 		}
 
-		types.emplace(ptr, new type{type_name, ptr, table});
+		if(!vm->SetValue(types_table, type_name.data(), table)) {
+			error("vmod: failed to set type '%s' value\n", type_name.data());
+			return false;
+		}
+
+		types.emplace_back(new type{type_name, ptr, table});
 
 		return true;
 	}
@@ -262,7 +316,7 @@ namespace vmod::bindings::mem
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(size == 0 || size == static_cast<std::size_t>(-1)) {
-			vm->RaiseException("vmod: invalid size");
+			vm->RaiseException("vmod: invalid size %zu", size);
 			return gsdk::INVALID_HSCRIPT;
 		}
 
@@ -281,12 +335,17 @@ namespace vmod::bindings::mem
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(size == 0 || size == static_cast<std::size_t>(-1)) {
-			vm->RaiseException("vmod: invalid size");
+			vm->RaiseException("vmod: invalid size: %zu", size);
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		if(static_cast<std::size_t>(align) == 0 || static_cast<std::size_t>(align) == static_cast<std::size_t>(-1) || (static_cast<std::size_t>(align) % 2) != 0) {
-			vm->RaiseException("vmod: invalid align");
+		if(static_cast<std::size_t>(align) == 0 || static_cast<std::size_t>(align) == static_cast<std::size_t>(-1)) {
+			vm->RaiseException("vmod: invalid align: %zu", static_cast<std::size_t>(align));
+			return gsdk::INVALID_HSCRIPT;
+		}
+
+		if((static_cast<std::size_t>(align) % 2) != 0) {
+			vm->RaiseException("vmod: align is not divisible by 2: %zu", static_cast<std::size_t>(align));
 			return gsdk::INVALID_HSCRIPT;
 		}
 
@@ -302,27 +361,8 @@ namespace vmod::bindings::mem
 
 	gsdk::HSCRIPT singleton::script_allocate_type(gsdk::HSCRIPT type_table) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
-
-		if(!type_table || type_table == gsdk::INVALID_HSCRIPT) {
-			vm->RaiseException("vmod: invalid type");
-			return gsdk::INVALID_HSCRIPT;
-		}
-
-		if(!vm->IsTable(type_table)) {
-			vm->RaiseException("vmod: invalid type");
-			return gsdk::INVALID_HSCRIPT;
-		}
-
-		vscript::variant type_var;
-		if(!vm->GetValue(type_table, "__internal_ptr__", &type_var)) {
-			vm->RaiseException("vmod: invalid type");
-			return gsdk::INVALID_HSCRIPT;
-		}
-
-		ffi_type *type{type_var.get<ffi_type *>()};
+		ffi_type *type{read_type(type_table)};
 		if(!type) {
-			vm->RaiseException("vmod: invalid type");
 			return gsdk::INVALID_HSCRIPT;
 		}
 
@@ -340,12 +380,12 @@ namespace vmod::bindings::mem
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(size == 0 || size == static_cast<std::size_t>(-1)) {
-			vm->RaiseException("vmod: invalid size");
+			vm->RaiseException("vmod: invalid size: %zu", size);
 			return gsdk::INVALID_HSCRIPT;
 		}
 
 		if(num == 0 || num == static_cast<std::size_t>(-1)) {
-			vm->RaiseException("vmod: invalid num");
+			vm->RaiseException("vmod: invalid num: %zu", num);
 			return gsdk::INVALID_HSCRIPT;
 		}
 
@@ -367,25 +407,8 @@ namespace vmod::bindings::mem
 			return vscript::null();
 		}
 
-		if(!type_table || type_table == gsdk::INVALID_HSCRIPT) {
-			vm->RaiseException("vmod: invalid type");
-			return vscript::null();
-		}
-
-		if(!vm->IsTable(type_table)) {
-			vm->RaiseException("vmod: invalid type");
-			return vscript::null();
-		}
-
-		vscript::variant type_var;
-		if(!vm->GetValue(type_table, "__internal_ptr__", &type_var)) {
-			vm->RaiseException("vmod: invalid type");
-			return vscript::null();
-		}
-
-		ffi_type *type{type_var.get<ffi_type *>()};
+		ffi_type *type{read_type(type_table)};
 		if(!type) {
-			vm->RaiseException("vmod: invalid type");
 			return vscript::null();
 		}
 
@@ -403,25 +426,8 @@ namespace vmod::bindings::mem
 			return;
 		}
 
-		if(!type_table || type_table == gsdk::INVALID_HSCRIPT) {
-			vm->RaiseException("vmod: invalid type");
-			return;
-		}
-
-		if(!vm->IsTable(type_table)) {
-			vm->RaiseException("vmod: invalid type");
-			return;
-		}
-
-		vscript::variant type_var;
-		if(!vm->GetValue(type_table, "__internal_ptr__", &type_var)) {
-			vm->RaiseException("vmod: invalid type");
-			return;
-		}
-
-		ffi_type *type{type_var.get<ffi_type *>()};
+		ffi_type *type{read_type(type_table)};
 		if(!type) {
-			vm->RaiseException("vmod: invalid type");
 			return;
 		}
 
@@ -478,7 +484,7 @@ namespace vmod::bindings::mem
 		}
 
 		if(index == static_cast<std::size_t>(-1)) {
-			vm->RaiseException("vmod: invalid index");
+			vm->RaiseException("vmod: invalid index %zu", index);
 			return nullptr;
 		}
 

@@ -96,12 +96,17 @@ namespace vmod::bindings::ent
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(classname.empty()) {
-			vm->RaiseException("vmod: invalid classname");
+			vm->RaiseException("vmod: invalid classname: '%s'", classname.data());
 			return nullptr;
 		}
 
-		if(size_ == 0 || size_ == static_cast<std::size_t>(-1) || size_ < size) {
-			vm->RaiseException("vmod: invalid size");
+		if(size_ == 0 || size_ == static_cast<std::size_t>(-1)) {
+			vm->RaiseException("vmod: invalid size: %zu", size_);
+			return nullptr;
+		}
+
+		if(size_ < size) {
+			vm->RaiseException("vmod: new size is less than base size: %zu vs %zu", size_, size);
 			return nullptr;
 		}
 

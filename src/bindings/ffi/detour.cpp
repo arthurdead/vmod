@@ -45,8 +45,9 @@ namespace vmod::bindings::ffi
 
 	gsdk::ScriptVariant_t detour::script_call(const vscript::variant *args, std::size_t num_args, ...) noexcept
 	{
-		if(!args || num_args != args_types.size()) {
-			main::instance().vm()->RaiseException("wrong number of parameters");
+		std::size_t required_args{args_types.size()};
+		if(!args || num_args != required_args) {
+			main::instance().vm()->RaiseException("vmod: wrong number of parameters expected %zu got %i", num_args, required_args);
 			return vscript::null();
 		}
 

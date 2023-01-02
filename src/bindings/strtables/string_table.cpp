@@ -48,12 +48,12 @@ namespace vmod::bindings::strtables
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(name.empty()) {
-			vm->RaiseException("vmod: invalid name");
+			vm->RaiseException("vmod: invalid name: '%s'", name.data());
 			return static_cast<std::size_t>(-1);
 		}
 
 		if(!table) {
-			vm->RaiseException("vmod: stringtable is not created yet");
+			vm->RaiseException("vmod: string table is not created yet");
 			return static_cast<std::size_t>(-1);
 		}
 
@@ -77,12 +77,12 @@ namespace vmod::bindings::strtables
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(i == static_cast<std::size_t>(-1) || static_cast<int>(i) >= table->GetNumStrings()) {
-			vm->RaiseException("vmod: invalid index");
+			vm->RaiseException("vmod: invalid index: %zu", i);
 			return {};
 		}
 
 		if(!table) {
-			vm->RaiseException("vmod: stringtable is not created yet");
+			vm->RaiseException("vmod: string table is not created yet");
 			return {};
 		}
 
@@ -94,12 +94,12 @@ namespace vmod::bindings::strtables
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(name.empty()) {
-			vm->RaiseException("vmod: invalid string");
+			vm->RaiseException("vmod: invalid string: '%s'", name.data());
 			return static_cast<std::size_t>(-1);
 		}
 
 		if(!table) {
-			vm->RaiseException("vmod: stringtable is not created yet");
+			vm->RaiseException("vmod: string table is not created yet");
 			return static_cast<std::size_t>(-1);
 		}
 

@@ -27,6 +27,6 @@ namespace gsdk
 			return nullptr;
 		}
 
-		return static_cast<CBaseEntity *>(g_pScriptVM->GetInstanceValue(instance, g_pScriptDesc));
+		return g_pScriptVM->GetInstanceValue<CBaseEntity>(instance, g_pScriptDesc);
 	}
 }

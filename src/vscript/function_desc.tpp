@@ -82,12 +82,12 @@ namespace vmod::vscript
 
 		if(num_required_args > 0) {
 			if(!args || num_args != static_cast<int>(num_required_args)) {
-				detail::raise_exception("vmod: wrong number of parameters");
+				detail::raise_exception("vmod: wrong number of parameters expected %zu got %i", num_required_args, num_args);
 				return false;
 			}
 		} else {
 			if(/*args ||*/ num_args != 0) {
-				detail::raise_exception("vmod: wrong number of parameters");
+				detail::raise_exception("vmod: wrong number of parameters expected %zu got %i", num_required_args, num_args);
 				return false;
 			}
 		}
@@ -139,12 +139,12 @@ namespace vmod::vscript
 
 		if(num_required_args > 0) {
 			if(!args || num_args != num_required_args) {
-				detail::raise_exception("vmod: wrong number of parameters");
+				detail::raise_exception("vmod: wrong number of parameters expected %zu got %i", num_required_args, num_args);
 				return false;
 			}
 		} else {
 			if(/*args ||*/ num_args != 0) {
-				detail::raise_exception("vmod: wrong number of parameters");
+				detail::raise_exception("vmod: wrong number of parameters expected %zu got %i", num_required_args, num_args);
 				return false;
 			}
 		}
@@ -239,7 +239,7 @@ namespace vmod::vscript
 
 		if(num_required_args > 0) {
 			if(!args || num_args < static_cast<int>(num_required_args)) {
-				detail::raise_exception("vmod: wrong number of parameters");
+				detail::raise_exception("vmod: wrong number of parameters expected %zu got %i", num_required_args, num_args);
 				return false;
 			}
 		}
@@ -303,7 +303,7 @@ namespace vmod::vscript
 
 		if(num_required_args > 0) {
 			if(!args || num_args < static_cast<int>(num_required_args)) {
-				detail::raise_exception("vmod: wrong number of parameters");
+				detail::raise_exception("vmod: wrong number of parameters expected %zu got %i", num_required_args, num_args);
 				return false;
 			}
 		}

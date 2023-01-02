@@ -2,6 +2,8 @@
 
 #include "../tier1/interface.hpp"
 #include "../mathlib/vector.hpp"
+#include "../config.hpp"
+#include <string_view>
 
 namespace gsdk
 {

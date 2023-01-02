@@ -29,7 +29,7 @@ namespace vmod
 {
 	squirrel_preprocessor *squirrel_preprocessor::current{nullptr};
 
-	char squirrel_preprocessor::msg_buff[squirrel_preprocessor::msg_buff_max];
+	char squirrel_preprocessor::msg_buff[gsdk::MAXPRINTMSG];
 
 	squirrel_preprocessor::squirrel_preprocessor() noexcept
 	{
@@ -69,13 +69,8 @@ namespace vmod
 			};
 		TPPLexer_Current->l_callbacks.c_unknown_file = nullptr;
 		TPPLexer_Current->l_callbacks.c_warn =
-		#ifndef __clang__
-			[](const char *fmt, va_list args) noexcept __attribute__((__format__(__gnu_printf__, 2, 0))) -> void
-		#else
-			[](const char *fmt, va_list args) noexcept -> void
-		#endif
+			[](const char *fmt, va_list args) __attribute__((__format__(__printf__, 2, 0))) noexcept -> void
 			{
-		
 				#pragma GCC diagnostic push
 				#pragma GCC diagnostic ignored "-Wformat-nonliteral"
 				std::vsnprintf(msg_buff, sizeof(msg_buff), fmt, args);
@@ -103,11 +98,7 @@ namespace vmod
 				}
 			};
 		TPPLexer_Current->l_callbacks.c_message =
-		#ifndef __clang__
-			[](const char *fmt, va_list args) noexcept __attribute__((__format__(__gnu_printf__, 2, 0))) -> void
-		#else
-			[](const char *fmt, va_list args) noexcept -> void
-		#endif
+			[](const char *fmt, va_list args) __attribute__((__format__(__printf__, 2, 0))) noexcept -> void
 			{
 				#pragma GCC diagnostic push
 				#pragma GCC diagnostic ignored "-Wformat-nonliteral"

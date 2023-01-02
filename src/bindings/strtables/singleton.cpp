@@ -23,12 +23,12 @@ namespace vmod
 				if(it == script_stringtables.end()) {
 					std::unique_ptr<bindings::strtables::string_table> ptr{new bindings::strtables::string_table{value}};
 					if(!ptr->initialize()) {
-						error("vmod: failed to register string table '%s' instance\n"sv, tablename.c_str());
+						error("vmod: failed to register '%s' string table instance\n"sv, tablename.c_str());
 						return;
 					}
 
 					if(!vm_->SetValue(stringtable_table, tablename.c_str(), ptr->instance)) {
-						error("vmod: failed to set string table '%s' value\n"sv);
+						error("vmod: failed to set '%s' string table value\n"sv);
 						return;
 					}
 
@@ -60,12 +60,12 @@ namespace vmod
 		std::unique_ptr<bindings::strtables::string_table> ptr{new bindings::strtables::string_table};
 
 		if(!ptr->initialize()) {
-			error("vmod: failed to register string table '%s' instance\n"sv);
+			error("vmod: failed to register '%s' string table instance\n"sv, tablename.c_str());
 			return false;
 		}
 
 		if(!vm_->SetValue(stringtable_table, tablename.c_str(), ptr->instance)) {
-			error("vmod: failed to set string table '%s' value\n"sv);
+			error("vmod: failed to set '%s' string table value\n"sv, tablename.c_str());
 			return false;
 		}
 

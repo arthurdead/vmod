@@ -1,6 +1,7 @@
 #include "bindings.hpp"
 #include "singleton.hpp"
-#include "sendprop.hpp"
+#include "sendtable.hpp"
+#include "datamap.hpp"
 #include "factory.hpp"
 #include "../docs.hpp"
 #include "../../filesystem.hpp"
@@ -14,6 +15,18 @@ namespace vmod::bindings::ent
 		}
 
 		if(!sendprop::bindings()) {
+			return false;
+		}
+
+		if(!sendtable::bindings()) {
+			return false;
+		}
+
+		if(!dataprop::bindings()) {
+			return false;
+		}
+
+		if(!datamap::bindings()) {
 			return false;
 		}
 
@@ -44,6 +57,10 @@ namespace vmod::bindings::ent
 		factory_ref::unbindings();
 
 		sendprop::unbindings();
+		sendtable::unbindings();
+
+		dataprop::unbindings();
+		datamap::unbindings();
 
 		singleton::instance().unbindings();
 	}
@@ -64,7 +81,16 @@ namespace vmod::bindings::ent
 		docs::write(&factory_impl::desc, true, 1, file, false);
 		file += "\n\n"sv;
 
+		docs::write(&sendtable::desc, true, 1, file, false);
+		file += "\n\n"sv;
+
 		docs::write(&sendprop::desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		docs::write(&datamap::desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		docs::write(&dataprop::desc, true, 1, file, false);
 		file += "\n\n"sv;
 
 		docs::write(&singleton::desc, false, 1, file, false);

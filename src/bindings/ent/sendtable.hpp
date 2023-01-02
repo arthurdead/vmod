@@ -60,4 +60,34 @@ namespace vmod::bindings::ent
 		sendprop(sendprop &&) = delete;
 		sendprop &operator=(sendprop &&) = delete;
 	};
+
+	class sendtable final
+	{
+		friend class singleton;
+		friend void write_docs(const std::filesystem::path &) noexcept;
+
+	public:
+		static bool bindings() noexcept;
+		static void unbindings() noexcept;
+
+		~sendtable() noexcept;
+
+	private:
+		static vscript::class_desc<sendtable> desc;
+
+		sendtable(gsdk::SendTable *table_) noexcept;
+
+		bool initialize() noexcept;
+
+		gsdk::SendTable *table;
+
+		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+
+	private:
+		sendtable() = delete;
+		sendtable(const sendtable &) = delete;
+		sendtable &operator=(const sendtable &) = delete;
+		sendtable(sendtable &&) = delete;
+		sendtable &operator=(sendtable &&) = delete;
+	};
 }
