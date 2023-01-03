@@ -1,3 +1,4 @@
+#define __VMOD_COMPILING_GSDK
 #include "baseentity.hpp"
 
 namespace gsdk

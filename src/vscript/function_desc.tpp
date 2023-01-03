@@ -1,5 +1,7 @@
+#include "../hacking.hpp"
 #include "variant.hpp"
 #include "../type_traits.hpp"
+#include "../gsdk.hpp"
 
 namespace vmod::vscript
 {
@@ -345,7 +347,12 @@ namespace vmod::vscript
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		m_pFunction.mfp = reinterpret_cast<generic_mfp_t>(func);
 	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
-		m_pFunction.plain = reinterpret_cast<generic_plain_mfp_t>(mfp_to_func(func).first);
+		auto internal{mfp_to_func(func)};
+		m_pFunction.plain = reinterpret_cast<generic_plain_mfp_t>(internal.first);
+		if(internal.second != 0) {
+			using namespace std::literals::string_view_literals;
+			error("vmod: member function '%s::%s' has base adjustment\n"sv, demangle<C>().c_str(), name.data());
+		}
 	#else
 		#error
 	#endif
@@ -363,7 +370,12 @@ namespace vmod::vscript
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		m_pFunction.mfp = reinterpret_cast<generic_mfp_t>(func);
 	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
-		m_pFunction.plain = reinterpret_cast<generic_plain_mfp_t>(mfp_to_func(func).first);
+		auto internal{mfp_to_func(func)};
+		m_pFunction.plain = reinterpret_cast<generic_plain_mfp_t>(internal.first);
+		if(internal.second != 0) {
+			using namespace std::literals::string_view_literals;
+			error("vmod: member function '%s::%s' has base adjustment\n"sv, demangle<C>().c_str(), name.data());
+		}
 	#else
 		#error
 	#endif

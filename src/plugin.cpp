@@ -5,6 +5,7 @@
 #include <charconv>
 #include <sys/inotify.h>
 #include "bindings/docs.hpp"
+#include "bindings/instance.hpp"
 
 namespace vmod
 {
@@ -318,12 +319,6 @@ namespace vmod
 
 	plugin::owned_instance::~owned_instance() noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
-
-		if(instance && instance != gsdk::INVALID_HSCRIPT) {
-			vm->RemoveInstance(instance);
-		}
-
 		if(owner_ && !owner_->clearing_instances) {
 			std::vector<owned_instance *> &instances{owner_->owned_instances};
 
@@ -346,6 +341,7 @@ namespace vmod
 				if(!target_desc->m_pBaseDesc) {
 					target_desc->m_pBaseDesc = &desc;
 				} else {
+				#if 0
 					bool found{false};
 
 					gsdk::ScriptClassDesc_t *base_desc{target_desc->m_pBaseDesc};
@@ -359,16 +355,17 @@ namespace vmod
 					}
 
 					if(!found) {
-						error("vmod: owned instance class '%s' has invalid base\n", target_desc->m_pszClassname);
+						error("vmod: owned instance class '%s' doenst have owned_instance as base\n", target_desc->m_pszClassname);
 						return false;
 					}
+				#endif
 				}
 			}
 
 			if(!target_desc->m_pfnDestruct) {
 				target_desc->m_pfnDestruct = 
 					[](void *ptr) noexcept -> void {
-						delete reinterpret_cast<owned_instance *>(ptr);
+						delete static_cast<owned_instance *>(ptr);
 					}
 				;
 			}
@@ -380,38 +377,10 @@ namespace vmod
 		}
 	}
 
-	bool plugin::owned_instance::register_instance(gsdk::ScriptClassDesc_t *target_desc) noexcept
+	bool plugin::owned_instance::register_instance(gsdk::ScriptClassDesc_t *target_desc, void *pthis) noexcept
 	{
-		using namespace std::literals::string_view_literals;
-
-		gsdk::IScriptVM *vm{main::instance().vm()};
-
-		const char *desc_name{bindings::docs::get_class_desc_name(target_desc).data()};
-
-		instance = vm->RegisterInstance(target_desc, this);
-		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
-			vm->RaiseException("vmod: failed to register '%s' instance", desc_name);
+		if(!bindings::instance_base::register_instance(target_desc, pthis)) {
 			return false;
-		}
-
-		std::string_view obfuscated_name;
-
-		if(target_desc->m_pNextDesc == reinterpret_cast<const gsdk::ScriptClassDesc_t *>(uninitialized_memory)) {
-			const vscript::extra_class_desc &extra{static_cast<const vscript::detail::base_class_desc<generic_class> *>(target_desc)->extra()};
-			obfuscated_name = extra.obfuscated_name();
-		} else {
-			vm->RaiseException("vmod: class desc '%s' was not created by vmod", desc_name);
-			return false;
-		}
-
-		{
-			std::string id_root{obfuscated_name};
-			id_root += "_instance"sv;
-
-			if(!vm->SetInstanceUniqeId2(instance, id_root.data())) {
-				vm->RaiseException("vmod: failed to generate unique id for '%s'", desc_name);
-				return false;
-			}
 		}
 
 		set_plugin();

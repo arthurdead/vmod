@@ -3,6 +3,7 @@
 #include "../../gsdk.hpp"
 #include "../../convar.hpp"
 #include "convar.hpp"
+#include <memory>
 
 namespace vmod::bindings::cvar
 {
@@ -22,10 +23,10 @@ namespace vmod::bindings::cvar
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		desc.func(&singleton::script_create_cvar, "script_create_cvar"sv, "create_var"sv)
-		.desc("[convar](name, value)"sv);
+		.desc("[convar_ref](name, value)"sv);
 
 		desc.func(&singleton::script_find_cvar, "script_find_cvar"sv, "find_var"sv)
-		.desc("[convar](name)"sv);
+		.desc("[convar_impl](name)"sv);
 
 		if(!singleton_base::bindings(&desc)) {
 			return false;
@@ -179,20 +180,20 @@ namespace vmod::bindings::cvar
 
 		if(varname.empty()) {
 			vm->RaiseException("vmod: invalid name: '%s'", varname.data());
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		if(vmod::cvar->FindCommandBase(varname.data()) != nullptr) {
 			vm->RaiseException("vmod: name already in use: '%s'", varname.data());
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		ConVar *var{new ConVar};
 
-		convar *svar{new convar{var, true}};
+		convar *svar{new convar{var}};
 		if(!svar->initialize()) {
 			delete svar;
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		var->initialize(varname, value);
@@ -200,26 +201,30 @@ namespace vmod::bindings::cvar
 		return svar->instance;
 	}
 
-	gsdk::HSCRIPT singleton::script_find_cvar(std::string_view varname) noexcept
+	gsdk::HSCRIPT singleton::script_find_cvar(std::string &&varname) noexcept
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(varname.empty()) {
-			vm->RaiseException("vmod: invalid name: '%s'", varname.data());
-			return nullptr;
+			vm->RaiseException("vmod: invalid name: '%s'", varname.c_str());
+			return gsdk::INVALID_HSCRIPT;
 		}
 
-		gsdk::ConVar *var{vmod::cvar->FindVar(varname.data())};
-		if(!var) {
-			return nullptr;
+		auto it{convars.find(varname)};
+		if(it == convars.end()) {
+			gsdk::ConVar *var{vmod::cvar->FindVar(varname.data())};
+			if(!var) {
+				return gsdk::INVALID_HSCRIPT;
+			}
+
+			std::unique_ptr<convar_ref> svar{new convar_ref{var}};
+			if(!svar->initialize()) {
+				return gsdk::INVALID_HSCRIPT;
+			}
+
+			it = convars.emplace(std::move(varname), std::move(svar)).first;
 		}
 
-		convar *svar{new convar{var, false}};
-		if(!svar->initialize()) {
-			delete svar;
-			return nullptr;
-		}
-
-		return svar->instance;
+		return it->second->instance;
 	}
 }

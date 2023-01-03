@@ -1,0 +1,220 @@
+#include "datamap.hpp"
+#include <cstddef>
+#include <cstring>
+
+namespace gsdk
+{
+	typedescription_t typedescription_t::empty;
+
+	typedescription_t::~typedescription_t() noexcept
+	{
+		if(flags & FTYPEDESC_FREE_NAME) {
+			if(fieldName) {
+				std::free(const_cast<char *>(fieldName));
+			}
+		}
+
+		if(flags & FTYPEDESC_FREE_EXTERNALNAME) {
+			if(externalName) {
+				std::free(const_cast<char *>(externalName));
+			}
+		}
+
+		if(flags & FTYPEDESC_FREE_DATAMAP) {
+			if(td) {
+				delete td;
+			}
+		}
+	}
+
+	typedescription_t &typedescription_t::operator=(typedescription_t &&other) noexcept
+	{
+		fieldType = other.fieldType;
+		other.fieldType = FIELD_VOID;
+		flags = other.flags;
+		other.flags = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		fieldOffset[TD_OFFSET_NORMAL] = other.fieldOffset[TD_OFFSET_NORMAL];
+		other.fieldOffset[TD_OFFSET_NORMAL] = 0;
+		fieldOffset[TD_OFFSET_PACKED] = other.fieldOffset[TD_OFFSET_PACKED];
+		other.fieldOffset[TD_OFFSET_PACKED] = 0;
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		fieldOffset = other.fieldOffset;
+		other.fieldOffset = 0;
+	#else
+		#error
+	#endif
+		pSaveRestoreOps = other.pSaveRestoreOps;
+		other.pSaveRestoreOps = nullptr;
+		inputFunc = other.inputFunc;
+		other.inputFunc = nullptr;
+		td = other.td;
+		other.td = nullptr;
+		fieldSizeInBytes = other.fieldSizeInBytes;
+		other.fieldSizeInBytes = 0;
+		override_field = other.override_field;
+		other.override_field = nullptr;
+		override_count = other.override_count;
+		other.override_count = 0;
+		fieldTolerance = other.fieldTolerance;
+		other.fieldTolerance = 0.0f;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		flatOffset[TD_OFFSET_NORMAL] = other.flatOffset[TD_OFFSET_NORMAL];
+		other.flatOffset[TD_OFFSET_NORMAL] = 0;
+		flatOffset[TD_OFFSET_PACKED] = other.flatOffset[TD_OFFSET_PACKED];
+		other.flatOffset[TD_OFFSET_PACKED] = 0;
+		flatGroup = other.flatGroup;
+		other.flatGroup = 0;
+	#endif
+		return *this;
+	}
+
+	bool typedescription_t::operator==(const typedescription_t &other) const noexcept
+	{
+		if(fieldType != other.fieldType) {
+			return false;
+		}
+
+		if(fieldName && other.fieldName) {
+			if(std::strcmp(fieldName, other.fieldName) != 0) {
+				return false;
+			}
+		} else if(fieldName && !other.fieldName) {
+			return false;
+		} else if(!fieldName && other.fieldName) {
+			return false;
+		}
+
+		if(fieldSize != other.fieldSize) {
+			return false;
+		}
+
+		if(fieldSizeInBytes != other.fieldSizeInBytes) {
+			return false;
+		}
+
+		constexpr int ignored_flags{
+			FTYPEDESC_FREE_DATAMAP|FTYPEDESC_FREE_NAME|FTYPEDESC_FREE_EXTERNALNAME|
+			FTYPEDESC_NOERRORCHECK
+		};
+
+		short tmp_flags{static_cast<short>(flags & ~ignored_flags)};
+		short tmp_other_flags{static_cast<short>(other.flags & ~ignored_flags)};
+
+		if(!(tmp_flags & tmp_other_flags)) {
+			return false;
+		}
+
+		if(tmp_flags & FTYPEDESC_KEY ||
+			tmp_flags & FTYPEDESC_INPUT ||
+			tmp_flags & FTYPEDESC_OUTPUT) {
+			if(externalName && other.externalName) {
+				if(std::strcmp(externalName, other.externalName) != 0) {
+					return false;
+				}
+			} else if(externalName && !other.externalName) {
+				return false;
+			} else if(!externalName && other.externalName) {
+				return false;
+			}
+		}
+
+		if(fieldType == FIELD_EMBEDDED) {
+			if(td && other.td) {
+				if(*td != *other.td) {
+					return false;
+				}
+			} else if(td && !other.td) {
+				return false;
+			} else if(!td && other.td) {
+				return false;
+			}
+		} else if(fieldType == FIELD_CUSTOM) {
+			if(pSaveRestoreOps != other.pSaveRestoreOps) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	bool datamap_t::operator==(const datamap_t &other) const noexcept
+	{
+		if(std::strcmp(dataClassName, other.dataClassName) != 0) {
+			return false;
+		}
+
+		if(baseMap && other.baseMap) {
+			if(*baseMap != *other.baseMap) {
+				return false;
+			}
+		} else if(baseMap && !other.baseMap) {
+			return false;
+		} else if(!baseMap && other.baseMap) {
+			return false;
+		}
+
+		if(dataNumFields != other.dataNumFields) {
+			return false;
+		}
+
+		auto compare_props{
+			[](int num, typedescription_t *desc1, typedescription_t *desc2) noexcept -> bool {
+				std::size_t num_props{static_cast<std::size_t>(num)};
+				for(std::size_t i{0}; i < num_props; ++i) {
+					bool found{false};
+					for(std::size_t j{0}; j < num_props; ++j) {
+						if(desc2[j] == desc1[i]) {
+							found = true;
+							break;
+						}
+					}
+					if(!found) {
+						return false;
+					}
+				}
+				return true;
+			}
+		};
+
+		if(!compare_props(dataNumFields, dataDesc, other.dataDesc)) {
+			return false;
+		}
+
+		if(!compare_props(dataNumFields, other.dataDesc, dataDesc)) {
+			return false;
+		}
+
+		return true;
+	}
+
+	datamap_t::~datamap_t() noexcept
+	{
+		if(dataDesc) {
+			short flags{FTYPEDESC_NOFLAGS};
+
+			std::size_t num_props{static_cast<std::size_t>(dataNumFields)};
+			for(std::size_t i{0}; i < num_props; ++i) {
+				if(dataDesc[i] == typedescription_t::empty) {
+					if(dataDesc[i].flags & FTYPEDESC_FREE_NAME) {
+						flags |= FTYPEDESC_FREE_NAME;
+					}
+					if(dataDesc[i].flags & FTYPEDESC_FREE_DATAMAP) {
+						flags |= FTYPEDESC_FREE_DATAMAP;
+					}
+					break;
+				}
+			}
+
+			if(flags & FTYPEDESC_FREE_NAME) {
+				if(dataClassName) {
+					std::free(const_cast<char *>(dataClassName));
+				}
+			}
+
+			if(flags & FTYPEDESC_FREE_DATAMAP) {
+				delete[] dataDesc;
+			}
+		}
+	}
+}

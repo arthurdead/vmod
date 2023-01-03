@@ -8,7 +8,6 @@
 #include <cstddef>
 #include <ffi.h>
 #include <functional>
-#include <iterator>
 #include <memory>
 #include <vector>
 
@@ -47,7 +46,7 @@ namespace vmod::bindings::ent
 		.desc("[factory_ref](name)"sv);
 
 		desc.func(&singleton::script_create_factory, "script_create_factory"sv, "create_factory"sv)
-		.desc("[factory_impl](name, function|callback, size)"sv);
+		.desc("[factory_impl](name, factory_callback, size)"sv);
 
 		if(!singleton_base::bindings(&desc)) {
 			return false;
@@ -95,32 +94,36 @@ namespace vmod::bindings::ent
 		return sfac->instance;
 	}
 
-	gsdk::HSCRIPT singleton::script_find_factory(std::string_view facname) noexcept
+	gsdk::HSCRIPT singleton::script_find_factory(std::string &&facname) noexcept
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(facname.empty()) {
-			vm->RaiseException("vmod: invalid name: '%s'", facname.data());
+			vm->RaiseException("vmod: invalid name: '%s'", facname.c_str());
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		gsdk::IEntityFactory *factory{entityfactorydict->FindFactory(facname.data())};
-		if(!factory) {
-			return gsdk::INVALID_HSCRIPT;
+		auto it{factories.find(facname)};
+		if(it == factories.end()) {
+			gsdk::IEntityFactory *factory{entityfactorydict->FindFactory(facname.c_str())};
+			if(!factory) {
+				return gsdk::INVALID_HSCRIPT;
+			}
+
+			factory_impl *impl{dynamic_cast<factory_impl *>(factory)};
+			if(impl) {
+				return impl->instance;
+			}
+
+			std::unique_ptr<factory_ref> sfac{new factory_ref{factory}};
+			if(!sfac->initialize()) {
+				return gsdk::INVALID_HSCRIPT;
+			}
+
+			it = factories.emplace(std::move(facname), std::move(sfac)).first;
 		}
 
-		factory_impl *impl{dynamic_cast<factory_impl *>(factory)};
-		if(impl) {
-			return impl->instance;
-		}
-
-		factory_ref *sfac{new factory_ref{factory}};
-		if(!sfac->initialize()) {
-			delete sfac;
-			return gsdk::INVALID_HSCRIPT;
-		}
-
-		return sfac->instance;
+		return it->second->instance;
 	}
 
 	gsdk::HSCRIPT singleton::script_from_ptr(gsdk::CBaseEntity *ptr) noexcept
@@ -760,7 +763,7 @@ namespace vmod::bindings::ent
 		erase(value);
 	}
 
-	gsdk::HSCRIPT singleton::script_create_datamap(std::string &&name, gsdk::HSCRIPT base, gsdk::HSCRIPT props_array) noexcept
+	gsdk::HSCRIPT singleton::script_create_datamap(std::string &&name, gsdk::HSCRIPT base_instance, gsdk::HSCRIPT props_array) noexcept
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
@@ -869,13 +872,22 @@ namespace vmod::bindings::ent
 			return gsdk::INVALID_HSCRIPT;
 		}
 
+		detail::datamap_base *base{nullptr};
+
+		if(base_instance && base_instance != gsdk::INVALID_HSCRIPT) {
+			auto base_map{vm->GetInstanceValue<detail::datamap_base>(base_instance, &detail::datamap_base::desc)};
+			if(!base_map) {
+				vm->RaiseException("vmod: invalid base");
+				return gsdk::INVALID_HSCRIPT;
+			}
+
+			base = base_map;
+		}
+
 		allocated_datamap *map{new allocated_datamap};
 
-		if(base && base != gsdk::INVALID_HSCRIPT) {
-			auto base_map{vm->GetInstanceValue<detail::datamap_base>(base, &detail::datamap_base::desc)};
-			if(base_map) {
-				map->maps[0]->baseMap = base_map->map;
-			}
+		if(base) {
+			map->maps[0]->baseMap = base->map;
 		}
 
 		map->maps_storage[0]->name = std::move(name);

@@ -97,7 +97,7 @@ namespace vmod::bindings::ffi
 			return false;
 		}
 
-		if(!register_instance(&desc)) {
+		if(!register_instance(&desc, this)) {
 			return false;
 		}
 

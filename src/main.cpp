@@ -1724,14 +1724,16 @@ namespace vmod
 							for(std::size_t i{0}; i < num_props; ++i) {
 								gsdk::typedescription_t &prop{targettable.dataDesc[i]};
 
-								if(num_props == 1 && i == 0 && !prop.fieldName) {
+								if(num_props == 1 && i == 0 && prop == gsdk::typedescription_t::empty) {
 									break;
 								}
 
 								std::function<void(gsdk::typedescription_t &, std::string_view, std::size_t)> write_prop{
 									[&file,&write_table](gsdk::typedescription_t &targetprop, std::string_view name, std::size_t funcdepth) noexcept -> void {
 										if(targetprop.fieldType == gsdk::FIELD_EMBEDDED) {
-											write_table(*targetprop.td, targetprop.td->dataClassName, funcdepth);
+											if(targetprop.td) {
+												write_table(*targetprop.td, targetprop.td->dataClassName ? targetprop.td->dataClassName : "<<unknown>>"sv, funcdepth);
+											}
 										}
 
 										bindings::docs::ident(file, funcdepth);
@@ -1741,7 +1743,11 @@ namespace vmod
 										std::size_t size{static_cast<std::size_t>(targetprop.fieldSizeInBytes)};
 
 										if(targetprop.fieldType == gsdk::FIELD_EMBEDDED) {
-											file += targetprop.td->dataClassName;
+											if(targetprop.td && targetprop.td->dataClassName) {
+												file += targetprop.td->dataClassName;
+											} else {
+												file += "<<unknown>>"sv;
+											}
 										} else {
 											switch(type) {
 												case gsdk::FIELD_VOID: {
@@ -1815,22 +1821,27 @@ namespace vmod
 
 								if(prop.flags & gsdk::FTYPEDESC_INPUT ||
 									prop.flags & gsdk::FTYPEDESC_OUTPUT) {
-									write_prop(prop, prop.externalName, depth+1);
+									write_prop(prop, prop.externalName ? prop.externalName : "<<unknown>>"sv, depth+1);
 								} else if(prop.flags & gsdk::FTYPEDESC_FUNCTIONTABLE) {
-									std::string funcname{prop.fieldName};
-									funcname.erase(0, tablename.length());
+									std::string funcname;
+									if(prop.fieldName) {
+										funcname = prop.fieldName;
+										funcname.erase(0, tablename.length());
+									} else {
+										funcname = "<<unknown>>"s;
+									}
 									write_prop(prop, funcname, depth+1);
 								} else if(prop.flags & gsdk::FTYPEDESC_KEY) {
 									bindings::docs::ident(file, depth+1);
 									file += "union\n"sv;
 									bindings::docs::ident(file, depth+1);
 									file += "{\n"sv;
-									write_prop(prop, prop.fieldName, depth+2);
-									write_prop(prop, prop.externalName, depth+2);
+									write_prop(prop, prop.fieldName ? prop.fieldName : "<<unknown>>"sv, depth+2);
+									write_prop(prop, prop.externalName ? prop.externalName : "<<unknown>>"sv, depth+2);
 									bindings::docs::ident(file, depth+1);
 									file += "};\n"sv;
 								} else {
-									write_prop(prop, prop.fieldName, depth+1);
+									write_prop(prop, prop.fieldName ? prop.fieldName : "<<unknown>>"sv, depth+1);
 								}
 							}
 
@@ -1839,7 +1850,7 @@ namespace vmod
 						}
 					};
 
-					write_table(*it.second, it.second->dataClassName, 0);
+					write_table(*it.second, it.second->dataClassName ? it.second->dataClassName : "<<unknown>>"sv, 0);
 
 					std::filesystem::path dump_path{dump_dir};
 					dump_path /= it.first;

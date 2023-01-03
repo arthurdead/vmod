@@ -4,6 +4,7 @@
 #include "../../vscript/class_desc.hpp"
 #include "../../gsdk/engine/stringtable.hpp"
 #include "bindings.hpp"
+#include "../instance.hpp"
 #include <cstddef>
 
 namespace vmod
@@ -13,13 +14,13 @@ namespace vmod
 
 namespace vmod::bindings::strtables
 {
-	class string_table final
+	class string_table final : public instance_base
 	{
 		friend class vmod::main;
 		friend void write_docs(const std::filesystem::path &) noexcept;
 
 	public:
-		~string_table() noexcept;
+		~string_table() noexcept override;
 
 		static bool bindings() noexcept;
 		static void unbindings() noexcept;
@@ -37,7 +38,8 @@ namespace vmod::bindings::strtables
 
 		static vscript::class_desc<string_table> desc;
 
-		bool initialize() noexcept;
+		inline bool initialize() noexcept
+		{ return register_instance(&desc, this); }
 
 		std::size_t script_find_index(std::string_view name) const noexcept;
 		std::size_t script_num_strings() const noexcept;
@@ -45,7 +47,6 @@ namespace vmod::bindings::strtables
 		std::size_t script_add_string(std::string_view name, ssize_t bytes, const void *data) noexcept;
 
 		gsdk::INetworkStringTable *table;
-		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
 
 	private:
 		string_table(const string_table &) = delete;

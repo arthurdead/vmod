@@ -1,3 +1,4 @@
+#define __VMOD_COMPILING_GSDK
 #include "vscript.hpp"
 #include "../engine/sv_engine.hpp"
 

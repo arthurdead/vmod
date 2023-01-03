@@ -125,7 +125,7 @@ namespace vmod::bindings::ffi
 		#pragma GCC diagnostic pop
 	#endif
 
-		if(!register_instance(&desc)) {
+		if(!register_instance(&desc, this)) {
 			return false;
 		}
 

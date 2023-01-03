@@ -1,5 +1,9 @@
 #pragma once
 
+#if !defined __VMOD_VSCRIPT_HEADER_INCLUDED && !defined __VMOD_COMPILING_GSDK
+	#error "include vscript/vscript.hpp instead"
+#endif
+
 #include <cstdarg>
 #include <cstdint>
 #include <string_view>
@@ -264,9 +268,11 @@ namespace gsdk
 
 	enum ScriptFuncBindingFlags_t : unsigned int
 	{
-		SF_NOFLAGS = 0,
+		SF_NOFLAGS =        0,
 		SF_MEMBER_FUNC = 0x01,
-		SF_NUM_FLAGS = 1
+
+		SF_LAST_FLAG =   SF_MEMBER_FUNC,
+		SF_NUM_FLAGS =      1
 	};
 
 	struct ScriptFuncDescriptor_t

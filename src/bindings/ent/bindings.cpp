@@ -30,11 +30,7 @@ namespace vmod::bindings::ent
 			return false;
 		}
 
-		if(!factory_ref::bindings()) {
-			return false;
-		}
-
-		if(!factory_impl::bindings()) {
+		if(!factory_base::bindings()) {
 			return false;
 		}
 
@@ -52,9 +48,7 @@ namespace vmod::bindings::ent
 
 	void unbindings() noexcept
 	{
-		factory_impl::unbindings();
-
-		factory_ref::unbindings();
+		factory_base::unbindings();
 
 		sendprop::unbindings();
 		sendtable::unbindings();
@@ -74,6 +68,12 @@ namespace vmod::bindings::ent
 		docs::gen_date(file);
 
 		file += "namespace ent\n{\n"sv;
+
+		docs::ident(file, 1);
+		file += "using factory_callback = entity(factory_impl factory, int size, char[] classname);\n\n"sv;
+
+		docs::write(&factory_base::desc, true, 1, file, false);
+		file += "\n\n"sv;
 
 		docs::write(&factory_ref::desc, true, 1, file, false);
 		file += "\n\n"sv;

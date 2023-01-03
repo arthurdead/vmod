@@ -8,7 +8,7 @@ namespace vmod::bindings::cvar
 {
 	bool bindings() noexcept
 	{
-		if(!convar::bindings()) {
+		if(!convar_base::bindings()) {
 			return false;
 		}
 
@@ -30,7 +30,7 @@ namespace vmod::bindings::cvar
 
 	void unbindings() noexcept
 	{
-		convar::unbindings();
+		convar_base::unbindings();
 
 		singleton::instance().unbindings();
 	}
@@ -52,6 +52,12 @@ namespace vmod::bindings::cvar
 		docs::write(file, 2, singleton::instance().flags_table, docs::write_enum_how::flags);
 		docs::ident(file, 1);
 		file += "};\n\n"sv;
+
+		docs::write(&convar_base::desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		docs::write(&convar_ref::desc, true, 1, file, false);
+		file += "\n\n"sv;
 
 		docs::write(&convar::desc, true, 1, file, false);
 		file += "\n\n"sv;

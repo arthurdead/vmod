@@ -5,6 +5,7 @@ namespace vmod
 {
 	vscript::class_desc<plugin> plugin::desc{"plugin"};
 	vscript::class_desc<plugin::owned_instance> plugin::owned_instance::desc{"plugin::owned_instance"};
+	vscript::class_desc<plugin::callback_instance> plugin::callback_instance::desc{"plugin::callback_instance"};
 
 	bool plugin::bindings() noexcept
 	{
@@ -101,8 +102,15 @@ namespace vmod
 		desc.func(&owned_instance::script_delete, "script_delete"sv, "free"sv);
 		desc.dtor();
 
+		callback_instance::desc.base(desc);
+
 		if(!vm->RegisterClass(&desc)) {
 			error("vmod: failed to register plugin owned instance script class\n"sv);
+			return false;
+		}
+
+		if(!vm->RegisterClass(&callback_instance::desc)) {
+			error("vmod: failed to register plugin callback instance script class\n"sv);
 			return false;
 		}
 

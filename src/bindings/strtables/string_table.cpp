@@ -5,6 +5,8 @@ namespace vmod::bindings::strtables
 {
 	vscript::class_desc<string_table> string_table::desc{"strtables::string_table"};
 
+	string_table::~string_table() noexcept {}
+
 	bool string_table::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -26,20 +28,6 @@ namespace vmod::bindings::strtables
 			error("vmod: failed to register stringtable script class\n"sv);
 			return false;
 		}
-
-		return true;
-	}
-
-	bool string_table::initialize() noexcept
-	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
-
-		instance = vm->RegisterInstance(&desc, this);
-		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
-			return false;
-		}
-
-		//TODO!! SetInstanceUniqueID
 
 		return true;
 	}
@@ -110,12 +98,5 @@ namespace vmod::bindings::strtables
 		}
 
 		return static_cast<std::size_t>(table->AddString(true, name.data(), bytes, data));
-	}
-
-	string_table::~string_table() noexcept
-	{
-		if(instance && instance != gsdk::INVALID_HSCRIPT) {
-			main::instance().vm()->RemoveInstance(instance);
-		}
 	}
 }

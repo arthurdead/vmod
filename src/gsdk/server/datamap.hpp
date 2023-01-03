@@ -1,6 +1,9 @@
 #pragma once
 
 #include "../config.hpp"
+#include <cstdlib>
+#include <string_view>
+#include "../tier1/utlvector.hpp"
 
 namespace gsdk
 {
@@ -70,18 +73,20 @@ namespace gsdk
 	static_assert(FIELD_INTEGER == 5);
 	static_assert(FIELD_BOOLEAN == 6);
 
-	static_assert(FIELD_CSTRING == 30);
-	static_assert(FIELD_HSCRIPT == 31);
-	static_assert(FIELD_VARIANT == 32);
+	static_assert(FIELD_TYPEUNKNOWN == 29);
+	static_assert(FIELD_CSTRING ==     30);
+	static_assert(FIELD_HSCRIPT ==     31);
+	static_assert(FIELD_VARIANT ==     32);
 #elif GSDK_ENGINE == GSDK_ENGINE_L4D2
 	static_assert(FIELD_VOID ==    0);
 	static_assert(FIELD_FLOAT ==   1);
 	static_assert(FIELD_INTEGER == 5);
 	static_assert(FIELD_BOOLEAN == 6);
 
-	static_assert(FIELD_CSTRING == 31);
-	static_assert(FIELD_HSCRIPT == 32);
-	static_assert(FIELD_VARIANT == 33);
+	static_assert(FIELD_TYPEUNKNOWN == 30);
+	static_assert(FIELD_CSTRING ==     31);
+	static_assert(FIELD_HSCRIPT ==     32);
+	static_assert(FIELD_VARIANT ==     33);
 #else
 	#error
 #endif
@@ -97,6 +102,15 @@ namespace gsdk
 
 	enum : int
 	{
+		PC_NON_NETWORKED_ONLY,
+		PC_NETWORKED_ONLY,
+		PC_COPYTYPE_COUNT,
+		PC_EVERYTHING = PC_COPYTYPE_COUNT,
+	};
+
+	enum : int
+	{
+		FTYPEDESC_NOFLAGS =           0,
 		FTYPEDESC_GLOBAL =            0x0001,
 		FTYPEDESC_SAVE =              0x0002,
 		FTYPEDESC_KEY =               0x0004,
@@ -112,25 +126,38 @@ namespace gsdk
 		FTYPEDESC_INDEX =             0x1000,
 		FTYPEDESC_VIEW_OTHER_PLAYER = 0x2000,
 		FTYPEDESC_VIEW_OWN_TEAM =     0x4000,
-		FTYPEDESC_VIEW_NEVER =        0x8000
+		FTYPEDESC_VIEW_NEVER =        0x8000,
+
+		FTYPEDESC_LAST_FLAG =         FTYPEDESC_VIEW_NEVER,
+		FTYPEDESC_NUM_FLAGS =         16,
 	};
+
+	enum : int
+	{
+		FTYPEDESC_FREE_DATAMAP =      (1 << 16),
+		FTYPEDESC_FREE_NAME =         (1 << 17),
+		FTYPEDESC_FREE_EXTERNALNAME = (1 << 18),
+	};
+
+	static_assert(FTYPEDESC_NUM_FLAGS == 16);
+	static_assert(FTYPEDESC_LAST_FLAG == (1 << 15));
 
 	using inputfunc_t = void(CBaseEntity::*)(inputdata_t &);
 
 	struct typedescription_t
 	{
 		typedescription_t() noexcept = default;
+		~typedescription_t() noexcept;
 
-		typedescription_t(typedescription_t &&) noexcept = default;
-		typedescription_t &operator=(typedescription_t &&) noexcept = default;
+		inline typedescription_t(typedescription_t &&other) noexcept
+		{ operator=(std::move(other)); }
+		typedescription_t &operator=(typedescription_t &&other) noexcept;
 
-		//static typedescription_t empty;
+		static typedescription_t empty;
 
-		#pragma GCC diagnostic push
-		#pragma GCC diagnostic ignored "-Wfloat-equal"
-		bool operator==(const typedescription_t &) const noexcept = default;
-		bool operator!=(const typedescription_t &) const noexcept = default;
-		#pragma GCC diagnostic pop
+		bool operator==(const typedescription_t &other) const noexcept;
+		inline bool operator!=(const typedescription_t &other) const noexcept
+		{ return !operator==(other); }
 
 		int fieldType{FIELD_VOID};
 		const char *fieldName{nullptr};
@@ -142,7 +169,7 @@ namespace gsdk
 		#error
 	#endif
 		unsigned short fieldSize{0};
-		short flags{0};
+		short flags{FTYPEDESC_NOFLAGS};
 		const char *externalName{nullptr};
 		ISaveRestoreOps *pSaveRestoreOps{nullptr};
 		inputfunc_t inputFunc{nullptr};
@@ -161,9 +188,80 @@ namespace gsdk
 		typedescription_t &operator=(const typedescription_t &) = delete;
 	};
 
+	struct datarun_t
+	{
+		int m_nStartFlatField;
+		int m_nEndFlatField;
+		int m_nStartOffset[TD_OFFSET_COUNT];
+		int m_nLength;
+
+	private:
+		datarun_t() = delete;
+		datarun_t(const datarun_t &) = delete;
+		datarun_t &operator=(const datarun_t &) = delete;
+		datarun_t(datarun_t &&) = delete;
+		datarun_t &operator=(datarun_t &&) = delete;
+	};
+
+	struct datacopyruns_t
+	{
+		CUtlVector<datarun_t> m_vecRuns;
+
+	private:
+		datacopyruns_t() = delete;
+		datacopyruns_t(const datacopyruns_t &) = delete;
+		datacopyruns_t &operator=(const datacopyruns_t &) = delete;
+		datacopyruns_t(datacopyruns_t &&) = delete;
+		datacopyruns_t &operator=(datacopyruns_t &&) = delete;
+	};
+
+	struct flattenedoffsets_t
+	{
+		CUtlVector<typedescription_t> m_Flattened;
+		int m_nPackedSize;
+		int m_nPackedStartOffset;
+
+	private:
+		flattenedoffsets_t() = delete;
+		flattenedoffsets_t(const flattenedoffsets_t &) = delete;
+		flattenedoffsets_t &operator=(const flattenedoffsets_t &) = delete;
+		flattenedoffsets_t(flattenedoffsets_t &&) = delete;
+		flattenedoffsets_t &operator=(flattenedoffsets_t &&) = delete;
+	};
+
+	struct datamapinfo_t
+	{
+		flattenedoffsets_t m_Flat;
+		datacopyruns_t m_CopyRuns;
+
+	private:
+		datamapinfo_t() = delete;
+		datamapinfo_t(const datamapinfo_t &) = delete;
+		datamapinfo_t &operator=(const datamapinfo_t &) = delete;
+		datamapinfo_t(datamapinfo_t &&) = delete;
+		datamapinfo_t &operator=(datamapinfo_t &&) = delete;
+	};
+
+	struct optimized_datamap_t
+	{
+		datamapinfo_t m_Info[PC_COPYTYPE_COUNT];
+
+	private:
+		optimized_datamap_t() = delete;
+		optimized_datamap_t(const optimized_datamap_t &) = delete;
+		optimized_datamap_t &operator=(const optimized_datamap_t &) = delete;
+		optimized_datamap_t(optimized_datamap_t &&) = delete;
+		optimized_datamap_t &operator=(optimized_datamap_t &&) = delete;
+	};
+
 	struct datamap_t
 	{
 		datamap_t() noexcept = default;
+		~datamap_t() noexcept;
+
+		bool operator==(const datamap_t &other) const noexcept;
+		inline bool operator!=(const datamap_t &other) const noexcept
+		{ return !operator==(other); }
 
 		typedescription_t *dataDesc{nullptr};
 		int dataNumFields{0};

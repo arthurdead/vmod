@@ -1,6 +1,5 @@
 #pragma once
 
-#include "gsdk/vscript/vscript.hpp"
 #include "vscript/vscript.hpp"
 #include "vscript/class_desc.hpp"
 #include "vscript/variant.hpp"
@@ -8,6 +7,7 @@
 #include <vector>
 #include <utility>
 #include <unordered_map>
+#include "bindings/instance.hpp"
 
 namespace vmod
 {
@@ -116,16 +116,17 @@ namespace vmod
 	public:
 		function lookup_function(std::string_view func_name) noexcept = delete;
 
-		class owned_instance
+		class owned_instance : public bindings::instance_base
 		{
 			friend class plugin;
 			friend class main;
 
 		public:
 			owned_instance() noexcept = default;
-			virtual ~owned_instance() noexcept;
+			~owned_instance() noexcept override;
 
-			bool register_instance(gsdk::ScriptClassDesc_t *target_desc) noexcept;
+			bool register_instance(gsdk::ScriptClassDesc_t *target_desc, void *pthis) noexcept override;
+			bool register_instance(gsdk::ScriptClassDesc_t *) = delete;
 
 			static bool bindings() noexcept;
 			static void unbindings() noexcept;
@@ -148,9 +149,6 @@ namespace vmod
 				return *this;
 			}
 
-		public:
-			gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
-
 		private:
 			static vscript::class_desc<owned_instance> desc;
 
@@ -169,9 +167,12 @@ namespace vmod
 
 		class callable;
 
-		class callback_instance : public owned_instance
+		class callback_instance final : public owned_instance
 		{
 			friend class callable;
+			friend class plugin;
+			friend class owned_instance;
+			friend class main;
 
 		public:
 			~callback_instance() noexcept override;
@@ -179,8 +180,12 @@ namespace vmod
 		public:
 			callback_instance(callable *caller_, gsdk::HSCRIPT callback_, bool post_) noexcept;
 
+		private:
+			static vscript::class_desc<callback_instance> desc;
+
+		public:
 			inline bool initialize() noexcept
-			{ return register_instance(&owned_instance::desc); }
+			{ return register_instance(&desc, this); }
 
 		private:
 			void callable_destroyed() noexcept;

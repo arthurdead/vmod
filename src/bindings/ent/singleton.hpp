@@ -14,6 +14,7 @@
 #include <memory>
 #include "datamap.hpp"
 #include "sendtable.hpp"
+#include "factory.hpp"
 
 namespace vmod::bindings::ent
 {
@@ -49,7 +50,7 @@ namespace vmod::bindings::ent
 
 		gsdk::HSCRIPT script_create_datamap(std::string &&name, gsdk::HSCRIPT base, gsdk::HSCRIPT props_array) noexcept;
 
-		static gsdk::HSCRIPT script_find_factory(std::string_view name) noexcept;
+		gsdk::HSCRIPT script_find_factory(std::string &&name) noexcept;
 		static gsdk::HSCRIPT script_create_factory(std::string_view name, gsdk::HSCRIPT func, std::size_t size) noexcept;
 
 		enum class prop_result_type : unsigned char
@@ -191,6 +192,8 @@ namespace vmod::bindings::ent
 
 		void erase(gsdk::datamap_t *map) noexcept;
 		void erase(gsdk::typedescription_t *prop) noexcept;
+
+		std::unordered_map<std::string, std::unique_ptr<factory_ref>> factories;
 
 	private:
 		singleton(const singleton &) = delete;

@@ -8,6 +8,8 @@ namespace vmod::bindings::ent
 	vscript::class_desc<sendprop> sendprop::desc{"ent::sendprop"};
 	vscript::class_desc<sendtable> sendtable::desc{"ent::sendtable"};
 
+	sendtable::~sendtable() noexcept {}
+
 	bool sendprop::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -44,27 +46,9 @@ namespace vmod::bindings::ent
 		type = mem::singleton::instance().find_type(type_ptr);
 	}
 
-	bool sendprop::initialize() noexcept
-	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
-
-		instance = vm->RegisterInstance(&desc, this);
-		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
-			return false;
-		}
-
-		//TODO!! SetInstanceUniqueID
-
-		return true;
-	}
-
 	sendprop::~sendprop() noexcept
 	{
 		remove_closure();
-
-		if(instance && instance != gsdk::INVALID_HSCRIPT) {
-			main::instance().vm()->RemoveInstance(instance);
-		}
 	}
 
 	void sendprop::on_empty() noexcept
@@ -279,31 +263,5 @@ namespace vmod::bindings::ent
 	void sendtable::unbindings() noexcept
 	{
 		
-	}
-
-	sendtable::sendtable(gsdk::SendTable *table_) noexcept
-		: table{table_}
-	{
-	}
-
-	bool sendtable::initialize() noexcept
-	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
-
-		instance = vm->RegisterInstance(&desc, this);
-		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
-			return false;
-		}
-
-		//TODO!! SetInstanceUniqueID
-
-		return true;
-	}
-
-	sendtable::~sendtable() noexcept
-	{
-		if(instance && instance != gsdk::INVALID_HSCRIPT) {
-			main::instance().vm()->RemoveInstance(instance);
-		}
 	}
 }

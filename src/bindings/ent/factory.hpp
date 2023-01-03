@@ -1,42 +1,67 @@
 #pragma once
 
+#include "../../vscript/vscript.hpp"
 #include "../../gsdk/server/baseentity.hpp"
 #include "../../plugin.hpp"
+#include "../instance.hpp"
 #include <vector>
 #include <string>
 #include <string_view>
 
 namespace vmod::bindings::ent
 {
-	class factory_ref : public plugin::owned_instance
+	class factory_base
 	{
 		friend class singleton;
 		friend void write_docs(const std::filesystem::path &) noexcept;
 
 	public:
-		~factory_ref() noexcept override;
+		virtual ~factory_base() noexcept;
 
 		static bool bindings() noexcept;
 		static void unbindings() noexcept;
 
 	protected:
-		inline factory_ref(gsdk::IEntityFactory *factory_) noexcept
+		inline factory_base(gsdk::IEntityFactory *factory_) noexcept
 			: factory{factory_}
 		{
 		}
 
-		static vscript::class_desc<factory_ref> desc;
+		static vscript::class_desc<factory_base> desc;
 
 	private:
-		inline bool initialize() noexcept
-		{ return register_instance(&desc); }
-
 		gsdk::IServerNetworkable *script_create(std::string_view classname) noexcept;
 
 		inline std::size_t script_size() const noexcept
 		{ return factory->GetEntitySize(); }
 
 		gsdk::IEntityFactory *factory;
+
+	private:
+		factory_base() = delete;
+		factory_base(const factory_base &) = delete;
+		factory_base &operator=(const factory_base &) = delete;
+		factory_base(factory_base &&) = delete;
+		factory_base &operator=(factory_base &&) = delete;
+	};
+
+	class factory_ref : public factory_base, public instance_base
+	{
+		friend class singleton;
+		friend void write_docs(const std::filesystem::path &) noexcept;
+		friend class factory_base;
+
+	public:
+		using factory_base::factory_base;
+
+		~factory_ref() noexcept override;
+
+	protected:
+		static vscript::class_desc<factory_ref> desc;
+
+	private:
+		inline bool initialize() noexcept
+		{ return register_instance(&desc, this); }
 
 	private:
 		factory_ref() = delete;
@@ -48,16 +73,14 @@ namespace vmod::bindings::ent
 
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
-	class factory_impl final : public gsdk::IEntityFactory, public factory_ref
+	class factory_impl final : public gsdk::IEntityFactory, public factory_base, public plugin::owned_instance
 	{
 		friend class singleton;
 		friend void write_docs(const std::filesystem::path &) noexcept;
+		friend class factory_base;
 
 	public:
 		~factory_impl() noexcept override;
-
-		static bool bindings() noexcept;
-		static void unbindings() noexcept;
 
 	private:
 		static vscript::class_desc<factory_impl> desc;
@@ -67,7 +90,7 @@ namespace vmod::bindings::ent
 		gsdk::IServerNetworkable *script_create_sized(std::string_view classname, std::size_t size_) noexcept;
 
 		inline factory_impl() noexcept
-			: factory_ref{this}
+			: factory_base{this}
 		{
 		}
 

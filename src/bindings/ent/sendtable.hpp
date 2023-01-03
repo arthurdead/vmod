@@ -6,10 +6,11 @@
 #include "../../ffi.hpp"
 #include "../../plugin.hpp"
 #include "../mem/singleton.hpp"
+#include "../instance.hpp"
 
 namespace vmod::bindings::ent
 {
-	class sendprop final : public plugin::callable
+	class sendprop final : public plugin::callable, public instance_base
 	{
 		friend class singleton;
 		friend void write_docs(const std::filesystem::path &) noexcept;
@@ -40,7 +41,8 @@ namespace vmod::bindings::ent
 
 		void remove_closure() noexcept;
 
-		bool initialize() noexcept;
+		inline bool initialize() noexcept
+		{ return register_instance(&desc, this); }
 
 		gsdk::HSCRIPT script_hook_proxy(gsdk::HSCRIPT func, bool post, bool per_client) noexcept;
 
@@ -51,8 +53,6 @@ namespace vmod::bindings::ent
 
 		ffi_closure *closure{nullptr};
 
-		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
-
 	private:
 		sendprop() = delete;
 		sendprop(const sendprop &) = delete;
@@ -61,7 +61,7 @@ namespace vmod::bindings::ent
 		sendprop &operator=(sendprop &&) = delete;
 	};
 
-	class sendtable final
+	class sendtable final : public instance_base
 	{
 		friend class singleton;
 		friend void write_docs(const std::filesystem::path &) noexcept;
@@ -70,18 +70,20 @@ namespace vmod::bindings::ent
 		static bool bindings() noexcept;
 		static void unbindings() noexcept;
 
-		~sendtable() noexcept;
+		~sendtable() override;
 
 	private:
 		static vscript::class_desc<sendtable> desc;
 
-		sendtable(gsdk::SendTable *table_) noexcept;
+		inline sendtable(gsdk::SendTable *table_) noexcept
+			: table{table_}
+		{
+		}
 
-		bool initialize() noexcept;
+		inline bool initialize() noexcept
+		{ return register_instance(&desc, this); }
 
 		gsdk::SendTable *table;
-
-		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
 
 	private:
 		sendtable() = delete;

@@ -4,39 +4,32 @@
 #include "../../plugin.hpp"
 #include "../../convar.hpp"
 #include "../../vscript/class_desc.hpp"
+#include "../instance.hpp"
 
 namespace vmod::bindings::cvar
 {
 	class singleton;
 
-	class convar final : public plugin::owned_instance
+	class convar_base
 	{
 		friend class singleton;
 		friend void write_docs(const std::filesystem::path &) noexcept;
 
 	public:
-		~convar() noexcept override;
+		virtual ~convar_base() noexcept;
 
 		static bool bindings() noexcept;
 		static void unbindings() noexcept;
 
-	private:
-		convar() = delete;
-		convar(const convar &) = delete;
-		convar &operator=(const convar &) = delete;
-		convar(convar &&) = delete;
-		convar &operator=(convar &&) = delete;
+	protected:
+		static vscript::class_desc<convar_base> desc;
 
-		static vscript::class_desc<convar> desc;
-
-		inline convar(gsdk::ConVar *var_, bool free_) noexcept
-			: var{var_}, free{free_}
+		inline convar_base(gsdk::ConVar *var_) noexcept
+			: var{var_}
 		{
 		}
 
-		inline bool initialize() noexcept
-		{ return register_instance(&desc); }
-
+	private:
 		inline int script_get_int() const noexcept
 		{ return var->ConVar::GetInt(); }
 		inline float script_get_float() const noexcept
@@ -59,7 +52,50 @@ namespace vmod::bindings::cvar
 
 		vscript::variant script_get() const noexcept;
 
+	protected:
 		gsdk::ConVar *var;
-		bool free;
+
+	private:
+		convar_base() = delete;
+		convar_base(const convar_base &) = delete;
+		convar_base &operator=(const convar_base &) = delete;
+		convar_base(convar_base &&) = delete;
+		convar_base &operator=(convar_base &&) = delete;
+	};
+
+	class convar_ref final : public convar_base, public instance_base
+	{
+		friend class singleton;
+		friend class convar_base;
+		friend void write_docs(const std::filesystem::path &) noexcept;
+
+	public:
+		using convar_base::convar_base;
+
+		~convar_ref() noexcept override;
+
+	protected:
+		static vscript::class_desc<convar_ref> desc;
+
+		inline bool initialize() noexcept
+		{ return register_instance(&desc, this); }
+	};
+
+	class convar final : public convar_base, public plugin::owned_instance
+	{
+		friend class singleton;
+		friend class convar_base;
+		friend void write_docs(const std::filesystem::path &) noexcept;
+
+	public:
+		using convar_base::convar_base;
+
+		~convar() noexcept override;
+
+	protected:
+		static vscript::class_desc<convar> desc;
+
+		inline bool initialize() noexcept
+		{ return register_instance(&desc, this); }
 	};
 }

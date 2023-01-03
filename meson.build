@@ -26,7 +26,8 @@ cpp_args += [
 	'-Wno-error=unused-parameter',
 	'-Wno-error=unused-function',
 	'-Wno-error=unreachable-code',
-	'-Wno-error=unused-lambda-capture'
+	'-Wno-error=unused-lambda-capture',
+	'-Wno-error=unused-macros'
 ]
 
 cpp_args += [
@@ -275,9 +276,11 @@ lib = shared_library('vmod',
 		join_paths('src','bindings','ent','factory.cpp'),
 		join_paths('src','bindings','docs.cpp'),
 		join_paths('src','bindings','singleton.cpp'),
+		join_paths('src','bindings','instance.cpp'),
 		join_paths('src','ffi.cpp'),
 		join_paths('src','symbol_cache.cpp'),
 		join_paths('src','gsdk','server','baseentity.cpp'),
+		join_paths('src','gsdk','server','datamap.cpp'),
 		join_paths('src','gsdk','vscript','vscript.cpp'),
 		join_paths('src','gsdk','vstdlib','convar.cpp'),
 		join_paths('src','gsdk','engine','vsp.cpp')

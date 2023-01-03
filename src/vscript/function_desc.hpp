@@ -28,13 +28,12 @@ namespace vmod::vscript
 
 		enum : int
 		{
-			SF_MEMBER_FUNC = gsdk::SF_MEMBER_FUNC,
 			SF_VA_FUNC = (1 << 1),
 			SF_OPT_FUNC = (1 << 2)
 		};
 
-		static_assert(gsdk::SF_MEMBER_FUNC == (1 << 0));
 		static_assert(gsdk::SF_NUM_FLAGS == 1);
+		static_assert(gsdk::SF_LAST_FLAG == (1 << 0));
 
 		void desc(std::string &&description) = delete;
 

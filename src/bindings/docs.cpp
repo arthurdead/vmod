@@ -621,6 +621,8 @@ namespace vmod::bindings::docs
 			}
 		}
 
+		std::size_t written{0};
+
 		if(global) {
 			if(desc->m_pszDescription && desc->m_pszDescription[0] != '\0' && desc->m_pszDescription[0] != '@') {
 				ident(file, depth);
@@ -651,6 +653,7 @@ namespace vmod::bindings::docs
 				ident(file, depth+1);
 				file += get_class_desc_name(desc);
 				file += "();\n\n"sv;
+				++written;
 			}
 
 			if(desc->m_pfnDestruct) {
@@ -658,10 +661,10 @@ namespace vmod::bindings::docs
 				file += '~';
 				file += get_class_desc_name(desc);
 				file += "();\n\n"sv;
+				++written;
 			}
 		}
 
-		std::size_t written{0};
 		for(std::size_t i{0}; i < desc->m_FunctionBindings.size(); ++i) {
 			if(write(&desc->m_FunctionBindings[i], global, global ? depth+1 : depth, file, respect_hide)) {
 				++written;

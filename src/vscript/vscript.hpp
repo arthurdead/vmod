@@ -1,5 +1,7 @@
 #pragma once
 
+#define __VMOD_VSCRIPT_HEADER_INCLUDED
+
 #include "../gsdk/vscript/vscript.hpp"
 
 namespace vmod::vscript

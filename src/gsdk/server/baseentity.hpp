@@ -1,6 +1,11 @@
 #pragma once
 
+#pragma push_macro("__VMOD_COMPILING_GSDK")
+#define __VMOD_COMPILING_GSDK
 #include "../vscript/vscript.hpp"
+#undef __VMOD_COMPILING_GSDK
+#pragma pop_macro("__VMOD_COMPILING_GSDK")
+
 #include "../string_t.hpp"
 #include "../engine/dt_send.hpp"
 #include "../engine/sv_engine.hpp"

@@ -51,7 +51,7 @@ namespace vmod::bindings::syms
 			static vscript::class_desc<qualification_it> desc;
 
 			inline bool initialize() noexcept
-			{ return register_instance(&desc); }
+			{ return register_instance(&desc, this); }
 
 			gsdk::HSCRIPT script_lookup(std::string_view symname) const noexcept;
 
@@ -88,7 +88,7 @@ namespace vmod::bindings::syms
 			static vscript::class_desc<name_it> desc;
 
 			inline bool initialize() noexcept
-			{ return register_instance(&desc); }
+			{ return register_instance(&desc, this); }
 
 			gsdk::HSCRIPT script_lookup(std::string_view symname) const noexcept;
 

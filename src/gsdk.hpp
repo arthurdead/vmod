@@ -11,7 +11,7 @@
 #include "gsdk/server/server.hpp"
 #include "gsdk/filesystem/filesystem.hpp"
 #include "gsdk/vstdlib/convar.hpp"
-#include "gsdk/vscript/vscript.hpp"
+#include "vscript/vscript.hpp"
 #include "gsdk/tier0/dbg.hpp"
 #include "gsdk/server/baseentity.hpp"
 #ifndef GSDK_NO_SYMBOLS

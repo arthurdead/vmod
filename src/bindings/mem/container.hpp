@@ -2,7 +2,7 @@
 
 #include <cstddef>
 #include <cstdlib>
-#include "../../gsdk/vscript/vscript.hpp"
+#include "../../vscript/vscript.hpp"
 #include "../../vscript/class_desc.hpp"
 #include "../../plugin.hpp"
 
@@ -25,7 +25,7 @@ namespace vmod::bindings::mem
 		static vscript::class_desc<container> desc;
 
 		inline bool initialize() noexcept
-		{ return register_instance(&desc); }
+		{ return register_instance(&desc, this); }
 
 		inline container(std::size_t size_) noexcept
 			: ptr{static_cast<unsigned char *>(std::malloc(size_))}, size{size_}
