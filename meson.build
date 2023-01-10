@@ -176,18 +176,23 @@ if custom_vm
 	use_quirrel = true
 
 	if use_quirrel
-		squirrel = subproject('quirrel',
-			default_options: thirdparty_default_options_cpp,
-			required: true
-		)
+		squirrel_ver = 'quirrel'
 	else
-		squirrel = subproject('squirrel',
-			default_options: thirdparty_default_options_cpp,
-			required: true
-		)
+		squirrel_ver = 'squirrel'
 	endif
+
+	squirrel = subproject(squirrel_ver,
+		default_options: thirdparty_default_options_cpp,
+		required: true
+	)
 else
-	squirrel = subproject('squirrel_304',
+	if game == 'portal2'
+		squirrel_ver = 'squirrel_223'
+	else
+		squirrel_ver = 'squirrel_304'
+	endif
+
+	squirrel = subproject(squirrel_ver,
 		default_options: thirdparty_default_options_cpp,
 		required: true
 	)

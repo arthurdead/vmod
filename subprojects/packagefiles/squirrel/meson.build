@@ -16,6 +16,10 @@ project('squirrel', 'cpp',
 	]
 )
 
+cpp_args = [
+	'-include__protofix.h'
+]
+
 cpp_internal_args = ['-DSQ_VAR_TRACE_ENABLED=0']
 
 squirrel_lib = static_library('squirrel',
@@ -33,7 +37,7 @@ squirrel_lib = static_library('squirrel',
 		join_paths('squirrel','sqtable.cpp'),
 		join_paths('squirrel','sqvm.cpp')
 	),
-	cpp_args: cpp_internal_args,
+	cpp_args: cpp_args + cpp_internal_args,
 	gnu_symbol_visibility: 'inlineshidden',
 	include_directories:
 		include_directories(

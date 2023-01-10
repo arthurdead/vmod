@@ -1283,13 +1283,17 @@ namespace vmod
 		}
 
 		{
+		#if SQUIRREL_VERSION_NUMBER >= 303
 			curr_sq_ver = ::sq_getversion();
+		#endif
 
-			if(curr_sq_ver != SQUIRREL_VERSION_NUMBER) {
-				warning("vmod: mismatched squirrel header '%i' vs '%i'\n"sv, curr_sq_ver, SQUIRREL_VERSION_NUMBER);
+			if(curr_sq_ver != -1) {
+				if(curr_sq_ver != SQUIRREL_VERSION_NUMBER) {
+					warning("vmod: mismatched squirrel header '%i' vs '%i'\n"sv, curr_sq_ver, SQUIRREL_VERSION_NUMBER);
+				}
 			}
 
-			if(game_sq_ver != -1) {
+			if(game_sq_ver != -1 && curr_sq_ver != -1) {
 				if(game_sq_ver != curr_sq_ver) {
 					warning("vmod: mismatched squirrel versions '%i' vs '%i'\n"sv, game_sq_ver, curr_sq_ver);
 				}
@@ -1299,7 +1303,7 @@ namespace vmod
 				warning("vmod: failed to get _versionnumber_ value\n"sv);
 			} else {
 				SQInteger _versionnumber_{game_sq_versionnumber.get<SQInteger>()};
-				if(_versionnumber_ != curr_sq_ver) {
+				if(_versionnumber_ != curr_sq_ver && curr_sq_ver != -1) {
 					warning("vmod: mismatched squirrel versions '%i' vs '%i'\n"sv, _versionnumber_, curr_sq_ver);
 				}
 			}
@@ -1645,7 +1649,9 @@ namespace vmod
 				info("vmod:   vmod:\n"sv);
 				info("vmod:    SQUIRREL_VERSION: %s\n"sv, SQUIRREL_VERSION);
 				info("vmod:    SQUIRREL_VERSION_NUMBER: %i\n"sv, SQUIRREL_VERSION_NUMBER);
-				info("vmod:    sq_getversion: %i\n"sv, curr_sq_ver);
+				if(curr_sq_ver != -1) {
+					info("vmod:    sq_getversion: %i\n"sv, curr_sq_ver);
+				}
 				info("vmod:   game:\n"sv);
 				if(game_sq_version.valid()) {
 					std::string_view _version{game_sq_version.get<std::string_view>()};
@@ -1965,7 +1971,14 @@ namespace vmod
 		vmod_auto_dump_entity_vtables.initialize("vmod_auto_dump_entity_vtables"sv, false);
 
 		vmod_dump_entity_vtables.initialize("vmod_dump_entity_vtables"sv,
-			[this,&sv_symbols = std::as_const(sv_symbols)](const gsdk::CCommand &) noexcept -> void {
+			[this](const gsdk::CCommand &) noexcept -> void {
+				if(!symbols_available) {
+					error("vmod: no symbols available\n"sv);
+					return;
+				}
+
+				const auto &sv_symbols{server_lib.symbols()};
+
 				std::filesystem::path dump_dir{root_dir_/"dumps"sv/"vtables"sv};
 
 				for(const auto &it : sv_classes) {
@@ -2042,7 +2055,14 @@ namespace vmod
 		vmod_auto_dump_entity_funcs.initialize("vmod_auto_dump_entity_funcs"sv, false);
 
 		vmod_dump_entity_funcs.initialize("vmod_dump_entity_funcs"sv,
-			[this,&sv_symbols = std::as_const(sv_symbols)](const gsdk::CCommand &) noexcept -> void {
+			[this](const gsdk::CCommand &) noexcept -> void {
+				if(!symbols_available) {
+					error("vmod: no symbols available\n"sv);
+					return;
+				}
+
+				const auto &sv_symbols{server_lib.symbols()};
+
 				std::filesystem::path dump_dir{root_dir_/"dumps"sv/"funcs"sv};
 
 				for(const auto &it : sv_classes) {

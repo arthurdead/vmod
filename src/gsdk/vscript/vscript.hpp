@@ -48,9 +48,13 @@
 #pragma GCC diagnostic ignored "-Wuseless-cast"
 #pragma GCC diagnostic ignored "-Wswitch-enum"
 #endif
+#if SQUIRREL_VERSION_NUMBER < 303
+SQUIRREL_API SQInteger sq_getversion();
+#endif
+#include <sqstate.h>
+#include <squtils.h>
 #include <sqvm.h>
 #include <sqobject.h>
-#include <sqstate.h>
 #include <squserdata.h>
 #include <sqtable.h>
 #include <sqarray.h>

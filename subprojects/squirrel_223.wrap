@@ -1,9 +1,9 @@
 [wrap-git]
-directory = squirrel_304
+directory = squirrel_223
 url = https://github.com/pfalcon-mirrors/squirrel-lang.git
-revision = squirrel3
+revision = squirrel2
 depth = 1
 patch_directory = squirrel
 
 [provide]
-dependency_names = squirrel-3.0.4
+dependency_names = squirrel-2.2.3
