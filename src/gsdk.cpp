@@ -1,11 +1,11 @@
 #include "gsdk.hpp"
 #include "gsdk/server/server.hpp"
-#include <dlfcn.h>
 
 namespace vmod
 {
 	gsdk::IDedicatedExports *dedicated{nullptr};
 	gsdk::IVEngineServer *sv_engine{nullptr};
+	gsdk::IServer *sv{nullptr};
 	gsdk::IFileSystem *filesystem{nullptr};
 	gsdk::ICvar *cvar{nullptr};
 	gsdk::IScriptManager *vsmgr{nullptr};
@@ -16,82 +16,6 @@ namespace vmod
 	gsdk::IServerNetworkStringTableContainer *sv_stringtables{nullptr};
 	std::unordered_map<std::string, gsdk::ServerClass *> sv_classes;
 	gsdk::CStandardSendProxies *std_proxies{nullptr};
-
-	bool gsdk_library::load(const std::filesystem::path &path) noexcept
-	{
-		using namespace std::literals::string_literals;
-
-		dl = dlopen(path.c_str(), RTLD_LAZY|RTLD_LOCAL|RTLD_NODELETE|RTLD_NOLOAD);
-		if(!dl) {
-			const char *err{dlerror()};
-			if(err && err[0] != '\0') {
-				err_str = err;
-			} else {
-				err_str = "unknown error"s;
-			}
-			return false;
-		} else {
-		#ifndef __clang__
-			#pragma GCC diagnostic push
-			#pragma GCC diagnostic ignored "-Wconditionally-supported"
-		#endif
-			iface_fac = reinterpret_cast<gsdk::CreateInterfaceFn>(dlsym(dl, "CreateInterface"));
-		#ifndef __clang__
-			#pragma GCC diagnostic pop
-		#endif
-			if(!iface_fac) {
-				err_str = "missing CreateInterface export"s;
-				return false;
-			}
-
-			Dl_info base_info;
-		#ifndef __clang__
-			#pragma GCC diagnostic push
-			#pragma GCC diagnostic ignored "-Wconditionally-supported"
-		#endif
-			if(dladdr(reinterpret_cast<const void *>(iface_fac), &base_info) == 0) {
-				err_str = "failed to get base address"s;
-				return false;
-			}
-		#ifndef __clang__
-			#pragma GCC diagnostic pop
-		#endif
-
-			base_addr = base_info.dli_fbase;
-		}
-
-		return true;
-	}
-
-	void *gsdk_library::find_iface(std::string_view name) noexcept
-	{
-		int status{gsdk::IFACE_OK};
-		void *iface{iface_fac(name.data(), &status)};
-		if(!iface || status != gsdk::IFACE_OK) {
-			return nullptr;
-		}
-		return iface;
-	}
-
-	void *gsdk_library::find_addr(std::string_view name) noexcept
-	{
-		return dlsym(dl, name.data());
-	}
-
-	void gsdk_library::unload() noexcept
-	{
-		if(dl) {
-			dlclose(dl);
-			dl = nullptr;
-		}
-	}
-
-	gsdk_library::~gsdk_library() noexcept
-	{
-		if(dl) {
-			dlclose(dl);
-		}
-	}
 
 	bool gsdk_launcher_library::load(const std::filesystem::path &path) noexcept
 	{
@@ -107,6 +31,7 @@ namespace vmod
 	bool gsdk_engine_library::load(const std::filesystem::path &path) noexcept
 	{
 		using namespace std::literals::string_literals;
+		using namespace std::literals::string_view_literals;
 
 		if(!gsdk_library::load(path)) {
 			return false;
@@ -126,10 +51,30 @@ namespace vmod
 			return false;
 		}
 
+	#ifndef GSDK_NO_SYMBOLS
 		if(!syms.load(path, base())) {
 			err_str = syms.error_string();
 			return false;
 		}
+	#endif
+
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
+		sv = sv_engine->GetIServer();
+	#else
+		#ifndef GSDK_NO_SYMBOLS
+		const auto &eng_global_qual{syms.global()};
+
+		auto sv_it{eng_global_qual.find("sv"s)};
+		if(sv_it == eng_global_qual.end()) {
+			error("vmod: missing 'sv' symbol\n"sv);
+			return false;
+		}
+
+		sv = sv_it->second->addr<gsdk::IServer *>();
+		#else
+			#error
+		#endif
+	#endif
 
 		return true;
 	}
@@ -166,14 +111,17 @@ namespace vmod
 			return false;
 		}
 
+	#ifndef GSDK_NO_SYMBOLS
 		if(!syms.load(path, base())) {
 			err_str = syms.error_string();
 			return false;
 		}
+	#endif
 
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		entityfactorydict = reinterpret_cast<gsdk::CEntityFactoryDictionary *>(servertools->GetEntityFactoryDictionary());
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#else
+		#ifndef GSDK_NO_SYMBOLS
 		const auto &sv_global_qual{syms.global()};
 
 		auto EntityFactoryDictionary_it{sv_global_qual.find("EntityFactoryDictionary()"s)};
@@ -183,8 +131,9 @@ namespace vmod
 		}
 
 		entityfactorydict = reinterpret_cast<gsdk::CEntityFactoryDictionary *>(EntityFactoryDictionary_it->second->func<gsdk::IEntityFactoryDictionary *(*)()>()());
-	#else
-		#error
+		#else
+			#error
+		#endif
 	#endif
 		if(!entityfactorydict) {
 			err_str = "EntityFactoryDictionary is null"s;
@@ -221,7 +170,8 @@ namespace vmod
 				return false;
 			}
 		} else {
-			std::ptrdiff_t offset{symbol_cache::uncached_find_mangled_func(path, "_Z17FileSystemFactoryPKcPi"sv)};
+		#ifndef GSDK_NO_SYMBOLS
+			std::uint64_t offset{symbol_cache::uncached_find_mangled_func(path, "_Z17FileSystemFactoryPKcPi"sv)};
 			if(offset == 0) {
 				err_str = "missing FileSystemFactory function"s;
 				return false;
@@ -243,6 +193,9 @@ namespace vmod
 				err_str += gsdk::IFileSystem::interface_name;
 				return false;
 			}
+		#else
+			#error
+		#endif
 		}
 
 		return true;
@@ -281,10 +234,12 @@ namespace vmod
 			return false;
 		}
 
+	#ifndef GSDK_NO_SYMBOLS
 		if(!syms.load(path, base())) {
 			err_str = syms.error_string();
 			return false;
 		}
+	#endif
 
 		return true;
 	}

@@ -34,6 +34,7 @@ namespace gsdk
 	class IServerNetworkable;
 	struct edict_t;
 	class CEntityRespawnInfo;
+	class KeyValues;
 
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
@@ -50,9 +51,9 @@ namespace gsdk
 	class IServerTools : public IBaseInterface
 	{
 	public:
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		static constexpr std::string_view interface_name{"VSERVERTOOLS003"};
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		static constexpr std::string_view interface_name{"VSERVERTOOLS001"};
 	#else
 		#error
@@ -73,20 +74,20 @@ namespace gsdk
 		virtual bool SetKeyValue(CBaseEntity *, const char *, const Vector &) = 0;
 		virtual CBaseEntity *CreateEntityByName(const char *) = 0;
 		virtual void DispatchSpawn(CBaseEntity *) = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual bool RespawnEntitiesWithEdits(CEntityRespawnInfo *, int) = 0;
 	#endif
 		virtual void ReloadParticleDefintions(const char *, const void *, int) = 0;
 		virtual void AddOriginToPVS(const Vector &) = 0;
 		virtual void MoveEngineViewTo(const Vector &, const QAngle &) = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		virtual bool DestroyEntityByHammerId(int) = 0;
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual void RemoveEntity(int) = 0;
 	#else
 		#error
 	#endif
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V1)
 		virtual CBaseEntity *GetBaseEntityByEntIndex(int) = 0;
 		virtual void RemoveEntity(CBaseEntity *) = 0;
 		virtual void RemoveEntityImmediate(CBaseEntity *) = 0;
@@ -127,16 +128,16 @@ namespace gsdk
 	class IServerGameDLL
 	{
 	public:
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		static constexpr std::string_view interface_name{"ServerGameDLL012"};
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		static constexpr std::string_view interface_name{"ServerGameDLL005"};
 	#else
 		#error
 	#endif
 
 		virtual bool DLLInit(CreateInterfaceFn, CreateInterfaceFn, CreateInterfaceFn, CGlobalVars *) = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V1)
 		virtual bool ReplayInit(CreateInterfaceFn) = 0;
 	#endif
 		virtual bool GameInit() = 0;
@@ -163,7 +164,7 @@ namespace gsdk
 		virtual void ReadRestoreHeaders(CSaveRestoreData *) = 0;
 		virtual void Restore(CSaveRestoreData *, bool) = 0;
 		virtual bool IsRestoring() = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual bool SupportsSaveRestore() = 0;
 	#endif
 		virtual int CreateEntityTransitionList(CSaveRestoreData *, int) = 0;
@@ -176,7 +177,7 @@ namespace gsdk
 		virtual bool ShouldHideServer() = 0;
 		virtual void InvalidateMdlCache() = 0;
 		virtual void OnQueryCvarValueFinished(QueryCvarCookie_t, edict_t *, EQueryCvarValueStatus, const char *, const char *) = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual void PostToolsInit() = 0;
 		virtual void ApplyGameSettings(KeyValues *) = 0;
 		virtual void GetMatchmakingTags(char *, size_t) = 0;
@@ -184,7 +185,7 @@ namespace gsdk
 		virtual void GenerateLumpFileName(const char *, char *, int, int) = 0;
 		virtual void GetMatchmakingGameData(char *, size_t) = 0; 
 	#endif
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V1)
 		virtual void GameServerSteamAPIActivated() = 0;
 		virtual void GameServerSteamAPIShutdown() = 0;
 		virtual void SetServerHibernation(bool) = 0;
@@ -196,6 +197,8 @@ namespace gsdk
 		virtual ePrepareLevelResourcesResult AsyncPrepareLevelResources(char *, size_t, char *, size_t, float * = nullptr) = 0;
 		virtual eCanProvideLevelResult CanProvideLevel(char *, int) = 0;
 		virtual bool IsManualMapChangeOkay(const char **) = 0;
+	#endif
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		virtual bool GetWorkshopMap(unsigned int, WorkshopMapDesc_t *) = 0;
 	#endif
 	};

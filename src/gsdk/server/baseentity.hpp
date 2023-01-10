@@ -30,6 +30,9 @@ namespace gsdk
 	class IServerNetworkable
 	{
 	public:
+		static std::size_t vtable_size;
+		static std::size_t GetServerClass_vindex;
+
 		virtual IHandleEntity *GetEntityHandle() = 0;
 		virtual ServerClass *GetServerClass() = 0;
 		virtual edict_t *GetEdict() const = 0;
@@ -86,6 +89,15 @@ namespace gsdk
 	class CBaseEntity : public IServerEntity
 	{
 	public:
+		virtual ServerClass *GetServerClass() = 0;
+		virtual void YouForgotToImplementOrDeclareServerClass() = 0;
+		virtual datamap_t *GetDataDescMap() = 0;
+		virtual ScriptClassDesc_t *GetScriptDesc() = 0;
+
+		static std::size_t UpdateOnRemove_vindex;
+		static std::size_t GetDataDescMap_vindex;
+		static std::size_t GetServerClass_vindex;
+
 		static ScriptClassDesc_t *g_pScriptDesc;
 		static HSCRIPT (CBaseEntity::*GetScriptInstance_ptr)();
 
@@ -93,23 +105,61 @@ namespace gsdk
 		static CBaseEntity *from_instance(HSCRIPT instance) noexcept;
 	};
 
+	template <typename T>
+	class CHandle;
+
 	class CBaseHandle
 	{
 	public:
 		CBaseHandle() noexcept = default;
+		CBaseHandle(const CBaseHandle &) noexcept = default;
+		CBaseHandle &operator=(const CBaseHandle &) noexcept = default;
+
+		inline CBaseHandle(CBaseHandle &&other) noexcept
+		{ operator=(std::move(other)); }
+		inline CBaseHandle &operator=(CBaseHandle &&other) noexcept
+		{
+			m_Index = other.m_Index;
+			other.m_Index = INVALID_EHANDLE_INDEX;
+			return *this;
+		}
+
+		bool operator==(const CBaseHandle &) const noexcept = default;
+		bool operator!=(const CBaseHandle &) const noexcept = default;
+
+		template <typename T>
+		inline operator const CHandle<T> &() const noexcept
+		{ return *static_cast<const CHandle<T> *>(this); }
+		template <typename T>
+		inline operator CHandle<T> &() noexcept
+		{ return *static_cast<CHandle<T> *>(this); }
 
 		unsigned long m_Index{INVALID_EHANDLE_INDEX};
-
-	private:
-		CBaseHandle(const CBaseHandle &) = delete;
-		CBaseHandle &operator=(const CBaseHandle &) = delete;
-		CBaseHandle(CBaseHandle &&) = delete;
-		CBaseHandle &operator=(CBaseHandle &&) = delete;
 	};
 
 	template <typename T>
-	class CHandle : public CBaseHandle
+	class alignas(CBaseHandle) CHandle : public CBaseHandle
 	{
+	public:
+		using CBaseHandle::CBaseHandle;
+		using CBaseHandle::operator=;
+
+		bool operator==(const CHandle &) const noexcept = default;
+		bool operator!=(const CHandle &) const noexcept = default;
+
+		template <typename U>
+		inline bool operator==(const CHandle<U> &other) const noexcept
+		{
+			static_assert(std::is_base_of_v<U, T>);
+			return CBaseHandle::operator==(static_cast<const CBaseHandle &>(other));
+		}
+
+		template <typename U>
+		inline bool operator!=(const CHandle<U> &other) const noexcept
+		{
+			static_assert(std::is_base_of_v<U, T>);
+			return CBaseHandle::operator!=(static_cast<const CBaseHandle &>(other));
+		}
 	};
 
 	using EHANDLE = CHandle<CBaseEntity>;
@@ -146,4 +196,21 @@ namespace gsdk
 		CUtlDict<IEntityFactory *, unsigned short> m_Factories;
 	};
 	#pragma GCC diagnostic pop
+}
+
+namespace std
+{
+	template <>
+	struct hash<gsdk::CBaseHandle> : public hash<unsigned long>
+	{
+		inline size_t operator()(const gsdk::CBaseHandle &other) const noexcept
+		{ return hash<unsigned long>::operator()(other.m_Index); }
+	};
+
+	template <typename T>
+	struct hash<gsdk::CHandle<T>> : public hash<gsdk::CBaseHandle>
+	{
+		inline size_t operator()(const gsdk::CHandle<T> &other) const noexcept
+		{ return hash<gsdk::CBaseHandle>::operator()(static_cast<const gsdk::CBaseHandle &>(other)); }
+	};
 }

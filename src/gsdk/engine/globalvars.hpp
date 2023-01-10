@@ -51,7 +51,7 @@ namespace gsdk
 		bool teamplay;
 		int maxEntities;
 		int serverCount;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		edict_t *pEdicts;
 	#endif
 

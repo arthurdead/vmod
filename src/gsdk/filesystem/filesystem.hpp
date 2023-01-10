@@ -2,7 +2,9 @@
 
 #include <string_view>
 #include "../tier1/interface.hpp"
+#include "../tier1/appframework.hpp"
 #include "../tier1/utlsymbol.hpp"
+#include "../config.hpp"
 
 //#define GSDK_TRACK_BLOCKING_IO
 
@@ -41,6 +43,7 @@ namespace gsdk
 	using CRC32_t = unsigned int;
 	template <typename T>
 	class CUtlVector;
+	class KeyValues;
 
 	enum PathTypeFilter_t : int
 	{
@@ -85,9 +88,11 @@ namespace gsdk
 	class IFileSystem : public IAppSystem, public IBaseFileSystem
 	{
 	public:
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V1)
 		static constexpr std::string_view interface_name{"VFileSystem022"};
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
+		static constexpr std::string_view interface_name{"VFileSystem017"};
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, <=, GSDK_ENGINE_BRANCH_2010_V0)
 		static constexpr std::string_view interface_name{"VFileSystem018"};
 	#else
 		#error
@@ -103,7 +108,7 @@ namespace gsdk
 		virtual const char *RelativePathToFullPath(const char *, const char *, char *, int, PathTypeFilter_t = FILTER_NONE, PathTypeQuery_t * = nullptr) = 0;
 		virtual int GetSearchPath(const char *, bool, char *, int) = 0;
 		virtual bool AddPackFile(const char *, const char *) = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, <=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual bool IsLocalizedPath(const char *) = 0;
 	#endif
 		virtual void RemoveFile(const char *, const char * = nullptr) = 0;
@@ -123,7 +128,7 @@ namespace gsdk
 		virtual bool FindIsDirectory(FileFindHandle_t) = 0;
 		virtual void FindClose(FileFindHandle_t) = 0;
 		virtual const char *FindFirstEx(const char *, const char *, FileFindHandle_t *) = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual void FindFileAbsoluteList(CUtlVector<CUtlString> &, const char *, const char *) = 0;
 	#endif
 		virtual const char *GetLocalPath(const char *, char *, int) = 0;
@@ -139,7 +144,7 @@ namespace gsdk
 		virtual FSAsyncStatus_t AsyncFlush() = 0;
 		virtual bool AsyncSuspend() = 0;
 		virtual bool AsyncResume() = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		virtual void AsyncAddFetcher(IAsyncFileFetch *) = 0;
 		virtual void AsyncRemoveFetcher(IAsyncFileFetch *) = 0;
 	#endif
@@ -179,7 +184,7 @@ namespace gsdk
 		virtual void LoadCompiledKeyValues(KeyValuesPreloadType_t, const char *) = 0;
 		virtual KeyValues *LoadKeyValues(KeyValuesPreloadType_t, const char *, const char * = nullptr) = 0;
 		virtual bool LoadKeyValues(KeyValues &, KeyValuesPreloadType_t, const char *, const char * = nullptr) = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		virtual bool ExtractRootKeyName(KeyValuesPreloadType_t, char *, size_t, const char *, const char *pPathID = nullptr) = 0;
 	#endif
 		virtual FSAsyncStatus_t AsyncWrite(const char *, const void *, int, bool, bool = false, FSAsyncControl_t * = nullptr ) = 0;
@@ -205,7 +210,7 @@ namespace gsdk
 		virtual int GetWhitelistSpewFlags() = 0;
 		virtual void SetWhitelistSpewFlags(int) = 0;
 		virtual void InstallDirtyDiskReportFunc(FSDirtyDiskReportFunc_t) = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		virtual FileCacheHandle_t CreateFileCache() = 0;
 		virtual void AddFilesToFileCache(FileCacheHandle_t, const char **, int, const char *) = 0;
 		virtual bool IsFileCacheFileLoaded(FileCacheHandle_t, const char *) = 0;
@@ -218,7 +223,7 @@ namespace gsdk
 		virtual void NotifyFileUnloaded(const char *, const char *) = 0;
 		virtual bool GetCaseCorrectFullPath_Ptr(const char *, char *, int) = 0;
 	#endif
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		virtual bool IsLaunchedFromXboxHDD() = 0;
 		virtual bool IsInstalledToXboxHDDCache() = 0;
 		virtual bool IsDVDHosted() = 0;

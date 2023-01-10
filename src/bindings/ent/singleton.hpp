@@ -48,8 +48,6 @@ namespace vmod::bindings::ent
 		gsdk::HSCRIPT script_lookup_dataprop(std::string_view path) noexcept;
 		gsdk::HSCRIPT script_lookup_datatable(std::string_view path) noexcept;
 
-		gsdk::HSCRIPT script_create_datamap(std::string &&name, gsdk::HSCRIPT base, gsdk::HSCRIPT props_array) noexcept;
-
 		gsdk::HSCRIPT script_find_factory(std::string &&name) noexcept;
 		static gsdk::HSCRIPT script_create_factory(std::string_view name, gsdk::HSCRIPT func, std::size_t size) noexcept;
 

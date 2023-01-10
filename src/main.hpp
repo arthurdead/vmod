@@ -76,6 +76,9 @@ namespace vmod
 
 		inline const symbol_cache &sv_syms() const noexcept
 		{ return server_lib.symbols(); }
+
+		inline const symbol_cache &eng_syms() const noexcept
+		{ return engine_lib.symbols(); }
 	#endif
 
 		static main &instance() noexcept;
@@ -151,7 +154,13 @@ namespace vmod
 		void clear_script_stringtables() noexcept;
 		bool create_script_stringtable(std::string &&tablename) noexcept;
 
+	#ifndef GSDK_NO_SYMBOLS
 		bool create_script_symbols() noexcept;
+	#endif
+
+	#ifndef GSDK_NO_SYMBOLS
+		bool symbols_available{false};
+	#endif
 
 		bool is_map_loaded{false};
 		bool is_map_active{false};
@@ -181,7 +190,9 @@ namespace vmod
 		gsdk::HSCRIPT stringtable_table{gsdk::INVALID_HSCRIPT};
 		std::unordered_map<std::string, std::unique_ptr<bindings::strtables::string_table>> script_stringtables;
 
+	#ifndef GSDK_NO_SYMBOLS
 		gsdk::HSCRIPT symbols_table_{gsdk::INVALID_HSCRIPT};
+	#endif
 
 		gsdk::HSCRIPT server_init_script{gsdk::INVALID_HSCRIPT};
 
@@ -226,11 +237,13 @@ namespace vmod
 		ConCommand vmod_dump_entity_classes;
 		ConVar vmod_auto_dump_entity_classes;
 
+	#ifndef GSDK_NO_SYMBOLS
 		ConCommand vmod_dump_entity_vtables;
 		ConVar vmod_auto_dump_entity_vtables;
 
 		ConCommand vmod_dump_entity_funcs;
 		ConVar vmod_auto_dump_entity_funcs;
+	#endif
 
 		bool can_gen_docs{false};
 		ConCommand vmod_gen_docs;

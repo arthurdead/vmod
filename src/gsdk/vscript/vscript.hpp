@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <string_view>
 #include "../tier1/interface.hpp"
+#include "../tier1/appframework.hpp"
 #include "../mathlib/vector.hpp"
 #include "../tier1/utlvector.hpp"
 #include "../server/datamap.hpp"
@@ -206,7 +207,7 @@ namespace gsdk
 			vmod::generic_mfp_t mfp;
 		};
 		char unk1[sizeof(unsigned long long)];
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		union {
 			vmod::generic_func_t func;
 			vmod::generic_plain_mfp_t plain;
@@ -219,7 +220,7 @@ namespace gsdk
 	static_assert(std::is_trivial_v<ScriptFunctionBindingStorageType_t>);
 #if GSDK_ENGINE == GSDK_ENGINE_TF2
 	static_assert(sizeof(ScriptFunctionBindingStorageType_t) == (sizeof(vmod::generic_mfp_t) + sizeof(unsigned long long)));
-#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 	static_assert(sizeof(ScriptFunctionBindingStorageType_t) == sizeof(vmod::generic_plain_mfp_t));
 #else
 	#error
@@ -234,7 +235,7 @@ namespace gsdk
 		#if GSDK_ENGINE == GSDK_ENGINE_TF2
 			mfp = nullptr;
 			std::memset(unk1, 0, sizeof(unk1));
-		#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 			plain = nullptr;
 		#else
 			#error
@@ -250,7 +251,7 @@ namespace gsdk
 			mfp = other.mfp;
 			std::memmove(unk1, other.unk1, sizeof(unk1));
 			std::memset(other.unk1, 0, sizeof(unk1));
-		#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 			plain = other.plain;
 		#else
 			#error
@@ -266,14 +267,26 @@ namespace gsdk
 	static_assert(sizeof(CScriptFunctionBindingStorageType) == sizeof(ScriptFunctionBindingStorageType_t));
 	static_assert(alignof(CScriptFunctionBindingStorageType) == alignof(ScriptFunctionBindingStorageType_t));
 
-	enum ScriptFuncBindingFlags_t : unsigned int
+	enum ScriptFuncBindingFlags_t : int
 	{
-		SF_NOFLAGS =        0,
+		SF_NOFLAGS =     0,
 		SF_MEMBER_FUNC = 0x01,
 
 		SF_LAST_FLAG =   SF_MEMBER_FUNC,
-		SF_NUM_FLAGS =      1
+		SF_NUM_FLAGS =   1
 	};
+
+	enum : int
+	{
+		SF_VA_FUNC =          (1 << 1),
+		SF_OPT_FUNC =         (1 << 2),
+		SF_FREE_SCRIPT_NAME = (1 << 3),
+		SF_FREE_NAME =        (1 << 4),
+		SF_FREE_DESCRIPTION = (1 << 5)
+	};
+
+	static_assert(gsdk::SF_NUM_FLAGS == 1);
+	static_assert(gsdk::SF_LAST_FLAG == (1 << 0));
 
 	struct ScriptFuncDescriptor_t
 	{
@@ -312,6 +325,7 @@ namespace gsdk
 	{
 	public:
 		ScriptFunctionBinding_t() noexcept = default;
+		~ScriptFunctionBinding_t() noexcept;
 
 		inline ScriptFunctionBinding_t(ScriptFunctionBinding_t &&other) noexcept
 		{ operator=(std::move(other)); }
@@ -330,7 +344,7 @@ namespace gsdk
 		ScriptFuncDescriptor_t m_desc;
 		ScriptBindingFunc_t m_pfnBinding{nullptr};
 		CScriptFunctionBindingStorageType m_pFunction;
-		unsigned m_flags{SF_NOFLAGS};
+		unsigned int m_flags{SF_NOFLAGS};
 
 	private:
 		ScriptFunctionBinding_t(const ScriptFunctionBinding_t &) = delete;
@@ -420,11 +434,11 @@ namespace gsdk
 		virtual void DisconnectDebugger() = 0;
 		virtual ScriptLanguage_t GetLanguage() = 0;
 		virtual const char *GetLanguageName() = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual HSQUIRRELVM GetInternalVM() = 0;
 	#endif
 		virtual void AddSearchPath(const char *) = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual bool ForwardConsoleCommand(const CCommandContext &, const CCommand &) = 0;
 	#endif
 		virtual bool Frame(float) = 0;
@@ -485,7 +499,7 @@ namespace gsdk
 		virtual bool SetValue(HSCRIPT, const char *, const char *) = 0;
 	public:
 		virtual bool SetValue_impl(HSCRIPT, const char *, const ScriptVariant_t &) = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual bool SetValue_impl(HSCRIPT, int, const ScriptVariant_t &) = 0;
 	#endif
 	public:
@@ -497,7 +511,7 @@ namespace gsdk
 	public:
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		bool IsTable(HSCRIPT table) const noexcept;
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual bool IsTable(HSCRIPT) = 0;
 	#else
 		#error
@@ -509,7 +523,7 @@ namespace gsdk
 		virtual int GetKeyValue(HSCRIPT, int, ScriptVariant_t *, ScriptVariant_t *) = 0;
 		int GetArrayValue(HSCRIPT array, int it, ScriptVariant_t *value) noexcept;
 		virtual bool GetValue(HSCRIPT, const char *, ScriptVariant_t *) = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual bool GetValue(HSCRIPT, int, ScriptVariant_t *) = 0;
 		virtual bool GetScalarValue(HSCRIPT, ScriptVariant_t *) = 0;
 	#endif
@@ -522,7 +536,7 @@ namespace gsdk
 		HSCRIPT CreateArray() noexcept;
 		bool IsArray(HSCRIPT array) const noexcept;
 		int GetArrayCount(HSCRIPT array) const noexcept;
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual HSCRIPT CreateArray() = 0;
 		virtual bool IsArray(HSCRIPT) = 0;
 		virtual int GetArrayCount(HSCRIPT) = 0;
@@ -533,7 +547,7 @@ namespace gsdk
 		void ArrayAddToTail(HSCRIPT array, ScriptVariant_t &&var) noexcept;
 		virtual void WriteState(CUtlBuffer *) = 0;
 		virtual void ReadState(CUtlBuffer *) = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual void CollectGarbage(const char *, bool) = 0;
 	#endif
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
@@ -547,7 +561,7 @@ namespace gsdk
 	public:
 		__attribute__((__format__(__printf__, 2, 3))) bool RaiseException(const char *fmt, ...) noexcept;
 		__attribute__((__format__(__printf__, 2, 0))) bool RaiseExceptionv(const char *fmt, va_list vargs) noexcept;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual HSCRIPT GetRootTable() = 0;
 		virtual HSCRIPT CopyHandle(HSCRIPT) = 0;
 		virtual HSCRIPT GetIdentity(HSCRIPT) = 0;

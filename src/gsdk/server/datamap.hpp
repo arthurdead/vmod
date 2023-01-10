@@ -43,7 +43,7 @@ namespace gsdk
 		FIELD_MODELINDEX,
 		FIELD_MATERIALINDEX,
 		FIELD_VECTOR2D,
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		FIELD_INTEGER64,
 	#endif
 		FIELD_TYPECOUNT
@@ -66,30 +66,6 @@ namespace gsdk
 
 	static_assert(sizeof(fieldtype_t) == sizeof(int));
 	static_assert(sizeof(ExtendedFieldType) == sizeof(int));
-
-#if GSDK_ENGINE == GSDK_ENGINE_TF2
-	static_assert(FIELD_VOID ==    0);
-	static_assert(FIELD_FLOAT ==   1);
-	static_assert(FIELD_INTEGER == 5);
-	static_assert(FIELD_BOOLEAN == 6);
-
-	static_assert(FIELD_TYPEUNKNOWN == 29);
-	static_assert(FIELD_CSTRING ==     30);
-	static_assert(FIELD_HSCRIPT ==     31);
-	static_assert(FIELD_VARIANT ==     32);
-#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
-	static_assert(FIELD_VOID ==    0);
-	static_assert(FIELD_FLOAT ==   1);
-	static_assert(FIELD_INTEGER == 5);
-	static_assert(FIELD_BOOLEAN == 6);
-
-	static_assert(FIELD_TYPEUNKNOWN == 30);
-	static_assert(FIELD_CSTRING ==     31);
-	static_assert(FIELD_HSCRIPT ==     32);
-	static_assert(FIELD_VARIANT ==     33);
-#else
-	#error
-#endif
 
 	struct datamap_t;
 
@@ -147,11 +123,18 @@ namespace gsdk
 	struct typedescription_t
 	{
 		typedescription_t() noexcept = default;
-		~typedescription_t() noexcept;
+		inline ~typedescription_t() noexcept
+		{ free(); }
+
+		void free() noexcept;
 
 		inline typedescription_t(typedescription_t &&other) noexcept
 		{ operator=(std::move(other)); }
 		typedescription_t &operator=(typedescription_t &&other) noexcept;
+
+		inline typedescription_t(const typedescription_t &other) noexcept
+		{ operator=(other); }
+		typedescription_t &operator=(const typedescription_t &other) noexcept;
 
 		static typedescription_t empty;
 
@@ -161,9 +144,9 @@ namespace gsdk
 
 		int fieldType{FIELD_VOID};
 		const char *fieldName{nullptr};
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		int fieldOffset[TD_OFFSET_COUNT]{0,0};
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		int fieldOffset{0};
 	#else
 		#error
@@ -178,14 +161,10 @@ namespace gsdk
 		typedescription_t *override_field{nullptr};
 		int override_count{0};
 		float fieldTolerance{0.0f};
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		int flatOffset[TD_OFFSET_COUNT]{0,0};
 		unsigned short flatGroup{0};
 	#endif
-
-	private:
-		typedescription_t(const typedescription_t &) = delete;
-		typedescription_t &operator=(const typedescription_t &) = delete;
 	};
 
 	struct datarun_t
@@ -257,29 +236,36 @@ namespace gsdk
 	struct datamap_t
 	{
 		datamap_t() noexcept = default;
-		~datamap_t() noexcept;
+		inline ~datamap_t() noexcept
+		{ free(); }
+
+		void free() noexcept;
+
+		inline datamap_t(const datamap_t &other) noexcept
+		{ operator=(other); }
+		datamap_t &operator=(const datamap_t &other) noexcept;
 
 		bool operator==(const datamap_t &other) const noexcept;
 		inline bool operator!=(const datamap_t &other) const noexcept
 		{ return !operator==(other); }
 
+		short *get_flags() const noexcept;
+
 		typedescription_t *dataDesc{nullptr};
 		int dataNumFields{0};
 		const char *dataClassName{nullptr};
 		datamap_t *baseMap{nullptr};
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		int packed_size{0};
 		optimized_datamap_t *m_pOptimizedDataMap{nullptr};
 	#endif
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		bool chains_validated{false};
 		bool packed_offsets_computed{false};
 		int packed_size{0};
 	#endif
 
 	private:
-		datamap_t(const datamap_t &) = delete;
-		datamap_t &operator=(const datamap_t &) = delete;
 		datamap_t(datamap_t &&) = delete;
 		datamap_t &operator=(datamap_t &&) = delete;
 	};

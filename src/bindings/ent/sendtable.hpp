@@ -92,4 +92,19 @@ namespace vmod::bindings::ent
 		sendtable(sendtable &&) = delete;
 		sendtable &operator=(sendtable &&) = delete;
 	};
+
+	class allocated_server_class
+	{
+	private:
+
+	public:
+		std::unique_ptr<gsdk::ServerClass> svclass;
+
+	private:
+		allocated_server_class() = delete;
+		allocated_server_class(const allocated_server_class &) = delete;
+		allocated_server_class &operator=(const allocated_server_class &) = delete;
+		allocated_server_class(allocated_server_class &&) = delete;
+		allocated_server_class &operator=(allocated_server_class &&) = delete;
+	};
 }

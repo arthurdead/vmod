@@ -65,7 +65,11 @@ namespace vmod::bindings::mem
 				vm->ReleaseFunction(free_callback);
 			}
 
-			std::free(ptr);
+			if(ent) {
+				sv_engine->FreeEntPrivateData(ptr);
+			} else {
+				std::free(ptr);
+			}
 		}
 	}
 }

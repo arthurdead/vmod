@@ -96,7 +96,7 @@ namespace gsdk
 		const char *m_pVarName;
 		float m_fHighLowMul;
 
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		unsigned char m_priority;
 	#endif
 

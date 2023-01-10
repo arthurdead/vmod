@@ -1,7 +1,9 @@
 #pragma once
 
 #include "../tier1/interface.hpp"
+#include "../tier1/appframework.hpp"
 #include "../config.hpp"
+#include <string_view>
 
 namespace gsdk
 {
@@ -14,7 +16,7 @@ namespace gsdk
 
 		virtual void Sys_Printf(const char *) = 0;
 		virtual void RunServer() = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual bool IsGuiDedicatedServer() = 0;
 	#endif
 	};

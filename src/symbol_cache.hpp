@@ -1,8 +1,10 @@
 #pragma once
 
+#ifndef __VMOD_COMPILING_VTABLE_DUMPER
 #include "gsdk/config.hpp"
+#endif
 
-#ifndef GSDK_NO_SYMBOLS
+#if !defined GSDK_NO_SYMBOLS || defined __VMOD_COMPILING_VTABLE_DUMPER
 
 #include <cstddef>
 #include <string_view>
@@ -17,12 +19,11 @@
 
 #include <libelf.h>
 #include <gelf.h>
+#include "libiberty.hpp"
 
-#pragma push_macro("HAVE_DECL_BASENAME")
-#undef HAVE_DECL_BASENAME
-#define HAVE_DECL_BASENAME 1
-#include <libiberty/demangle.h>
-#pragma pop_macro("HAVE_DECL_BASENAME")
+#ifdef __VMOD_COMPILING_VTABLE_DUMPER
+#include <llvm/Object/MachO.h>
+#endif
 
 namespace vmod
 {
@@ -33,18 +34,16 @@ namespace vmod
 
 		symbol_cache() noexcept = default;
 
-		inline bool load(const std::filesystem::path &path) noexcept
-		{ return load(path, nullptr); }
 		bool load(const std::filesystem::path &path, void *base) noexcept;
 
 		inline const std::string &error_string() const noexcept
 		{ return err_str; }
 
-		void resolve(void *base) noexcept;
-
 		struct qualification_info
 		{
-			virtual ~qualification_info() noexcept = default;
+			friend class symbol_cache;
+
+			virtual ~qualification_info() noexcept;
 
 			qualification_info() noexcept = default;
 			qualification_info(qualification_info &&) noexcept = default;
@@ -58,12 +57,15 @@ namespace vmod
 		public:
 			struct name_info
 			{
-				virtual ~name_info() noexcept = default;
+				friend class symbol_cache;
+
+				virtual ~name_info() noexcept;
 
 				name_info() noexcept = default;
 				name_info(name_info &&) noexcept = default;
 				name_info &operator=(name_info &&) noexcept = default;
 
+			#ifndef __VMOD_COMPILING_VTABLE_DUMPER
 				template <typename T>
 				inline T addr() const noexcept
 				{ return reinterpret_cast<T>(const_cast<void *>(addr_)); }
@@ -83,10 +85,12 @@ namespace vmod
 
 				inline std::size_t size() const noexcept
 				{ return size_; }
+			#endif
 
 				inline std::size_t virtual_index() const noexcept
 				{ return vindex; }
 
+			#ifndef __VMOD_COMPILING_VTABLE_DUMPER
 				using const_iterator = names_t::const_iterator;
 
 				inline const_iterator find(const std::string &name) const noexcept
@@ -101,14 +105,18 @@ namespace vmod
 				{ return names.cbegin(); }
 				inline const_iterator cend() const noexcept
 				{ return names.cend(); }
+			#endif
 
 			private:
-				friend class symbol_cache;
-
+			#ifndef __VMOD_COMPILING_VTABLE_DUMPER
 				virtual void resolve(void *base) noexcept;
+			#endif
 
-				std::ptrdiff_t offset_{0};
+			#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+				std::uint64_t offset_{0};
+			#endif
 				std::size_t vindex{static_cast<std::size_t>(-1)};
+			#ifndef __VMOD_COMPILING_VTABLE_DUMPER
 				std::size_t size_{0};
 				union {
 					void *addr_;
@@ -117,6 +125,7 @@ namespace vmod
 				};
 
 				names_t names;
+			#endif
 
 			private:
 				name_info(const name_info &) = delete;
@@ -140,10 +149,6 @@ namespace vmod
 			{ return names.cend(); }
 
 		private:
-			friend class symbol_cache;
-
-			virtual void resolve(void *base) noexcept;
-
 			names_t names;
 
 		private:
@@ -154,6 +159,8 @@ namespace vmod
 	private:
 		using qualifications_t = std::unordered_map<std::string, std::unique_ptr<qualification_info>>;
 
+		using vtable_sizes_t = std::unordered_map<std::string, std::size_t>;
+
 	public:
 		struct pair_t
 		{
@@ -163,9 +170,15 @@ namespace vmod
 
 		struct class_info final : qualification_info
 		{
+			friend class symbol_cache;
+
 		public:
+			~class_info() noexcept override;
+
 			struct vtable_info final
 			{
+				friend class symbol_cache;
+
 			private:
 				using funcs_t = std::vector<pair_t>;
 
@@ -192,13 +205,11 @@ namespace vmod
 				{ return funcs_; }
 
 			private:
-				friend class symbol_cache;
-
 				void resolve(void *base) noexcept;
 
 				vtable_info() noexcept = default;
 
-				std::ptrdiff_t offset{0};
+				std::uint64_t offset{0};
 				std::size_t size_{0};
 				__cxxabiv1::vtable_prefix *prefix{nullptr};
 				funcs_t funcs_;
@@ -214,12 +225,9 @@ namespace vmod
 			{ return vtable_; }
 
 		private:
-			friend class symbol_cache;
-
-			void resolve(void *base) noexcept override;
-
 			class_info() noexcept = default;
 
+		#ifndef __VMOD_COMPILING_VTABLE_DUMPER
 			struct ctor_info final : name_info
 			{
 			private:
@@ -239,15 +247,21 @@ namespace vmod
 				ctor_info(ctor_info &&) = delete;
 				ctor_info &operator=(ctor_info &&) = delete;
 			};
+		#endif
 
 			struct dtor_info final : name_info
 			{
+			public:
+				~dtor_info() noexcept override;
+
 			private:
 				friend class symbol_cache;
 
 				using kind_t = gnu_v3_dtor_kinds;
 
+			#ifndef __VMOD_COMPILING_VTABLE_DUMPER
 				void resolve(void *base) noexcept override;
+			#endif
 
 				dtor_info() noexcept = default;
 
@@ -285,21 +299,43 @@ namespace vmod
 		inline const_iterator cend() const noexcept
 		{ return qualifications.cend(); }
 
+	#ifndef __VMOD_COMPILING_VTABLE_DUMPER
 		inline const qualification_info &global() const noexcept
 		{ return global_qual; }
+	#endif
 
-		static std::ptrdiff_t uncached_find_mangled_func(const std::filesystem::path &path, std::string_view search) noexcept;
+		std::size_t vtable_size(const std::string &name) const noexcept;
+
+	#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+		static std::uint64_t uncached_find_mangled_func(const std::filesystem::path &path, std::string_view search) noexcept;
+	#endif
 
 	private:
 		std::string err_str;
 
 		bool read_elf(int fd, void *base) noexcept;
 
-		bool handle_component(std::string_view name_mangled, int base_demangle_flags, demangle_component *component, qualifications_t::iterator &qual_it, qualification_info::names_t::iterator &name_it, GElf_Sym &&sym, void *base) noexcept;
+	#ifdef __VMOD_COMPILING_VTABLE_DUMPER
+		bool read_macho(llvm::object::MachOObjectFile &obj, void *base) noexcept;
+	#endif
 
-		std::unordered_map<std::ptrdiff_t, pair_t> offset_map;
+		static int demangle_flags;
+
+		struct basic_sym_t
+		{
+			std::uint64_t off;
+			std::size_t size;
+		};
+
+		bool handle_component(std::string_view name_mangled, demangle_component *component, qualifications_t::iterator &qual_it, qualification_info::names_t::iterator &name_it, basic_sym_t &&sym, void *base, bool elf) noexcept;
+
+		void resolve_vtables(void *base, bool elf) noexcept;
+
+		std::unordered_map<std::uint64_t, pair_t> offset_map;
 
 		qualifications_t qualifications;
+		vtable_sizes_t vtable_sizes;
+
 		qualification_info global_qual;
 
 	private:

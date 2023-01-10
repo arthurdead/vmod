@@ -1,9 +1,15 @@
 namespace vmod
 {
+	namespace detail
+	{
+		template <typename T>
+		static std::string demangle_buffer;
+	}
+
 	template <typename T>
 	const std::string &demangle() noexcept
 	{
-		static std::string buffer;
+		std::string &buffer{detail::demangle_buffer<T>};
 
 		if(buffer.empty()) {
 			const char *mangled{typeid(T).name()};

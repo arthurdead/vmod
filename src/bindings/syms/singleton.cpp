@@ -1,3 +1,7 @@
+#include "../../gsdk/config.hpp"
+
+#ifndef GSDK_NO_SYMBOLS
+
 #include "singleton.hpp"
 #include "../../main.hpp"
 
@@ -262,3 +266,5 @@ namespace vmod
 		return true;
 	}
 }
+
+#endif

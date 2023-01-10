@@ -27,9 +27,14 @@ namespace vmod::bindings::mem
 		inline bool initialize() noexcept
 		{ return register_instance(&desc, this); }
 
-		inline container(std::size_t size_) noexcept
-			: ptr{static_cast<unsigned char *>(std::malloc(size_))}, size{size_}
+		inline container(std::size_t size_, bool ent_) noexcept
+			: ent{ent_}, size{size_}
 		{
+			if(ent_) {
+				ptr = static_cast<unsigned char *>(sv_engine->PvAllocEntPrivateData(static_cast<long>(size_)));
+			} else {
+				ptr = static_cast<unsigned char *>(std::malloc(size_));
+			}
 		}
 
 		inline container(std::align_val_t align, std::size_t size_) noexcept
@@ -52,6 +57,7 @@ namespace vmod::bindings::mem
 		inline std::size_t script_size() const noexcept
 		{ return size; }
 
+		bool ent{false};
 		unsigned char *ptr;
 		std::size_t size;
 		gsdk::HSCRIPT free_callback{gsdk::INVALID_HSCRIPT};

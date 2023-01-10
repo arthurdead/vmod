@@ -25,9 +25,9 @@ namespace gsdk
 				//delete m_utlstringtoken;
 				break;
 				case FIELD_CSTRING: {
-				#if GSDK_ENGINE == GSDK_ENGINE_TF2
+				#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 					std::free(m_cstr);
-				#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+				#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 					delete[] m_cstr;
 				#else
 					#error

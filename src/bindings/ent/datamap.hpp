@@ -8,10 +8,12 @@
 #include "../../ffi.hpp"
 #include <memory>
 #include <vector>
+#include "../../xxhash.hpp"
 
 namespace vmod::bindings::ent
 {
 	class singleton;
+	class factory_impl;
 
 	namespace detail
 	{
@@ -56,6 +58,7 @@ namespace vmod::bindings::ent
 		class datamap_base
 		{
 			friend class ent::singleton;
+			friend class ent::factory_impl;
 
 		public:
 			inline datamap_base(datamap_base &&other)
@@ -72,6 +75,7 @@ namespace vmod::bindings::ent
 
 			datamap_base(gsdk::datamap_t *map_) noexcept;
 
+		public:
 			gsdk::datamap_t *map;
 
 		private:
@@ -81,7 +85,7 @@ namespace vmod::bindings::ent
 		};
 	}
 
-	class dataprop final : public detail::dataprop_base
+	class dataprop final : public detail::dataprop_base, public instance_base
 	{
 		friend class singleton;
 		friend void write_docs(const std::filesystem::path &) noexcept;
@@ -90,14 +94,13 @@ namespace vmod::bindings::ent
 		static bool bindings() noexcept;
 		static void unbindings() noexcept;
 
-		~dataprop() noexcept;
+		~dataprop() noexcept override;
 
 	private:
 		using detail::dataprop_base::dataprop_base;
 
-		bool initialize() noexcept;
-
-		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+		inline bool initialize() noexcept
+		{ return register_instance(&desc, this); }
 
 	private:
 		dataprop() = delete;
@@ -107,7 +110,7 @@ namespace vmod::bindings::ent
 		dataprop &operator=(dataprop &&) = delete;
 	};
 
-	class datamap final : public detail::datamap_base
+	class datamap final : public detail::datamap_base, public instance_base
 	{
 		friend class singleton;
 		friend void write_docs(const std::filesystem::path &) noexcept;
@@ -116,14 +119,13 @@ namespace vmod::bindings::ent
 		static bool bindings() noexcept;
 		static void unbindings() noexcept;
 
-		~datamap() noexcept;
+		~datamap() noexcept override;
 
 	private:
 		using detail::datamap_base::datamap_base;
 
-		bool initialize() noexcept;
-
-		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+		inline bool initialize() noexcept
+		{ return register_instance(&desc, this); }
 
 	private:
 		datamap() = delete;
@@ -133,15 +135,24 @@ namespace vmod::bindings::ent
 		datamap &operator=(datamap &&) = delete;
 	};
 
-	class allocated_datamap : public detail::datamap_base, public plugin::owned_instance
+	extern XXH64_hash_t hash_datamap(gsdk::datamap_t *map) noexcept;
+
+	class allocated_datamap : public detail::datamap_base
 	{
-		friend class singleton;
+		friend class factory_impl;
 
 	public:
-		~allocated_datamap() noexcept override;
+		~allocated_datamap() noexcept;
 
 		allocated_datamap(allocated_datamap &&) noexcept = default;
 		allocated_datamap &operator=(allocated_datamap &&) noexcept = default;
+
+		void append(const allocated_datamap &other) noexcept;
+
+		std::unique_ptr<allocated_datamap> calculate_offsets(std::size_t base) const noexcept;
+
+		inline XXH64_hash_t hash() const noexcept
+		{ return hash_; }
 
 	private:
 		static vscript::class_desc<allocated_datamap> desc;
@@ -152,6 +163,16 @@ namespace vmod::bindings::ent
 			maps.emplace_back(map);
 			maps_storage.emplace_back(new map_storage);
 		}
+
+		inline allocated_datamap(std::nullptr_t) noexcept
+			: detail::datamap_base{nullptr}
+		{
+		}
+
+		inline allocated_datamap(const allocated_datamap &other) noexcept
+			: allocated_datamap{nullptr}
+		{ operator=(other); }
+		allocated_datamap &operator=(const allocated_datamap &other) noexcept;
 
 		struct prop_storage
 		{
@@ -168,10 +189,15 @@ namespace vmod::bindings::ent
 		};
 
 		std::vector<std::unique_ptr<map_storage>> maps_storage;
+
+	public:
 		std::vector<std::unique_ptr<gsdk::datamap_t>> maps;
 
 	private:
-		allocated_datamap(const allocated_datamap &) = delete;
-		allocated_datamap &operator=(const allocated_datamap &) = delete;
+		std::size_t total_size{0};
+
+		std::size_t last_offset{0};
+
+		XXH64_hash_t hash_;
 	};
 }

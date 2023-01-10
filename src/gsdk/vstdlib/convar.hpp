@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../tier1/interface.hpp"
+#include "../tier1/appframework.hpp"
 #include "../tier0/dbg.hpp"
 #include <string_view>
 #include <cstring>
@@ -55,7 +56,7 @@ namespace gsdk
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		FCVAR_INTERNAL_USE =            (1 << 15),
 	#endif
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		FCVAR_SS =                      (1 << 15),
 	#endif
 		FCVAR_DEMO =                    (1 << 16),
@@ -63,10 +64,8 @@ namespace gsdk
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		FCVAR_ALLOWED_IN_COMPETITIVE =  (1 << 18),
 	#endif
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		FCVAR_SS_ADDED =                (1 << 18),
-	#endif
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 		FCVAR_RELEASE =                 (1 << 19),
 	#endif
 		FCVAR_RELOAD_MATERIALS =        (1 << 20),
@@ -92,7 +91,7 @@ namespace gsdk
 	class ICVarIterator
 	{
 	public:
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V1)
 		virtual ~ICVarIterator() = 0;
 	#endif
 		virtual void SetFirst() = 0;
@@ -113,7 +112,7 @@ namespace gsdk
 		virtual bool IsCommand() const;
 		virtual bool IsFlagSet(int flags) const;
 		virtual void AddFlags(int flags) final;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual void RemoveFlags(int flags) final;
 		virtual int GetFlags() const final;
 	#endif
@@ -153,15 +152,15 @@ namespace gsdk
 		virtual void SetValue(const char *value) = 0;
 		virtual void SetValue(float value) = 0;
 		virtual void SetValue(int value) = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual void SetValue(Color value) = 0;
 	#endif
 		virtual const char *GetName() const = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual const char *GetBaseName() const = 0;
 	#endif
 		virtual bool IsFlagSet(int flags) const = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual int GetSplitScreenPlayerSlot() const = 0;
 	#endif
 	};
@@ -179,7 +178,7 @@ namespace gsdk
 		ConVar() noexcept = default;
 		~ConVar() override;
 
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual const char *GetBaseName() const final;
 		virtual int GetSplitScreenPlayerSlot() const final;
 	#endif
@@ -187,25 +186,23 @@ namespace gsdk
 		virtual void SetValue(float value) final;
 		virtual void SetValue(int value) final;
 		void SetValue(bool value) noexcept;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual void SetValue(Color value) final;
 	#endif
 		virtual void InternalSetValue(const char *value) final;
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V2)
 		virtual void InternalSetFloatValue(float value, bool force = false) final;
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
-		virtual void InternalSetFloatValue(float value) final;
 	#else
-		#error
+		virtual void InternalSetFloatValue(float value) final;
 	#endif
 		virtual void InternalSetIntValue(int value) final;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual void InternalSetColorValue(Color value) final;
 	#endif
 		virtual bool ClampValue(float &value) final;
 		bool ClampValue(int &value);
 		virtual void ChangeStringValue(const char *value, float old_float) final;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual void Create(const char *name, const char *default_value, int flags = FCVAR_NONE, const char *help = nullptr, bool has_min = false, float min = 0.0f, bool has_max = false, float max = 0.0f, FnChangeCallback_t callback = nullptr) final;
 	#endif
 
@@ -242,9 +239,9 @@ namespace gsdk
 		float m_fCompMaxVal{0.0f};
 		bool m_bCompetitiveRestrictions{false};
 	#endif
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		FnChangeCallback_t m_fnChangeCallback{nullptr};
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		CUtlVector<FnChangeCallback_t> m_fnChangeCallbacks;
 	#else
 		#error
@@ -263,9 +260,9 @@ namespace gsdk
 	class ICvar : public IAppSystem
 	{
 	public:
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		static constexpr std::string_view interface_name{"VEngineCvar004"};
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		static constexpr std::string_view interface_name{"VEngineCvar007"};
 	#else
 		#error
@@ -294,7 +291,7 @@ namespace gsdk
 		virtual const ConVar *FindVar(const char *) const = 0;
 		virtual ConCommand *FindCommand(const char *) = 0;
 		virtual const ConCommand *FindCommand(const char *) const = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		virtual ConCommandBase *GetCommands() = 0;
 		virtual const ConCommandBase *GetCommands() const = 0;
 	#endif
@@ -308,7 +305,7 @@ namespace gsdk
 		virtual void ConsoleDPrintf(const char *, ...) const = 0;
 		virtual void RevertFlaggedConVars(int) = 0;
 		virtual void InstallCVarQuery(ICvarQuery *) = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual void SetMaxSplitScreenSlots(int) = 0;
 		virtual int GetMaxSplitScreenSlots() const = 0;
 		virtual void AddSplitScreenConVars() = 0;

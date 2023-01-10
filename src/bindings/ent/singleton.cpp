@@ -36,9 +36,6 @@ namespace vmod::bindings::ent
 		desc.func(&singleton::script_lookup_datatable, "script_lookup_datatable"sv, "lookup_datatable"sv)
 		.desc("[datatable](name)"sv);
 
-		desc.func(&singleton::script_create_datamap, "script_create_datamap"sv, "create_datatable"sv)
-		.desc("[datatable](name, datatable|base, array<dataprop_description>|props)"sv);
-
 		desc.func(&singleton::script_from_ptr, "script_from_ptr"sv, "from_ptr"sv)
 		.desc("[entity](ptr|)"sv);
 
@@ -85,7 +82,7 @@ namespace vmod::bindings::ent
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		factory_impl *sfac{new factory_impl{}};
+		factory_impl *sfac{new factory_impl{size}};
 		if(!sfac->initialize(facname, callback)) {
 			delete sfac;
 			return gsdk::INVALID_HSCRIPT;
@@ -761,143 +758,5 @@ namespace vmod::bindings::ent
 		std::uintptr_t value{reinterpret_cast<std::uintptr_t>(prop)};
 
 		erase(value);
-	}
-
-	gsdk::HSCRIPT singleton::script_create_datamap(std::string &&name, gsdk::HSCRIPT base_instance, gsdk::HSCRIPT props_array) noexcept
-	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
-
-		if(!props_array || props_array == gsdk::INVALID_HSCRIPT) {
-			vm->RaiseException("vmod: invalid props");
-			return gsdk::INVALID_HSCRIPT;
-		}
-
-		if(!vm->IsArray(props_array)) {
-			vm->RaiseException("vmod: props is not a array");
-			return gsdk::INVALID_HSCRIPT;
-		}
-
-		std::vector<gsdk::typedescription_t> props;
-		std::vector<std::unique_ptr<allocated_datamap::prop_storage>> props_storage;
-
-		std::vector<std::unique_ptr<gsdk::datamap_t>> maps;
-		std::vector<std::unique_ptr<allocated_datamap::map_storage>> maps_storage;
-
-		std::function<bool(gsdk::HSCRIPT)> read_props{
-			[&read_props,vm,&props,&props_storage](gsdk::HSCRIPT var) noexcept -> bool {
-				int array_num{vm->GetArrayCount(var)};
-				for(int i{0}, it{0}; it != -1 && i < array_num; ++i) {
-					vscript::variant value;
-					it = vm->GetArrayValue(var, it, &value);
-
-					gsdk::HSCRIPT prop_table{value.get<gsdk::HSCRIPT>()};
-
-					if(!prop_table || prop_table == gsdk::INVALID_HSCRIPT) {
-						vm->RaiseException("vmod: prop %i is invalid", i);
-						return false;
-					}
-
-					if(vm->IsTable(prop_table)) {
-						if(!vm->GetValue(prop_table, "name", &value)) {
-							vm->RaiseException("vmod: prop %i is missing a name", i);
-							return false;
-						}
-
-						gsdk::typedescription_t &prop{props.emplace_back()};
-						auto &storage{props_storage.emplace_back(new allocated_datamap::prop_storage)};
-
-						prop.flags = static_cast<short>(gsdk::FTYPEDESC_PRIVATE|gsdk::FTYPEDESC_VIEW_NEVER|gsdk::FTYPEDESC_NOERRORCHECK);
-
-						std::string prop_name{value.get<std::string>()};
-						if(prop_name.empty()) {
-							vm->RaiseException("vmod: prop %i has empty name", i);
-							return false;
-						}
-
-						storage->name = std::move(prop_name);
-						prop.fieldName = storage->name.c_str();
-
-						if(!vm->GetValue(prop_table, "type", &value)) {
-							vm->RaiseException("vmod: prop '%s' is missing its type", prop.fieldName);
-							return false;
-						}
-
-						ffi_type *type{mem::singleton::read_type(value.get<gsdk::HSCRIPT>())};
-						if(!type) {
-							vm->RaiseException("vmod: prop '%s' type is invalid", prop.fieldName);
-							return false;
-						}
-
-						std::size_t num{1};
-
-						if(vm->GetValue(prop_table, "num", &value)) {
-							num = value.get<std::size_t>();
-
-							if(num == 0 || num == static_cast<std::size_t>(-1)) {
-								vm->RaiseException("vmod: prop '%s' has invalid num: %zu", prop.fieldName, num);
-								return false;
-							}
-						}
-
-						prop.fieldType = static_cast<gsdk::fieldtype_t>(ffi::to_field_type(type));
-						prop.fieldSize = static_cast<unsigned short>(num);
-						prop.fieldSizeInBytes = static_cast<int>(type->size);
-
-						if(vm->GetValue(prop_table, "external_name", &value)) {
-							std::string external_name{value.get<std::string>()};
-							if(external_name.empty()) {
-								vm->RaiseException("vmod: prop has '%s' invalid external name: '%s'", prop.fieldName, external_name.c_str());
-								return gsdk::INVALID_HSCRIPT;
-							}
-
-							storage->external_name = std::move(external_name);
-							prop.externalName = storage->external_name.c_str();
-
-							prop.flags |= gsdk::FTYPEDESC_KEY;
-						}
-					} else if(vm->IsArray(prop_table)) {
-						vm->RaiseException("vmod: prop %i is invalid", i);
-						return false;
-					} else {
-						vm->RaiseException("vmod: prop %i is invalid", i);
-						return false;
-					}
-				}
-
-				return true;
-			}
-		};
-
-		if(!read_props(props_array)) {
-			return gsdk::INVALID_HSCRIPT;
-		}
-
-		detail::datamap_base *base{nullptr};
-
-		if(base_instance && base_instance != gsdk::INVALID_HSCRIPT) {
-			auto base_map{vm->GetInstanceValue<detail::datamap_base>(base_instance, &detail::datamap_base::desc)};
-			if(!base_map) {
-				vm->RaiseException("vmod: invalid base");
-				return gsdk::INVALID_HSCRIPT;
-			}
-
-			base = base_map;
-		}
-
-		allocated_datamap *map{new allocated_datamap};
-
-		if(base) {
-			map->maps[0]->baseMap = base->map;
-		}
-
-		map->maps_storage[0]->name = std::move(name);
-		map->maps[0]->dataClassName = map->maps_storage[0]->name.c_str();
-
-		map->maps_storage[0]->props = std::move(props);
-
-		map->maps[0]->dataNumFields = static_cast<int>(map->maps_storage[0]->props.size());
-		map->maps[0]->dataDesc = map->maps_storage[0]->props.data();
-
-		return map->instance;
 	}
 }

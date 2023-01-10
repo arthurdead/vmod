@@ -44,15 +44,17 @@ namespace vmod::ffi
 		{
 		}
 
+		virtual ~cif() noexcept;
+
 		bool initialize(ffi_abi abi) noexcept;
 
 		inline ffi_cif *operator&() noexcept
-		{ return &impl; }
+		{ return &cif_impl; }
 
 	protected:
 		void call(void(*func)()) noexcept;
 
-		ffi_cif impl;
+		ffi_cif cif_impl;
 
 		std::vector<ffi_type *> args_types;
 		ffi_type *ret_type;
@@ -73,5 +75,49 @@ namespace vmod::ffi
 		cif &operator=(const cif &) = delete;
 		cif(cif &&) = delete;
 		cif &operator=(cif &&) = delete;
+	};
+
+	class closure final : cif
+	{
+	public:
+		inline closure(ffi_type *ret, std::vector<ffi_type *> &&args) noexcept
+			: cif{ret, std::move(args)}
+		{
+		}
+
+		~closure() noexcept override;
+
+		using binding_func = void (*)(ffi_cif *closure_cif, void *ret, void *args[], void *userptr);
+
+		template <typename U>
+		bool initialize(ffi_abi abi, generic_plain_mfp_t &func, binding_func binding, U &userptr) noexcept
+		{
+			return initialize_impl(abi, reinterpret_cast<void **>(&func), binding, static_cast<void *>(&userptr));
+		}
+
+		template <typename R, typename U, typename ...Args>
+		bool initialize(ffi_abi abi, R(*&func)(Args...), binding_func binding, U &userptr) noexcept
+		{
+			return initialize_impl(abi, reinterpret_cast<void **>(&func), binding, static_cast<void *>(&userptr));
+		}
+
+		template <typename R, typename C, typename U, typename ...Args>
+		bool initialize(ffi_abi abi, R(C::*&func)(Args...), binding_func binding, U &userptr) noexcept
+		{
+			return initialize_impl(abi, reinterpret_cast<void **>(&func), binding, static_cast<void *>(&userptr));
+		}
+
+	private:
+		bool initialize_impl(ffi_abi abi, void **func, binding_func binding, void *userptr) noexcept;
+
+	private:
+		ffi_closure *closure_impl{nullptr};
+
+	private:
+		closure() = delete;
+		closure(const closure &) = delete;
+		closure &operator=(const closure &) = delete;
+		closure(closure &&) = delete;
+		closure &operator=(closure &&) = delete;
 	};
 }

@@ -26,15 +26,6 @@ namespace vmod::vscript
 		inline void initialize(R(*func)(Args..., ...), std::string_view name, std::string_view script_name) noexcept
 		{ initialize_static<R, Args...>(func, name, script_name); }
 
-		enum : int
-		{
-			SF_VA_FUNC = (1 << 1),
-			SF_OPT_FUNC = (1 << 2)
-		};
-
-		static_assert(gsdk::SF_NUM_FLAGS == 1);
-		static_assert(gsdk::SF_LAST_FLAG == (1 << 0));
-
 		void desc(std::string &&description) = delete;
 
 		inline void desc(std::string_view description) noexcept

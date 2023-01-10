@@ -14,7 +14,7 @@ namespace gsdk
 	public:
 		int m_fStateFlags;
 
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		#ifdef GSDK_LITTLE_ENDIAN
 		short m_NetworkSerialNumber;
 		short m_EdictIndex;
@@ -22,7 +22,7 @@ namespace gsdk
 		short m_EdictIndex;
 		short m_NetworkSerialNumber;
 		#endif
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		int m_NetworkSerialNumber;
 	#else
 		#error
@@ -35,7 +35,7 @@ namespace gsdk
 
 	struct edict_t : public CBaseEdict
 	{
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		float freetime;
 	#endif
 	};

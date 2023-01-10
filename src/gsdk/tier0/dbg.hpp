@@ -46,7 +46,7 @@ namespace gsdk
 	using SpewOutputFunc_t = SpewRetval_t(*)(SpewType_t, const char *);
 }
 
-#if GSDK_ENGINE == GSDK_ENGINE_TF2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 extern "C" __attribute__((__visibility__("default"))) const char * __attribute__((__cdecl__)) GetSpewOutputGroup();
 extern "C" __attribute__((__visibility__("default"))) int __attribute__((__cdecl__)) GetSpewOutputLevel();
 extern "C" __attribute__((__visibility__("default"))) const gsdk::Color * __attribute__((__cdecl__)) GetSpewOutputColor();
@@ -56,81 +56,78 @@ extern "C" __attribute__((__visibility__("default"))) gsdk::SpewOutputFunc_t __a
 #endif
 
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) Error(const char *, ...);
-#if GSDK_ENGINE == GSDK_ENGINE_TF2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ErrorV(const char *, va_list);
 #endif
 
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) Msg(const char * , ...);
-#if GSDK_ENGINE == GSDK_ENGINE_TF2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DMsg(const char *, int, const char *, ...);
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) MsgV(const char *, va_list);
 #endif
 
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) Warning(const char *, ...);
-#if GSDK_ENGINE == GSDK_ENGINE_TF2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DWarning(const char *, int, const char *, ...);
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) WarningV(const char *, va_list);
 #endif
 
-#if GSDK_ENGINE == GSDK_ENGINE_TF2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) Log(const char *, ...);
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DLog(const char *, int, const char *, ...);
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) LogV(const char *, va_list);
 #endif
 
-#if GSDK_ENGINE == GSDK_ENGINE_TF2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DevLog(const char *, ...);
 #endif
 
-#if GSDK_ENGINE == GSDK_ENGINE_TF2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DevMsg(int, const char *, ...);
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DevWarning(int, const char *, ...);
-#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2 || \
-		GSDK_ENGINE == GSDK_ENGINE_L4D2
+#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DevMsg(const char *, ...);
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DevWarning(const char *, ...);
 #else
 	#error
 #endif
 
-#if GSDK_ENGINE == GSDK_ENGINE_TF2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConColorMsg(int, const gsdk::Color &, const char *, ...);
-#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2 || \
-		GSDK_ENGINE == GSDK_ENGINE_L4D2
+#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 extern __attribute__((__visibility__("default"))) void ConColorMsg(const gsdk::Color &, const char *, ...);
 #else
 	#error
 #endif
 
-#if GSDK_ENGINE == GSDK_ENGINE_TF2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConWarning(int, const char *, ...);
 #endif
 
-#if GSDK_ENGINE == GSDK_ENGINE_TF2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConMsg(int, const char *, ...);
-#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2 || \
-		GSDK_ENGINE == GSDK_ENGINE_L4D2
+#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 extern __attribute__((__visibility__("default"))) void ConMsg(const char *, ...);
 #else
 	#error
 #endif
 
-#if GSDK_ENGINE == GSDK_ENGINE_TF2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConLog(int, const char *, ...);
 #endif
 
-#if GSDK_ENGINE == GSDK_ENGINE_TF2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConDColorMsg(const gsdk::Color &, const char *, ...);
 #endif
 
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConDMsg(const char *, ...);
 
-#if GSDK_ENGINE == GSDK_ENGINE_TF2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConDWarning(const char *, ...);
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConDLog(const char *, ...);
 #endif
 
-#if GSDK_ENGINE == GSDK_ENGINE_TF2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) NetMsg(int, const char *, ... );
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) NetWarning(int, const char *, ... );
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) NetLog(int, const char *, ... );

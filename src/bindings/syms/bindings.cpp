@@ -1,3 +1,7 @@
+#include "../../gsdk/config.hpp"
+
+#ifndef GSDK_NO_SYMBOLS
+
 #include "bindings.hpp"
 #include "singleton.hpp"
 #include "../docs.hpp"
@@ -63,3 +67,5 @@ namespace vmod::bindings::syms
 		write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
 	}
 }
+
+#endif

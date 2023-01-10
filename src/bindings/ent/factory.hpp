@@ -7,6 +7,8 @@
 #include <vector>
 #include <string>
 #include <string_view>
+#include "datamap.hpp"
+#include "sendtable.hpp"
 
 namespace vmod::bindings::ent
 {
@@ -35,6 +37,7 @@ namespace vmod::bindings::ent
 		inline std::size_t script_size() const noexcept
 		{ return factory->GetEntitySize(); }
 
+	protected:
 		gsdk::IEntityFactory *factory;
 
 	private:
@@ -56,12 +59,16 @@ namespace vmod::bindings::ent
 
 		~factory_ref() noexcept override;
 
+		static bool detours() noexcept;
+
 	protected:
 		static vscript::class_desc<factory_ref> desc;
 
 	private:
 		inline bool initialize() noexcept
 		{ return register_instance(&desc, this); }
+
+		gsdk::IServerNetworkable *script_create_sized(std::string_view classname, std::size_t new_size) noexcept;
 
 	private:
 		factory_ref() = delete;
@@ -82,23 +89,30 @@ namespace vmod::bindings::ent
 	public:
 		~factory_impl() noexcept override;
 
+		static bool detours() noexcept;
+
 	private:
 		static vscript::class_desc<factory_impl> desc;
 
 		bool initialize(std::string_view name, gsdk::HSCRIPT callback_) noexcept;
 
-		gsdk::IServerNetworkable *script_create_sized(std::string_view classname, std::size_t size_) noexcept;
+		gsdk::IServerNetworkable *script_create_sized(std::string_view classname, std::size_t new_size) noexcept;
 
-		inline factory_impl() noexcept
-			: factory_base{this}
+		void script_create_datamap(std::string &&name, gsdk::HSCRIPT props_array) noexcept;
+
+		inline factory_impl(std::size_t base_size_) noexcept
+			: factory_base{this}, base_size{base_size_}
 		{
 		}
 
 		gsdk::HSCRIPT callback{gsdk::INVALID_HSCRIPT};
-		std::size_t size{0};
+		std::size_t base_size{0};
 		std::vector<std::string> names;
 
-		gsdk::IServerNetworkable *create(std::string_view classname, std::size_t size_) noexcept;
+		std::unique_ptr<allocated_datamap> datamap;
+		std::unique_ptr<allocated_server_class> svclass;
+
+		gsdk::IServerNetworkable *create(std::string_view classname, std::size_t new_size) noexcept;
 
 		gsdk::IServerNetworkable *Create(const char *classname) override;
 		void Destroy(gsdk::IServerNetworkable *net) override;

@@ -5,6 +5,11 @@ namespace gsdk
 {
 	ScriptClassDesc_t *CBaseEntity::g_pScriptDesc{nullptr};
 	HSCRIPT (CBaseEntity::*CBaseEntity::GetScriptInstance_ptr)() {nullptr};
+	std::size_t CBaseEntity::UpdateOnRemove_vindex{static_cast<std::size_t>(-1)};
+	std::size_t CBaseEntity::GetDataDescMap_vindex{vmod::vfunc_index(&gsdk::CBaseEntity::GetDataDescMap)};
+	std::size_t CBaseEntity::GetServerClass_vindex{vmod::vfunc_index(&gsdk::CBaseEntity::GetServerClass)};
+	std::size_t IServerNetworkable::vtable_size{static_cast<std::size_t>(-1)};
+	std::size_t IServerNetworkable::GetServerClass_vindex{vmod::vfunc_index(&gsdk::IServerNetworkable::GetServerClass)};
 
 	void IEntityFactory::Destroy(IServerNetworkable *net)
 	{

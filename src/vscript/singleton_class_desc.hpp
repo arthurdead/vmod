@@ -64,7 +64,7 @@ namespace vmod::vscript
 		void make_singleton(function_desc &desc, std::type_identity<std::tuple<Args...>>) noexcept
 		{
 			if constexpr(class_is_singleton_v<T>) {
-				desc.m_flags &= ~gsdk::SF_MEMBER_FUNC;
+				desc.m_flags &= ~static_cast<unsigned int>(gsdk::SF_MEMBER_FUNC);
 			}
 
 			if constexpr(function_is_va_v<F>) {

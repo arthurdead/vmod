@@ -23,10 +23,10 @@ namespace vmod::bindings::cvar
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		desc.func(&singleton::script_create_cvar, "script_create_cvar"sv, "create_var"sv)
-		.desc("[convar_ref](name, value)"sv);
+		.desc("[convar_impl](name, value)"sv);
 
 		desc.func(&singleton::script_find_cvar, "script_find_cvar"sv, "find_var"sv)
-		.desc("[convar_impl](name)"sv);
+		.desc("[convar_ref](name)"sv);
 
 		if(!singleton_base::bindings(&desc)) {
 			return false;

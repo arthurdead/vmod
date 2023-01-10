@@ -9,6 +9,8 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include "type_traits.hpp"
+#include <memory>
+#include <typeinfo>
 
 #include <cxxabi.h>
 
@@ -65,6 +67,8 @@ namespace vmod
 
 	template <typename T>
 	const std::string &demangle() noexcept;
+
+	extern const std::string &demangle(std::string_view mangled) noexcept;
 
 	class generic_class final
 	{
@@ -324,7 +328,7 @@ namespace vmod
 	}
 
 	template <typename C>
-	inline generic_plain_mfp_t *vtable_from_object(C *ptr) noexcept
+	inline __cxxabiv1::vtable_prefix *vtable_prefix_from_object(C *ptr) noexcept
 	{
 	#ifdef __clang__
 		#pragma clang diagnostic push
@@ -333,7 +337,7 @@ namespace vmod
 		#pragma GCC diagnostic push
 		#pragma GCC diagnostic ignored "-Wcast-align"
 	#endif
-		return *reinterpret_cast<generic_plain_mfp_t **>(ptr);
+		return reinterpret_cast<__cxxabiv1::vtable_prefix *>(reinterpret_cast<unsigned char *>(*reinterpret_cast<generic_vtable_t *>(ptr)) - offsetof(__cxxabiv1::vtable_prefix, origin));
 	#ifdef __clang__
 		#pragma clang diagnostic pop
 	#else
@@ -341,8 +345,44 @@ namespace vmod
 	#endif
 	}
 
+	template <typename C>
+	inline __cxxabiv1::vtable_prefix *swap_prefix(C *ptr, __cxxabiv1::vtable_prefix *new_prefix) noexcept
+	{
+		__cxxabiv1::vtable_prefix *old_prefix{vtable_prefix_from_object<C>(ptr)};
+	#ifdef __clang__
+		#pragma clang diagnostic push
+		#pragma clang diagnostic ignored "-Wundefined-reinterpret-cast"
+	#else
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wcast-align"
+	#endif
+		*reinterpret_cast<generic_vtable_t *>(ptr) = reinterpret_cast<generic_vtable_t>(const_cast<void **>(&new_prefix->origin));
+	#ifdef __clang__
+		#pragma clang diagnostic pop
+	#else
+		#pragma GCC diagnostic pop
+	#endif
+		return old_prefix;
+	}
+
+	inline generic_vtable_t vtable_from_prefix(__cxxabiv1::vtable_prefix *prefix) noexcept
+	{
+		return reinterpret_cast<generic_vtable_t>(const_cast<void **>(&prefix->origin));
+	}
+
+	template <typename C>
+	inline generic_vtable_t vtable_from_object(C *ptr) noexcept
+	{
+		__cxxabiv1::vtable_prefix *prefix{vtable_prefix_from_object(ptr)};
+		return vtable_from_prefix(prefix);
+	}
+
+	extern std::unique_ptr<__cxxabiv1::vtable_prefix> copy_prefix(__cxxabiv1::vtable_prefix *other, std::size_t num_funcs) noexcept;
+
 	inline void *align(void *ptr, std::size_t alignment) noexcept
 	{ return reinterpret_cast<void *>(reinterpret_cast<std::uintptr_t>(ptr) & ~(alignment - 1)); }
+	constexpr inline std::size_t align(std::size_t value, std::size_t alignment) noexcept
+	{ return (value & ~(alignment - 1)); }
 
 	struct page_info final
 	{
@@ -370,14 +410,14 @@ namespace vmod
 	};
 
 	template <typename R, typename C, typename U, typename ...Args>
-	inline auto swap_vfunc(C *ptr, R(U::*old_func)(Args...), R(*new_func)(C *, Args...)) noexcept -> R(C::*)(Args...)
+	inline auto swap_vfunc(generic_vtable_t vtable, R(U::*old_func)(Args...), R(*new_func)(C *, Args...)) noexcept -> R(C::*)(Args...)
 	{
-		std::size_t index{vfunc_index(old_func)};
+		static_assert(std::is_base_of_v<U, C>);
+		std::size_t index{vfunc_index<R, U, Args...>(old_func)};
 		if(index == static_cast<std::size_t>(-1)) {
 			debugtrap();
 			return nullptr;
 		}
-		generic_plain_mfp_t *vtable{vtable_from_object<C>(ptr)};
 		generic_plain_mfp_t old_vfunc{vtable[index]};
 		page_info func_page{vtable + ((index > 0) ? (index-1) : 0), sizeof(generic_plain_mfp_t)};
 		func_page.protect(PROT_READ|PROT_WRITE|PROT_EXEC);

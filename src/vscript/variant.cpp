@@ -56,7 +56,7 @@ namespace vmod::vscript
 			return var.m_int > 0;
 			case gsdk::FIELD_UINT32:
 			return var.m_uint > 0;
-		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 			case gsdk::FIELD_INTEGER64:
 			return var.m_longlong > 0;
 		#endif
@@ -75,9 +75,9 @@ namespace vmod::vscript
 	{
 		if(!value.empty()) {
 			std::size_t len{value.length()};
-		#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 			var.m_cstr = static_cast<char *>(std::malloc(len+1));
-		#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 			var.m_cstr = new char[len+1];
 		#else
 			#error
@@ -94,9 +94,9 @@ namespace vmod::vscript
 	{
 		if(!value.empty()) {
 			std::size_t len{value.native().length()};
-		#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 			var.m_cstr = static_cast<char *>(std::malloc(len+1));
-		#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 			var.m_cstr = new char[len+1];
 		#else
 			#error

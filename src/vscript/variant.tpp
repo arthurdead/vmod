@@ -62,7 +62,7 @@ namespace vmod::vscript
 				return static_cast<T>(var.m_int);
 				case gsdk::FIELD_UINT32:
 				return static_cast<T>(var.m_uint);
-			#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 				case gsdk::FIELD_INTEGER64:
 				return static_cast<T>(var.m_longlong);
 			#endif
@@ -133,7 +133,7 @@ namespace vmod::vscript
 				return static_cast<T>(var.m_int);
 				case gsdk::FIELD_UINT32:
 				return static_cast<T>(var.m_uint);
-			#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 				case gsdk::FIELD_INTEGER64:
 				return static_cast<T>(var.m_longlong);
 			#endif
@@ -236,7 +236,7 @@ namespace vmod::vscript
 					tc_res.ptr[0] = '\0';
 					return begin;
 				}
-			#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 				case gsdk::FIELD_INTEGER64: {
 					char *begin{variant_str_buffer};
 					char *end{begin + buffers_size};
@@ -393,9 +393,9 @@ namespace vmod::vscript
 	#if __SIZEOF_LONG__ == __SIZEOF_INT__
 		return gsdk::FIELD_INTEGER;
 	#elif __SIZEOF_LONG__ == __SIZEOF_LONG_LONG__
-		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		return gsdk::FIELD_INTEGER64;
-		#elif GSDK_ENGINE == GSDK_ENGINE_TF2
+		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		return gsdk::FIELD_INTEGER;
 		#else
 			#error
@@ -422,9 +422,9 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<long long>() noexcept
 	{
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		return gsdk::FIELD_INTEGER64;
-	#elif GSDK_ENGINE == GSDK_ENGINE_TF2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		return gsdk::FIELD_INTEGER;
 	#else
 		#error

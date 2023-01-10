@@ -6,7 +6,7 @@ namespace vmod
 	template <typename T>
 	void ConCommand::initialize(std::string_view name, int flags, T &&func_) noexcept
 	{
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		flags |= gsdk::FCVAR_RELEASE;
 	#endif
 
@@ -26,7 +26,7 @@ namespace vmod
 	{
 		using namespace std::literals::string_literals;
 
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		flags |= gsdk::FCVAR_RELEASE;
 	#endif
 
@@ -69,9 +69,9 @@ namespace vmod
 			static_assert(false_t<T>::value);
 		}
 
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		gsdk::ConVar::Create(name.data(), m_pszDefaultValue, flags, nullptr, false, 0.0f, false, 0.0f, nullptr);
-	#elif GSDK_ENGINE == GSDK_ENGINE_TF2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		gsdk::ConVar::Create(name.data(), nullptr, flags);
 	#else
 		#error

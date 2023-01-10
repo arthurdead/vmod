@@ -3,7 +3,8 @@
 #include <filesystem>
 #include <string>
 #include <string_view>
-#include "gsdk/tier1/interface.hpp"
+#include <unordered_map>
+#include "gsdk_library.hpp"
 #include "gsdk/launcher/launcher.hpp"
 #include "gsdk/engine/sv_engine.hpp"
 #include "gsdk/engine/globalvars.hpp"
@@ -22,6 +23,7 @@ namespace vmod
 {
 	extern gsdk::IDedicatedExports *dedicated;
 	extern gsdk::IVEngineServer *sv_engine;
+	extern gsdk::IServer *sv;
 	extern gsdk::IFileSystem *filesystem;
 	extern gsdk::ICvar *cvar;
 	extern gsdk::IScriptManager *vsmgr;
@@ -43,10 +45,9 @@ namespace vmod
 	template <typename ...Args>
 	inline void print(std::string_view fmt, Args &&...args) noexcept
 	{
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		ConColorMsg(0, print_clr, fmt.data(), std::forward<Args>(args)...);
-	#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2 || \
-			GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		ConColorMsg(print_clr, fmt.data(), std::forward<Args>(args)...);
 	#else
 		#error
@@ -56,10 +57,9 @@ namespace vmod
 	template <typename ...Args>
 	inline void success(std::string_view fmt, Args &&...args) noexcept
 	{
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		ConColorMsg(0, success_clr, fmt.data(), std::forward<Args>(args)...);
-	#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2 || \
-			GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		ConColorMsg(success_clr, fmt.data(), std::forward<Args>(args)...);
 	#else
 		#error
@@ -69,10 +69,9 @@ namespace vmod
 	template <typename ...Args>
 	inline void info(std::string_view fmt, Args &&...args) noexcept
 	{
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		ConColorMsg(0, info_clr, fmt.data(), std::forward<Args>(args)...);
-	#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2 || \
-			GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		ConColorMsg(info_clr, fmt.data(), std::forward<Args>(args)...);
 	#else
 		#error
@@ -82,10 +81,9 @@ namespace vmod
 	template <typename ...Args>
 	inline void remark(std::string_view fmt, Args &&...args) noexcept
 	{
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		ConColorMsg(0, remark_clr, fmt.data(), std::forward<Args>(args)...);
-	#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2 || \
-			GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		ConColorMsg(remark_clr, fmt.data(), std::forward<Args>(args)...);
 	#else
 		#error
@@ -95,10 +93,9 @@ namespace vmod
 	template <typename ...Args>
 	inline void warning(std::string_view fmt, Args &&...args) noexcept
 	{
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		ConColorMsg(0, warning_clr, fmt.data(), std::forward<Args>(args)...);
-	#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2 || \
-			GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		ConColorMsg(warning_clr, fmt.data(), std::forward<Args>(args)...);
 	#else
 		#error
@@ -108,65 +105,14 @@ namespace vmod
 	template <typename ...Args>
 	inline void error(std::string_view fmt, Args &&...args) noexcept
 	{
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		ConColorMsg(0, error_clr, fmt.data(), std::forward<Args>(args)...);
-	#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2 || \
-			GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		ConColorMsg(error_clr, fmt.data(), std::forward<Args>(args)...);
 	#else
 		#error
 	#endif
 	}
-
-	class gsdk_library
-	{
-	public:
-		gsdk_library() noexcept = default;
-
-		virtual bool load(const std::filesystem::path &path) noexcept;
-
-		inline const std::string &error_string() const noexcept
-		{ return err_str; }
-
-		template <typename T>
-		T *iface() noexcept;
-		template <typename T>
-		T *iface(std::string_view name) noexcept;
-
-		template <typename T>
-		T *addr(std::string_view name) noexcept;
-
-		inline void *base() noexcept
-		{ return base_addr; }
-
-		void unload() noexcept;
-
-		virtual ~gsdk_library() noexcept;
-
-	protected:
-		std::string err_str;
-
-		virtual void *find_addr(std::string_view name) noexcept;
-		virtual void *find_iface(std::string_view name) noexcept;
-
-	private:
-		void *dl{nullptr};
-		gsdk::CreateInterfaceFn iface_fac{nullptr};
-		void *base_addr{nullptr};
-
-	private:
-		gsdk_library(const gsdk_library &) = delete;
-		gsdk_library &operator=(const gsdk_library &) = delete;
-		gsdk_library(gsdk_library &&) = delete;
-		gsdk_library &operator=(gsdk_library &&) = delete;
-	};
-
-	template <typename T>
-	inline T *gsdk_library::iface() noexcept
-	{ return static_cast<T *>(find_iface(T::interface_name)); }
-	template <typename T>
-	inline T *gsdk_library::iface(std::string_view name) noexcept
-	{ return static_cast<T *>(find_iface(name)); }
 
 	class gsdk_launcher_library final : public gsdk_library
 	{

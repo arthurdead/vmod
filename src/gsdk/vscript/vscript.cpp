@@ -312,7 +312,7 @@ namespace gsdk
 			case FIELD_FUNCTION:
 			case FIELD_UINT32:
 			case FIELD_UINT64:
-		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 			case FIELD_INTEGER64:
 		#endif
 			case FIELD_SHORT:
@@ -326,5 +326,20 @@ namespace gsdk
 	{
 		var.m_type = fixup_var_field(var.m_type);
 		return var;
+	}
+
+	ScriptFunctionBinding_t::~ScriptFunctionBinding_t() noexcept
+	{
+		if(m_flags & SF_FREE_SCRIPT_NAME) {
+			std::free(const_cast<char *>(m_desc.m_pszScriptName));
+		}
+
+		if(m_flags & SF_FREE_NAME) {
+			std::free(const_cast<char *>(m_desc.m_pszFunction));
+		}
+
+		if(m_flags & SF_FREE_DESCRIPTION) {
+			std::free(const_cast<char *>(m_desc.m_pszDescription));
+		}
 	}
 }

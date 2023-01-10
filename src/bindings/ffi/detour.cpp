@@ -117,7 +117,7 @@ namespace vmod::bindings::ffi
 		#pragma GCC diagnostic push
 		#pragma GCC diagnostic ignored "-Wconditionally-supported"
 	#endif
-		if(ffi_prep_closure_loc(closure, &impl, closure_binding, this, reinterpret_cast<void *>(closure_func)) != FFI_OK) {
+		if(ffi_prep_closure_loc(closure, &cif_impl, closure_binding, this, reinterpret_cast<void *>(closure_func)) != FFI_OK) {
 			vm->RaiseException("vmod: failed to prepare detour closure");
 			return false;
 		}

@@ -2,7 +2,7 @@
 
 #include "../config.hpp"
 
-#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 	#define GSDK_DT_SUPPORTS_INT64
 #endif
 
@@ -41,7 +41,7 @@ namespace gsdk
 		SPROP_XYZE =                      (1 << 7),
 		SPROP_INSIDEARRAY =               (1 << 8),
 		SPROP_PROXY_ALWAYS_YES =          (1 << 9),
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		SPROP_CHANGES_OFTEN =             (1 << 10),
 		SPROP_IS_A_VECTOR_ELEM =          (1 << 11),
 		SPROP_COLLAPSIBLE =               (1 << 12),
@@ -54,7 +54,7 @@ namespace gsdk
 		SPROP_NUMFLAGBITS_NETWORKED =           16,
 		SPROP_ENCODED_AGAINST_TICKCOUNT = (1 << 16),
 		SPROP_NUMFLAGBITS =                     17,
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		SPROP_IS_A_VECTOR_ELEM =          (1 << 10),
 		SPROP_COLLAPSIBLE =               (1 << 11),
 		SPROP_COORD_MP =                  (1 << 12),
@@ -70,7 +70,7 @@ namespace gsdk
 	#else
 		#error
 	#endif
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		SPROP_VARINT =                    SPROP_NORMAL,
 	#endif
 	};

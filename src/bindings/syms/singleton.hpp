@@ -1,5 +1,9 @@
 #pragma once
 
+#include "../../gsdk/config.hpp"
+
+#ifndef GSDK_NO_SYMBOLS
+
 #include "../../vscript/vscript.hpp"
 #include "../../vscript/class_desc.hpp"
 #include "../../vscript/singleton_class_desc.hpp"
@@ -151,3 +155,5 @@ namespace vmod::bindings::syms
 		const symbol_cache &cache() const noexcept override;
 	};
 }
+
+#endif

@@ -21,12 +21,12 @@ namespace vmod::vscript
 		if constexpr(num_args > 0) {
 			using LA = std::tuple_element_t<num_args-1, std::tuple<Args...>>;
 			if constexpr(is_optional<LA>::value) {
-				m_flags |= SF_OPT_FUNC;
+				m_flags |= gsdk::SF_OPT_FUNC;
 			}
 		}
 
 		if(va) {
-			m_flags |= SF_VA_FUNC;
+			m_flags |= gsdk::SF_VA_FUNC;
 
 			if(num_args >= 2) {
 				m_desc.m_Parameters.erase(num_args);
@@ -98,7 +98,7 @@ namespace vmod::vscript
 		#pragma GCC diagnostic ignored "-Wcast-function-type"
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		R(C::*func)(Args...){reinterpret_cast<R(C::*)(Args...)>(func_storage.mfp)};
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		R(C::*func)(Args...){mfp_from_func(reinterpret_cast<R(__attribute__((__thiscall__)) *)(C *, Args...)>(func_storage.plain))};
 	#else
 		#error
@@ -250,7 +250,7 @@ namespace vmod::vscript
 		#pragma GCC diagnostic ignored "-Wcast-function-type"
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		R(C::*func)(Args..., ...){reinterpret_cast<R(C::*)(Args..., ...)>(func_storage.mfp)};
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		R(C::*func)(Args..., ...){mfp_from_func(reinterpret_cast<R(*)(C *, Args..., ...)>(func_storage.plain))};
 	#else
 		#error
@@ -346,7 +346,7 @@ namespace vmod::vscript
 		#pragma GCC diagnostic ignored "-Wcast-function-type"
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		m_pFunction.mfp = reinterpret_cast<generic_mfp_t>(func);
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		auto internal{mfp_to_func(func)};
 		m_pFunction.plain = reinterpret_cast<generic_plain_mfp_t>(internal.first);
 		if(internal.second != 0) {
@@ -369,7 +369,7 @@ namespace vmod::vscript
 		#pragma GCC diagnostic ignored "-Wcast-function-type"
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		m_pFunction.mfp = reinterpret_cast<generic_mfp_t>(func);
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		auto internal{mfp_to_func(func)};
 		m_pFunction.plain = reinterpret_cast<generic_plain_mfp_t>(internal.first);
 		if(internal.second != 0) {

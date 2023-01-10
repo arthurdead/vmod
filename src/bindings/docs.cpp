@@ -105,7 +105,7 @@ namespace vmod::bindings::docs
 				return "FIELD_UTLSTRINGTOKEN"sv;
 				case gsdk::FIELD_QANGLE:
 				return "FIELD_QANGLE"sv;
-			#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 				case gsdk::FIELD_INTEGER64:
 				return "FIELD_INTEGER64"sv;
 			#endif
@@ -403,7 +403,7 @@ namespace vmod::bindings::docs
 			return "short"sv;
 			case gsdk::FIELD_UINT32:
 			return "unsigned int"sv;
-		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 			case gsdk::FIELD_INTEGER64:
 			return "long long"sv;
 		#endif
@@ -525,6 +525,8 @@ namespace vmod::bindings::docs
 		file += "tf2"sv;
 	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
 		file += "l4d2"sv;
+	#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2
+		file += "portal2"sv;
 	#else
 		#error
 	#endif
@@ -587,7 +589,7 @@ namespace vmod::bindings::docs
 			}
 			params_str += ", "sv;
 		}
-		if(func->m_flags & vscript::function_desc::SF_VA_FUNC) {
+		if(func->m_flags & gsdk::SF_VA_FUNC) {
 			params_str += "..."sv;
 		} else {
 			if(num_args > 0) {

@@ -15,7 +15,7 @@ namespace gsdk
 
 	using TABLEID = int;
 	using pfnStringChanged = void(*)(void *, INetworkStringTable *, int, const char *, const void *);
-	
+
 	constexpr unsigned short INVALID_STRING_INDEX{static_cast<unsigned short>(-1)};
 	constexpr int INVALID_STRING_TABLE{-1};
 
@@ -48,20 +48,20 @@ namespace gsdk
 	{
 	public:
 		virtual ~INetworkStringTableContainer() = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		virtual INetworkStringTable *CreateStringTable(const char *, int, int = 0, int = 0) = 0;
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual INetworkStringTable *CreateStringTable(const char *, int, int = 0, int = 0, int = NSF_NONE) = 0;
 	#endif
 		virtual void RemoveAllTables() = 0;
 		virtual INetworkStringTable *FindTable(const char *) const = 0;
 		virtual INetworkStringTable *GetTable(TABLEID) const = 0;
 		virtual int GetNumTables() const = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		virtual INetworkStringTable *CreateStringTableEx(const char *, int, int = 0, int = 0, bool = false) = 0;
 	#endif
 		virtual void SetAllowClientSideAddString(INetworkStringTable *, bool) = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual void CreateDictionary(const char *) = 0;
 	#endif
 	};

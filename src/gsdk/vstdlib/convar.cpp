@@ -16,7 +16,7 @@ namespace gsdk
 	void ConVar::SetValue(const char *value) { ConVar::InternalSetValue(value); }
 	void ConVar::SetValue(float value) { ConVar::InternalSetFloatValue(value); }
 	void ConVar::SetValue(int value) { ConVar::InternalSetIntValue(value); }
-#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 	void ConVar::SetValue(Color value) { ConVar::InternalSetColorValue(value); }
 #endif
 	const char *ConVar::GetName() const { return ConCommandBase::GetName(); }
@@ -76,7 +76,7 @@ namespace gsdk
 		m_nFlags |= flags;
 	}
 
-#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 	void ConCommandBase::RemoveFlags(int flags)
 	{
 		flags &= ~FCVAR_UNREGISTERED;
@@ -168,9 +168,9 @@ namespace gsdk
 
 	void ConVar::Create(const char *name, const char *help, int flags)
 	{
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		Create(name, nullptr, flags, help, false, 0.0f, false, 0.0f, nullptr);
-	#elif GSDK_ENGINE == GSDK_ENGINE_TF2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		ConCommandBase::Create(name, help, flags);
 		m_pParent = this;
 	#else
@@ -178,7 +178,7 @@ namespace gsdk
 	#endif
 	}
 
-#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 	void ConVar::Create(const char *name, const char *default_value, int flags, const char *help, bool has_min, float min, bool has_max, float max, FnChangeCallback_t callback)
 	{
 		ConCommandBase::Create(name, help, flags);
@@ -192,9 +192,7 @@ namespace gsdk
 			m_fnChangeCallbacks.emplace_back(callback);
 		}
 	}
-#endif
 
-#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 	const char *ConVar::GetBaseName() const
 	{
 		if(m_pParent && m_pParent != this) {
@@ -329,21 +327,17 @@ namespace gsdk
 		}
 	}
 
-#if GSDK_ENGINE == GSDK_ENGINE_TF2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V2)
 	void ConVar::InternalSetFloatValue(float value, bool force)
-#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
-	void ConVar::InternalSetFloatValue(float value)
 #else
-	#error
+	void ConVar::InternalSetFloatValue(float value)
 #endif
 	{
 		if(m_pParent && m_pParent != this) {
-		#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V2)
 			m_pParent->ConVar::InternalSetFloatValue(value, force);
-		#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
-			m_pParent->ConVar::InternalSetFloatValue(value);
 		#else
-			#error
+			m_pParent->ConVar::InternalSetFloatValue(value);
 		#endif
 		}
 
@@ -434,7 +428,7 @@ namespace gsdk
 		ConVar::ClampValue(m_nValue);
 	}
 
-#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 	void ConVar::InternalSetColorValue(Color value)
 	{
 		if(m_pParent && m_pParent != this) {

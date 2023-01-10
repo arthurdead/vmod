@@ -31,6 +31,9 @@ namespace vmod::bindings::mem
 		desc.func(&singleton::script_allocate_type, "script_allocate_type"sv, "allocate_type"sv)
 		.desc("[container](types::type|type)"sv);
 
+		desc.func(&singleton::script_allocate_ent, "script_allocate_ent"sv, "allocate_ent"sv)
+		.desc("[container](size)"sv);
+
 		desc.func(&singleton::script_read, "script_read"sv, "read"sv)
 		.desc("(ptr|, types::type|type)"sv);
 
@@ -320,7 +323,26 @@ namespace vmod::bindings::mem
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		container *block{new container{size}};
+		container *block{new container{size, false}};
+
+		if(!block->initialize()) {
+			delete block;
+			return gsdk::INVALID_HSCRIPT;
+		}
+
+		return block->instance;
+	}
+
+	gsdk::HSCRIPT singleton::script_allocate_ent(std::size_t size) noexcept
+	{
+		gsdk::IScriptVM *vm{main::instance().vm()};
+
+		if(size == 0 || size == static_cast<std::size_t>(-1)) {
+			vm->RaiseException("vmod: invalid size %zu", size);
+			return gsdk::INVALID_HSCRIPT;
+		}
+
+		container *block{new container{size, true}};
 
 		if(!block->initialize()) {
 			delete block;

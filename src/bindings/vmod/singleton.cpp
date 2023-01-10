@@ -130,6 +130,7 @@ namespace vmod
 			return false;
 		}
 
+	#ifndef GSDK_NO_SYMBOLS
 		if(!bindings::syms::bindings()) {
 			return false;
 		}
@@ -148,6 +149,7 @@ namespace vmod
 			error("vmod: failed to set syms table value\n"sv);
 			return false;
 		}
+	#endif
 
 		if(!bindings::cvar::create_get()) {
 			return false;
@@ -216,9 +218,11 @@ namespace vmod
 		file += "namespace strtables;\n\n"sv;
 		bindings::strtables::write_docs(dir);
 
+	#ifndef GSDK_NO_SYMBOLS
 		bindings::docs::ident(file, 1);
 		file += "namespace syms;\n\n"sv;
 		bindings::syms::write_docs(dir);
+	#endif
 
 		bindings::docs::ident(file, 1);
 		file += "namespace ffi;\n\n"sv;
@@ -251,6 +255,7 @@ namespace vmod
 
 		bindings::strtables::unbindings();
 
+	#ifndef GSDK_NO_SYMBOLS
 		if(symbols_table_ && symbols_table_ != gsdk::INVALID_HSCRIPT) {
 			vm_->ReleaseTable(symbols_table_);
 		}
@@ -258,12 +263,15 @@ namespace vmod
 		if(vm_->ValueExists(scope, "syms")) {
 			vm_->ClearValue(scope, "syms");
 		}
+	#endif
 
 		bindings::ent::unbindings();
 
 		bindings::ffi::unbindings();
 
+	#ifndef GSDK_NO_SYMBOLS
 		bindings::syms::unbindings();
+	#endif
 
 		bindings::fs::unbindings();
 

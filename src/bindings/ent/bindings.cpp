@@ -59,6 +59,19 @@ namespace vmod::bindings::ent
 		singleton::instance().unbindings();
 	}
 
+	bool detours() noexcept
+	{
+		if(!factory_ref::detours()) {
+			return false;
+		}
+
+		if(!factory_impl::detours()) {
+			return false;
+		}
+
+		return true;
+	}
+
 	void write_docs(const std::filesystem::path &dir) noexcept
 	{
 		using namespace std::literals::string_view_literals;

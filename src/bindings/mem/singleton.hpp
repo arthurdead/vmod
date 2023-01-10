@@ -81,6 +81,7 @@ namespace vmod::bindings::mem
 		static vscript::singleton_class_desc<singleton> desc;
 
 		static gsdk::HSCRIPT script_allocate(std::size_t size) noexcept;
+		static gsdk::HSCRIPT script_allocate_ent(std::size_t size) noexcept;
 		static gsdk::HSCRIPT script_allocate_aligned(std::align_val_t align, std::size_t size) noexcept;
 		static gsdk::HSCRIPT script_allocate_type(gsdk::HSCRIPT type) noexcept;
 		static gsdk::HSCRIPT script_allocate_zero(std::size_t num, std::size_t size) noexcept;

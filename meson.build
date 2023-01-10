@@ -3,7 +3,7 @@ project('vmod', 'cpp',
 		'warning_level=everything',
 		'werror=true',
 		'buildtype=debug',
-		'b_sanitize=address',
+		'b_sanitize=none',
 		'b_lundef=false',
 		'strip=false',
 		'cpp_std=gnu++20',
@@ -91,12 +91,14 @@ dedicated = game != 'portal2'
 
 install = engine_dir != '' and game != ''
 
+vmod_cpp_args = []
+
 if game == 'tf'
-	cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_TF2']
+	vmod_cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_TF2']
 elif game == 'portal2'
-	cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_PORTAL2']
+	vmod_cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_PORTAL2']
 elif game == 'left4dead2'
-	cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_L4D2']
+	vmod_cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_L4D2']
 endif
 
 thirdparty_default_options = [
@@ -111,6 +113,18 @@ thirdparty_default_options = [
 	'b_lundef=true',
 	'strip=true',
 	'default_library=static'
+]
+
+firstparty_default_options = [
+	'warning_level=everything',
+	'werror=true',
+	'buildtype=debug',
+	'b_sanitize=none',
+	'b_lundef=false',
+	'strip=false',
+	'cpp_std=gnu++20',
+	'cpp_eh=none',
+	'cpp_rtti=true'
 ]
 
 thirdparty_default_options_c = thirdparty_default_options + [
@@ -149,7 +163,7 @@ if custom_vm
 		),
 		gnu_symbol_visibility: 'inlineshidden',
 		implicit_include_directories: true,
-		cpp_args: cpp_args
+		cpp_args: cpp_args + vmod_cpp_args
 	)
 
 	vm_dep = declare_dependency(
@@ -183,16 +197,28 @@ dependencies = [
 	dependency('threads'),
 	dependency('dl'),
 	dependency('libelf'),
+	libiberty.get_variable('iberty_dep')
+]
+
+vmod_dependencies = [
 	dependency('libffi'),
+	dependency('libxxhash').partial_dependency(
+		compile_args: true,
+		includes: true,
+		sources: true
+	),
 	libyaml.get_variable('yaml_dep'),
-	libiberty.get_variable('iberty_dep'),
 	tpp.get_variable('tpp_dep'),
 	squirrel.get_variable('squirrel_dep'),
 	squirrel.get_variable('squirrel_internal_dep')
 ]
 
+vtable_dumper_dependencies = [
+	dependency('llvm')
+]
+
 if custom_vm
-	dependencies += [vm_dep]
+	vmod_dependencies += [vm_dep]
 endif
 
 vmod_base_script_src = files('src/vmod_base.nut')
@@ -211,7 +237,7 @@ if xxd_exe.found()
 		)
 	)
 
-	dependencies += [vmod_base_script]
+	vmod_dependencies += [vmod_base_script]
 endif
 
 if engine_dir != ''
@@ -226,18 +252,18 @@ if engine_dir != ''
 		]
 	)
 
-	vscript_lib_name = 'vscript.so'
+	vstdlib_lib_name = 'libvstdlib.so'
 	if dedicated
-		vscript_lib_name = 'vscript_srv.so'
+		vstdlib_lib_name = 'libvstdlib_srv.so'
 	endif
 
-	vscript = declare_dependency(
+	vstdlib = declare_dependency(
 		link_args: [
-			join_paths(engine_bin,vscript_lib_name)
+			join_paths(engine_bin,vstdlib_lib_name)
 		]
 	)
 
-	dependencies += [tier0]
+	dependencies += [tier0,vstdlib]
 endif
 
 lib = shared_library('vmod',
@@ -247,6 +273,7 @@ lib = shared_library('vmod',
 		join_paths('src','preprocessor.cpp'),
 		join_paths('src','plugin.cpp'),
 		join_paths('src','convar.cpp'),
+		join_paths('src','gsdk_library.cpp'),
 		join_paths('src','gsdk.cpp'),
 		join_paths('src','vscript','variant.cpp'),
 		join_paths('src','vscript','vscript.cpp'),
@@ -278,6 +305,8 @@ lib = shared_library('vmod',
 		join_paths('src','bindings','singleton.cpp'),
 		join_paths('src','bindings','instance.cpp'),
 		join_paths('src','ffi.cpp'),
+		join_paths('src','hacking.cpp'),
+		join_paths('src','xxhash.cpp'),
 		join_paths('src','symbol_cache.cpp'),
 		join_paths('src','gsdk','server','baseentity.cpp'),
 		join_paths('src','gsdk','server','datamap.cpp'),
@@ -288,10 +317,28 @@ lib = shared_library('vmod',
 	gnu_symbol_visibility: 'inlineshidden',
 	implicit_include_directories: true,
 	name_prefix: '',
-	dependencies: dependencies,
+	dependencies: dependencies + vmod_dependencies,
 	install: install,
 	install_dir: addons,
-	cpp_args: cpp_args,
+	cpp_args: cpp_args + vmod_cpp_args,
+	link_args: link_args
+)
+
+vtable_dumper = executable('vtable_dumper',
+	files(
+		join_paths('src','gsdk_library.cpp'),
+		join_paths('src','symbol_cache.cpp'),
+		join_paths('src','filesystem.cpp'),
+		join_paths('src','vtable_dumper.cpp')
+	),
+	gnu_symbol_visibility: 'inlineshidden',
+	implicit_include_directories: true,
+	name_prefix: '',
+	dependencies: dependencies + vtable_dumper_dependencies,
+	install: install,
+	install_dir: join_paths(vmod_root,'bin'),
+	install_rpath: engine_bin,
+	cpp_args: cpp_args + ['-D__VMOD_COMPILING_VTABLE_DUMPER'],
 	link_args: link_args
 )
 
@@ -310,5 +357,12 @@ if install
 		vmod_base_script_src,
 		rename: join_paths(vmod_root,'base','vmod_base.nut'),
 		install_dir: addons
+	)
+
+	install_data(
+		files('src/vtable_dumper.sh'),
+		rename: join_paths(vmod_root,'bin','vtable_dumper.sh'),
+		install_dir: addons,
+		install_mode: 'rwxr-xr--'
 	)
 endif

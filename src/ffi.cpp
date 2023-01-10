@@ -150,9 +150,9 @@ namespace vmod::ffi
 			case FFI_TYPE_UINT64:
 			return gsdk::FIELD_UINT64;
 			case FFI_TYPE_SINT64:
-		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 			return gsdk::FIELD_INTEGER64;
-		#elif GSDK_ENGINE == GSDK_ENGINE_TF2
+		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 			return gsdk::FIELD_INTEGER;
 		#else
 			#error
@@ -204,9 +204,11 @@ namespace vmod::ffi
 		}
 	}
 
+	cif::~cif() noexcept {}
+
 	bool cif::initialize(ffi_abi abi) noexcept
 	{
-		if(ffi_prep_cif(&impl, abi, args_types.size(), ret_type, args_types.data()) != FFI_OK) {
+		if(ffi_prep_cif(&cif_impl, abi, args_types.size(), ret_type, args_types.data()) != FFI_OK) {
 			return false;
 		}
 
@@ -228,6 +230,31 @@ namespace vmod::ffi
 
 	void cif::call(void(*func)()) noexcept
 	{
-		ffi_call(&impl, func, static_cast<void *>(ret_storage.get()), args_ptrs.data());
+		ffi_call(&cif_impl, func, static_cast<void *>(ret_storage.get()), args_ptrs.data());
+	}
+
+	bool closure::initialize_impl(ffi_abi abi, void **func, binding_func binding, void *userptr) noexcept
+	{
+		if(!cif::initialize(abi)) {
+			return false;
+		}
+
+		closure_impl = static_cast<ffi_closure *>(ffi_closure_alloc(sizeof(ffi_closure), func));
+		if(!closure_impl) {
+			return false;
+		}
+
+		if(ffi_prep_closure_loc(closure_impl, &cif_impl, binding, userptr, *func) != FFI_OK) {
+			return false;
+		}
+
+		return true;
+	}
+
+	closure::~closure() noexcept
+	{
+		if(closure_impl) {
+			ffi_closure_free(closure_impl);
+		}
 	}
 }

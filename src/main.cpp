@@ -24,6 +24,7 @@
 
 #include "bindings/docs.hpp"
 #include "bindings/strtables/singleton.hpp"
+#include "bindings/ent/bindings.hpp"
 
 namespace vmod
 {
@@ -124,7 +125,7 @@ namespace vmod
 		return ret;
 	}
 
-#if GSDK_ENGINE == GSDK_ENGINE_TF2
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 	static gsdk::SpewOutputFunc_t old_spew{nullptr};
 	static gsdk::SpewRetval_t new_spew(gsdk::SpewType_t type, const char *str)
 	{
@@ -335,7 +336,7 @@ namespace vmod
 		RegisterFunctionGuts_detour(vm, binding, classdesc);
 		current_binding = nullptr;
 
-		if(binding->m_flags & vscript::function_desc::SF_VA_FUNC) {
+		if(binding->m_flags & gsdk::SF_VA_FUNC) {
 			constexpr std::size_t arglimit{14};
 			constexpr std::size_t va_args{arglimit};
 
@@ -360,9 +361,9 @@ namespace vmod
 		std::string temp_typemask{typemask};
 
 		if(current_binding) {
-			if(current_binding->m_flags & vscript::function_desc::SF_VA_FUNC) {
+			if(current_binding->m_flags & gsdk::SF_VA_FUNC) {
 				nparamscheck = -nparamscheck;
-			} else if(current_binding->m_flags & vscript::function_desc::SF_OPT_FUNC) {
+			} else if(current_binding->m_flags & gsdk::SF_OPT_FUNC) {
 				nparamscheck = -(nparamscheck-1);
 				temp_typemask += "|o"sv;
 			}
@@ -667,11 +668,15 @@ namespace vmod
 		VScriptServerRunScriptForAllAddons_detour.enable();
 	#endif
 
-		CreateVM_original = swap_vfunc(vsmgr, &gsdk::IScriptManager::CreateVM, CreateVM_detour_callback);
-		DestroyVM_original = swap_vfunc(vsmgr, &gsdk::IScriptManager::DestroyVM, DestroyVM_detour_callback);
+		generic_vtable_t vsmgr_vtable{vtable_from_object(vsmgr)};
 
-		Run_original = swap_vfunc(vm_, static_cast<decltype(Run_original)>(&gsdk::IScriptVM::Run), Run_detour_callback);
-		SetErrorCallback_original = swap_vfunc(vm_, &gsdk::IScriptVM::SetErrorCallback, SetErrorCallback_detour_callback);
+		CreateVM_original = swap_vfunc(vsmgr_vtable, &gsdk::IScriptManager::CreateVM, CreateVM_detour_callback);
+		DestroyVM_original = swap_vfunc(vsmgr_vtable, &gsdk::IScriptManager::DestroyVM, DestroyVM_detour_callback);
+
+		generic_vtable_t vm_vtable{vtable_from_object(vm_)};
+
+		Run_original = swap_vfunc(vm_vtable, static_cast<decltype(Run_original)>(&gsdk::IScriptVM::Run), Run_detour_callback);
+		SetErrorCallback_original = swap_vfunc(vm_vtable, &gsdk::IScriptVM::SetErrorCallback, SetErrorCallback_detour_callback);
 
 		RegisterFunction_detour.disable();
 		RegisterClass_detour.disable();
@@ -679,15 +684,23 @@ namespace vmod
 		SetValue_var_detour.disable();
 		SetValue_str_detour.disable();
 
-		RegisterFunction_original = swap_vfunc(vm_, &gsdk::IScriptVM::RegisterFunction, RegisterFunction_detour_callback);
-		RegisterClass_original = swap_vfunc(vm_, &gsdk::IScriptVM::RegisterClass, RegisterClass_detour_callback);
-		RegisterInstance_original = swap_vfunc(vm_, &gsdk::IScriptVM::RegisterInstance_impl, RegisterInstance_detour_callback);
-		SetValue_var_original = swap_vfunc(vm_, static_cast<decltype(SetValue_var_original)>(&gsdk::IScriptVM::SetValue_impl), SetValue_var_detour_callback);
-		SetValue_str_original = swap_vfunc(vm_, static_cast<decltype(SetValue_str_original)>(&gsdk::IScriptVM::SetValue), SetValue_str_detour_callback);
+		RegisterFunction_original = swap_vfunc(vm_vtable, &gsdk::IScriptVM::RegisterFunction, RegisterFunction_detour_callback);
+		RegisterClass_original = swap_vfunc(vm_vtable, &gsdk::IScriptVM::RegisterClass, RegisterClass_detour_callback);
+		RegisterInstance_original = swap_vfunc(vm_vtable, &gsdk::IScriptVM::RegisterInstance_impl, RegisterInstance_detour_callback);
+		SetValue_var_original = swap_vfunc(vm_vtable, static_cast<decltype(SetValue_var_original)>(&gsdk::IScriptVM::SetValue_impl), SetValue_var_detour_callback);
+		SetValue_str_original = swap_vfunc(vm_vtable, static_cast<decltype(SetValue_str_original)>(&gsdk::IScriptVM::SetValue), SetValue_str_detour_callback);
 
-		CreateNetworkStringTables_original = swap_vfunc(gamedll, &gsdk::IServerGameDLL::CreateNetworkStringTables, CreateNetworkStringTables_detour_callback);
+		generic_vtable_t gamedll_vtable{vtable_from_object(gamedll)};
 
-		RemoveAllTables_original = swap_vfunc(sv_stringtables, &gsdk::IServerNetworkStringTableContainer::RemoveAllTables, RemoveAllTables_detour_callback);
+		CreateNetworkStringTables_original = swap_vfunc(gamedll_vtable, &gsdk::IServerGameDLL::CreateNetworkStringTables, CreateNetworkStringTables_detour_callback);
+
+		generic_vtable_t sv_stringtables_vtable{vtable_from_object(sv_stringtables)};
+
+		RemoveAllTables_original = swap_vfunc(sv_stringtables_vtable, &gsdk::IServerNetworkStringTableContainer::RemoveAllTables, RemoveAllTables_detour_callback);
+
+		if(!bindings::ent::detours()) {
+			return false;
+		}
 
 		return true;
 	}
@@ -743,38 +756,30 @@ namespace vmod
 
 		bin_folder = exe_filename.parent_path();
 		bin_folder /= "bin"sv;
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
+		bin_folder /= "linux32"sv;
+	#endif
 
 		exe_filename = exe_filename.filename();
 		exe_filename.replace_extension();
 
-		if(exe_filename == "portal2_linux"sv) {
-			bin_folder /= "linux32"sv;
-		}
-
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || \
-		GSDK_ENGINE == GSDK_ENGINE_L4D2
-		if(exe_filename != "hl2_linux"sv && exe_filename != "srcds_linux"sv) {
-			std::cout << "\033[0;31m"sv << "vmod: unsupported exe filename: '"sv << exe_filename << "'\n"sv << "\033[0m"sv;
-			return false;
-		}
-	#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2
+	#if GSDK_ENGINE == GSDK_ENGINE_PORTAL2
 		if(exe_filename != "portal2_linux"sv) {
 			std::cout << "\033[0;31m"sv << "vmod: unsupported exe filename: '"sv << exe_filename << "'\n"sv << "\033[0m"sv;
 			return false;
 		}
 	#else
-		#error
+		if(exe_filename != "hl2_linux"sv && exe_filename != "srcds_linux"sv) {
+			std::cout << "\033[0;31m"sv << "vmod: unsupported exe filename: '"sv << exe_filename << "'\n"sv << "\033[0m"sv;
+			return false;
+		}
 	#endif
 
 		std::string_view launcher_lib_name;
-		if(exe_filename == "hl2_linux"sv ||
-			exe_filename == "portal2_linux"sv) {
-			launcher_lib_name = "launcher.so"sv;
-		} else if(exe_filename == "srcds_linux"sv) {
+		if(exe_filename == "srcds_linux"sv) {
 			launcher_lib_name = "dedicated_srv.so"sv;
 		} else {
-			std::cout << "\033[0;31m"sv << "vmod: unsupported exe filename: '"sv << exe_filename << "'\n"sv << "\033[0m"sv;
-			return false;
+			launcher_lib_name = "launcher.so"sv;
 		}
 
 		if(!launcher_lib.load(bin_folder/launcher_lib_name)) {
@@ -782,13 +787,14 @@ namespace vmod
 			return false;
 		}
 
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		old_spew = GetSpewOutputFunc();
 		SpewOutputFunc(new_spew);
-	#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2 || \
-			GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		//TODO!!!
 		//LoggingSystem
+	#else
+		#error
 	#endif
 
 		std::string_view engine_lib_name{"engine.so"sv};
@@ -799,6 +805,17 @@ namespace vmod
 			error("vmod: failed to open engine library: '%s'\n"sv, engine_lib.error_string().c_str());
 			return false;
 		}
+
+	#ifndef GSDK_NO_SYMBOLS
+		symbols_available = sv_engine->IsDedicatedServer();
+		if(!symbols_available) {
+			error("vmod: no symbols available\n"sv);
+			return false;
+		}
+	#else
+		error("vmod: no symbols available\n"sv);
+		return false;
+	#endif
 
 		//TODO!!!
 	#if 0
@@ -871,6 +888,9 @@ namespace vmod
 
 		std::filesystem::path server_lib_name{game_dir_};
 		server_lib_name /= "bin"sv;
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
+		server_lib_name /= "linux32"sv;
+	#endif
 		if(sv_engine->IsDedicatedServer()) {
 			server_lib_name /= "server_srv.so"sv;
 		} else {
@@ -920,7 +940,7 @@ namespace vmod
 			error("vmod: missing 'VScriptRunScript' symbol\n"sv);
 			return false;
 		}
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		auto VScriptServerRunScript_it{sv_global_qual.find("VScriptServerRunScript(char const*, HSCRIPT__*, bool)"s)};
 		if(VScriptServerRunScript_it == sv_global_qual.end()) {
 			error("vmod: missing 'VScriptServerRunScript' symbol\n"sv);
@@ -1171,6 +1191,7 @@ namespace vmod
 		}
 	#endif
 
+	#ifndef GSDK_NO_SYMBOLS
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		RegisterScriptFunctions = RegisterScriptFunctions_it->second->mfp<decltype(RegisterScriptFunctions)>();
 	#endif
@@ -1202,6 +1223,9 @@ namespace vmod
 	#endif
 
 		g_SendTables = g_SendTables_it->second->addr<gsdk::CUtlVector<gsdk::SendTable *> *>();
+	#else
+		#error
+	#endif
 
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		gsdk::ScriptClassDesc_t *tmp_desc{*sv_classdesc_pHead};
@@ -1210,7 +1234,8 @@ namespace vmod
 			sv_script_class_descs.emplace(std::move(descname), tmp_desc);
 			tmp_desc = tmp_desc->m_pNextDesc;
 		}
-	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		#ifndef GSDK_NO_SYMBOLS
 		for(const auto &it : sv_global_qual) {
 			if(it.first.starts_with("ScriptClassDesc_t* GetScriptDesc<"sv)) {
 				gsdk::ScriptClassDesc_t *tmp_desc{it.second->func<gsdk::ScriptClassDesc_t *(*)(generic_object_t *)>()(nullptr)};
@@ -1218,6 +1243,9 @@ namespace vmod
 				sv_script_class_descs.emplace(std::move(descname), tmp_desc);
 			}
 		}
+		#else
+			#error
+		#endif
 	#else
 		#error
 	#endif
@@ -1249,9 +1277,6 @@ namespace vmod
 				error("vmod: missing '%s' symbols\n"sv, it.first.c_str());
 				return false;
 			}
-		#else
-			#error
-		#endif
 
 			auto GetDataDescMap_it{sv_sym_it->second->find("GetDataDescMap()"s)};
 			if(GetDataDescMap_it != sv_sym_it->second->end()) {
@@ -1264,9 +1289,16 @@ namespace vmod
 
 				info_it->second.datamap = map;
 			}
+		#else
+			#error
+		#endif
 		}
 
+	#ifndef GSDK_NO_SYMBOLS
 		gsdk::CBaseEntity::GetScriptInstance_ptr = GetScriptInstance_it->second->mfp<decltype(gsdk::CBaseEntity::GetScriptInstance_ptr)>();
+	#else
+		#error
+	#endif
 
 		if(!assign_entity_class_info()) {
 			return false;
@@ -1350,7 +1382,7 @@ namespace vmod
 			return false;
 		}
 
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		for(const auto &it : sv_script_class_descs) {
 			if(!RegisterClass_detour_callback(vm_, it.second)) {
 				error("vmod: failed to register '%s' script class\n"sv, it.first.c_str());
@@ -1730,10 +1762,8 @@ namespace vmod
 
 								std::function<void(gsdk::typedescription_t &, std::string_view, std::size_t)> write_prop{
 									[&file,&write_table](gsdk::typedescription_t &targetprop, std::string_view name, std::size_t funcdepth) noexcept -> void {
-										if(targetprop.fieldType == gsdk::FIELD_EMBEDDED) {
-											if(targetprop.td) {
-												write_table(*targetprop.td, targetprop.td->dataClassName ? targetprop.td->dataClassName : "<<unknown>>"sv, funcdepth);
-											}
+										if(targetprop.td) {
+											write_table(*targetprop.td, targetprop.td->dataClassName ? targetprop.td->dataClassName : "<<unknown>>"sv, funcdepth);
 										}
 
 										bindings::docs::ident(file, funcdepth);
@@ -1795,12 +1825,10 @@ namespace vmod
 											file += ']';
 										}
 
-										if(targetprop.fieldType != gsdk::FIELD_EMBEDDED) {
-											if(targetprop.flags & gsdk::FTYPEDESC_INPUT) {
-												file += '(';
-												file += bindings::docs::type_name(targetprop.fieldType, size);
-												file += ')';
-											}
+										if(targetprop.flags & gsdk::FTYPEDESC_INPUT) {
+											file += '(';
+											file += bindings::docs::type_name(targetprop.fieldType, size);
+											file += ')';
 										}
 
 										file += ';';
@@ -1884,6 +1912,7 @@ namespace vmod
 			}
 		);
 
+	#ifndef GSDK_NO_SYMBOLS
 		vmod_auto_dump_entity_vtables.initialize("vmod_auto_dump_entity_vtables"sv, false);
 
 		vmod_dump_entity_vtables.initialize("vmod_dump_entity_vtables"sv,
@@ -2014,6 +2043,7 @@ namespace vmod
 				}
 			}
 		);
+	#endif
 
 		sv_engine->InsertServerCommand("exec vmod/load.cfg\n");
 		sv_engine->ServerExecute();
@@ -2029,12 +2059,44 @@ namespace vmod
 		{
 			auto CBaseEntity_desc_it{sv_script_class_descs.find("CBaseEntity"s)};
 			if(CBaseEntity_desc_it == sv_script_class_descs.end()) {
-				error("vmod: failed to find baseentity script class\n"sv);
+				error("vmod: failed to find CBaseEntity script class\n"sv);
 				return false;
 			}
 
 			gsdk::CBaseEntity::g_pScriptDesc = CBaseEntity_desc_it->second;
 		}
+
+	#ifndef GSDK_NO_SYMBOLS
+		const auto &sv_symbols{server_lib.symbols()};
+
+		{
+			auto CBaseEntity_it{sv_symbols.find("CBaseEntity"s)};
+			if(CBaseEntity_it == sv_symbols.end()) {
+				error("vmod: missing 'CBaseEntity' symbols\n"sv);
+				return false;
+			}
+
+			auto UpdateOnRemove_it{CBaseEntity_it->second->find("UpdateOnRemove()"s)};
+			if(UpdateOnRemove_it == CBaseEntity_it->second->end()) {
+				error("vmod: missing 'CBaseEntity::UpdateOnRemove' symbol\n"sv);
+				return false;
+			}
+
+			gsdk::CBaseEntity::UpdateOnRemove_vindex = UpdateOnRemove_it->second->virtual_index();
+		}
+
+		{
+			std::size_t net_vtable_size{sv_symbols.vtable_size("CServerNetworkProperty"s)};
+			if(net_vtable_size == static_cast<std::size_t>(-1)) {
+				error("vmod: missing 'CServerNetworkProperty' vtable symbol\n"sv);
+				return false;
+			}
+
+			gsdk::IServerNetworkable::vtable_size = net_vtable_size;
+		}
+	#else
+		#error
+	#endif
 
 		return true;
 	}
@@ -2362,6 +2424,22 @@ namespace vmod
 			vmod_dump_internal_scripts();
 		}
 
+	#ifndef GSDK_NO_SYMBOLS
+		if(vmod_auto_dump_entity_vtables.get<bool>()) {
+			vmod_dump_entity_vtables();
+		}
+
+		if(vmod_auto_dump_entity_funcs.get<bool>()) {
+			vmod_dump_entity_funcs();
+		}
+	#endif
+
+		if(vmod_auto_gen_docs.get<bool>()) {
+			vmod_gen_docs();
+		}
+
+		vmod_refresh_plugins();
+
 		if(vmod_auto_dump_netprops.get<bool>()) {
 			vmod_dump_netprops();
 		}
@@ -2373,20 +2451,6 @@ namespace vmod
 		if(vmod_auto_dump_entity_classes.get<bool>()) {
 			vmod_dump_entity_classes();
 		}
-
-		if(vmod_auto_dump_entity_vtables.get<bool>()) {
-			vmod_dump_entity_vtables();
-		}
-
-		if(vmod_auto_dump_entity_funcs.get<bool>()) {
-			vmod_dump_entity_funcs();
-		}
-
-		if(vmod_auto_gen_docs.get<bool>()) {
-			vmod_gen_docs();
-		}
-
-		vmod_refresh_plugins();
 
 		return true;
 	}
@@ -2509,7 +2573,7 @@ namespace vmod
 			cvar->UnregisterConCommands(cvar_dll_id_);
 		}
 
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		if(old_spew) {
 			SpewOutputFunc(old_spew);
 		}
