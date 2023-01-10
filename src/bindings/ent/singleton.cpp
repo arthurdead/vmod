@@ -39,11 +39,13 @@ namespace vmod::bindings::ent
 		desc.func(&singleton::script_from_ptr, "script_from_ptr"sv, "from_ptr"sv)
 		.desc("[entity](ptr|)"sv);
 
-		desc.func(&singleton::script_find_factory, "script_find_factory"sv, "find_factory"sv)
-		.desc("[factory_ref](name)"sv);
+		if(entityfactorydict) {
+			desc.func(&singleton::script_find_factory, "script_find_factory"sv, "find_factory"sv)
+			.desc("[factory_ref](name)"sv);
 
-		desc.func(&singleton::script_create_factory, "script_create_factory"sv, "create_factory"sv)
-		.desc("[factory_impl](name, factory_callback, size)"sv);
+			desc.func(&singleton::script_create_factory, "script_create_factory"sv, "create_factory"sv)
+			.desc("[factory_impl](name, factory_callback, size)"sv);
+		}
 
 		if(!singleton_base::bindings(&desc)) {
 			return false;

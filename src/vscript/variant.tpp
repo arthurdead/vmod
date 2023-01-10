@@ -21,7 +21,13 @@ namespace vmod::vscript
 				case gsdk::FIELD_FLOAT:
 				return static_cast<T>(var.m_float);
 				case gsdk::FIELD_FLOAT64:
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 				return static_cast<T>(var.m_double);
+			#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+				return static_cast<T>(var.m_float);
+			#else
+				#error
+			#endif
 				case gsdk::FIELD_STRING: {
 					const char *ccstr{gsdk::vscript::STRING(var.m_tstr)};
 
@@ -64,10 +70,20 @@ namespace vmod::vscript
 				return static_cast<T>(var.m_uint);
 			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 				case gsdk::FIELD_INTEGER64:
+				#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 				return static_cast<T>(var.m_longlong);
+				#else
+				return static_cast<T>(var.m_long);
+				#endif
 			#endif
 				case gsdk::FIELD_UINT64:
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 				return static_cast<T>(var.m_ulonglong);
+			#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+				return static_cast<T>(var.m_ulong);
+			#else
+				#error
+			#endif
 				case gsdk::FIELD_BOOLEAN:
 				return var.m_bool ? static_cast<T>(1.0f) : static_cast<T>(0.0f);
 				case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
@@ -93,7 +109,13 @@ namespace vmod::vscript
 				case gsdk::FIELD_FLOAT:
 				return static_cast<T>(var.m_float);
 				case gsdk::FIELD_FLOAT64:
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 				return static_cast<T>(var.m_double);
+			#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+				return static_cast<T>(var.m_float);
+			#else
+				#error
+			#endif
 				case gsdk::FIELD_STRING: {
 					const char *ccstr{gsdk::vscript::STRING(var.m_tstr)};
 
@@ -135,10 +157,20 @@ namespace vmod::vscript
 				return static_cast<T>(var.m_uint);
 			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 				case gsdk::FIELD_INTEGER64:
+				#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 				return static_cast<T>(var.m_longlong);
+				#else
+				return static_cast<T>(var.m_long);
+				#endif
 			#endif
 				case gsdk::FIELD_UINT64:
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 				return static_cast<T>(var.m_ulonglong);
+			#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+				return static_cast<T>(var.m_ulong);
+			#else
+				#error
+			#endif
 				case gsdk::FIELD_BOOLEAN:
 				return var.m_bool ? static_cast<T>(1) : static_cast<T>(0);
 				case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
@@ -189,7 +221,15 @@ namespace vmod::vscript
 					char *begin{variant_str_buffer};
 					char *end{begin + buffers_size};
 
-					std::to_chars_result tc_res{std::to_chars(begin, end, var.m_double)};
+					std::to_chars_result tc_res{std::to_chars(begin, end,
+					#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+						var.m_double
+					#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+						var.m_float
+					#else
+						#error
+					#endif
+					)};
 					tc_res.ptr[0] = '\0';
 					return begin;
 				}
@@ -241,7 +281,13 @@ namespace vmod::vscript
 					char *begin{variant_str_buffer};
 					char *end{begin + buffers_size};
 
-					std::to_chars_result tc_res{std::to_chars(begin, end, var.m_longlong)};
+					std::to_chars_result tc_res{std::to_chars(begin, end,
+					#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+						var.m_longlong
+					#else
+						var.m_long
+					#endif
+					)};
 					tc_res.ptr[0] = '\0';
 					return begin;
 				}
@@ -250,7 +296,15 @@ namespace vmod::vscript
 					char *begin{variant_str_buffer};
 					char *end{begin + buffers_size};
 
-					std::to_chars_result tc_res{std::to_chars(begin, end, var.m_ulonglong)};
+					std::to_chars_result tc_res{std::to_chars(begin, end,
+					#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+						var.m_ulonglong
+					#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+						var.m_ulong
+					#else
+						#error
+					#endif
+					)};
 					tc_res.ptr[0] = '\0';
 					return begin;
 				}
@@ -414,7 +468,15 @@ namespace vmod::vscript
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<unsigned long long>() noexcept
 	{ return gsdk::FIELD_UINT64; }
 	inline void initialize_impl(gsdk::ScriptVariant_t &var, unsigned long long value) noexcept
-	{ var.m_ulonglong = value; }
+	{
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+		var.m_ulonglong = value;
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		var.m_ulong = static_cast<unsigned long>(value);
+	#else
+		#error
+	#endif
+	}
 	template <>
 	inline unsigned long long to_value_impl<unsigned long long>(const gsdk::ScriptVariant_t &var) noexcept
 	{ return detail::to_int_impl<unsigned long long>(var); }
@@ -431,7 +493,15 @@ namespace vmod::vscript
 	#endif
 	}
 	inline void initialize_impl(gsdk::ScriptVariant_t &var, long long value) noexcept
-	{ var.m_longlong = value; }
+	{
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+		var.m_longlong = value;
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		var.m_long = static_cast<long>(value);
+	#else
+		#error
+	#endif
+	}
 	template <>
 	inline long long to_value_impl<long long>(const gsdk::ScriptVariant_t &var) noexcept
 	{ return detail::to_int_impl<long long>(var); }
@@ -449,7 +519,15 @@ namespace vmod::vscript
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<double>() noexcept
 	{ return gsdk::FIELD_FLOAT64; }
 	inline void initialize_impl(gsdk::ScriptVariant_t &var, double value) noexcept
-	{ var.m_double = value; }
+	{
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+		var.m_double = value;
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		var.m_float = static_cast<float>(value);
+	#else
+		#error
+	#endif
+	}
 	template <>
 	inline double to_value_impl<double>(const gsdk::ScriptVariant_t &var) noexcept
 	{ return detail::to_float_impl<double>(var); }
@@ -458,7 +536,15 @@ namespace vmod::vscript
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<long double>() noexcept
 	{ return gsdk::FIELD_FLOAT64; }
 	inline void initialize_impl(gsdk::ScriptVariant_t &var, long double value) noexcept
-	{ var.m_double = static_cast<double>(value); }
+	{
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+		var.m_double = static_cast<double>(value);
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		var.m_float = static_cast<float>(value);
+	#else
+		#error
+	#endif
+	}
 	template <>
 	inline long double to_value_impl<long double>(const gsdk::ScriptVariant_t &var) noexcept
 	{ return detail::to_float_impl<long double>(var); }
@@ -682,10 +768,27 @@ namespace vmod::vscript
 	{
 		if(value) {
 			generic_internal_mfp_t internal{value};
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 			var.m_ulonglong = internal.value;
+		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			if(internal.adjustor == 0) {
+				var.m_ptr = reinterpret_cast<void *>(internal.addr);
+			} else {
+				var.m_type = gsdk::FIELD_VOID;
+				var.m_ulong = 0;
+			}
+		#else
+			#error
+		#endif
 		} else {
 			var.m_type = gsdk::FIELD_VOID;
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 			var.m_ulonglong = 0;
+		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			var.m_ulong = 0;
+		#else
+			#error
+		#endif
 		}
 	}
 	template <>
@@ -694,8 +797,14 @@ namespace vmod::vscript
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_FUNCTION: {
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 				generic_internal_mfp_t internal{var.m_ulonglong};
 				return internal.func;
+			#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+				return reinterpret_cast<generic_mfp_t>(mfp_from_func(reinterpret_cast<generic_plain_mfp_t>(var.m_ptr), 0));
+			#else
+				#error
+			#endif
 			}
 			default: return nullptr;
 		}
@@ -707,10 +816,27 @@ namespace vmod::vscript
 	inline void initialize_impl(gsdk::ScriptVariant_t &var, generic_internal_mfp_t value) noexcept
 	{
 		if(value) {
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 			var.m_ulonglong = value.value;
+		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			if(value.adjustor == 0) {
+				var.m_ptr = reinterpret_cast<void *>(value.addr);
+			} else {
+				var.m_type = gsdk::FIELD_VOID;
+				var.m_ulong = 0;
+			}
+		#else
+			#error
+		#endif
 		} else {
 			var.m_type = gsdk::FIELD_VOID;
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 			var.m_ulonglong = 0;
+		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			var.m_ulong = 0;
+		#else
+			#error
+		#endif
 		}
 	}
 	template <>
@@ -719,8 +845,14 @@ namespace vmod::vscript
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_FUNCTION: {
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 				generic_internal_mfp_t internal{var.m_ulonglong};
 				return internal;
+			#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+				return get_internal_mfp(reinterpret_cast<generic_mfp_t>(mfp_from_func(reinterpret_cast<generic_plain_mfp_t>(var.m_ptr), 0)));
+			#else
+				#error
+			#endif
 			}
 			default: return nullptr;
 		}
@@ -732,10 +864,27 @@ namespace vmod::vscript
 	inline void initialize_impl(gsdk::ScriptVariant_t &var, generic_internal_mfp_va_t value) noexcept
 	{
 		if(value) {
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 			var.m_ulonglong = value.value;
+		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			if(value.adjustor == 0) {
+				var.m_ptr = reinterpret_cast<void *>(value.addr);
+			} else {
+				var.m_type = gsdk::FIELD_VOID;
+				var.m_ulong = 0;
+			}
+		#else
+			#error
+		#endif
 		} else {
 			var.m_type = gsdk::FIELD_VOID;
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 			var.m_ulonglong = 0;
+		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			var.m_ulong = 0;
+		#else
+			#error
+		#endif
 		}
 	}
 	template <>
@@ -744,8 +893,14 @@ namespace vmod::vscript
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_FUNCTION: {
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 				generic_internal_mfp_va_t internal{var.m_ulonglong};
 				return internal;
+			#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+				return get_internal_mfp(reinterpret_cast<generic_mfp_va_t>(mfp_from_func(reinterpret_cast<generic_plain_mfp_va_t>(var.m_ptr), 0)));
+			#else
+				#error
+			#endif
 			}
 			default: return nullptr;
 		}
@@ -757,10 +912,27 @@ namespace vmod::vscript
 	inline void initialize_impl(gsdk::ScriptVariant_t &var, mfp_or_func_t value) noexcept
 	{
 		if(value) {
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 			var.m_ulonglong = value.mfp.value;
+		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			if(value.mfp.adjustor == 0) {
+				var.m_ptr = reinterpret_cast<void *>(value.mfp.addr);
+			} else {
+				var.m_type = gsdk::FIELD_VOID;
+				var.m_ulong = 0;
+			}
+		#else
+			#error
+		#endif
 		} else {
 			var.m_type = gsdk::FIELD_VOID;
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 			var.m_ulonglong = 0;
+		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			var.m_ulong = 0;
+		#else
+			#error
+		#endif
 		}
 	}
 	template <>
@@ -770,7 +942,13 @@ namespace vmod::vscript
 			case gsdk::FIELD_INTEGER:
 			case gsdk::FIELD_FUNCTION: {
 				mfp_or_func_t internal;
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 				internal.mfp = var.m_ulonglong;
+			#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+				internal.mfp.addr = reinterpret_cast<generic_plain_mfp_t>(var.m_ptr);
+			#else
+				#error
+			#endif
 				return internal;
 			}
 			default: return nullptr;

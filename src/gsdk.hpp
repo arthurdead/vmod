@@ -34,6 +34,9 @@ namespace vmod
 	extern gsdk::IServerNetworkStringTableContainer *sv_stringtables;
 	extern std::unordered_map<std::string, gsdk::ServerClass *> sv_classes;
 	extern gsdk::CStandardSendProxies *std_proxies;
+#ifndef GSDK_NO_SYMBOLS
+	extern bool symbols_available;
+#endif
 
 	constexpr gsdk::Color print_clr{255, 255, 255, 255};
 	constexpr gsdk::Color success_clr{0, 255, 0, 255};

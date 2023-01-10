@@ -158,10 +158,6 @@ namespace vmod
 		bool create_script_symbols() noexcept;
 	#endif
 
-	#ifndef GSDK_NO_SYMBOLS
-		bool symbols_available{false};
-	#endif
-
 		bool is_map_loaded{false};
 		bool is_map_active{false};
 		bool are_string_tables_created{false};

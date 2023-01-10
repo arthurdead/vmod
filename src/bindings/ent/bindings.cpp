@@ -30,8 +30,10 @@ namespace vmod::bindings::ent
 			return false;
 		}
 
-		if(!factory_base::bindings()) {
-			return false;
+		if(entityfactorydict) {
+			if(!factory_base::bindings()) {
+				return false;
+			}
 		}
 
 		return true;
@@ -48,7 +50,9 @@ namespace vmod::bindings::ent
 
 	void unbindings() noexcept
 	{
-		factory_base::unbindings();
+		if(entityfactorydict) {
+			factory_base::unbindings();
+		}
 
 		sendprop::unbindings();
 		sendtable::unbindings();
@@ -61,12 +65,14 @@ namespace vmod::bindings::ent
 
 	bool detours() noexcept
 	{
-		if(!factory_ref::detours()) {
-			return false;
-		}
+		if(entityfactorydict) {
+			if(!factory_ref::detours()) {
+				return false;
+			}
 
-		if(!factory_impl::detours()) {
-			return false;
+			if(!factory_impl::detours()) {
+				return false;
+			}
 		}
 
 		return true;
@@ -82,17 +88,19 @@ namespace vmod::bindings::ent
 
 		file += "namespace ent\n{\n"sv;
 
-		docs::ident(file, 1);
-		file += "using factory_callback = entity(factory_impl factory, int size, char[] classname);\n\n"sv;
+		if(entityfactorydict) {
+			docs::ident(file, 1);
+			file += "using factory_callback = entity(factory_impl factory, int size, char[] classname);\n\n"sv;
 
-		docs::write(&factory_base::desc, true, 1, file, false);
-		file += "\n\n"sv;
+			docs::write(&factory_base::desc, true, 1, file, false);
+			file += "\n\n"sv;
 
-		docs::write(&factory_ref::desc, true, 1, file, false);
-		file += "\n\n"sv;
+			docs::write(&factory_ref::desc, true, 1, file, false);
+			file += "\n\n"sv;
 
-		docs::write(&factory_impl::desc, true, 1, file, false);
-		file += "\n\n"sv;
+			docs::write(&factory_impl::desc, true, 1, file, false);
+			file += "\n\n"sv;
+		}
 
 		docs::write(&sendtable::desc, true, 1, file, false);
 		file += "\n\n"sv;

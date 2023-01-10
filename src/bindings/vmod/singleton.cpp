@@ -131,23 +131,25 @@ namespace vmod
 		}
 
 	#ifndef GSDK_NO_SYMBOLS
-		if(!bindings::syms::bindings()) {
-			return false;
-		}
+		if(symbols_available) {
+			if(!bindings::syms::bindings()) {
+				return false;
+			}
 
-		symbols_table_ = vm_->CreateTable();
-		if(!symbols_table_ || symbols_table_ == gsdk::INVALID_HSCRIPT) {
-			error("vmod: failed to create syms table\n"sv);
-			return false;
-		}
+			symbols_table_ = vm_->CreateTable();
+			if(!symbols_table_ || symbols_table_ == gsdk::INVALID_HSCRIPT) {
+				error("vmod: failed to create syms table\n"sv);
+				return false;
+			}
 
-		if(!create_script_symbols()) {
-			return false;
-		}
+			if(!create_script_symbols()) {
+				return false;
+			}
 
-		if(!vm_->SetValue(scope, "syms", symbols_table_)) {
-			error("vmod: failed to set syms table value\n"sv);
-			return false;
+			if(!vm_->SetValue(scope, "syms", symbols_table_)) {
+				error("vmod: failed to set syms table value\n"sv);
+				return false;
+			}
 		}
 	#endif
 
@@ -219,9 +221,11 @@ namespace vmod
 		bindings::strtables::write_docs(dir);
 
 	#ifndef GSDK_NO_SYMBOLS
-		bindings::docs::ident(file, 1);
-		file += "namespace syms;\n\n"sv;
-		bindings::syms::write_docs(dir);
+		if(symbols_available) {
+			bindings::docs::ident(file, 1);
+			file += "namespace syms;\n\n"sv;
+			bindings::syms::write_docs(dir);
+		}
 	#endif
 
 		bindings::docs::ident(file, 1);
@@ -256,12 +260,14 @@ namespace vmod
 		bindings::strtables::unbindings();
 
 	#ifndef GSDK_NO_SYMBOLS
-		if(symbols_table_ && symbols_table_ != gsdk::INVALID_HSCRIPT) {
-			vm_->ReleaseTable(symbols_table_);
-		}
+		if(symbols_available) {
+			if(symbols_table_ && symbols_table_ != gsdk::INVALID_HSCRIPT) {
+				vm_->ReleaseTable(symbols_table_);
+			}
 
-		if(vm_->ValueExists(scope, "syms")) {
-			vm_->ClearValue(scope, "syms");
+			if(vm_->ValueExists(scope, "syms")) {
+				vm_->ClearValue(scope, "syms");
+			}
 		}
 	#endif
 
@@ -270,7 +276,9 @@ namespace vmod
 		bindings::ffi::unbindings();
 
 	#ifndef GSDK_NO_SYMBOLS
-		bindings::syms::unbindings();
+		if(symbols_available) {
+			bindings::syms::unbindings();
+		}
 	#endif
 
 		bindings::fs::unbindings();

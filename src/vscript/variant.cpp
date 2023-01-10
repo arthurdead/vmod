@@ -16,7 +16,13 @@ namespace vmod::vscript
 			case gsdk::FIELD_FLOAT:
 			return var.m_float > 0.0f;
 			case gsdk::FIELD_FLOAT64:
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 			return var.m_double > 0.0;
+		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			return var.m_float > 0.0f;
+		#else
+			#error
+		#endif
 			case gsdk::FIELD_STRING: {
 				const char *ccstr{gsdk::vscript::STRING(var.m_tstr)};
 
@@ -58,10 +64,20 @@ namespace vmod::vscript
 			return var.m_uint > 0;
 		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 			case gsdk::FIELD_INTEGER64:
+			#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 			return var.m_longlong > 0;
+			#else
+			return var.m_long > 0;
+			#endif
 		#endif
 			case gsdk::FIELD_UINT64:
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 			return var.m_ulonglong > 0;
+		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			return var.m_ulong > 0;
+		#else
+			#error
+		#endif
 			case gsdk::FIELD_BOOLEAN:
 			return var.m_bool;
 			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:

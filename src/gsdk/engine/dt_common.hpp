@@ -3,7 +3,7 @@
 #include "../config.hpp"
 
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
-	#define GSDK_DT_SUPPORTS_INT64
+#define GSDK_SENDPROP_SUPPORTS_INT64
 #endif
 
 #include "../mathlib/vector.hpp"
@@ -23,7 +23,7 @@ namespace gsdk
 	#if 0
 		DPT_Quaternion,
 	#endif
-	#ifdef GSDK_DT_SUPPORTS_INT64
+	#ifdef GSDK_SENDPROP_SUPPORTS_INT64
 		DPT_Int64,
 	#endif
 		DPT_NUMSendPropTypes
@@ -94,7 +94,7 @@ namespace gsdk
 		#else
 			float m_Vector[3];
 		#endif
-		#ifdef GSDK_DT_SUPPORTS_INT64
+		#ifdef GSDK_SENDPROP_SUPPORTS_INT64
 			long long m_Int64;
 		#endif
 			unsigned char m_data[sizeof(float) * 3];

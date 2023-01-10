@@ -77,11 +77,13 @@ namespace vmod::bindings
 
 		gsdk::HSCRIPT target_scope{root ? nullptr : main::instance().scope};
 
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 		get_impl = vm->MakeSquirrelMetamethod_Get(target_scope, name.data(), this, false);
 		if(!get_impl) {
 			error("vmod: failed to create '%s' _get metamethod\n"sv, name.data());
 			return false;
 		}
+	#endif
 
 		return true;
 	}
@@ -90,9 +92,11 @@ namespace vmod::bindings
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 		if(get_impl) {
 			vm->DestroySquirrelMetamethod_Get(get_impl);
 		}
+	#endif
 
 		if(instance && instance != gsdk::INVALID_HSCRIPT) {
 			vm->RemoveInstance(instance);

@@ -87,6 +87,58 @@ namespace gsdk
 	}
 #endif
 
+#if GSDK_ENGINE != GSDK_ENGINE_L4D2 && GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+	bool IScriptVM::IsArray(HSCRIPT array) const noexcept
+	{
+		if(!array || array == INVALID_HSCRIPT) {
+			return false;
+		}
+
+		return (array->_type == OT_ARRAY);
+	}
+
+	bool IScriptVM::IsTable(HSCRIPT table) const noexcept
+	{
+		if(!table || table == INVALID_HSCRIPT) {
+			return false;
+		}
+
+		return (table->_type == OT_TABLE);
+	}
+
+	void IScriptVM::ArrayAddToTail(HSCRIPT array, const ScriptVariant_t &var)
+	{
+		if(!array || array == INVALID_HSCRIPT) {
+			return;
+		}
+
+		if(array->_type != OT_ARRAY) {
+			return;
+		}
+
+		//array->_unVal.pArray->Append();
+	}
+
+	HSCRIPT IScriptVM::CreateArray() noexcept
+	{
+		return INVALID_HSCRIPT;
+	}
+
+	int IScriptVM::GetArrayCount(HSCRIPT array) const noexcept
+	{
+		if(!array || array == INVALID_HSCRIPT) {
+			return 0;
+		}
+
+		if(array->_type != OT_ARRAY) {
+			return false;
+		}
+
+		return array->_unVal.pArray->Size();
+	}
+#endif
+
+#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 	HSCRIPT IScriptVM::ReferenceObject(HSCRIPT object) noexcept
 	{
 		if(!object || object == INVALID_HSCRIPT) {
@@ -95,6 +147,16 @@ namespace gsdk
 
 		return ReferenceScope(object);
 	}
+#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+	HSCRIPT IScriptVM::ReferenceObject(HSCRIPT object) noexcept
+	{
+		if(!object || object == INVALID_HSCRIPT) {
+			return INVALID_HSCRIPT;
+		}
+
+		return object;
+	}
+#endif
 
 	HSCRIPT IScriptVM::LookupFunction(const char *name, HSCRIPT scope) noexcept
 	{
@@ -120,6 +182,20 @@ namespace gsdk
 
 	ScriptStatus_t IScriptVM::ExecuteFunction(HSCRIPT func, const ScriptVariant_t *args, int num_args, ScriptVariant_t *ret, HSCRIPT scope, bool wait) noexcept
 	{
+		if(!func || func == INVALID_HSCRIPT) {
+			return SCRIPT_ERROR;
+		}
+
+		if(scope == INVALID_HSCRIPT) {
+			return SCRIPT_ERROR;
+		}
+
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+		if(!scope) {
+			scope = GetRootTable();
+		}
+	#endif
+
 		std::size_t num_args_siz{static_cast<std::size_t>(num_args)};
 		for(std::size_t i{0}; i < num_args_siz; ++i) {
 			fixup_var(const_cast<ScriptVariant_t &>(args[i]));
@@ -134,6 +210,12 @@ namespace gsdk
 			return false;
 		}
 
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+		if(!scope) {
+			scope = GetRootTable();
+		}
+	#endif
+
 		ScriptVariant_t temp;
 		temp.m_type = fixup_var_field(var.m_type);
 		temp.m_flags = var.m_flags & ~SV_FREE;
@@ -146,6 +228,12 @@ namespace gsdk
 		if(scope == INVALID_HSCRIPT) {
 			return false;
 		}
+
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+		if(!scope) {
+			scope = GetRootTable();
+		}
+	#endif
 
 		bool ret{SetValue(scope, name, static_cast<const ScriptVariant_t &>(var))};
 		var.m_flags &= ~SV_FREE;
@@ -161,6 +249,12 @@ namespace gsdk
 		if(!object || object == INVALID_HSCRIPT) {
 			return false;
 		}
+
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+		if(!scope) {
+			scope = GetRootTable();
+		}
+	#endif
 
 		ScriptVariant_t var;
 		var.m_type = FIELD_HSCRIPT;
@@ -229,11 +323,32 @@ namespace gsdk
 		return GetKeyValue(array, it, &tmp, value);
 	}
 
+	bool IScriptVM::GetValue(HSCRIPT scope, const char *name, ScriptVariant_t *var) noexcept
+	{
+		if(scope == INVALID_HSCRIPT) {
+			return false;
+		}
+
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+		if(!scope) {
+			scope = GetRootTable();
+		}
+	#endif
+
+		return GetValue_impl(scope, name, var);
+	}
+
 	bool IScriptVM::GetValue(HSCRIPT scope, const char *name, HSCRIPT *object) noexcept
 	{
 		if(scope == INVALID_HSCRIPT) {
 			return false;
 		}
+
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+		if(!scope) {
+			scope = GetRootTable();
+		}
+	#endif
 
 		ScriptVariant_t tmp;
 		bool ret{GetValue(scope, name, &tmp)};
@@ -272,18 +387,22 @@ namespace gsdk
 		ReleaseValue(var);
 	}
 
+#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 	CSquirrelMetamethodDelegateImpl *IScriptVM::MakeSquirrelMetamethod_Get(HSCRIPT scope, const char *name, ISquirrelMetamethodDelegate *delegate, bool free) noexcept
 	{
 		if(scope == INVALID_HSCRIPT) {
 			return nullptr;
 		}
 
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 		if(!scope) {
 			scope = GetRootTable();
 		}
+	#endif
 
 		return MakeSquirrelMetamethod_Get_impl(scope, name, delegate, free);
 	}
+#endif
 
 	void IScriptVM::ArrayAddToTail(HSCRIPT array, ScriptVariant_t &&var) noexcept
 	{

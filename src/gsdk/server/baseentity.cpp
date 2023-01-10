@@ -20,6 +20,10 @@ namespace gsdk
 
 	HSCRIPT CBaseEntity::GetScriptInstance() noexcept
 	{
+		if(!GetScriptInstance_ptr) {
+			return INVALID_HSCRIPT;
+		}
+
 		HSCRIPT ret{(this->*GetScriptInstance_ptr)()};
 		if(!ret) {
 			ret = INVALID_HSCRIPT;
@@ -30,6 +34,10 @@ namespace gsdk
 	CBaseEntity *CBaseEntity::from_instance(HSCRIPT instance) noexcept
 	{
 		if(!instance || instance == INVALID_HSCRIPT) {
+			return nullptr;
+		}
+
+		if(!g_pScriptDesc) {
 			return nullptr;
 		}
 

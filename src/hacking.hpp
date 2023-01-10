@@ -86,8 +86,11 @@ namespace vmod
 
 	using generic_object_t = generic_class;
 	using generic_func_t = void(*)();
+	using generic_func_va_t = void(*)(...);
 	using generic_plain_mfp_t = void(__attribute__((__thiscall__)) *)(generic_class *);
+	using generic_plain_mfp_va_t = void(*)(generic_class *, ...);
 	using generic_mfp_t = void(generic_class::*)();
+	using generic_mfp_va_t = void(generic_class::*)(...);
 
 	static_assert(sizeof(&generic_class::generic_function) == sizeof(std::uint64_t));
 	static_assert(alignof(&generic_class::generic_function) == alignof(std::uint64_t));
@@ -265,6 +268,13 @@ namespace vmod
 	constexpr inline mfp_internal_t<R, C, Args...> get_internal_mfp(R(C::*func)(Args...)) noexcept
 	{
 		mfp_internal_t<R, C, Args...> internal{func};
+		return internal;
+	}
+
+	template <typename R, typename C, typename ...Args>
+	constexpr inline mfp_internal_va_t<R, C, Args...> get_internal_mfp(R(C::*func)(Args..., ...)) noexcept
+	{
+		mfp_internal_va_t<R, C, Args...> internal{func};
 		return internal;
 	}
 

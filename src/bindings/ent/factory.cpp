@@ -146,26 +146,6 @@ namespace vmod::bindings::ent
 		using namespace std::literals::string_literals;
 		using namespace std::literals::string_view_literals;
 
-	#if 0
-	#ifndef GSDK_NO_SYMBOLS
-		const auto &eng_symbols{main::instance().eng_syms()};
-
-		auto CGameServer_it{eng_symbols.find("CGameServer"s)};
-		if(CGameServer_it == eng_symbols.end()) {
-			error("vmod: missing 'CGameServer' symbols\n"sv);
-			return false;
-		}
-
-		auto AssignClassIds_it{CGameServer_it->second->find("AssignClassIds()"s)};
-		if(AssignClassIds_it == CGameServer_it->second->end()) {
-			error("vmod: missing 'CGameServer::AssignClassIds' symbol\n"sv);
-			return false;
-		}
-	#else
-		#error
-	#endif
-	#endif
-
 		return true;
 	}
 
@@ -333,16 +313,20 @@ namespace vmod::bindings::ent
 				auto ent_vtable_size_it{entity_vtable_sizes.find(old_ent_vtable)};
 				if(ent_vtable_size_it == entity_vtable_sizes.end()) {
 				#ifndef GSDK_NO_SYMBOLS
-					const auto &sv_symbols{main::instance().sv_syms()};
+					if(symbols_available) {
+						const auto &sv_symbols{main::instance().sv_syms()};
 
-					std::size_t ent_vtable_size{sv_symbols.vtable_size(demangle(ent_type->name()))};
-					if(ent_vtable_size == static_cast<std::size_t>(-1)) {
-						debugtrap();
+						std::size_t ent_vtable_size{sv_symbols.vtable_size(demangle(ent_type->name()))};
+						if(ent_vtable_size == static_cast<std::size_t>(-1)) {
+							debugtrap();
+						}
+
+						ent_vtable_size_it = entity_vtable_sizes.emplace(old_ent_vtable, ent_vtable_size).first;
+					} else {
+				#endif
+						
+				#ifndef GSDK_NO_SYMBOLS
 					}
-
-					ent_vtable_size_it = entity_vtable_sizes.emplace(old_ent_vtable, ent_vtable_size).first;
-				#else
-					#error
 				#endif
 				}
 
@@ -457,75 +441,72 @@ namespace vmod::bindings::ent
 						return false;
 					}
 
-					if(vm->IsTable(prop_table)) {
-						if(!vm->GetValue(prop_table, "name", &value)) {
-							vm->RaiseException("vmod: prop %i is missing a name", i);
-							return false;
-						}
-
-						gsdk::typedescription_t &prop{props.emplace_back()};
-						auto &storage{props_storage.emplace_back(new allocated_datamap::prop_storage)};
-
-						prop.flags = static_cast<short>(gsdk::FTYPEDESC_PRIVATE|gsdk::FTYPEDESC_VIEW_NEVER|gsdk::FTYPEDESC_NOERRORCHECK);
-
-						std::string prop_name{value.get<std::string>()};
-						if(prop_name.empty()) {
-							vm->RaiseException("vmod: prop %i has empty name", i);
-							return false;
-						}
-
-						storage->name = std::move(prop_name);
-						prop.fieldName = storage->name.c_str();
-
-						if(!vm->GetValue(prop_table, "type", &value)) {
-							vm->RaiseException("vmod: prop '%s' is missing its type", prop.fieldName);
-							return false;
-						}
-
-						ffi_type *type{mem::singleton::read_type(value.get<gsdk::HSCRIPT>())};
-						if(!type) {
-							vm->RaiseException("vmod: prop '%s' type is invalid", prop.fieldName);
-							return false;
-						}
-
-						std::size_t num{1};
-
-						if(vm->GetValue(prop_table, "num", &value)) {
-							num = value.get<std::size_t>();
-
-							if(num == 0 || num == static_cast<std::size_t>(-1)) {
-								vm->RaiseException("vmod: prop '%s' has invalid num: %zu", prop.fieldName, num);
-								return false;
-							}
-						}
-
-						prop.fieldType = static_cast<gsdk::fieldtype_t>(ffi::to_field_type(type));
-						prop.fieldSize = static_cast<unsigned short>(num);
-
-						std::size_t propsize{align(type->size * num, type->alignment)};
-
-						prop.fieldSizeInBytes = static_cast<int>(propsize);
-
-						total_size += propsize;
-
-						if(vm->GetValue(prop_table, "external_name", &value)) {
-							std::string external_name{value.get<std::string>()};
-							if(external_name.empty()) {
-								vm->RaiseException("vmod: prop has '%s' invalid external name: '%s'", prop.fieldName, external_name.c_str());
-								return gsdk::INVALID_HSCRIPT;
-							}
-
-							storage->external_name = std::move(external_name);
-							prop.externalName = storage->external_name.c_str();
-
-							prop.flags |= gsdk::FTYPEDESC_KEY;
-						}
-					} else if(vm->IsArray(prop_table)) {
-						vm->RaiseException("vmod: prop %i is invalid", i);
+					if(!vm->IsTable(prop_table)) {
+						vm->RaiseException("vmod: prop %i is not a table", i);
 						return false;
-					} else {
-						vm->RaiseException("vmod: prop %i is invalid", i);
+					}
+
+					if(!vm->GetValue(prop_table, "name", &value)) {
+						vm->RaiseException("vmod: prop %i is missing a name", i);
 						return false;
+					}
+
+					gsdk::typedescription_t &prop{props.emplace_back()};
+					auto &storage{props_storage.emplace_back(new allocated_datamap::prop_storage)};
+
+					prop.flags = static_cast<short>(gsdk::FTYPEDESC_PRIVATE|gsdk::FTYPEDESC_VIEW_NEVER|gsdk::FTYPEDESC_NOERRORCHECK);
+
+					std::string prop_name{value.get<std::string>()};
+					if(prop_name.empty()) {
+						vm->RaiseException("vmod: prop %i has empty name", i);
+						return false;
+					}
+
+					storage->name = std::move(prop_name);
+					prop.fieldName = storage->name.c_str();
+
+					if(!vm->GetValue(prop_table, "type", &value)) {
+						vm->RaiseException("vmod: prop '%s' is missing its type", prop.fieldName);
+						return false;
+					}
+
+					ffi_type *type{mem::singleton::read_type(value.get<gsdk::HSCRIPT>())};
+					if(!type) {
+						vm->RaiseException("vmod: prop '%s' type is invalid", prop.fieldName);
+						return false;
+					}
+
+					std::size_t num{1};
+
+					if(vm->GetValue(prop_table, "num", &value)) {
+						num = value.get<std::size_t>();
+
+						if(num == 0 || num == static_cast<std::size_t>(-1)) {
+							vm->RaiseException("vmod: prop '%s' has invalid num: %zu", prop.fieldName, num);
+							return false;
+						}
+					}
+
+					prop.fieldType = static_cast<gsdk::fieldtype_t>(ffi::to_field_type(type));
+					prop.fieldSize = static_cast<unsigned short>(num);
+
+					std::size_t propsize{align(type->size * num, type->alignment)};
+
+					prop.fieldSizeInBytes = static_cast<int>(propsize);
+
+					total_size += propsize;
+
+					if(vm->GetValue(prop_table, "external_name", &value)) {
+						std::string external_name{value.get<std::string>()};
+						if(external_name.empty()) {
+							vm->RaiseException("vmod: prop has '%s' invalid external name: '%s'", prop.fieldName, external_name.c_str());
+							return gsdk::INVALID_HSCRIPT;
+						}
+
+						storage->external_name = std::move(external_name);
+						prop.externalName = storage->external_name.c_str();
+
+						prop.flags |= gsdk::FTYPEDESC_KEY;
 					}
 				}
 

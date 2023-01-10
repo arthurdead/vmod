@@ -87,7 +87,13 @@ namespace gsdk
 	class IScriptManager : public IAppSystem
 	{
 	public:
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 		static constexpr std::string_view interface_name{"VScriptManager010"};
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		static constexpr std::string_view interface_name{"VScriptManager009"};
+	#else
+		#error
+	#endif
 
 		virtual IScriptVM *CreateVM(ScriptLanguage_t = SL_DEFAULT) = 0;
 		virtual void DestroyVM(IScriptVM *) = 0;
@@ -160,6 +166,14 @@ namespace gsdk
 			return *this;
 		}
 
+		inline bool valid() const noexcept
+		{
+			return (
+				m_type != FIELD_TYPEUNKNOWN &&
+				m_type != FIELD_VOID
+			);
+		}
+
 		union
 		{
 			int m_int;
@@ -172,10 +186,14 @@ namespace gsdk
 			bool m_bool;
 			long m_long;
 			unsigned long m_ulong;
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 			long long m_longlong;
 			unsigned long long m_ulonglong;
+		#endif
 			float m_float;
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 			double m_double;
+		#endif
 			//long double m_longdouble;
 			vscript::string_t m_tstr;
 			char *m_cstr;
@@ -188,7 +206,13 @@ namespace gsdk
 			void *m_ehandle;
 			HSCRIPT m_object;
 			void *m_ptr;
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 			unsigned char m_data[sizeof(unsigned long long)];
+		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			unsigned char m_data[sizeof(unsigned int)];
+		#else
+			#error
+		#endif
 		};
 
 		short m_type{FIELD_TYPEUNKNOWN};
@@ -197,7 +221,13 @@ namespace gsdk
 
 	using ScriptVariant_t = CVariantBase<CVariantDefaultAllocator>;
 
+#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 	static_assert(sizeof(ScriptVariant_t) == (sizeof(unsigned long long) + (sizeof(short) * 2)));
+#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+	static_assert(sizeof(ScriptVariant_t) == (sizeof(unsigned int) + (sizeof(short) * 2)));
+#else
+	#error
+#endif
 
 	struct ScriptFunctionBindingStorageType_t
 	{
@@ -434,11 +464,11 @@ namespace gsdk
 		virtual void DisconnectDebugger() = 0;
 		virtual ScriptLanguage_t GetLanguage() = 0;
 		virtual const char *GetLanguageName() = 0;
-	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 		virtual HSQUIRRELVM GetInternalVM() = 0;
 	#endif
 		virtual void AddSearchPath(const char *) = 0;
-	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 		virtual bool ForwardConsoleCommand(const CCommandContext &, const CCommand &) = 0;
 	#endif
 		virtual bool Frame(float) = 0;
@@ -451,7 +481,9 @@ namespace gsdk
 		virtual HSCRIPT CreateScope_impl(const char *, HSCRIPT = nullptr) = 0;
 	public:
 		HSCRIPT CreateScope(const char *script, HSCRIPT parent = nullptr) noexcept;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2 || GSDK_ENGINE == GSDK_ENGINE_TF2
 		virtual HSCRIPT ReferenceScope(HSCRIPT) = 0;
+	#endif
 		HSCRIPT ReferenceObject(HSCRIPT object) noexcept;
 		virtual void ReleaseScope(HSCRIPT) = 0;
 	private:
@@ -499,7 +531,7 @@ namespace gsdk
 		virtual bool SetValue(HSCRIPT, const char *, const char *) = 0;
 	public:
 		virtual bool SetValue_impl(HSCRIPT, const char *, const ScriptVariant_t &) = 0;
-	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 		virtual bool SetValue_impl(HSCRIPT, int, const ScriptVariant_t &) = 0;
 	#endif
 	public:
@@ -511,22 +543,27 @@ namespace gsdk
 	public:
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		bool IsTable(HSCRIPT table) const noexcept;
-	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
 		virtual bool IsTable(HSCRIPT) = 0;
-	#else
-		#error
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		bool IsTable(HSCRIPT table) const noexcept;
 	#endif
 		HSCRIPT CreateTable() noexcept;
 		void ReleaseTable(HSCRIPT table) noexcept;
 		void ReleaseArray(HSCRIPT array) noexcept;
-		virtual int GetNumTableEntries(HSCRIPT) = 0;
+		virtual int GetNumTableEntries(HSCRIPT) const = 0;
 		virtual int GetKeyValue(HSCRIPT, int, ScriptVariant_t *, ScriptVariant_t *) = 0;
 		int GetArrayValue(HSCRIPT array, int it, ScriptVariant_t *value) noexcept;
-		virtual bool GetValue(HSCRIPT, const char *, ScriptVariant_t *) = 0;
-	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
-		virtual bool GetValue(HSCRIPT, int, ScriptVariant_t *) = 0;
+	public:
+		virtual bool GetValue_impl(HSCRIPT, const char *, ScriptVariant_t *) = 0;
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	private:
+		virtual bool GetValue_impl(HSCRIPT, int, ScriptVariant_t *) = 0;
+	public:
 		virtual bool GetScalarValue(HSCRIPT, ScriptVariant_t *) = 0;
 	#endif
+	public:
+		bool GetValue(HSCRIPT scope, const char *name, ScriptVariant_t *var) noexcept;
 		bool GetValue(HSCRIPT scope, const char *name, HSCRIPT *object) noexcept;
 		virtual void ReleaseValue(ScriptVariant_t &) = 0;
 		void ReleaseValue(HSCRIPT object) noexcept;
@@ -536,21 +573,24 @@ namespace gsdk
 		HSCRIPT CreateArray() noexcept;
 		bool IsArray(HSCRIPT array) const noexcept;
 		int GetArrayCount(HSCRIPT array) const noexcept;
-	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
 		virtual HSCRIPT CreateArray() = 0;
 		virtual bool IsArray(HSCRIPT) = 0;
 		virtual int GetArrayCount(HSCRIPT) = 0;
 		virtual void ArrayAddToTail(HSCRIPT, const ScriptVariant_t &) = 0;
-	#else
-		#error
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		HSCRIPT CreateArray() noexcept;
+		bool IsArray(HSCRIPT array) const noexcept;
+		int GetArrayCount(HSCRIPT array) const noexcept;
+		void ArrayAddToTail(HSCRIPT array, const ScriptVariant_t &var);
 	#endif
 		void ArrayAddToTail(HSCRIPT array, ScriptVariant_t &&var) noexcept;
 		virtual void WriteState(CUtlBuffer *) = 0;
 		virtual void ReadState(CUtlBuffer *) = 0;
-	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 		virtual void CollectGarbage(const char *, bool) = 0;
 	#endif
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#if GSDK_ENGINE != GSDK_ENGINE_L4D2
 		virtual void RemoveOrphanInstances() = 0;
 	#endif
 		virtual void DumpState() = 0;
@@ -561,17 +601,19 @@ namespace gsdk
 	public:
 		__attribute__((__format__(__printf__, 2, 3))) bool RaiseException(const char *fmt, ...) noexcept;
 		__attribute__((__format__(__printf__, 2, 0))) bool RaiseExceptionv(const char *fmt, va_list vargs) noexcept;
-	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 		virtual HSCRIPT GetRootTable() = 0;
 		virtual HSCRIPT CopyHandle(HSCRIPT) = 0;
 		virtual HSCRIPT GetIdentity(HSCRIPT) = 0;
 	#endif
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 	private:
 		virtual CSquirrelMetamethodDelegateImpl *MakeSquirrelMetamethod_Get_impl(HSCRIPT &, const char *, ISquirrelMetamethodDelegate *, bool) = 0;
 	public:
 		CSquirrelMetamethodDelegateImpl *MakeSquirrelMetamethod_Get(HSCRIPT scope, const char *name, ISquirrelMetamethodDelegate *delegate, bool free) noexcept;
 		virtual void DestroySquirrelMetamethod_Get(CSquirrelMetamethodDelegateImpl *) = 0;
 		virtual int GetKeyValue2(HSCRIPT, int, ScriptVariant_t *, ScriptVariant_t *) = 0;
+	#endif
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		virtual HSQUIRRELVM GetInternalVM() = 0;
 		virtual bool GetScalarValue(HSCRIPT, ScriptVariant_t *) = 0;
