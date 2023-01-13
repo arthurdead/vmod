@@ -44,6 +44,8 @@ namespace gsdk
 	};
 
 	using SpewOutputFunc_t = SpewRetval_t(*)(SpewType_t, const char *);
+
+	constexpr int MAXPRINTMSG{4096};
 }
 
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
@@ -53,6 +55,8 @@ extern "C" __attribute__((__visibility__("default"))) const gsdk::Color * __attr
 
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) SpewOutputFunc(gsdk::SpewOutputFunc_t);
 extern "C" __attribute__((__visibility__("default"))) gsdk::SpewOutputFunc_t __attribute__((__cdecl__)) GetSpewOutputFunc();
+
+extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) SpewActivate(const char *, int);
 #endif
 
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) Error(const char *, ...);

@@ -37,6 +37,9 @@ namespace gsdk
 		inline std::size_t size() const noexcept
 		{ return static_cast<std::size_t>(m_Size); }
 
+		inline bool empty() const noexcept
+		{ return m_Size == 0; }
+
 		inline T *data() noexcept
 		{ return m_Memory.data(); }
 		inline const T *data() const noexcept

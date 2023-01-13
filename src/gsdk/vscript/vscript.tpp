@@ -5,6 +5,13 @@ namespace gsdk
 	{
 		if(m_flags & SV_FREE) {
 			switch(m_type) {
+				case FIELD_HSCRIPT_NEW_INSTANCE:
+				case FIELD_HSCRIPT:
+				g_pScriptVM->ReleaseObject(m_object);
+				return;
+			}
+
+			switch(m_type) {
 				case FIELD_VOID:
 				case FIELD_TYPEUNKNOWN:
 				break;
@@ -33,10 +40,6 @@ namespace gsdk
 					#error
 				#endif
 				} break;
-				case FIELD_HSCRIPT_NEW_INSTANCE:
-				case FIELD_HSCRIPT:
-				g_pScriptVM->ReleaseObject(m_object);
-				break;
 				default:
 				std::free(static_cast<void *>(m_data));
 				break;

@@ -19,6 +19,23 @@
 
 #include <squirrel.h>
 
+//TODO!! how to detect
+#if !defined SQUIRREL_VERSION_NUMBER
+	#define __VMOD_USING_QUIRREL
+#endif
+
+#if defined __VMOD_USING_QUIRREL && !defined __VMOD_USING_CUSTOM_VM
+	#error
+#endif
+
+#if !defined __VMOD_USING_QUIRREL && !defined SQUIRREL_VERSION_NUMBER
+	#error
+#endif
+
+#if defined __VMOD_USING_QUIRREL || !(defined SQUIRREL_VERSION_NUMBER && SQUIRREL_VERSION_NUMBER >= 303)
+SQUIRREL_API SQInteger sq_getversion();
+#endif
+
 #include <cassert>
 #include <type_traits>
 #ifdef __clang__
@@ -34,6 +51,7 @@
 #pragma clang diagnostic ignored "-Wshadow-field"
 #pragma clang diagnostic ignored "-Wdeprecated-copy-with-user-provided-copy"
 #pragma clang diagnostic ignored "-Wdocumentation"
+#pragma clang diagnostic ignored "-Wreorder-ctor"
 #else
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsuggest-override"
@@ -47,9 +65,7 @@
 #pragma GCC diagnostic ignored "-Weffc++"
 #pragma GCC diagnostic ignored "-Wuseless-cast"
 #pragma GCC diagnostic ignored "-Wswitch-enum"
-#endif
-#if SQUIRREL_VERSION_NUMBER < 303
-SQUIRREL_API SQInteger sq_getversion();
+#pragma GCC diagnostic ignored "-Wreorder-ctor"
 #endif
 #include <sqstate.h>
 #include <squtils.h>
@@ -438,20 +454,21 @@ namespace gsdk
 
 	class CSquirrelMetamethodDelegateImpl;
 
-	struct InstanceContext_t
-	{
-		void *pInstance;
-		ScriptClassDesc_t *pClassDesc;
-		SQObjectPtr name;
-	};
-
+#ifdef __clang__
+	#pragma clang diagnostic push
+	#pragma clang diagnostic ignored "-Wweak-vtables"
+	#pragma clang diagnostic ignored "-Wnon-virtual-dtor"
+#else
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
+#endif
 	class IScriptVM
 	{
 	public:
+	#ifndef __VMOD_USING_CUSTOM_VM
 		static short fixup_var_field(short field) noexcept;
 		static ScriptVariant_t &fixup_var(ScriptVariant_t &var) noexcept;
+	#endif
 
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		static void(IScriptVM::*CreateArray_ptr)(ScriptVariant_t &);
@@ -565,6 +582,8 @@ namespace gsdk
 		virtual bool GetValue_impl(HSCRIPT, int, ScriptVariant_t *) = 0;
 	public:
 		virtual bool GetScalarValue(HSCRIPT, ScriptVariant_t *) = 0;
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		bool GetScalarValue(HSCRIPT object, ScriptVariant_t *var) noexcept;
 	#endif
 	public:
 		bool GetValue(HSCRIPT scope, const char *name, ScriptVariant_t *var) noexcept;
@@ -573,17 +592,18 @@ namespace gsdk
 		void ReleaseValue(HSCRIPT object) noexcept;
 		void ReleaseObject(HSCRIPT object) noexcept;
 		virtual bool ClearValue(HSCRIPT, const char *) = 0;
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		HSCRIPT CreateArray() noexcept;
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		bool IsArray(HSCRIPT array) const noexcept;
 		int GetArrayCount(HSCRIPT array) const noexcept;
 	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
-		virtual HSCRIPT CreateArray() = 0;
+	private:
+		virtual void CreateArray_impl(ScriptVariant_t &) = 0;
+	public:
 		virtual bool IsArray(HSCRIPT) = 0;
 		virtual int GetArrayCount(HSCRIPT) = 0;
 		virtual void ArrayAddToTail(HSCRIPT, const ScriptVariant_t &) = 0;
 	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
-		HSCRIPT CreateArray() noexcept;
 		bool IsArray(HSCRIPT array) const noexcept;
 		int GetArrayCount(HSCRIPT array) const noexcept;
 		void ArrayAddToTail(HSCRIPT array, const ScriptVariant_t &var);
@@ -628,18 +648,13 @@ namespace gsdk
 		virtual void CollectGarbage(const char *, bool) = 0;
 	#endif
 	};
+#ifdef __clang__
+	#pragma clang diagnostic pop
+#else
 	#pragma GCC diagnostic pop
+#endif
 
 	extern IScriptVM *g_pScriptVM;
-
-	#pragma GCC diagnostic push
-	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
-	class CSquirrelVM : public IScriptVM
-	{
-	public:
-		HSQUIRRELVM m_hVM;
-	};
-	#pragma GCC diagnostic pop
 }
 
 #include "vscript.tpp"

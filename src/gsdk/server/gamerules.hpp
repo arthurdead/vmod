@@ -16,5 +16,17 @@ namespace gsdk
 	public:
 		
 	};
+#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2
+	class CPortalGameRules : public CGameRules
+	{
+	public:
+		
+	};
+
+	class CPortalMPGameRules : public CGameRules
+	{
+	public:
+		
+	};
 #endif
 }

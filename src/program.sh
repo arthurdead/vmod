@@ -8,5 +8,5 @@ export LD_LIBRARY_PATH="$engine_bin:$engine_bin/linux32:$LD_LIBRARY_PATH"
 
 export ASAN_OPTIONS=alloc_dealloc_mismatch=0
 
-exec "$script_dir/vtable_dumper" "$@"
-#exec gdb -ex=run --args "$script_dir/vtable_dumper" "$@"
+exec "$script_dir/@PROGRAMNAME@" "$@"
+#exec gdb -ex=run --args "$script_dir/@PROGRAMNAME@" "$@"

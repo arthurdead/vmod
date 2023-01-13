@@ -86,19 +86,20 @@ game_dir = join_paths(engine_dir,game)
 game_bin = join_paths(game_dir,'bin')
 addons = join_paths(game_dir,'addons')
 vmod_root = join_paths(addons,'vmod')
+vmod_bin = join_paths(vmod_root,'bin')
 
 dedicated = game != 'portal2'
 
 install = engine_dir != '' and game != ''
 
-vmod_cpp_args = []
+gsdk_cpp_args = []
 
 if game == 'tf'
-	vmod_cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_TF2']
+	gsdk_cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_TF2']
 elif game == 'portal2'
-	vmod_cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_PORTAL2']
+	gsdk_cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_PORTAL2']
 elif game == 'left4dead2'
-	vmod_cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_L4D2']
+	gsdk_cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_L4D2']
 endif
 
 thirdparty_default_options = [
@@ -152,25 +153,7 @@ tpp = subproject('tpp',
 	required: true
 )
 
-custom_vm = false
-
-if custom_vm
-	vm_lib = static_library('vm',
-		files(
-			join_paths('src','vm','vscript_squirrel.cpp')
-			#join_paths('src','vm','vscript_bindings_math.cpp'),
-			#join_paths('src','vm','vscript_bindings_base.cpp')
-		),
-		gnu_symbol_visibility: 'inlineshidden',
-		implicit_include_directories: true,
-		cpp_args: cpp_args + vmod_cpp_args
-	)
-
-	vm_dep = declare_dependency(
-		link_with: vm_lib,
-		compile_args: ['-D__VMOD_USING_CUSTOM_VM']
-	)
-endif
+custom_vm = true
 
 if custom_vm
 	use_quirrel = true
@@ -195,6 +178,66 @@ else
 	squirrel = subproject(squirrel_ver,
 		default_options: thirdparty_default_options_cpp,
 		required: true
+	)
+endif
+
+xxd_exe = find_program('xxd')
+if xxd_exe.found()
+	xxd_named = generator(xxd_exe,
+		arguments: ['-n','@EXTRA_ARGS@','-i','@INPUT@','@OUTPUT@'],
+		output: '@PLAINNAME@.h'
+	)
+endif
+
+if custom_vm
+	vm_cpp_args = ['-D__VMOD_USING_CUSTOM_VM']
+
+	vm_dependencies = [
+		squirrel.get_variable('squirrel_dep'),
+		squirrel.get_variable('squirrel_internal_dep')
+	]
+
+	if use_quirrel
+		vmod_vm_init_script_src = files('src/vm/vmod_init.nut')
+
+		if xxd_exe.found()
+			vmod_vm_init_script = declare_dependency(
+				sources: xxd_named.process(
+					vmod_vm_init_script_src,
+					extra_args: '__vmod_vm_init_script_data'
+				)
+			)
+
+			vm_dependencies += [vmod_vm_init_script]
+		endif
+
+		vmod_server_init_script_src = files('src/vmod_server_init.nut')
+
+		if xxd_exe.found()
+			vmod_server_init_script = declare_dependency(
+				sources: xxd_named.process(
+					vmod_server_init_script_src,
+					extra_args: '__vmod_server_init_script_data'
+				)
+			)
+
+			vm_dependencies += [vmod_server_init_script]
+		endif
+	endif
+
+	vm_lib = static_library('vm',
+		files(
+			join_paths('src','vm','squirrel_vm.cpp')
+		),
+		dependencies: vm_dependencies,
+		gnu_symbol_visibility: 'inlineshidden',
+		implicit_include_directories: true,
+		cpp_args: cpp_args + gsdk_cpp_args + vm_cpp_args
+	)
+
+	vm_dep = declare_dependency(
+		link_with: vm_lib,
+		compile_args: vm_cpp_args
 	)
 endif
 
@@ -228,17 +271,11 @@ endif
 
 vmod_base_script_src = files('src/vmod_base.nut')
 
-xxd_exe = find_program('xxd')
 if xxd_exe.found()
-	xxd_named = generator(xxd_exe,
-		arguments: ['-n','@EXTRA_ARGS@','-i','@INPUT@','@OUTPUT@'],
-		output: '@PLAINNAME@.h'
-	)
-
 	vmod_base_script = declare_dependency(
 		sources: xxd_named.process(
 			vmod_base_script_src,
-			extra_args: '__vmod_base_script'
+			extra_args: '__vmod_base_script_data'
 		)
 	)
 
@@ -325,7 +362,7 @@ lib = shared_library('vmod',
 	dependencies: dependencies + vmod_dependencies,
 	install: install,
 	install_dir: addons,
-	cpp_args: cpp_args + vmod_cpp_args,
+	cpp_args: cpp_args + gsdk_cpp_args,
 	link_args: link_args
 )
 
@@ -341,9 +378,27 @@ vtable_dumper = executable('vtable_dumper',
 	name_prefix: '',
 	dependencies: dependencies + vtable_dumper_dependencies,
 	install: install,
-	install_dir: join_paths(vmod_root,'bin'),
+	install_dir: vmod_bin,
 	install_rpath: engine_bin,
 	cpp_args: cpp_args + ['-D__VMOD_COMPILING_VTABLE_DUMPER'],
+	link_args: link_args
+)
+
+signature_guesser = executable('signature_guesser',
+	files(
+		join_paths('src','gsdk_library.cpp'),
+		join_paths('src','symbol_cache.cpp'),
+		join_paths('src','filesystem.cpp'),
+		join_paths('src','signature_guesser.cpp')
+	),
+	gnu_symbol_visibility: 'inlineshidden',
+	implicit_include_directories: true,
+	name_prefix: '',
+	dependencies: dependencies,
+	install: install,
+	install_dir: vmod_bin,
+	install_rpath: engine_bin,
+	cpp_args: cpp_args + gsdk_cpp_args + ['-D__VMOD_COMPILING_SIGNATURE_GUESSER'],
 	link_args: link_args
 )
 
@@ -357,6 +412,28 @@ configure_file(
 	install_dir: addons
 )
 
+configure_file(
+	input: files(join_paths('src','program.sh')),
+	output: 'vtable_dumper.sh',
+	configuration: {
+		'PROGRAMNAME': 'vtable_dumper'
+	},
+	install: install,
+	install_dir: vmod_bin,
+	install_mode: 'rwxr-xr--'
+)
+
+configure_file(
+	input: files(join_paths('src','program.sh')),
+	output: 'signature_guesser.sh',
+	configuration: {
+		'PROGRAMNAME': 'signature_guesser'
+	},
+	install: install,
+	install_dir: vmod_bin,
+	install_mode: 'rwxr-xr--'
+)
+
 if install
 	install_data(
 		vmod_base_script_src,
@@ -364,10 +441,17 @@ if install
 		install_dir: addons
 	)
 
-	install_data(
-		files('src/vtable_dumper.sh'),
-		rename: join_paths(vmod_root,'bin','vtable_dumper.sh'),
-		install_dir: addons,
-		install_mode: 'rwxr-xr--'
-	)
+	if custom_vm and use_quirrel
+		install_data(
+			vmod_vm_init_script_src,
+			rename: join_paths(vmod_root,'base','vmod_init.nut'),
+			install_dir: addons
+		)
+
+		install_data(
+			vmod_server_init_script_src,
+			rename: join_paths(vmod_root,'base','vmod_server_init.nut'),
+			install_dir: addons
+		)
+	endif
 endif

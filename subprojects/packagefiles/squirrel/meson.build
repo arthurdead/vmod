@@ -20,9 +20,18 @@ cpp_args = [
 	'-include__protofix.h'
 ]
 
-cpp_internal_args = ['-DSQ_VAR_TRACE_ENABLED=0']
+enable_vartrace = false
 
-squirrel_lib = static_library('squirrel',
+if enable_vartrace
+	cpp_internal_args = ['-DSQ_VAR_TRACE_ENABLED=1']
+else
+	cpp_internal_args = ['-DSQ_VAR_TRACE_ENABLED=0']
+endif
+
+is_quirrel = true
+complete_squirrel = is_quirrel
+
+sources = [
 	files(
 		join_paths('squirrel','sqapi.cpp'),
 		join_paths('squirrel','sqbaselib.cpp'),
@@ -36,12 +45,73 @@ squirrel_lib = static_library('squirrel',
 		join_paths('squirrel','sqstate.cpp'),
 		join_paths('squirrel','sqtable.cpp'),
 		join_paths('squirrel','sqvm.cpp')
-	),
+	)
+]
+
+if is_quirrel
+	sources += [
+		files(
+			join_paths('squirrel','sqdirect.cpp'),
+			join_paths('squirrel','sqstringlib.cpp'),
+			join_paths('squirrel','sqoptimizer.cpp')
+		)
+	]
+
+	if enable_vartrace
+		sources += [
+			files(
+				join_paths('squirrel','vartrace.cpp')
+			)
+		]
+	else
+		sources += [
+			files(
+				join_paths('squirrel','vartracestub.cpp')
+			)
+		]
+	endif
+endif
+
+if complete_squirrel
+	sources += [
+		files(
+			join_paths('sqstdlib','sqstdaux.cpp'),
+			join_paths('sqstdlib','sqstdblob.cpp'),
+			join_paths('sqstdlib','sqstdio.cpp'),
+			join_paths('sqstdlib','sqstdmath.cpp'),
+			join_paths('sqstdlib','sqstdrex.cpp'),
+			join_paths('sqstdlib','sqstdstream.cpp'),
+			join_paths('sqstdlib','sqstdstring.cpp'),
+			join_paths('sqstdlib','sqstdsystem.cpp')
+		)
+	]
+
+	if is_quirrel
+		sources += [
+			files(
+				join_paths('sqstdlib','sqstddatetime.cpp')
+			)
+		]
+	endif
+endif
+
+if complete_squirrel and is_quirrel
+	sources += [
+		files(
+			join_paths('sqmodules','sqmodules.cpp'),
+			join_paths('sqmodules','path.cpp')
+		)
+	]
+endif
+
+squirrel_lib = static_library('squirrel',
+	sources,
 	cpp_args: cpp_args + cpp_internal_args,
 	gnu_symbol_visibility: 'inlineshidden',
 	include_directories:
 		include_directories(
-			'include'
+			'include',
+			'internal'
 		)
 )
 

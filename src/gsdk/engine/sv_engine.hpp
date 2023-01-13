@@ -60,8 +60,6 @@ namespace gsdk
 
 	constexpr unsigned long INVALID_EHANDLE_INDEX{0xFFFFFFFF};
 
-	constexpr int MAXPRINTMSG{4096};
-
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 	class IVEngineServer

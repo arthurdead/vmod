@@ -6,6 +6,10 @@
 #include "gsdk/engine/vsp.hpp"
 #include "gsdk/tier0/dbg.hpp"
 #include <cstring>
+#include <dlfcn.h>
+#ifdef __VMOD_USING_CUSTOM_VM
+#include "vm/squirrel_vm.hpp"
+#endif
 
 #include "plugin.hpp"
 #include "filesystem.hpp"
@@ -28,16 +32,45 @@
 
 namespace vmod
 {
-#if __has_include("vmod_base.nut.h")
-#ifdef __clang__
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+	namespace detail
+	{
+	#if __has_include("vmod_base.nut.h")
+	#ifdef __clang__
+		#pragma clang diagnostic push
+		#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+	#endif
+		#include "vmod_base.nut.h"
+	#ifdef __clang__
+		#pragma clang diagnostic pop
+	#endif
+		#define __VMOD_BASE_SCRIPT_HEADER_INCLUDED
+	#endif
+	}
+
+#ifdef __VMOD_BASE_SCRIPT_HEADER_INCLUDED
+	static std::string __vmod_base_script{reinterpret_cast<const char *>(detail::__vmod_base_script_data), sizeof(detail::__vmod_base_script_data)};
 #endif
-	#include "vmod_base.nut.h"
-#ifdef __clang__
-	#pragma clang diagnostic pop
-#endif
-	#define __VMOD_BASE_SCRIPT_HEADER_INCLUDED
+}
+
+namespace vmod
+{
+	namespace detail
+	{
+	#if __has_include("vmod_server_init.nut.h")
+	#ifdef __clang__
+		#pragma clang diagnostic push
+		#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+	#endif
+		#include "vmod_server_init.nut.h"
+	#ifdef __clang__
+		#pragma clang diagnostic pop
+	#endif
+		#define __VMOD_SERVER_SCRIPT_HEADER_INCLUDED
+	#endif
+	}
+
+#ifdef __VMOD_SERVER_SCRIPT_HEADER_INCLUDED
+	static std::string __vmod_server_init_script{reinterpret_cast<const char *>(detail::__vmod_server_init_script_data), sizeof(detail::__vmod_server_init_script_data)};
 #endif
 }
 
@@ -70,7 +103,11 @@ namespace vmod
 
 	main::~main() noexcept {}
 
-	static const unsigned char *g_Script_init{nullptr};
+#ifndef __VMOD_USING_CUSTOM_VM
+	static
+#endif
+	const unsigned char *g_Script_init{nullptr};
+
 	static const unsigned char *g_Script_vscript_server{nullptr};
 	static const unsigned char *g_Script_spawn_helper{nullptr};
 	static gsdk::IScriptVM **g_pScriptVM_ptr{nullptr};
@@ -82,17 +119,26 @@ namespace vmod
 #endif
 #if GSDK_ENGINE == GSDK_ENGINE_TF2
 	static void(gsdk::CTFGameRules::*RegisterScriptFunctions)() {nullptr};
+#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2
+	static void(gsdk::CPortalGameRules::*RegisterScriptFunctionsSP)() {nullptr};
+	static void(gsdk::CPortalMPGameRules::*RegisterScriptFunctionsMP)() {nullptr};
 #endif
 	static void(*PrintFunc)(HSQUIRRELVM, const SQChar *, ...) {nullptr};
 	static void(*ErrorFunc)(HSQUIRRELVM, const SQChar *, ...) {nullptr};
+#ifdef __VMOD_USING_CUSTOM_VM
+	static gsdk::IScriptVM *(*ScriptCreateSquirrelVM)() {nullptr};
+	static void (*ScriptDestroySquirrelVM)(gsdk::IScriptVM *) {nullptr};
+#endif
+#ifndef __VMOD_USING_CUSTOM_VM
 	static void(gsdk::IScriptVM::*RegisterFunctionGuts)(gsdk::ScriptFunctionBinding_t *, gsdk::ScriptClassDesc_t *) {nullptr};
+#endif
 	static void(gsdk::IScriptVM::*RegisterFunction)(gsdk::ScriptFunctionBinding_t *) {nullptr};
 	static bool(gsdk::IScriptVM::*RegisterClass)(gsdk::ScriptClassDesc_t *) {nullptr};
 	static gsdk::HSCRIPT(gsdk::IScriptVM::*RegisterInstance)(gsdk::ScriptClassDesc_t *, void *) {nullptr};
 	static bool(gsdk::IScriptVM::*SetValue_var)(gsdk::HSCRIPT, const char *, const gsdk::ScriptVariant_t &) {nullptr};
 	static bool(gsdk::IScriptVM::*SetValue_str)(gsdk::HSCRIPT, const char *, const char *) {nullptr};
 	static SQRESULT(*sq_setparamscheck)(HSQUIRRELVM, SQInteger, const SQChar *) {nullptr};
-#if GSDK_ENGINE == GSDK_ENGINE_TF2
+#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
 	static gsdk::ScriptClassDesc_t **sv_classdesc_pHead{nullptr};
 #endif
 	static gsdk::CUtlVector<gsdk::SendTable *> *g_SendTables{nullptr};
@@ -100,7 +146,11 @@ namespace vmod
 	static vscript::variant game_sq_versionnumber;
 	static vscript::variant game_sq_version;
 	static SQInteger game_sq_ver{-1};
+#ifdef __VMOD_USING_QUIRREL
+	static SQInteger curr_sq_ver[3]{-1,-1,-1};
+#else
 	static SQInteger curr_sq_ver{-1};
+#endif
 
 	static bool in_vscript_server_init{false};
 	static bool in_vscript_print{false};
@@ -118,9 +168,20 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
-		in_vscript_error = true;
-		bool ret{server_vs_error_cb(lvl, txt)};
-		in_vscript_error = false;
+		bool ret{false};
+		if(server_vs_error_cb) {
+			ret = server_vs_error_cb(lvl, txt);
+		} else {
+			switch(lvl) {
+				case gsdk::SCRIPT_LEVEL_ERROR: {
+					error("%s"sv, txt);
+				} break;
+				case gsdk::SCRIPT_LEVEL_WARNING: {
+					warning("%s"sv, txt);
+				} break;
+			}
+			ret = false;
+		}
 
 		return ret;
 	}
@@ -331,6 +392,7 @@ namespace vmod
 
 	static gsdk::ScriptFunctionBinding_t *current_binding{nullptr};
 
+#ifndef __VMOD_USING_CUSTOM_VM
 	static detour<decltype(RegisterFunctionGuts)> RegisterFunctionGuts_detour;
 	static void RegisterFunctionGuts_detour_callback(gsdk::IScriptVM *vm, gsdk::ScriptFunctionBinding_t *binding, gsdk::ScriptClassDesc_t *classdesc)
 	{
@@ -354,6 +416,7 @@ namespace vmod
 			}
 		}
 	}
+#endif
 
 	static detour<decltype(sq_setparamscheck)> sq_setparamscheck_detour;
 	static SQRESULT sq_setparamscheck_detour_callback(HSQUIRRELVM v, SQInteger nparamscheck, const SQChar *typemask)
@@ -605,6 +668,20 @@ namespace vmod
 		return ret;
 	}
 
+#ifdef __VMOD_USING_CUSTOM_VM
+	static detour<decltype(ScriptCreateSquirrelVM)> ScriptCreateSquirrelVM_detour;
+	static gsdk::IScriptVM *ScriptCreateSquirrelVM_detour_callback()
+	{
+		return new vm::squirrel_vm;
+	}
+
+	static detour<decltype(ScriptDestroySquirrelVM)> ScriptDestroySquirrelVM_detour;
+	static void ScriptDestroySquirrelVM_detour_callback(gsdk::IScriptVM *vm)
+	{
+		delete static_cast<vm::squirrel_vm *>(vm);
+	}
+#endif
+
 	bool main::detours_prevm() noexcept
 	{
 		if(RegisterFunction) {
@@ -632,15 +709,33 @@ namespace vmod
 			SetValue_var_detour.enable();
 		}
 
+	#ifdef __VMOD_USING_CUSTOM_VM
+		if(!ScriptCreateSquirrelVM) {
+			error("vmod: missing 'ScriptCreateSquirrelVM' address\n");
+			return false;
+		}
+		ScriptCreateSquirrelVM_detour.initialize(ScriptCreateSquirrelVM, ScriptCreateSquirrelVM_detour_callback);
+		ScriptCreateSquirrelVM_detour.enable();
+
+		if(!ScriptDestroySquirrelVM) {
+			error("vmod: missing 'ScriptDestroySquirrelVM' address\n");
+			return false;
+		}
+		ScriptDestroySquirrelVM_detour.initialize(ScriptDestroySquirrelVM, ScriptDestroySquirrelVM_detour_callback);
+		ScriptDestroySquirrelVM_detour.enable();
+	#endif
+
 		return true;
 	}
 
 	bool main::detours() noexcept
 	{
+	#ifndef __VMOD_USING_CUSTOM_VM
 		if(RegisterFunctionGuts) {
 			RegisterFunctionGuts_detour.initialize(RegisterFunctionGuts, RegisterFunctionGuts_detour_callback);
 			RegisterFunctionGuts_detour.enable();
 		}
+	#endif
 
 		if(sq_setparamscheck) {
 			sq_setparamscheck_detour.initialize(sq_setparamscheck, sq_setparamscheck_detour_callback);
@@ -743,13 +838,6 @@ namespace vmod
 		using namespace std::literals::string_literals;
 		using namespace std::literals::string_view_literals;
 
-	#ifndef GSDK_NO_SYMBOLS
-		if(!symbol_cache::initialize()) {
-			std::cout << "\033[0;31m"sv << "vmod: failed to initialize symbol cache\n"sv << "\033[0m"sv;
-			return false;
-		}
-	#endif
-
 		std::filesystem::path exe_filename;
 
 		{
@@ -758,6 +846,25 @@ namespace vmod
 			exe[len] = '\0';
 
 			exe_filename = exe;
+		}
+
+		{
+			Dl_info info;
+			dladdr(reinterpret_cast<void *>(::CreateInterface), &info);
+
+			std::filesystem::path lib_path{info.dli_fname};
+
+			std::filesystem::path addons_dir{lib_path.parent_path()};
+
+			game_dir_ = addons_dir.parent_path();
+
+			root_dir_ = addons_dir;
+			root_dir_ /= "vmod"sv;
+		}
+
+		if(!symbol_cache::initialize()) {
+			std::cout << "\033[0;31m"sv << "vmod: failed to initialize symbol cache\n"sv << "\033[0m"sv;
+			return false;
 		}
 
 		bin_folder = exe_filename.parent_path();
@@ -794,6 +901,9 @@ namespace vmod
 		}
 
 	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
+		SpewActivate("*", 0);
+		SpewActivate("console", 0);
+		SpewActivate("developer", 0);
 		old_spew = GetSpewOutputFunc();
 		SpewOutputFunc(new_spew);
 	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
@@ -811,6 +921,16 @@ namespace vmod
 			error("vmod: failed to open engine library: '%s'\n"sv, engine_lib.error_string().c_str());
 			return false;
 		}
+
+		{
+			char gamedir[PATH_MAX];
+			sv_engine->GetGameDir(gamedir, sizeof(gamedir));
+
+			game_dir_ = gamedir;
+		}
+
+		root_dir_ = game_dir_;
+		root_dir_ /= "addons/vmod"sv;
 
 		//TODO!!!
 	#if 0
@@ -832,30 +952,18 @@ namespace vmod
 		}
 	#endif
 
-	#ifndef GSDK_NO_SYMBOLS
-		if(!symbols_available) {
+		{
 			const auto &eng_symbols{engine_lib.symbols()};
 			const auto &eng_global_qual{eng_symbols.global()};
 
 			auto g_SendTables_it{eng_global_qual.find("g_SendTables"s)};
 			if(g_SendTables_it == eng_global_qual.end()) {
-				error("vmod: missing 'g_SendTables' symbol\n"sv);
-				return false;
+				warning("vmod: missing 'g_SendTables' symbol\n"sv);
 			}
 
-			g_SendTables = g_SendTables_it->second->addr<gsdk::CUtlVector<gsdk::SendTable *> *>();
-		} else {
-	#endif
-
-	#ifndef GSDK_NO_SYMBOLS
-		}
-	#endif
-
-		{
-			char gamedir[PATH_MAX];
-			sv_engine->GetGameDir(gamedir, sizeof(gamedir));
-
-			game_dir_ = gamedir;
+			if(g_SendTables_it != eng_global_qual.end()) {
+				g_SendTables = g_SendTables_it->second->addr<gsdk::CUtlVector<gsdk::SendTable *> *>();
+			}
 		}
 
 		std::string_view filesystem_lib_name{"filesystem_stdio.so"sv};
@@ -877,9 +985,6 @@ namespace vmod
 		}
 
 		cvar_dll_id_ = cvar->AllocateDLLIdentifier();
-
-		root_dir_ = game_dir_;
-		root_dir_ /= "addons/vmod"sv;
 
 		{
 			std::filesystem::path assets_dir{root_dir_};
@@ -922,53 +1027,35 @@ namespace vmod
 			return false;
 		}
 
-	#ifndef GSDK_NO_SYMBOLS
-		if(symbols_available) {
+		{
 			const auto &vscript_symbols{vscript_lib.symbols()};
 			const auto &vscript_global_qual{vscript_symbols.global()};
 
-			auto CSquirrelVM_it{vscript_symbols.find("CSquirrelVM"s)};
-			if(CSquirrelVM_it == vscript_symbols.end()) {
-				error("vmod: missing 'CSquirrelVM' symbols\n"sv);
+			auto g_Script_init_it{vscript_global_qual.find("g_Script_init"s)};
+			if(g_Script_init_it == vscript_global_qual.end()) {
+			#ifndef __VMOD_USING_CUSTOM_VM
+				warning("vmod: missing 'g_Script_init' symbol\n");
+			#else
+				error("vmod: missing 'g_Script_init' symbol\n");
+				return false;
+			#endif
+			}
+
+		#ifdef __VMOD_USING_CUSTOM_VM
+			auto ScriptCreateSquirrelVM_it{vscript_global_qual.find("ScriptCreateSquirrelVM()"s)};
+			if(ScriptCreateSquirrelVM_it == vscript_global_qual.end()) {
+				error("vmod: missing 'ScriptCreateSquirrelVM' symbol\n");
 				return false;
 			}
 
-		#if GSDK_ENGINE == GSDK_ENGINE_TF2
-			auto CreateArray_it{CSquirrelVM_it->second->find("CreateArray(CVariantBase<CVariantDefaultAllocator>&)"s)};
-			if(CreateArray_it == CSquirrelVM_it->second->end()) {
-				error("vmod: missing 'CSquirrelVM::CreateArray(CVariantBase<CVariantDefaultAllocator>&)' symbol\n"sv);
-				return false;
-			}
-
-			auto GetArrayCount_it{CSquirrelVM_it->second->find("GetArrayCount(HSCRIPT__*)"s)};
-			if(GetArrayCount_it == CSquirrelVM_it->second->end()) {
-				error("vmod: missing 'CSquirrelVM::GetArrayCount(HSCRIPT__*)' symbol\n"sv);
-				return false;
-			}
-
-			auto IsArray_it{CSquirrelVM_it->second->find("IsArray(HSCRIPT__*)"s)};
-			if(IsArray_it == CSquirrelVM_it->second->end()) {
-				error("vmod: missing 'CSquirrelVM::IsArray(HSCRIPT__*)' symbol\n"sv);
-				return false;
-			}
-
-			auto IsTable_it{CSquirrelVM_it->second->find("IsTable(HSCRIPT__*)"s)};
-			if(IsTable_it == CSquirrelVM_it->second->end()) {
-				error("vmod: missing 'CSquirrelVM::IsTable(HSCRIPT__*)' symbol\n"sv);
+			auto ScriptDestroySquirrelVM_it{vscript_global_qual.find("ScriptDestroySquirrelVM(IScriptVM*)"s)};
+			if(ScriptDestroySquirrelVM_it == vscript_global_qual.end()) {
+				error("vmod: missing 'ScriptDestroySquirrelVM' symbol\n");
 				return false;
 			}
 		#endif
 
-			auto PrintFunc_it{CSquirrelVM_it->second->find("PrintFunc(SQVM*, char const*, ...)"s)};
-			if(PrintFunc_it == CSquirrelVM_it->second->end()) {
-				warning("vmod: missing 'CSquirrelVM::PrintFunc(SQVM*, char const*, ...)' symbol\n"sv);
-			}
-
-			auto ErrorFunc_it{CSquirrelVM_it->second->find("ErrorFunc(SQVM*, char const*, ...)"s)};
-			if(ErrorFunc_it == CSquirrelVM_it->second->end()) {
-				warning("vmod: missing 'CSquirrelVM::ErrorFunc(SQVM*, char const*, ...)' symbol\n"sv);
-			}
-
+		#ifndef __VMOD_USING_CUSTOM_VM
 			auto sq_getversion_it{vscript_global_qual.find("sq_getversion"s)};
 			if(sq_getversion_it == vscript_global_qual.end()) {
 				warning("vmod: missing 'sq_getversion' symbol\n"sv);
@@ -978,98 +1065,170 @@ namespace vmod
 			if(sq_setparamscheck_it == vscript_global_qual.end()) {
 				warning("vmod: missing 'sq_setparamscheck' symbol\n"sv);
 			}
+		#endif
 
-			auto RegisterFunctionGuts_it{CSquirrelVM_it->second->find("RegisterFunctionGuts(ScriptFunctionBinding_t*, ScriptClassDesc_t*)"s)};
-			if(RegisterFunctionGuts_it == CSquirrelVM_it->second->end()) {
-				warning("vmod: missing 'CSquirrelVM::RegisterFunctionGuts(ScriptFunctionBinding_t*, ScriptClassDesc_t*)' symbol\n"sv);
+		#ifndef __VMOD_USING_CUSTOM_VM
+			auto CSquirrelVM_it{vscript_symbols.find("CSquirrelVM"s)};
+			if(CSquirrelVM_it == vscript_symbols.end()) {
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2
+				error("vmod: missing 'CSquirrelVM' symbols\n"sv);
+				return false;
+			#else
+				warning("vmod: missing 'CSquirrelVM' symbols\n"sv);
+			#endif
 			}
 
-			auto RegisterFunction_it{CSquirrelVM_it->second->find("RegisterFunction(ScriptFunctionBinding_t*)"s)};
-			if(RegisterFunction_it == CSquirrelVM_it->second->end()) {
-				warning("vmod: missing 'CSquirrelVM::RegisterFunction(ScriptFunctionBinding_t*)' symbol\n"sv);
-			}
+			if(CSquirrelVM_it != vscript_symbols.end()) {
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2
+				auto CreateArray_it{CSquirrelVM_it->second->find("CreateArray(CVariantBase<CVariantDefaultAllocator>&)"s)};
+				if(CreateArray_it == CSquirrelVM_it->second->end()) {
+					error("vmod: missing 'CSquirrelVM::CreateArray(CVariantBase<CVariantDefaultAllocator>&)' symbol\n"sv);
+					return false;
+				}
 
-			auto RegisterClass_it{CSquirrelVM_it->second->find("RegisterClass(ScriptClassDesc_t*)"s)};
-			if(RegisterClass_it == CSquirrelVM_it->second->end()) {
-				warning("vmod: missing 'CSquirrelVM::RegisterClass(ScriptClassDesc_t*)' symbol\n"sv);
-			}
+				auto GetArrayCount_it{CSquirrelVM_it->second->find("GetArrayCount(HSCRIPT__*)"s)};
+				if(GetArrayCount_it == CSquirrelVM_it->second->end()) {
+					error("vmod: missing 'CSquirrelVM::GetArrayCount(HSCRIPT__*)' symbol\n"sv);
+					return false;
+				}
 
-			auto RegisterInstance_it{CSquirrelVM_it->second->find("RegisterInstance(ScriptClassDesc_t*, void*)"s)};
-			if(RegisterInstance_it == CSquirrelVM_it->second->end()) {
-				warning("vmod: missing 'CSquirrelVM::RegisterInstance(ScriptClassDesc_t*, void*)' symbol\n"sv);
-			}
+				auto IsArray_it{CSquirrelVM_it->second->find("IsArray(HSCRIPT__*)"s)};
+				if(IsArray_it == CSquirrelVM_it->second->end()) {
+					error("vmod: missing 'CSquirrelVM::IsArray(HSCRIPT__*)' symbol\n"sv);
+					return false;
+				}
 
-			auto SetValue_str_it{CSquirrelVM_it->second->find("SetValue(HSCRIPT__*, char const*, char const*)"s)};
-			if(SetValue_str_it == CSquirrelVM_it->second->end()) {
-				warning("vmod: missing 'CSquirrelVM::SetValue(HSCRIPT__*, char const*, char const*)' symbol\n"sv);
-			}
+				auto IsTable_it{CSquirrelVM_it->second->find("IsTable(HSCRIPT__*)"s)};
+				if(IsTable_it == CSquirrelVM_it->second->end()) {
+					error("vmod: missing 'CSquirrelVM::IsTable(HSCRIPT__*)' symbol\n"sv);
+					return false;
+				}
+			#endif
 
-			auto SetValue_var_it{CSquirrelVM_it->second->find("SetValue(HSCRIPT__*, char const*, CVariantBase<CVariantDefaultAllocator> const&)"s)};
-			if(SetValue_var_it == CSquirrelVM_it->second->end()) {
-				warning("vmod: missing 'CSquirrelVM::SetValue(HSCRIPT__*, char const*, CVariantBase<CVariantDefaultAllocator> const&)' symbol\n"sv);
-			}
+				auto PrintFunc_it{CSquirrelVM_it->second->find("PrintFunc(SQVM*, char const*, ...)"s)};
+				if(PrintFunc_it == CSquirrelVM_it->second->end()) {
+					warning("vmod: missing 'CSquirrelVM::PrintFunc(SQVM*, char const*, ...)' symbol\n"sv);
+				}
 
-			auto g_Script_init_it{vscript_global_qual.find("g_Script_init"s)};
-			if(g_Script_init_it == vscript_global_qual.end()) {
-				warning("vmod: missing 'g_Script_init' symbol\n");
-			}
+				auto ErrorFunc_it{CSquirrelVM_it->second->find("ErrorFunc(SQVM*, char const*, ...)"s)};
+				if(ErrorFunc_it == CSquirrelVM_it->second->end()) {
+					warning("vmod: missing 'CSquirrelVM::ErrorFunc(SQVM*, char const*, ...)' symbol\n"sv);
+				}
 
-			if(RegisterFunction_it != CSquirrelVM_it->second->end()) {
-				RegisterFunction = RegisterFunction_it->second->mfp<decltype(RegisterFunction)>();
-			}
+				auto RegisterFunctionGuts_it{CSquirrelVM_it->second->find("RegisterFunctionGuts(ScriptFunctionBinding_t*, ScriptClassDesc_t*)"s)};
+				if(RegisterFunctionGuts_it == CSquirrelVM_it->second->end()) {
+					warning("vmod: missing 'CSquirrelVM::RegisterFunctionGuts(ScriptFunctionBinding_t*, ScriptClassDesc_t*)' symbol\n"sv);
+				}
 
-			if(RegisterClass_it != CSquirrelVM_it->second->end()) {
-				RegisterClass = RegisterClass_it->second->mfp<decltype(RegisterClass)>();
-			}
+				auto RegisterFunction_it{CSquirrelVM_it->second->find("RegisterFunction(ScriptFunctionBinding_t*)"s)};
+				if(RegisterFunction_it == CSquirrelVM_it->second->end()) {
+					warning("vmod: missing 'CSquirrelVM::RegisterFunction(ScriptFunctionBinding_t*)' symbol\n"sv);
+				}
 
-			if(RegisterInstance_it != CSquirrelVM_it->second->end()) {
-				RegisterInstance = RegisterInstance_it->second->mfp<decltype(RegisterInstance)>();
-			}
+				auto RegisterClass_it{CSquirrelVM_it->second->find("RegisterClass(ScriptClassDesc_t*)"s)};
+				if(RegisterClass_it == CSquirrelVM_it->second->end()) {
+					warning("vmod: missing 'CSquirrelVM::RegisterClass(ScriptClassDesc_t*)' symbol\n"sv);
+				}
 
-			if(SetValue_str_it != CSquirrelVM_it->second->end()) {
-				SetValue_str = SetValue_str_it->second->mfp<decltype(SetValue_str)>();
-			}
+				auto RegisterInstance_it{CSquirrelVM_it->second->find("RegisterInstance(ScriptClassDesc_t*, void*)"s)};
+				if(RegisterInstance_it == CSquirrelVM_it->second->end()) {
+					warning("vmod: missing 'CSquirrelVM::RegisterInstance(ScriptClassDesc_t*, void*)' symbol\n"sv);
+				}
 
-			if(SetValue_var_it != CSquirrelVM_it->second->end()) {
-				SetValue_var = SetValue_var_it->second->mfp<decltype(SetValue_var)>();
-			}
+				auto SetValue_str_it{CSquirrelVM_it->second->find("SetValue(HSCRIPT__*, char const*, char const*)"s)};
+				if(SetValue_str_it == CSquirrelVM_it->second->end()) {
+					warning("vmod: missing 'CSquirrelVM::SetValue(HSCRIPT__*, char const*, char const*)' symbol\n"sv);
+				}
 
-			if(g_Script_init_it != vscript_global_qual.end()) {
-				g_Script_init = g_Script_init_it->second->addr<const unsigned char *>();
-			}
+				auto SetValue_var_it{CSquirrelVM_it->second->find("SetValue(HSCRIPT__*, char const*, CVariantBase<CVariantDefaultAllocator> const&)"s)};
+				if(SetValue_var_it == CSquirrelVM_it->second->end()) {
+					warning("vmod: missing 'CSquirrelVM::SetValue(HSCRIPT__*, char const*, CVariantBase<CVariantDefaultAllocator> const&)' symbol\n"sv);
+				}
 
+				if(RegisterFunction_it != CSquirrelVM_it->second->end()) {
+					RegisterFunction = RegisterFunction_it->second->mfp<decltype(RegisterFunction)>();
+				}
+
+				if(RegisterClass_it != CSquirrelVM_it->second->end()) {
+					RegisterClass = RegisterClass_it->second->mfp<decltype(RegisterClass)>();
+				}
+
+				if(RegisterInstance_it != CSquirrelVM_it->second->end()) {
+					RegisterInstance = RegisterInstance_it->second->mfp<decltype(RegisterInstance)>();
+				}
+
+				if(SetValue_str_it != CSquirrelVM_it->second->end()) {
+					SetValue_str = SetValue_str_it->second->mfp<decltype(SetValue_str)>();
+				}
+
+				if(SetValue_var_it != CSquirrelVM_it->second->end()) {
+					SetValue_var = SetValue_var_it->second->mfp<decltype(SetValue_var)>();
+				}
+
+				if(PrintFunc_it != CSquirrelVM_it->second->end()) {
+					PrintFunc = PrintFunc_it->second->func<decltype(PrintFunc)>();
+				}
+
+				if(ErrorFunc_it != CSquirrelVM_it->second->end()) {
+					ErrorFunc = ErrorFunc_it->second->func<decltype(ErrorFunc)>();
+				}
+
+				if(RegisterFunctionGuts_it != CSquirrelVM_it->second->end()) {
+					RegisterFunctionGuts = RegisterFunctionGuts_it->second->mfp<decltype(RegisterFunctionGuts)>();
+				}
+
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2
+				gsdk::IScriptVM::CreateArray_ptr = CreateArray_it->second->mfp<decltype(gsdk::IScriptVM::CreateArray_ptr)>();
+				gsdk::IScriptVM::GetArrayCount_ptr = GetArrayCount_it->second->mfp<decltype(gsdk::IScriptVM::GetArrayCount_ptr)>();
+				gsdk::IScriptVM::IsArray_ptr = IsArray_it->second->mfp<decltype(gsdk::IScriptVM::IsArray_ptr)>();
+				gsdk::IScriptVM::IsTable_ptr = IsTable_it->second->mfp<decltype(gsdk::IScriptVM::IsTable_ptr)>();
+			#endif
+			}
+		#else
+			RegisterFunction = reinterpret_cast<decltype(RegisterFunction)>(&vm::squirrel_vm::RegisterFunction_nonvirtual);
+			RegisterClass = reinterpret_cast<decltype(RegisterClass)>(&vm::squirrel_vm::RegisterClass_nonvirtual);
+			RegisterInstance = reinterpret_cast<decltype(RegisterInstance)>(&vm::squirrel_vm::RegisterInstance_impl_nonvirtual);
+			SetValue_str = reinterpret_cast<decltype(SetValue_str)>(static_cast<bool(vm::squirrel_vm::*)(gsdk::HSCRIPT, const char *, const char *)>(&vm::squirrel_vm::SetValue_nonvirtual));
+			SetValue_var = reinterpret_cast<decltype(SetValue_var)>(static_cast<bool(vm::squirrel_vm::*)(gsdk::HSCRIPT, const char *, const gsdk::ScriptVariant_t &)>(&vm::squirrel_vm::SetValue_impl_nonvirtual));
+			PrintFunc = vm::squirrel_vm::print_func;
+			ErrorFunc = vm::squirrel_vm::error_func;
+
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2
+			gsdk::IScriptVM::CreateArray_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::CreateArray_ptr)>(&vm::squirrel_vm::CreateArray_impl_nonvirtual);
+			gsdk::IScriptVM::GetArrayCount_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::GetArrayCount_ptr)>(&vm::squirrel_vm::GetArrayCount_nonvirtual);
+			gsdk::IScriptVM::IsArray_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::IsArray_ptr)>(&vm::squirrel_vm::IsArray_nonvirtual);
+			gsdk::IScriptVM::IsTable_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::IsTable_ptr)>(&vm::squirrel_vm::IsTable_nonvirtual);
+			#endif
+		#endif
+
+		#ifndef __VMOD_USING_CUSTOM_VM
 			if(sq_getversion_it != vscript_global_qual.end()) {
 				game_sq_ver = sq_getversion_it->second->func<decltype(::sq_getversion)>()();
-			}
-
-			if(PrintFunc_it != CSquirrelVM_it->second->end()) {
-				PrintFunc = PrintFunc_it->second->func<decltype(PrintFunc)>();
-			}
-
-			if(ErrorFunc_it != CSquirrelVM_it->second->end()) {
-				ErrorFunc = ErrorFunc_it->second->func<decltype(ErrorFunc)>();
-			}
-
-			if(RegisterFunctionGuts_it != CSquirrelVM_it->second->end()) {
-				RegisterFunctionGuts = RegisterFunctionGuts_it->second->mfp<decltype(RegisterFunctionGuts)>();
 			}
 
 			if(sq_setparamscheck_it != vscript_global_qual.end()) {
 				sq_setparamscheck = sq_setparamscheck_it->second->func<decltype(sq_setparamscheck)>();
 			}
+		#else
+			#ifndef __VMOD_USING_QUIRREL
+			game_sq_ver = ::sq_getversion();
+			#endif
 
-		#if GSDK_ENGINE == GSDK_ENGINE_TF2
-			gsdk::IScriptVM::CreateArray_ptr = CreateArray_it->second->mfp<decltype(gsdk::IScriptVM::CreateArray_ptr)>();
-			gsdk::IScriptVM::GetArrayCount_ptr = GetArrayCount_it->second->mfp<decltype(gsdk::IScriptVM::GetArrayCount_ptr)>();
-			gsdk::IScriptVM::IsArray_ptr = IsArray_it->second->mfp<decltype(gsdk::IScriptVM::IsArray_ptr)>();
-			gsdk::IScriptVM::IsTable_ptr = IsTable_it->second->mfp<decltype(gsdk::IScriptVM::IsTable_ptr)>();
+			sq_setparamscheck = ::sq_setparamscheck;
 		#endif
-		} else {
-	#endif
-			
-	#ifndef GSDK_NO_SYMBOLS
+
+		#ifndef __VMOD_USING_CUSTOM_VM
+			if(g_Script_init_it != vscript_global_qual.end())
+		#endif
+			{
+				g_Script_init = g_Script_init_it->second->addr<const unsigned char *>();
+			}
+
+		#ifdef __VMOD_USING_CUSTOM_VM
+			ScriptCreateSquirrelVM = ScriptCreateSquirrelVM_it->second->func<decltype(ScriptCreateSquirrelVM)>();
+			ScriptDestroySquirrelVM = ScriptDestroySquirrelVM_it->second->func<decltype(ScriptDestroySquirrelVM)>();
+		#endif
 		}
-	#endif
 
 		std::filesystem::path server_lib_name{game_dir_};
 		server_lib_name /= "bin"sv;
@@ -1086,8 +1245,7 @@ namespace vmod
 			return false;
 		}
 
-	#ifndef GSDK_NO_SYMBOLS
-		if(symbols_available) {
+		{
 			const auto &sv_symbols{server_lib.symbols()};
 			const auto &sv_global_qual{sv_symbols.global()};
 
@@ -1115,13 +1273,13 @@ namespace vmod
 				return false;
 			}
 
-		#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
 			auto VScriptServerRunScript_it{sv_global_qual.find("VScriptRunScript(char const*, HSCRIPT__*, bool)"s)};
 			if(VScriptServerRunScript_it == sv_global_qual.end()) {
 				error("vmod: missing 'VScriptRunScript' symbol\n"sv);
 				return false;
 			}
-		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, <=, GSDK_ENGINE_BRANCH_2010_V0)
 			auto VScriptServerRunScript_it{sv_global_qual.find("VScriptServerRunScript(char const*, HSCRIPT__*, bool)"s)};
 			if(VScriptServerRunScript_it == sv_global_qual.end()) {
 				error("vmod: missing 'VScriptServerRunScript' symbol\n"sv);
@@ -1151,6 +1309,30 @@ namespace vmod
 				error("vmod: missing 'CTFGameRules::RegisterScriptFunctions()' symbol\n"sv);
 				return false;
 			}
+		#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2
+			auto CPortalGameRules_it{sv_symbols.find("CPortalGameRules"s)};
+			if(CPortalGameRules_it == sv_symbols.end()) {
+				error("vmod: missing 'CPortalGameRules' symbols\n"sv);
+				return false;
+			}
+
+			auto RegisterScriptFunctionsSP_it{CPortalGameRules_it->second->find("RegisterScriptFunctions()"s)};
+			if(RegisterScriptFunctionsSP_it == CPortalGameRules_it->second->end()) {
+				error("vmod: missing 'CPortalGameRules::RegisterScriptFunctions()' symbol\n"sv);
+				return false;
+			}
+
+			auto CPortalMPGameRules_it{sv_symbols.find("CPortalMPGameRules"s)};
+			if(CPortalMPGameRules_it == sv_symbols.end()) {
+				error("vmod: missing 'CPortalMPGameRules' symbols\n"sv);
+				return false;
+			}
+
+			auto RegisterScriptFunctionsMP_it{CPortalMPGameRules_it->second->find("RegisterScriptFunctions()"s)};
+			if(RegisterScriptFunctionsMP_it == CPortalMPGameRules_it->second->end()) {
+				error("vmod: missing 'CPortalMPGameRules::RegisterScriptFunctions()' symbol\n"sv);
+				return false;
+			}
 		#endif
 
 			auto CBaseEntity_it{sv_symbols.find("CBaseEntity"s)};
@@ -1171,7 +1353,7 @@ namespace vmod
 				return false;
 			}
 
-		#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
 			auto sv_ScriptClassDesc_t_it{sv_symbols.find("ScriptClassDesc_t"s)};
 			if(sv_ScriptClassDesc_t_it == sv_symbols.end()) {
 				error("vmod: missing 'ScriptClassDesc_t' symbol\n"sv);
@@ -1215,7 +1397,7 @@ namespace vmod
 				}
 			}
 
-		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, <=, GSDK_ENGINE_BRANCH_2010_V0)
 			for(const auto &it : sv_global_qual) {
 				if(it.first.starts_with("ScriptClassDesc_t* GetScriptDesc<"sv)) {
 					gsdk::ScriptClassDesc_t *tmp_desc{it.second->func<gsdk::ScriptClassDesc_t *(*)(generic_object_t *)>()(nullptr)};
@@ -1236,6 +1418,9 @@ namespace vmod
 
 		#if GSDK_ENGINE == GSDK_ENGINE_TF2
 			RegisterScriptFunctions = RegisterScriptFunctions_it->second->mfp<decltype(RegisterScriptFunctions)>();
+		#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2
+			RegisterScriptFunctionsSP = RegisterScriptFunctionsSP_it->second->mfp<decltype(RegisterScriptFunctionsSP)>();
+			RegisterScriptFunctionsMP = RegisterScriptFunctionsMP_it->second->mfp<decltype(RegisterScriptFunctionsMP)>();
 		#endif
 
 			VScriptServerInit = VScriptServerInit_it->second->func<decltype(VScriptServerInit)>();
@@ -1248,7 +1433,7 @@ namespace vmod
 			g_pScriptVM_ptr = g_pScriptVM_it->second->addr<gsdk::IScriptVM **>();
 			gsdk::g_pScriptVM = *g_pScriptVM_ptr;
 
-		#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
 			sv_classdesc_pHead = sv_pHead_it->second->addr<gsdk::ScriptClassDesc_t **>();
 		#endif
 
@@ -1256,19 +1441,18 @@ namespace vmod
 
 			gsdk::CBaseEntity::UpdateOnRemove_vindex = UpdateOnRemove_it->second->virtual_index();
 			gsdk::CBaseEntity::GetScriptInstance_ptr = GetScriptInstance_it->second->mfp<decltype(gsdk::CBaseEntity::GetScriptInstance_ptr)>();
+		}
 
-		#if GSDK_ENGINE == GSDK_ENGINE_TF2
-			gsdk::ScriptClassDesc_t *tmp_desc{*sv_classdesc_pHead};
-			while(tmp_desc) {
-				std::string descname{tmp_desc->m_pszClassname};
-				sv_script_class_descs.emplace(std::move(descname), tmp_desc);
-				tmp_desc = tmp_desc->m_pNextDesc;
-			}
-		#endif
-		} else {
-	#endif
-
-	#ifndef GSDK_NO_SYMBOLS
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
+		if(!sv_classdesc_pHead) {
+			error("vmod: missing 'ScriptClassDesc_t::GetDescList()::pHead' address\n");
+			return false;
+		}
+		gsdk::ScriptClassDesc_t *tmp_desc{*sv_classdesc_pHead};
+		while(tmp_desc) {
+			std::string descname{tmp_desc->m_pszClassname};
+			sv_script_class_descs.emplace(std::move(descname), tmp_desc);
+			tmp_desc = tmp_desc->m_pNextDesc;
 		}
 	#endif
 
@@ -1283,9 +1467,10 @@ namespace vmod
 		}
 
 		{
-		#if SQUIRREL_VERSION_NUMBER >= 303
+		#ifndef __VMOD_USING_QUIRREL
+			#if SQUIRREL_VERSION_NUMBER >= 303
 			curr_sq_ver = ::sq_getversion();
-		#endif
+			#endif
 
 			if(curr_sq_ver != -1) {
 				if(curr_sq_ver != SQUIRREL_VERSION_NUMBER) {
@@ -1316,6 +1501,7 @@ namespace vmod
 					warning("vmod: mismatched squirrel versions '%s' vs '%s'\n"sv, _version_.data(), SQUIRREL_VERSION);
 				}
 			}
+		#endif
 		}
 
 		if(entityfactorydict) {
@@ -1372,12 +1558,13 @@ namespace vmod
 				base_script = vm_->CompileScript(reinterpret_cast<const char *>(script_data.get()), base_script_path.c_str());
 				if(!base_script || base_script == gsdk::INVALID_HSCRIPT) {
 				#ifndef __VMOD_BASE_SCRIPT_HEADER_INCLUDED
-					error("vmod: failed to compile base script '%s'\n"sv, base_script_path.c_str());
+					error("vmod: failed to compile base script from file '%s'\n"sv, base_script_path.c_str());
 					return false;
 				#else
-					base_script = vm_->CompileScript(reinterpret_cast<const char *>(__vmod_base_script), base_script_name.c_str());
+					error("vmod: failed to compile base script from file '%s' re-trying with embedded\n"sv, base_script_path.c_str());
+					base_script = vm_->CompileScript(__vmod_base_script.c_str(), base_script_name.c_str());
 					if(!base_script || base_script == gsdk::INVALID_HSCRIPT) {
-						error("vmod: failed to compile base script\n"sv);
+						error("vmod: failed to compile embedded base script\n"sv);
 						return false;
 					}
 				#endif
@@ -1387,12 +1574,12 @@ namespace vmod
 			}
 		} else {
 		#ifndef __VMOD_BASE_SCRIPT_HEADER_INCLUDED
-			error("vmod: missing base script '%s'\n"sv, base_script_path.c_str());
+			error("vmod: missing base script file '%s'\n"sv, base_script_path.c_str());
 			return false;
 		#else
-			base_script = vm_->CompileScript(reinterpret_cast<const char *>(__vmod_base_script), base_script_name.c_str());
+			base_script = vm_->CompileScript(__vmod_base_script.c_str(), base_script_name.c_str());
 			if(!base_script || base_script == gsdk::INVALID_HSCRIPT) {
-				error("vmod: failed to compile base script\n"sv);
+				error("vmod: failed to compile embedded base script\n"sv);
 				return false;
 			}
 		#endif
@@ -1406,19 +1593,58 @@ namespace vmod
 
 		if(vm_->Run(base_script, base_script_scope, true) == gsdk::SCRIPT_ERROR) {
 			if(base_script_from_file) {
-				error("vmod: failed to run base script '%s'\n"sv, base_script_path.c_str());
+				error("vmod: failed to run base script from file '%s'\n"sv, base_script_path.c_str());
 			} else {
-				error("vmod: failed to run base script\n"sv);
+				error("vmod: failed to run embedded base script\n"sv);
 			}
 			return false;
 		}
 
 		if(vm_->GetLanguage() == gsdk::SL_SQUIRREL) {
+		#if defined __VMOD_USING_CUSTOM_VM && defined __VMOD_USING_QUIRREL
+			std::filesystem::path server_init_path{root_dir_};
+
+			server_init_path /= "base"sv;
+			server_init_path /= "vmod_server_init.nut"sv;
+
+			if(std::filesystem::exists(server_init_path)) {
+				{
+					std::unique_ptr<unsigned char[]> script_data{read_file(server_init_path)};
+
+					server_init_script = vm_->CompileScript(reinterpret_cast<const char *>(script_data.get()), server_init_path.c_str());
+					if(!server_init_script || server_init_script == gsdk::INVALID_HSCRIPT) {
+					#ifndef __VMOD_SERVER_SCRIPT_HEADER_INCLUDED
+						error("vmod: failed to compile server init script from file '%s'\n"sv, server_init_path.c_str());
+						return false;
+					#else
+						error("vmod: failed to compile server init script from file '%s' re-trying with embedded\n"sv, server_init_path.c_str());
+						server_init_script = vm_->CompileScript(__vmod_server_init_script.c_str(), "vscript_server.nut");
+						if(!server_init_script || server_init_script == gsdk::INVALID_HSCRIPT) {
+							error("vmod: failed to compile embedded base script\n"sv);
+							return false;
+						}
+					#endif
+					}
+				}
+			} else {
+			#ifndef __VMOD_SERVER_SCRIPT_HEADER_INCLUDED
+				error("vmod: missing server init script file '%s'\n"sv, server_init_path.c_str());
+				return false;
+			#else
+				server_init_script = vm_->CompileScript(__vmod_server_init_script.c_str(), "vscript_server.nut");
+				if(!server_init_script || server_init_script == gsdk::INVALID_HSCRIPT) {
+					error("vmod: failed to compile embedded server init script\n"sv);
+					return false;
+				}
+			#endif
+			}
+		#else
 			server_init_script = vm_->CompileScript(reinterpret_cast<const char *>(g_Script_vscript_server), "vscript_server.nut");
 			if(!server_init_script || server_init_script == gsdk::INVALID_HSCRIPT) {
 				error("vmod: failed to compile server init script\n"sv);
 				return false;
 			}
+		#endif
 		} else {
 			error("vmod: server init script not supported on this language\n"sv);
 			return false;
@@ -1429,7 +1655,7 @@ namespace vmod
 			return false;
 		}
 
-	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, <=, GSDK_ENGINE_BRANCH_2010_V0)
 		for(const auto &it : sv_script_class_descs) {
 			if(!RegisterClass_detour_callback(vm_, it.second)) {
 				error("vmod: failed to register '%s' script class\n"sv, it.first.c_str());
@@ -1444,7 +1670,22 @@ namespace vmod
 		}
 
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		if(!RegisterScriptFunctions) {
+			error("vmod: missing 'CTFGameRules::RegisterScriptFunctions' address\n");
+			return false;
+		}
 		(reinterpret_cast<gsdk::CTFGameRules *>(uninitialized_memory)->*RegisterScriptFunctions)();
+	#elif GSDK_ENGINE == GSDK_ENGINE_PORTAL2
+		if(!RegisterScriptFunctionsSP) {
+			error("vmod: missing 'CPortalGameRules::RegisterScriptFunctions' address\n");
+			return false;
+		}
+		(reinterpret_cast<gsdk::CPortalGameRules *>(uninitialized_memory)->*RegisterScriptFunctionsSP)();
+		if(!RegisterScriptFunctionsMP) {
+			error("vmod: missing 'CPortalMPGameRules::RegisterScriptFunctions' address\n");
+			return false;
+		}
+		(reinterpret_cast<gsdk::CPortalMPGameRules *>(uninitialized_memory)->*RegisterScriptFunctionsMP)();
 	#endif
 
 		vscript_server_init_called = true;
@@ -1462,27 +1703,27 @@ namespace vmod
 			return true;
 		}};
 
-		if(!get_func_from_base_script(to_string_func, "__to_string__"sv)) {
+		if(!get_func_from_base_script(to_string_func, "__vmod_to_string__"sv)) {
 			return false;
 		}
 
-		if(!get_func_from_base_script(to_int_func, "__to_int__"sv)) {
+		if(!get_func_from_base_script(to_int_func, "__vmod_to_int__"sv)) {
 			return false;
 		}
 
-		if(!get_func_from_base_script(to_float_func, "__to_float__"sv)) {
+		if(!get_func_from_base_script(to_float_func, "__vmod_to_float__"sv)) {
 			return false;
 		}
 
-		if(!get_func_from_base_script(to_bool_func, "__to_bool__"sv)) {
+		if(!get_func_from_base_script(to_bool_func, "__vmod_to_bool__"sv)) {
 			return false;
 		}
 
-		if(!get_func_from_base_script(typeof_func, "__typeof__"sv)) {
+		if(!get_func_from_base_script(typeof_func, "__vmod_typeof__"sv)) {
 			return false;
 		}
 
-		if(!get_func_from_base_script(funcisg_func, "__get_func_sig__"sv)) {
+		if(!get_func_from_base_script(funcisg_func, "__vmod_get_func_sig__"sv)) {
 			return false;
 		}
 
@@ -1647,6 +1888,7 @@ namespace vmod
 			[](const gsdk::CCommand &) noexcept -> void {
 				info("vmod: squirrel version:\n"sv);
 				info("vmod:   vmod:\n"sv);
+			#ifndef __VMOD_USING_QUIRREL
 				info("vmod:    SQUIRREL_VERSION: %s\n"sv, SQUIRREL_VERSION);
 				info("vmod:    SQUIRREL_VERSION_NUMBER: %i\n"sv, SQUIRREL_VERSION_NUMBER);
 				if(curr_sq_ver != -1) {
@@ -1663,6 +1905,10 @@ namespace vmod
 				if(game_sq_ver != -1) {
 					info("vmod:    sq_getversion: %i\n"sv, game_sq_ver);
 				}
+			#else
+				info("vmod:    SQUIRREL_VERSION: %s\n"sv, SQUIRREL_VERSION);
+				info("vmod:    SQUIRREL_VERSION_NUMBER: (%i, %i, %i)\n"sv, SQUIRREL_VERSION_NUMBER_MAJOR, SQUIRREL_VERSION_NUMBER_MINOR, SQUIRREL_VERSION_NUMBER_PATCH);
+			#endif
 			}
 		);
 
@@ -1742,7 +1988,10 @@ namespace vmod
 			[this](const gsdk::CCommand &) noexcept -> void {
 				std::filesystem::path dump_dir{root_dir_/"dumps"sv/"internal_scripts"sv};
 
-				if(g_Script_init) {
+			#ifndef __VMOD_USING_CUSTOM_VM
+				if(g_Script_init)
+			#endif
+				{
 					write_file(dump_dir/"init.nut"sv, g_Script_init, std::strlen(reinterpret_cast<const char *>(g_Script_init)+1));
 				}
 

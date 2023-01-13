@@ -19,6 +19,7 @@ namespace vmod
 #ifndef GSDK_NO_SYMBOLS
 	bool symbols_available{true};
 #endif
+	gsdk::ConVar *developer{nullptr};
 
 	bool gsdk_launcher_library::load(const std::filesystem::path &path) noexcept
 	{
@@ -58,35 +59,24 @@ namespace vmod
 			return false;
 		}
 
-	#ifndef GSDK_NO_SYMBOLS
-		if(symbols_available) {
-			if(!syms.load(path, base())) {
-				err_str = syms.error_string();
-				return false;
-			}
+		if(!syms.load(path, base())) {
+			err_str = syms.error_string();
+			return false;
 		}
-	#endif
 
 	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		sv = sv_engine->GetIServer();
 	#else
-		#ifndef GSDK_NO_SYMBOLS
-		if(symbols_available) {
-			const auto &eng_global_qual{syms.global()};
+		const auto &eng_global_qual{syms.global()};
 
-			auto sv_it{eng_global_qual.find("sv"s)};
-			if(sv_it == eng_global_qual.end()) {
-				error("vmod: missing 'sv' symbol\n"sv);
-				return false;
-			}
-
-			sv = sv_it->second->addr<gsdk::IServer *>();
-		} else {
-		#endif
-			
-		#ifndef GSDK_NO_SYMBOLS
+		auto sv_it{eng_global_qual.find("sv"s)};
+		if(sv_it == eng_global_qual.end()) {
+			warning("vmod: missing 'sv' symbol\n"sv);
 		}
-		#endif
+
+		if(sv_it != eng_global_qual.end()) {
+			sv = sv_it->second->addr<gsdk::IServer *>();
+		}
 	#endif
 
 		return true;
@@ -124,35 +114,26 @@ namespace vmod
 			return false;
 		}
 
-	#ifndef GSDK_NO_SYMBOLS
-		if(symbols_available) {
-			if(!syms.load(path, base())) {
-				err_str = syms.error_string();
-				return false;
-			}
+		if(!syms.load(path, base())) {
+			err_str = syms.error_string();
+			return false;
 		}
-	#endif
 
 	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		entityfactorydict = reinterpret_cast<gsdk::CEntityFactoryDictionary *>(servertools->GetEntityFactoryDictionary());
 	#else
-		#ifndef GSDK_NO_SYMBOLS
-		if(symbols_available) {
-			const auto &sv_global_qual{syms.global()};
+		const auto &sv_global_qual{syms.global()};
 
-			auto EntityFactoryDictionary_it{sv_global_qual.find("EntityFactoryDictionary()"s)};
-			if(EntityFactoryDictionary_it == sv_global_qual.end()) {
-				error("vmod: missing 'EntityFactoryDictionary' symbol\n"sv);
-				return false;
-			}
-
-			entityfactorydict = reinterpret_cast<gsdk::CEntityFactoryDictionary *>(EntityFactoryDictionary_it->second->func<gsdk::IEntityFactoryDictionary *(*)()>()());
-		} else {
-		#endif
-			
-		#ifndef GSDK_NO_SYMBOLS
+		auto EntityFactoryDictionary_it{sv_global_qual.find("EntityFactoryDictionary()"s)};
+		if(EntityFactoryDictionary_it == sv_global_qual.end()) {
+			warning("vmod: missing 'EntityFactoryDictionary' symbol\n"sv);
 		}
-		#endif
+
+		if(EntityFactoryDictionary_it != sv_global_qual.end()) {
+			gsdk::IEntityFactoryDictionary *(*EntityFactoryDictionary)(){EntityFactoryDictionary_it->second->func<decltype(EntityFactoryDictionary)>()};
+
+			entityfactorydict = reinterpret_cast<gsdk::CEntityFactoryDictionary *>(EntityFactoryDictionary());
+		}
 	#endif
 
 		std_proxies = gamedll->GetStandardSendProxies();
@@ -236,6 +217,8 @@ namespace vmod
 			return false;
 		}
 
+		developer = cvar->FindVar("developer");
+
 		return true;
 	}
 
@@ -254,14 +237,10 @@ namespace vmod
 			return false;
 		}
 
-	#ifndef GSDK_NO_SYMBOLS
-		if(symbols_available) {
-			if(!syms.load(path, base())) {
-				err_str = syms.error_string();
-				return false;
-			}
+		if(!syms.load(path, base())) {
+			err_str = syms.error_string();
+			return false;
 		}
-	#endif
 
 		return true;
 	}

@@ -1,29 +1,29 @@
-function __to_string__(value)
+::__vmod_to_string__ <- function(value)
 {
 	return value.tostring();
 }
 
-function __to_int__(value)
+::__vmod_to_int__ <- function(value)
 {
 	return value.tointeger();
 }
 
-function __to_float__(value)
+::__vmod_to_float__ <- function(value)
 {
 	return value.tofloat();
 }
 
-function __to_bool__(value)
+::__vmod_to_bool__ <- function(value)
 {
 	return value ? true : false;
 }
 
-function __typeof__(value)
+::__vmod_typeof__ <- function(value)
 {
 	return typeof(value);
 }
 
-function __get_func_sig__(value)
+::__vmod_get_func_sig__ <- function(value)
 {
 	return GetFunctionSignature(value);
 }

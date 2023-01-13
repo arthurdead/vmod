@@ -1,10 +1,12 @@
 #pragma once
 
+#if defined __VMOD_COMPILING_VTABLE_DUMPER || defined __VMOD_COMPILING_SIGNATURE_GUESSER
+	#define __VMOD_COMPILING_SYMBOL_TOOL
+#endif
+
 #ifndef __VMOD_COMPILING_VTABLE_DUMPER
 #include "gsdk/config.hpp"
 #endif
-
-#if !defined GSDK_NO_SYMBOLS || defined __VMOD_COMPILING_VTABLE_DUMPER
 
 #include <cstddef>
 #include <string_view>
@@ -17,8 +19,10 @@
 #include "hacking.hpp"
 #include "type_traits.hpp"
 
+#ifndef GSDK_NO_SYMBOLS
 #include <libelf.h>
 #include <gelf.h>
+#endif
 #include "libiberty.hpp"
 
 #ifdef __VMOD_COMPILING_VTABLE_DUMPER
@@ -65,7 +69,7 @@ namespace vmod
 				name_info(name_info &&) noexcept = default;
 				name_info &operator=(name_info &&) noexcept = default;
 
-			#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+			#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 				template <typename T>
 				inline T addr() const noexcept
 				{ return reinterpret_cast<T>(const_cast<void *>(addr_)); }
@@ -83,14 +87,16 @@ namespace vmod
 					#pragma GCC diagnostic pop
 				}
 
+				#ifndef GSDK_NO_SYMBOLS
 				inline std::size_t size() const noexcept
 				{ return size_; }
+				#endif
 			#endif
 
 				inline std::size_t virtual_index() const noexcept
 				{ return vindex; }
 
-			#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+			#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 				using const_iterator = names_t::const_iterator;
 
 				inline const_iterator find(const std::string &name) const noexcept
@@ -108,16 +114,18 @@ namespace vmod
 			#endif
 
 			private:
-			#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+			#if !defined __VMOD_COMPILING_SYMBOL_TOOL && !defined GSDK_NO_SYMBOLS
 				virtual void resolve(void *base) noexcept;
 			#endif
 
-			#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+			#if !defined __VMOD_COMPILING_SYMBOL_TOOL && !defined GSDK_NO_SYMBOLS
 				std::uint64_t offset_{0};
 			#endif
 				std::size_t vindex{static_cast<std::size_t>(-1)};
-			#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+			#ifndef __VMOD_COMPILING_SYMBOL_TOOL
+				#ifndef GSDK_NO_SYMBOLS
 				std::size_t size_{0};
+				#endif
 				union {
 					void *addr_;
 					generic_func_t func_;
@@ -205,11 +213,15 @@ namespace vmod
 				{ return funcs_; }
 
 			private:
+			#ifndef GSDK_NO_SYMBOLS
 				void resolve(void *base) noexcept;
+			#endif
 
 				vtable_info() noexcept = default;
 
+			#ifndef GSDK_NO_SYMBOLS
 				std::uint64_t offset{0};
+			#endif
 				std::size_t size_{0};
 				__cxxabiv1::vtable_prefix *prefix{nullptr};
 				funcs_t funcs_;
@@ -227,7 +239,7 @@ namespace vmod
 		private:
 			class_info() noexcept = default;
 
-		#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+		#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 			struct ctor_info final : name_info
 			{
 			private:
@@ -235,7 +247,9 @@ namespace vmod
 
 				using kind_t = gnu_v3_ctor_kinds;
 
+			#ifndef GSDK_NO_SYMBOLS
 				void resolve(void *base) noexcept override;
+			#endif
 
 				ctor_info() noexcept = default;
 
@@ -259,7 +273,7 @@ namespace vmod
 
 				using kind_t = gnu_v3_dtor_kinds;
 
-			#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+			#if !defined __VMOD_COMPILING_SYMBOL_TOOL && !defined GSDK_NO_SYMBOLS
 				void resolve(void *base) noexcept override;
 			#endif
 
@@ -299,26 +313,38 @@ namespace vmod
 		inline const_iterator cend() const noexcept
 		{ return qualifications.cend(); }
 
-	#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+	#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 		inline const qualification_info &global() const noexcept
 		{ return global_qual; }
 	#endif
 
 		std::size_t vtable_size(const std::string &name) const noexcept;
 
-	#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+	#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 		static std::uint64_t uncached_find_mangled_func(const std::filesystem::path &path, std::string_view search) noexcept;
 	#endif
 
 	private:
 		std::string err_str;
 
+	#ifndef __VMOD_COMPILING_SYMBOL_TOOL
+		static std::filesystem::path yamls_dir;
+	#endif
+
+	#ifndef GSDK_NO_SYMBOLS
 		bool read_elf(int fd, void *base) noexcept;
+	#endif
 
 	#ifdef __VMOD_COMPILING_VTABLE_DUMPER
 		bool read_macho(llvm::object::MachOObjectFile &obj, void *base) noexcept;
 	#endif
 
+	#ifndef __VMOD_COMPILING_SYMBOL_TOOL
+		bool read_yamls(const std::filesystem::path &dir, void *base) noexcept;
+		bool read_yaml(const std::filesystem::path &path, void *base) noexcept;
+	#endif
+
+	#ifndef GSDK_NO_SYMBOLS
 		static int demangle_flags;
 
 		struct basic_sym_t
@@ -332,6 +358,7 @@ namespace vmod
 		void resolve_vtables(void *base, bool elf) noexcept;
 
 		std::unordered_map<std::uint64_t, pair_t> offset_map;
+	#endif
 
 		qualifications_t qualifications;
 		vtable_sizes_t vtable_sizes;
@@ -345,5 +372,3 @@ namespace vmod
 		symbol_cache &operator=(symbol_cache &&) = delete;
 	};
 }
-
-#endif

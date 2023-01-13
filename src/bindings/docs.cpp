@@ -155,12 +155,12 @@ namespace vmod::bindings::docs
 				return {};
 			}
 
-			if(*description == '@') {
+			if(description[0] == '@') {
 				++description;
-			} else if(*description == '#') {
+			} else if(description[0] == '#') {
 				++description;
 				const char *begin{description};
-				while(*description != ':') {
+				while(description[0] != ':') {
 					++description;
 				}
 				const char *end{description};
@@ -192,16 +192,16 @@ namespace vmod::bindings::docs
 
 			auto parse_args{
 				[&description,&info,base_description,is_valid_start_id,is_valid_base_id]() noexcept -> bool {
-					if(*description == '(') {
+					if(description[0] == '(') {
 						++description;
-						while(*description == ' ') { ++description; }
+						while(description[0] == ' ') { ++description; }
 
 						std::size_t i{0};
 
 						while(true) {
 							const char *name_begin{description};
 
-							if(!is_valid_start_id(*description)) {
+							if(!is_valid_start_id(description[0])) {
 								description = base_description;
 								info.clear_params();
 								return false;
@@ -210,16 +210,16 @@ namespace vmod::bindings::docs
 							}
 
 							while(
-								is_valid_base_id(*description) ||
-								*description == '|' ||
-								(*description == '[' || *description == ']')
+								is_valid_base_id(description[0]) ||
+								description[0] == '|' ||
+								(description[0] == '[' || description[0] == ']')
 							) {
 								++description;
 							}
 
 							const char *name_end{description};
 
-							while(*description == ' ') { ++description; }
+							while(description[0] == ' ') { ++description; }
 
 							std::string_view name{name_begin, name_end};
 							std::string_view type{};
@@ -236,11 +236,11 @@ namespace vmod::bindings::docs
 
 							info.params.emplace(i++, func_info::param_info{type,name});
 
-							if(*description == ',') {
+							if(description[0] == ',') {
 								++description;
-								while(*description == ' ') { ++description; }
+								while(description[0] == ' ') { ++description; }
 								continue;
-							} else if(*description == ')') {
+							} else if(description[0] == ')') {
 								++description;
 								return true;
 							} else {
@@ -257,13 +257,13 @@ namespace vmod::bindings::docs
 
 			auto parse_ret{
 				[&description,&info,base_description,is_valid_start_id,is_valid_base_id]() noexcept -> bool {
-					if(*description == '[') {
+					if(description[0] == '[') {
 						++description;
-						while(*description == ' ') { ++description; }
+						while(description[0] == ' ') { ++description; }
 
 						const char *name_begin{description};
 
-						if(!is_valid_start_id(*description)) {
+						if(!is_valid_start_id(description[0])) {
 							description = base_description;
 							info.clear_params();
 							return false;
@@ -271,17 +271,17 @@ namespace vmod::bindings::docs
 							++description;
 						}
 
-						while(is_valid_base_id(*description)) {
+						while(is_valid_base_id(description[0])) {
 							++description;
 						}
 
 						const char *name_end{description};
 
-						while(*description == ' ') { ++description; }
+						while(description[0] == ' ') { ++description; }
 
 						info.ret_type = std::string_view{name_begin, name_end};
 
-						if(*description == ']') {
+						if(description[0] == ']') {
 							++description;
 							return true;
 						} else {
@@ -309,7 +309,7 @@ namespace vmod::bindings::docs
 						description += 3;
 					} else if(std::strncmp(description, " : ", 3) == 0) {
 						description += 3;
-					} else if(*description != '\0') {
+					} else if(description[0] != '\0') {
 						info.clear_params();
 						return base_description;
 					}
@@ -346,20 +346,20 @@ namespace vmod::bindings::docs
 					} else {
 						if(parse_ret()) {
 							if(parse_args()) {
-								if(*description != '\0') {
+								if(description[0] != '\0') {
 									info.clear_params();
 									return base_description;
 								}
-							} else if(*description != '\0') {
+							} else if(description[0] != '\0') {
 								info.clear_params();
 								return base_description;
 							}
 						} else if(parse_args()) {
 							if(std::strncmp(description, " - ", 3) == 0) {
 								description += 3;
-							} else if(*description == ' ') {
+							} else if(description[0] == ' ') {
 								++description;
-							} else if(*description != '\0') {
+							} else if(description[0] != '\0') {
 								info.clear_params();
 								return base_description;
 							}
@@ -371,7 +371,7 @@ namespace vmod::bindings::docs
 				}
 			}
 
-			if(*description == '\0') {
+			if(description[0] == '\0') {
 				return {};
 			}
 

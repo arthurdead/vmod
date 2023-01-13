@@ -68,6 +68,9 @@ namespace vmod
 	template <typename T>
 	const std::string &demangle() noexcept;
 
+	template <>
+	const std::string &demangle<void>() noexcept = delete;
+
 	extern const std::string &demangle(std::string_view mangled) noexcept;
 
 	class generic_class final

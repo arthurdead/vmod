@@ -15,8 +15,13 @@ namespace vmod::vscript
 		m_desc.m_pszFunction = name.data();
 		m_desc.m_pszScriptName = script_name.data();
 
+	#ifndef __VMOD_USING_CUSTOM_VM
 		m_desc.m_ReturnType = gsdk::IScriptVM::fixup_var_field(type_to_field<std::decay_t<R>>());
 		(m_desc.m_Parameters.emplace_back(gsdk::IScriptVM::fixup_var_field(type_to_field<std::decay_t<Args>>())), ...);
+	#else
+		m_desc.m_ReturnType = type_to_field<std::decay_t<R>>();
+		(m_desc.m_Parameters.emplace_back(type_to_field<std::decay_t<Args>>()), ...);
+	#endif
 
 		if constexpr(num_args > 0) {
 			using LA = std::tuple_element_t<num_args-1, std::tuple<Args...>>;
@@ -122,7 +127,9 @@ namespace vmod::vscript
 					R ret_val{call_member<R, C, Args...>(func, obj, args)};
 					to_variant<R>(*ret, std::forward<R>(ret_val));
 				}
+			#ifndef __VMOD_USING_CUSTOM_VM
 				gsdk::IScriptVM::fixup_var(*ret);
+			#endif
 			}
 		}
 
@@ -173,7 +180,9 @@ namespace vmod::vscript
 					R ret_val{call<R, Args...>(func, args)};
 					to_variant<R>(*ret, std::forward<R>(ret_val));
 				}
+			#ifndef __VMOD_USING_CUSTOM_VM
 				gsdk::IScriptVM::fixup_var(*ret);
+			#endif
 			}
 		}
 
@@ -274,7 +283,9 @@ namespace vmod::vscript
 					R ret_val{call_member_va<R, C, Args...>(func, obj, args, args_va, num_va)};
 					to_variant<R>(*ret, std::forward<R>(ret_val));
 				}
+			#ifndef __VMOD_USING_CUSTOM_VM
 				gsdk::IScriptVM::fixup_var(*ret);
+			#endif
 			}
 		}
 
@@ -332,7 +343,9 @@ namespace vmod::vscript
 					R ret_val{call_va<R, Args...>(func, args, args_va, num_va)};
 					to_variant<R>(*ret, std::forward<R>(ret_val));
 				}
+			#ifndef __VMOD_USING_CUSTOM_VM
 				gsdk::IScriptVM::fixup_var(*ret);
+			#endif
 			}
 		}
 

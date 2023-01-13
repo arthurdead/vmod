@@ -1,15 +1,20 @@
+#include "symbol_cache.hpp"
+
 #ifndef __VMOD_COMPILING_VTABLE_DUMPER
 #include "gsdk/config.hpp"
 #endif
 
-#if !defined GSDK_NO_SYMBOLS || defined __VMOD_COMPILING_VTABLE_DUMPER
-
-#include "symbol_cache.hpp"
 #include <string_view>
 #include <unistd.h>
 #include <fcntl.h>
 #include <cstring>
 #include <iostream>
+#ifndef __VMOD_COMPILING_SYMBOL_TOOL
+#include <yaml.h>
+#include "filesystem.hpp"
+#include "gsdk.hpp"
+#include "main.hpp"
+#endif
 
 namespace vmod
 {
@@ -18,15 +23,30 @@ namespace vmod
 	symbol_cache::class_info::~class_info() noexcept {}
 	symbol_cache::class_info::dtor_info::~dtor_info() noexcept {}
 
+#ifndef __VMOD_COMPILING_SYMBOL_TOOL
+	std::filesystem::path symbol_cache::yamls_dir;
+#endif
+
+#ifndef GSDK_NO_SYMBOLS
 	int symbol_cache::demangle_flags{DMGL_GNU_V3|DMGL_PARAMS|DMGL_VERBOSE|DMGL_TYPES|DMGL_ANSI};
+#endif
 
 	bool symbol_cache::initialize() noexcept
 	{
+		using namespace std::literals::string_view_literals;
+
+	#ifndef GSDK_NO_SYMBOLS
 		if(elf_version(EV_CURRENT) == EV_NONE) {
 			return false;
 		}
 
 		cplus_demangle_set_style(gnu_v3_demangling);
+	#endif
+
+	#ifndef __VMOD_COMPILING_SYMBOL_TOOL
+		yamls_dir = main::instance().root_dir();
+		yamls_dir /= "syms"sv;
+	#endif
 
 		return true;
 	}
@@ -39,22 +59,53 @@ namespace vmod
 		std::filesystem::path ext{path.extension()};
 
 		if(ext == ".so"sv) {
-			int fd{open(path.c_str(), O_RDONLY)};
-			if(fd < 0) {
-				int err{errno};
-				err_str = strerror(err);
-				return false;
-			}
+		#ifndef __VMOD_COMPILING_SYMBOL_TOOL
+			#ifndef GSDK_NO_SYMBOLS
+			if(!symbols_available)
+			#endif
+			{
+				std::filesystem::path yaml_dir{yamls_dir};
+				yaml_dir /= path.filename();
+				yaml_dir.replace_extension();
 
-			if(!read_elf(fd, base)) {
+				if(!read_yamls(yaml_dir, base)) {
+					return false;
+				}
+
+			#ifndef GSDK_NO_SYMBOLS
+				resolve_vtables(base, true);
+			#endif
+
+				return true;
+			}
+			#ifndef GSDK_NO_SYMBOLS
+			else {
+			#endif
+		#endif
+			#ifndef GSDK_NO_SYMBOLS
+				int fd{open(path.c_str(), O_RDONLY)};
+				if(fd < 0) {
+					int err{errno};
+					err_str = strerror(err);
+					return false;
+				}
+
+				if(!read_elf(fd, base)) {
+					close(fd);
+					return false;
+				}
+
+				resolve_vtables(base, true);
+
 				close(fd);
+				return true;
+			#elif defined __VMOD_COMPILING_SYMBOL_TOOL
+				err_str = "invalid extension"s;
 				return false;
+			#endif
+		#if !defined __VMOD_COMPILING_SYMBOL_TOOL && !defined GSDK_NO_SYMBOLS
 			}
-
-			resolve_vtables(base, true);
-
-			close(fd);
-			return true;
+		#endif
 		}
 	#ifdef __VMOD_COMPILING_VTABLE_DUMPER
 		else if(ext == ".dylib"sv) {
@@ -91,7 +142,7 @@ namespace vmod
 		}
 	}
 
-#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+#if !defined __VMOD_COMPILING_SYMBOL_TOOL && !defined GSDK_NO_SYMBOLS
 	void symbol_cache::qualification_info::name_info::resolve(void *base) noexcept
 	{
 	#ifndef __clang__
@@ -132,6 +183,7 @@ namespace vmod
 	}
 #endif
 
+#ifndef GSDK_NO_SYMBOLS
 	void symbol_cache::class_info::vtable_info::resolve(void *base) noexcept
 	{
 	#ifndef __clang__
@@ -175,6 +227,7 @@ namespace vmod
 
 		offset_map.clear();
 	}
+#endif
 
 #ifdef __VMOD_COMPILING_VTABLE_DUMPER
 	bool symbol_cache::read_macho(llvm::object::MachOObjectFile &obj, void *base) noexcept
@@ -244,6 +297,7 @@ namespace vmod
 	}
 #endif
 
+#ifndef GSDK_NO_SYMBOLS
 	bool symbol_cache::read_elf(int fd, void *base) noexcept
 	{
 		using namespace std::literals::string_literals;
@@ -324,7 +378,7 @@ namespace vmod
 						name_mangled == "__cxa_deleted_virtual"sv) {
 						std::unique_ptr<qualification_info::name_info> info{new qualification_info::name_info};
 						std::uint64_t offset{basic_sym.off};
-					#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+					#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 						info->offset_ = offset;
 						info->size_ = basic_sym.size;
 						info->resolve(base);
@@ -363,13 +417,88 @@ namespace vmod
 
 		return true;
 	}
+#endif
 
-	bool symbol_cache::handle_component([[maybe_unused]] std::string_view name_mangled, demangle_component *component, qualifications_t::iterator &qual_it, qualification_info::names_t::iterator &name_it, basic_sym_t &&sym, void *base, bool elf) noexcept
+#ifndef __VMOD_COMPILING_SYMBOL_TOOL
+	bool symbol_cache::read_yaml(const std::filesystem::path &path, void *base) noexcept
+	{
+		struct scope_delete_parser final {
+			inline scope_delete_parser(yaml_parser_t &parser_) noexcept
+				: parser{parser_} {}
+			inline ~scope_delete_parser() noexcept
+			{ yaml_parser_delete(&parser); }
+			yaml_parser_t &parser;
+		};
+
+		yaml_parser_t parser{};
+		if(yaml_parser_initialize(&parser) != 1) {
+			return false;
+		}
+		scope_delete_parser sdp{parser};
+
+		std::size_t size{0};
+		std::unique_ptr<unsigned char[]> data{read_file(path, size)};
+		if(size == 0) {
+			return false;
+		}
+
+		yaml_parser_set_input_string(&parser, data.get(), size);
+
+		while(true) {
+			yaml_document_t temp_doc{};
+			if(yaml_parser_load(&parser, &temp_doc) != 1) {
+				return false;
+			}
+
+			yaml_node_t *root{yaml_document_get_root_node(&temp_doc)};
+			if(!root) {
+				break;
+			}
+
+			//TODO!!!
+			debugtrap();
+		}
+
+		return true;
+	}
+
+	bool symbol_cache::read_yamls(const std::filesystem::path &dir, void *base) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		std::error_code ec;
+		for(const auto &file : std::filesystem::directory_iterator{dir, ec}) {
+			if(!file.is_regular_file()) {
+				continue;
+			}
+
+			std::filesystem::path path{file.path()};
+			std::filesystem::path filename{path.filename()};
+
+			if(filename.native()[0] == '.') {
+				continue;
+			}
+
+			if(filename.extension() != ".yaml"sv) {
+				continue;
+			}
+
+			if(!read_yaml(path, base)) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+#endif
+
+#ifndef GSDK_NO_SYMBOLS
+	bool symbol_cache::handle_component([[maybe_unused]] std::string_view name_mangled, demangle_component *component, qualifications_t::iterator &qual_it, qualification_info::names_t::iterator &name_it, basic_sym_t &&sym, void *base, [[maybe_unused]] bool elf) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
 		if(!component) {
-		#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+		#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 			if(elf) {
 				std::unique_ptr<qualification_info::name_info> info{new qualification_info::name_info};
 				info->offset_ = sym.off;
@@ -383,7 +512,7 @@ namespace vmod
 				name_it = global_qual.names.end();
 				qual_it = qualifications.end();
 				return false;
-		#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+		#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 			}
 		#endif
 		}
@@ -393,7 +522,7 @@ namespace vmod
 			case DEMANGLE_COMPONENT_QUAL_NAME:
 			case DEMANGLE_COMPONENT_TYPED_NAME:
 			break;
-		#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+		#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 			case DEMANGLE_COMPONENT_LOCAL_NAME:
 			case DEMANGLE_COMPONENT_NAME: {
 				if(elf) {
@@ -485,7 +614,7 @@ namespace vmod
 				qual_it = this_qual_it;
 				return true;
 			}
-		#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+		#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 			case DEMANGLE_COMPONENT_LOCAL_NAME: {
 				if(elf) {
 					switch(component->u.s_binary.left->type) {
@@ -605,7 +734,7 @@ namespace vmod
 								}
 
 								std::uint64_t offset{sym.off};
-							#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+							#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 								if(elf) {
 									info->offset_ = offset;
 									info->size_ = sym.size;
@@ -706,7 +835,7 @@ namespace vmod
 								std::unique_ptr<qualification_info::name_info> info{new qualification_info::name_info};
 
 								std::uint64_t offset{sym.off};
-							#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+							#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 								if(elf) {
 									info->offset_ = offset;
 									info->size_ = sym.size;
@@ -767,7 +896,7 @@ namespace vmod
 
 								switch(component->u.s_binary.left->u.s_binary.right->type) {
 									case DEMANGLE_COMPONENT_CTOR: {
-									#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+									#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 										if(elf) {
 											gnu_v3_ctor_kinds kind{component->u.s_binary.left->u.s_binary.right->u.s_ctor.kind};
 											switch(kind) {
@@ -801,7 +930,7 @@ namespace vmod
 											name_it = global_qual.names.end();
 											qual_it = this_qual_it;
 											return false;
-									#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+									#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 										}
 									#endif
 									}
@@ -841,7 +970,7 @@ namespace vmod
 								}
 
 								std::uint64_t offset{sym.off};
-							#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+							#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 								if(elf) {
 									info->offset_ = offset;
 									info->size_ = sym.size;
@@ -852,7 +981,7 @@ namespace vmod
 								name_it = this_qual_it->second->names.insert_or_assign(std::move(func_name), std::move(info)).first;
 								qual_it = this_qual_it;
 
-							#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+							#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 								if(dynamic_cast<class_info::ctor_info *>(info.get()) == nullptr)
 							#endif
 								{
@@ -861,7 +990,7 @@ namespace vmod
 
 								return true;
 							}
-						#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+						#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 							case DEMANGLE_COMPONENT_TEMPLATE: {
 								if(elf) {
 									switch(component->u.s_binary.left->u.s_binary.left->type) {
@@ -927,6 +1056,7 @@ namespace vmod
 			}
 		}
 	}
+#endif
 
 	std::size_t symbol_cache::vtable_size(const std::string &name) const noexcept
 	{
@@ -938,7 +1068,7 @@ namespace vmod
 		return it->second;
 	}
 
-#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+#if !defined __VMOD_COMPILING_SYMBOL_TOOL && !defined GSDK_NO_SYMBOLS
 	std::uint64_t symbol_cache::uncached_find_mangled_func(const std::filesystem::path &path, std::string_view search) noexcept
 	{
 		int fd{open(path.c_str(), O_RDONLY)};
@@ -1029,5 +1159,3 @@ namespace vmod
 	}
 #endif
 }
-
-#endif

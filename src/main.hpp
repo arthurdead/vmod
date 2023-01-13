@@ -28,6 +28,10 @@ namespace vmod
 
 	extern std::unordered_map<std::string, entity_class_info> sv_ent_class_info;
 
+#ifdef __VMOD_USING_CUSTOM_VM
+	extern const unsigned char *g_Script_init;
+#endif
+
 	class main final : public bindings::singleton_base
 	{
 		friend class vsp;
