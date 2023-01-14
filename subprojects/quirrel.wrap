@@ -4,6 +4,7 @@ url = https://github.com/GaijinEntertainment/quirrel.git
 revision = master
 depth = 1
 patch_directory = squirrel
+diff_files = squirrel/vmod_quirrel_fixes.patch
 
 [provide]
 dependency_names = quirrel

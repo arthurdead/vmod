@@ -5,13 +5,13 @@
 
 namespace vmod::bindings
 {
-	bool singleton_base::Get(const gsdk::CUtlString &getname, gsdk::ScriptVariant_t &value)
+	bool singleton_base::Get(const gsdk::CUtlConstString &getname, gsdk::ScriptVariant_t &value)
 	{
-		if(main::instance().vm()->GetValue(instance, getname.c_str(), &value)) {
+		if(main::instance().vm()->GetValue(instance, getname.data(), &value)) {
 			return true;
 		}
 
-		error("vmod: member '%s' not found in '%s'\n", getname.c_str(), name.data());
+		error("vmod: member '%s' not found in '%s'\n", getname.data(), name.data());
 
 		return false;
 	}
@@ -80,8 +80,7 @@ namespace vmod::bindings
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 		get_impl = vm->MakeSquirrelMetamethod_Get(target_scope, name.data(), this, false);
 		if(!get_impl) {
-			error("vmod: failed to create '%s' _get metamethod\n"sv, name.data());
-			return false;
+			warning("vmod: failed to create '%s' _get metamethod\n"sv, name.data());
 		}
 	#endif
 

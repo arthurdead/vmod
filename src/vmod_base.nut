@@ -23,7 +23,7 @@
 	return typeof(value);
 }
 
-::__vmod_get_func_sig__ <- function(value)
+::__vmod_get_func_sig__ <- function(value, name)
 {
-	return GetFunctionSignature(value);
+	return ::GetFunctionSignature(value, name);
 }

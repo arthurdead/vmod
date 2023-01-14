@@ -39,7 +39,7 @@ namespace vmod::bindings::fs
 		file += "namespace fs\n{\n"sv;
 
 		docs::ident(file, 1);
-		file += "using path = char[];\n\n"sv;
+		file += "using path = string;\n\n"sv;
 
 		docs::write(&singleton::desc, false, 1, file, false);
 		file += '\n';

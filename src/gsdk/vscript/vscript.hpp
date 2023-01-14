@@ -86,6 +86,7 @@ namespace gsdk
 {
 	class CUtlBuffer;
 	class CUtlString;
+	class CUtlConstString;
 	class CUtlStringToken;
 	class CCommand;
 	class CCommandContext;
@@ -448,8 +449,7 @@ namespace gsdk
 	public:
 		virtual ~ISquirrelMetamethodDelegate();
 
-		//TODO!!! change to CUtlConstString
-		virtual bool Get(const CUtlString &, ScriptVariant_t &) = 0;
+		virtual bool Get(const CUtlConstString &, ScriptVariant_t &) = 0;
 	};
 
 	class CSquirrelMetamethodDelegateImpl;

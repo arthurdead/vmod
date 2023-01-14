@@ -3,7 +3,7 @@ project('vmod', 'cpp',
 		'warning_level=everything',
 		'werror=true',
 		'buildtype=debug',
-		'b_sanitize=none',
+		'b_sanitize=address',
 		'b_lundef=false',
 		'strip=false',
 		'cpp_std=gnu++20',
@@ -27,7 +27,8 @@ cpp_args += [
 	'-Wno-error=unused-function',
 	'-Wno-error=unreachable-code',
 	'-Wno-error=unused-lambda-capture',
-	'-Wno-error=unused-macros'
+	'-Wno-error=unused-macros',
+	'-Wno-error=unused-template'
 ]
 
 cpp_args += [
@@ -114,18 +115,6 @@ thirdparty_default_options = [
 	'b_lundef=true',
 	'strip=true',
 	'default_library=static'
-]
-
-firstparty_default_options = [
-	'warning_level=everything',
-	'werror=true',
-	'buildtype=debug',
-	'b_sanitize=none',
-	'b_lundef=false',
-	'strip=false',
-	'cpp_std=gnu++20',
-	'cpp_eh=none',
-	'cpp_rtti=true'
 ]
 
 thirdparty_default_options_c = thirdparty_default_options + [

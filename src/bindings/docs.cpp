@@ -109,6 +109,10 @@ namespace vmod::bindings::docs
 				case gsdk::FIELD_INTEGER64:
 				return "FIELD_INTEGER64"sv;
 			#endif
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
+				case gsdk::FIELD_VECTOR4D:
+				return "FIELD_VECTOR4D"sv;
+			#endif
 				default: {
 					datatype_str_buffer = "<<unknown: "sv;
 
@@ -388,118 +392,133 @@ namespace vmod::bindings::docs
 
 			return description;
 		}
+
+		static std::string_view type_name(gsdk::ScriptDataType_t type, std::size_t size, bool vscript) noexcept
+		{
+			using namespace std::literals::string_view_literals;
+
+			switch(type) {
+				case gsdk::FIELD_VOID:
+				return "void"sv;
+				case gsdk::FIELD_CHARACTER:
+				return "char"sv;
+				case gsdk::FIELD_SHORT:
+				return "short"sv;
+				case gsdk::FIELD_UINT32:
+				return "unsigned int"sv;
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+				case gsdk::FIELD_INTEGER64:
+				return "long long"sv;
+			#endif
+				case gsdk::FIELD_UINT64:
+				return "unsigned long long"sv;
+				case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
+				return "int"sv;
+				case gsdk::FIELD_INTEGER: {
+					switch(size) {
+						case sizeof(char):
+						return "char"sv;
+						case sizeof(short):
+						return "short"sv;
+						case sizeof(int):
+						return "int"sv;
+						case sizeof(long long):
+						return "long long"sv;
+						case static_cast<std::size_t>(-1):
+						return "int"sv;
+						default:
+						return "<<unknown>>"sv;
+					}
+				}
+				case gsdk::FIELD_MODELINDEX:
+				return "model_index"sv;
+				case gsdk::FIELD_MATERIALINDEX:
+				return "material_index"sv;
+				case gsdk::FIELD_TICK:
+				return "int"sv;
+				case gsdk::FIELD_FLOAT64:
+				return "double"sv;
+				case gsdk::FIELD_FLOAT: {
+					switch(size) {
+						case sizeof(float):
+						return "float"sv;
+						case sizeof(double):
+						return "double"sv;
+						case sizeof(long double):
+						return "long double"sv;
+						case static_cast<std::size_t>(-1):
+						return "float"sv;
+						default:
+						return "<<unknown>>"sv;
+					}
+				}
+				case gsdk::FIELD_INTERVAL:
+				return "interval_t"sv;
+				case gsdk::FIELD_TIME:
+				return "float"sv;
+				case gsdk::FIELD_BOOLEAN:
+				return "bool"sv;
+				case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
+				case gsdk::FIELD_HSCRIPT:
+				return "handle"sv;
+				case gsdk::FIELD_POSITION_VECTOR:
+				case gsdk::FIELD_VECTOR:
+				return "Vector"sv;
+				case gsdk::FIELD_VECTOR2D:
+				return "Vector2D"sv;
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
+				case gsdk::FIELD_VECTOR4D:
+				return "Vector4D"sv;
+			#endif
+				case gsdk::FIELD_QANGLE:
+				return "QAngle"sv;
+				case gsdk::FIELD_QUATERNION:
+				return "Quaternion"sv;
+				case gsdk::FIELD_STRING:
+				return "string_t"sv;
+				case gsdk::FIELD_CSTRING: {
+					if(vscript) {
+						return "string"sv;
+					} else {
+						return "char[]"sv;
+					}
+				}
+				case gsdk::FIELD_MODELNAME:
+				return "model_path"sv;
+				case gsdk::FIELD_SOUNDNAME:
+				return "sound_path"sv;
+				case gsdk::FIELD_VARIANT:
+				return "variant"sv;
+				case gsdk::FIELD_EHANDLE:
+				return "EHANDLE"sv;
+				case gsdk::FIELD_EDICT:
+				return "edict"sv;
+				case gsdk::FIELD_FUNCTION:
+				return "function *"sv;
+				case gsdk::FIELD_CLASSPTR:
+				return "object *"sv;
+				case gsdk::FIELD_COLOR32:
+				return "color32"sv;
+				case gsdk::FIELD_EMBEDDED:
+				return "struct"sv;
+				case gsdk::FIELD_CUSTOM:
+				return "<<unknown>>"sv;
+				case gsdk::FIELD_TYPEUNKNOWN:
+				return "<<unknown>>"sv;
+				default:
+				return detail::datatype_to_raw_str(type);
+			}
+		}
 	}
 
 	std::string_view type_name(gsdk::ScriptDataType_t type, std::size_t size) noexcept
 	{
-		using namespace std::literals::string_view_literals;
-
-		switch(type) {
-			case gsdk::FIELD_VOID:
-			return "void"sv;
-			case gsdk::FIELD_CHARACTER:
-			return "char"sv;
-			case gsdk::FIELD_SHORT:
-			return "short"sv;
-			case gsdk::FIELD_UINT32:
-			return "unsigned int"sv;
-		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
-			case gsdk::FIELD_INTEGER64:
-			return "long long"sv;
-		#endif
-			case gsdk::FIELD_UINT64:
-			return "unsigned long long"sv;
-			case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
-			case gsdk::FIELD_INTEGER: {
-				switch(size) {
-					case sizeof(char):
-					return "char"sv;
-					case sizeof(short):
-					return "short"sv;
-					case sizeof(int):
-					return "int"sv;
-					case sizeof(long long):
-					return "long long"sv;
-					case static_cast<std::size_t>(-1):
-					return "int"sv;
-					default:
-					return "<<unknown>>"sv;
-				}
-			}
-			case gsdk::FIELD_MODELINDEX:
-			return "model_index"sv;
-			case gsdk::FIELD_MATERIALINDEX:
-			return "material_index"sv;
-			case gsdk::FIELD_TICK:
-			return "int"sv;
-			case gsdk::FIELD_FLOAT64:
-			return "double"sv;
-			case gsdk::FIELD_FLOAT: {
-				switch(size) {
-					case sizeof(float):
-					return "float"sv;
-					case sizeof(double):
-					return "double"sv;
-					case sizeof(long double):
-					return "long double"sv;
-					case static_cast<std::size_t>(-1):
-					return "float"sv;
-					default:
-					return "<<unknown>>"sv;
-				}
-			}
-			case gsdk::FIELD_INTERVAL:
-			return "interval_t"sv;
-			case gsdk::FIELD_TIME:
-			return "float"sv;
-			case gsdk::FIELD_BOOLEAN:
-			return "bool"sv;
-			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
-			case gsdk::FIELD_HSCRIPT:
-			return "handle"sv;
-			case gsdk::FIELD_POSITION_VECTOR:
-			case gsdk::FIELD_VECTOR:
-			return "Vector"sv;
-			case gsdk::FIELD_VECTOR2D:
-			return "Vector2D"sv;
-			case gsdk::FIELD_QANGLE:
-			return "QAngle"sv;
-			case gsdk::FIELD_QUATERNION:
-			return "Quaternion"sv;
-			case gsdk::FIELD_STRING:
-			return "string_t"sv;
-			case gsdk::FIELD_CSTRING:
-			return "char[]"sv;
-			case gsdk::FIELD_MODELNAME:
-			return "model_path"sv;
-			case gsdk::FIELD_SOUNDNAME:
-			return "sound_path"sv;
-			case gsdk::FIELD_VARIANT:
-			return "variant"sv;
-			case gsdk::FIELD_EHANDLE:
-			return "EHANDLE"sv;
-			case gsdk::FIELD_EDICT:
-			return "edict"sv;
-			case gsdk::FIELD_FUNCTION:
-			return "function"sv;
-			case gsdk::FIELD_CLASSPTR:
-			return "object"sv;
-			case gsdk::FIELD_COLOR32:
-			return "color32"sv;
-			case gsdk::FIELD_EMBEDDED:
-			return "struct"sv;
-			case gsdk::FIELD_CUSTOM:
-			return "<<unknown>>"sv;
-			case gsdk::FIELD_TYPEUNKNOWN:
-			return "<<unknown>>"sv;
-			default:
-			return detail::datatype_to_raw_str(type);
-		}
+		return detail::type_name(type, size, false);
 	}
 
-	std::string_view type_name(gsdk::ScriptDataType_t type) noexcept
+	std::string_view type_name(gsdk::ScriptDataType_t type, bool vscript) noexcept
 	{
-		return type_name(type, static_cast<std::size_t>(-1));
+		return detail::type_name(type, static_cast<std::size_t>(-1), vscript);
 	}
 
 	std::string_view get_class_desc_name(const gsdk::ScriptClassDesc_t *desc) noexcept
@@ -564,7 +583,7 @@ namespace vmod::bindings::docs
 		if(!info.ret_type.empty()) {
 			ret_str += info.ret_type;
 		} else {
-			ret_str += type_name(func_desc.m_ReturnType);
+			ret_str += type_name(func_desc.m_ReturnType, true);
 		}
 		ret_str += ' ';
 
@@ -578,14 +597,14 @@ namespace vmod::bindings::docs
 				if(!param_it->second.type.empty()) {
 					params_str += param_it->second.type;
 				} else {
-					params_str += type_name(func_desc.m_Parameters[j]);
+					params_str += type_name(func_desc.m_Parameters[j], true);
 				}
 				if(!param_it->second.name.empty()) {
 					params_str += ' ';
 					params_str += param_it->second.name;
 				}
 			} else {
-				params_str += type_name(func_desc.m_Parameters[j]);
+				params_str += type_name(func_desc.m_Parameters[j], true);
 			}
 			params_str += ", "sv;
 		}
@@ -761,7 +780,7 @@ namespace vmod::bindings::docs
 			switch(it.second.type) {
 				case value::type::variant: {
 					const vscript::variant &var{it.second.var};
-					file += type_name(var.m_type);
+					file += type_name(var.m_type, true);
 				} break;
 				case value::type::desc: {
 					const gsdk::ScriptClassDesc_t *desc{it.second.desc};

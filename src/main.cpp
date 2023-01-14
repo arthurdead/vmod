@@ -76,6 +76,19 @@ namespace vmod
 
 namespace vmod
 {
+	template <typename ...Args>
+	static inline auto CompileScript_strict(gsdk::IScriptVM *vm, Args &&...args) noexcept -> decltype(vm->CompileScript(std::forward<Args>(args)...))
+	{
+#ifdef __VMOD_USING_CUSTOM_VM
+		return static_cast<vm::squirrel_vm *>(vm)->CompileScript_strict(std::forward<Args>(args)...);
+#else
+		return vm->CompileScript(std::forward<Args>(args)...);
+#endif
+	}
+}
+
+namespace vmod
+{
 	std::unordered_map<std::string, entity_class_info> sv_ent_class_info;
 
 	static std::unordered_map<std::string, gsdk::ScriptClassDesc_t *> sv_script_class_descs;
@@ -1555,14 +1568,14 @@ namespace vmod
 			{
 				std::unique_ptr<unsigned char[]> script_data{read_file(base_script_path)};
 
-				base_script = vm_->CompileScript(reinterpret_cast<const char *>(script_data.get()), base_script_path.c_str());
+				base_script = CompileScript_strict(vm_, reinterpret_cast<const char *>(script_data.get()), base_script_path.c_str());
 				if(!base_script || base_script == gsdk::INVALID_HSCRIPT) {
 				#ifndef __VMOD_BASE_SCRIPT_HEADER_INCLUDED
 					error("vmod: failed to compile base script from file '%s'\n"sv, base_script_path.c_str());
 					return false;
 				#else
 					error("vmod: failed to compile base script from file '%s' re-trying with embedded\n"sv, base_script_path.c_str());
-					base_script = vm_->CompileScript(__vmod_base_script.c_str(), base_script_name.c_str());
+					base_script = CompileScript_strict(vm_, __vmod_base_script.c_str(), base_script_name.c_str());
 					if(!base_script || base_script == gsdk::INVALID_HSCRIPT) {
 						error("vmod: failed to compile embedded base script\n"sv);
 						return false;
@@ -1577,7 +1590,7 @@ namespace vmod
 			error("vmod: missing base script file '%s'\n"sv, base_script_path.c_str());
 			return false;
 		#else
-			base_script = vm_->CompileScript(__vmod_base_script.c_str(), base_script_name.c_str());
+			base_script = CompileScript_strict(vm_, __vmod_base_script.c_str(), base_script_name.c_str());
 			if(!base_script || base_script == gsdk::INVALID_HSCRIPT) {
 				error("vmod: failed to compile embedded base script\n"sv);
 				return false;
@@ -1611,14 +1624,14 @@ namespace vmod
 				{
 					std::unique_ptr<unsigned char[]> script_data{read_file(server_init_path)};
 
-					server_init_script = vm_->CompileScript(reinterpret_cast<const char *>(script_data.get()), server_init_path.c_str());
+					server_init_script = CompileScript_strict(vm_, reinterpret_cast<const char *>(script_data.get()), server_init_path.c_str());
 					if(!server_init_script || server_init_script == gsdk::INVALID_HSCRIPT) {
 					#ifndef __VMOD_SERVER_SCRIPT_HEADER_INCLUDED
 						error("vmod: failed to compile server init script from file '%s'\n"sv, server_init_path.c_str());
 						return false;
 					#else
 						error("vmod: failed to compile server init script from file '%s' re-trying with embedded\n"sv, server_init_path.c_str());
-						server_init_script = vm_->CompileScript(__vmod_server_init_script.c_str(), "vscript_server.nut");
+						server_init_script = CompileScript_strict(vm_, __vmod_server_init_script.c_str(), "vscript_server.nut");
 						if(!server_init_script || server_init_script == gsdk::INVALID_HSCRIPT) {
 							error("vmod: failed to compile embedded base script\n"sv);
 							return false;
@@ -1631,7 +1644,7 @@ namespace vmod
 				error("vmod: missing server init script file '%s'\n"sv, server_init_path.c_str());
 				return false;
 			#else
-				server_init_script = vm_->CompileScript(__vmod_server_init_script.c_str(), "vscript_server.nut");
+				server_init_script = CompileScript_strict(vm_, __vmod_server_init_script.c_str(), "vscript_server.nut");
 				if(!server_init_script || server_init_script == gsdk::INVALID_HSCRIPT) {
 					error("vmod: failed to compile embedded server init script\n"sv);
 					return false;
@@ -1956,7 +1969,9 @@ namespace vmod
 						file += "\n{\n"sv;
 
 						gsdk::HSCRIPT enum_table{value.get<gsdk::HSCRIPT>()};
-						bindings::docs::write(file, 1, enum_table, enum_name[0] == 'F' ? bindings::docs::write_enum_how::flags : bindings::docs::write_enum_how::normal);
+						if(enum_table && enum_table != gsdk::INVALID_HSCRIPT) {
+							bindings::docs::write(file, 1, enum_table, enum_name[0] == 'F' ? bindings::docs::write_enum_how::flags : bindings::docs::write_enum_how::normal);
+						}
 
 						file += '}';
 
@@ -2074,7 +2089,10 @@ namespace vmod
 
 										gsdk::fieldtype_t type{targetprop.fieldType};
 
-										std::size_t size{static_cast<std::size_t>(targetprop.fieldSizeInBytes)};
+										std::size_t size{static_cast<std::size_t>(-1)};
+										if(targetprop.fieldSizeInBytes > 0 && targetprop.fieldSize > 0) {
+											size = static_cast<std::size_t>(targetprop.fieldSizeInBytes / targetprop.fieldSize);
+										}
 
 										if(targetprop.fieldType == gsdk::FIELD_EMBEDDED) {
 											if(targetprop.td && targetprop.td->dataClassName) {
@@ -2567,6 +2585,7 @@ namespace vmod
 			internal_vscript_func_bindings.emplace_back(&func);
 		}
 
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2 || __VMOD_USING_CUSTOM_VM
 		{
 			gsdk::ScriptFunctionBinding_t &func{isweakref_desc};
 
@@ -2575,8 +2594,12 @@ namespace vmod
 			func.m_desc.m_pszScriptName = "IsWeakref";
 			func.m_desc.m_ReturnType = gsdk::FIELD_BOOLEAN;
 
+			func.m_desc.m_Parameters.emplace_back(gsdk::FIELD_HSCRIPT);
+			func.m_desc.m_Parameters.emplace_back(gsdk::FIELD_CSTRING);
+
 			internal_vscript_func_bindings.emplace_back(&func);
 		}
+	#endif
 
 		{
 			gsdk::ScriptFunctionBinding_t &func{getfunctionsignature_desc};
@@ -2586,9 +2609,28 @@ namespace vmod
 			func.m_desc.m_pszScriptName = "GetFunctionSignature";
 			func.m_desc.m_ReturnType = gsdk::FIELD_CSTRING;
 
+			func.m_desc.m_Parameters.emplace_back(gsdk::FIELD_HSCRIPT);
+			func.m_desc.m_Parameters.emplace_back(gsdk::FIELD_CSTRING);
+
 			internal_vscript_func_bindings.emplace_back(&func);
 		}
 
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2 || __VMOD_USING_CUSTOM_VM
+		{
+			gsdk::ScriptFunctionBinding_t &func{dumpobject_desc};
+
+			func.m_flags = 0;
+			func.m_desc.m_pszDescription = nullptr;
+			func.m_desc.m_pszScriptName = "DumpObject";
+			func.m_desc.m_ReturnType = gsdk::FIELD_VOID;
+
+			func.m_desc.m_Parameters.emplace_back(gsdk::FIELD_VARIANT);
+
+			internal_vscript_func_bindings.emplace_back(&func);
+		}
+	#endif
+
+	#if (GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2) && !defined __VMOD_USING_CUSTOM_VM
 		{
 			gsdk::ScriptFunctionBinding_t &func{makenamespace_desc};
 
@@ -2597,8 +2639,11 @@ namespace vmod
 			func.m_desc.m_pszScriptName = "MakeNamespace";
 			func.m_desc.m_ReturnType = gsdk::FIELD_VOID;
 
+			func.m_desc.m_Parameters.emplace_back(gsdk::FIELD_HSCRIPT);
+
 			internal_vscript_func_bindings.emplace_back(&func);
 		}
+	#endif
 
 		{
 			gsdk::ScriptClassDesc_t &tmp_desc{instance_desc};
@@ -2635,6 +2680,7 @@ namespace vmod
 			internal_vscript_class_bindings.emplace_back(&tmp_desc);
 		}
 
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2 || __VMOD_USING_CUSTOM_VM
 		{
 			gsdk::ScriptClassDesc_t &tmp_desc{quaternion_desc};
 
@@ -2686,6 +2732,7 @@ namespace vmod
 
 			internal_vscript_class_bindings.emplace_back(&tmp_desc);
 		}
+	#endif
 
 		internal_docs_built = true;
 	}

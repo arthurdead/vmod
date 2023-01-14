@@ -6,6 +6,7 @@
 #include "../gsdk/mathlib/vector.hpp"
 #include "../bindings/docs.hpp"
 #include "../filesystem.hpp"
+#include "../gsdk/tier1/utlstring.hpp"
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -22,6 +23,9 @@
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
+
+#define USQTrue (1u)
+#define USQFalse (0u)
 
 #define __VMOD_VM_FORCE_DEBUG
 
@@ -52,12 +56,16 @@ namespace vmod::vm
 	char squirrel_vm::err_buff[gsdk::MAXPRINTMSG];
 	char squirrel_vm::print_buff[gsdk::MAXPRINTMSG];
 
+#ifdef __VMOD_USING_QUIRREL
+	std::underlying_type_t<SQLangFeature> squirrel_vm::default_lang_feat{LF_STRICT_BOOL|LF_NO_PLUS_CONCAT|LF_EXPLICIT_ROOT_LOOKUP};
+#endif
+
 	squirrel_vm::~squirrel_vm() noexcept {}
 
 	static SQInteger developer(HSQUIRRELVM vm)
 	{
 		if(sq_gettop(vm) != 1) {
-			return sq_throwerror(vm, "wrong number of parameters");
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
 		}
 
 	#ifndef __VMOD_VM_FORCE_DEBUG
@@ -65,7 +73,7 @@ namespace vmod::vm
 	#else
 		sq_pushinteger(vm, 4);
 	#endif
-		return SQ_OK;
+		return 1;
 	}
 
 	static SQInteger get_func_signature(HSQUIRRELVM vm)
@@ -74,13 +82,13 @@ namespace vmod::vm
 
 		SQInteger top{sq_gettop(vm)};
 		if(top < 2 || top > 3) {
-			return sq_throwerror(vm, "wrong number of parameters");
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
 		}
 
 		HSQOBJECT func;
 		sq_resetobject(&func);
 		if(SQ_FAILED(sq_getstackobj(vm, -2, &func))) {
-			return sq_throwerror(vm, "failed to get func parameter");
+			return sq_throwerror(vm, _SC("failed to get func parameter"));
 		}
 
 		const SQChar *name{nullptr};
@@ -143,14 +151,14 @@ namespace vmod::vm
 				params.resize(num_params, _SC("<unknown>"));
 			}
 		} else {
-			return sq_throwerror(vm, "invalid function parameter");
+			return sq_throwerror(vm, _SC("invalid function parameter"));
 		}
 
 		const SQChar *new_name{nullptr};
 
 		if(top == 3) {
 			if(SQ_FAILED(sq_getstring(vm, -3, &new_name))) {
-				return sq_throwerror(vm, "failed to get name parameter");
+				return sq_throwerror(vm, _SC("failed to get name parameter"));
 			}
 		} else {
 			new_name = name;
@@ -179,7 +187,17 @@ namespace vmod::vm
 
 		sq_pushstring(vm, sig.c_str(), static_cast<SQInteger>(sig.length()));
 
-		return SQ_OK;
+		return 1;
+	}
+
+	static SQInteger is_weak_ref(HSQUIRRELVM vm)
+	{
+		return sq_throwerror(vm, _SC("not implemented yet"));
+	}
+
+	static SQInteger dump_object(HSQUIRRELVM vm)
+	{
+		return sq_throwerror(vm, _SC("not implemented yet"));
 	}
 
 	struct native_closure_info
@@ -200,7 +218,7 @@ namespace vmod::vm
 		T *vec{static_cast<T *>(userptr)};
 		delete vec;
 
-		return SQ_OK;
+		return 0;
 	}
 
 	template <typename T>
@@ -210,7 +228,7 @@ namespace vmod::vm
 
 		SQInteger top{sq_gettop(vm)};
 		if(top < 1 || top > 4) {
-			return sq_throwerror(vm, "wrong number of parameters");
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
 		}
 
 		float x{0.0f};
@@ -219,35 +237,37 @@ namespace vmod::vm
 
 		std::size_t num_args{static_cast<std::size_t>(top)};
 		if(num_args >= 2) {
-			if(SQ_FAILED(sq_getfloat(vm, -2, &x))) {
-				return sq_throwerror(vm, "failed to get x parameter");
+			if(SQ_FAILED(sq_getfloat(vm, 2, &x))) {
+				return sq_throwerror(vm, _SC("failed to get x parameter"));
 			}
 		}
 		if(num_args >= 3) {
-			if(SQ_FAILED(sq_getfloat(vm, -3, &y))) {
-				return sq_throwerror(vm, "failed to get y parameter");
+			if(SQ_FAILED(sq_getfloat(vm, 3, &y))) {
+				return sq_throwerror(vm, _SC("failed to get y parameter"));
 			}
 		}
 		if(num_args == 4) {
-			if(SQ_FAILED(sq_getfloat(vm, -4, &z))) {
-				return sq_throwerror(vm, "failed to get z parameter");
+			if(SQ_FAILED(sq_getfloat(vm, 4, &z))) {
+				return sq_throwerror(vm, _SC("failed to get z parameter"));
 			}
 		}
 
-		T *vec{new T{x, y, z}};
-
-		if(SQ_FAILED(sq_setinstanceup(vm, 1, vec))) {
-			delete vec;
-			return sq_throwerror(vm, "failed to set instance");
+		SQUserPointer userptr{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, 1, &userptr, typeid_ptr<T>()))) {
+			return sq_throwerror(vm, _SC("failed to get instance pointer"));
 		}
+
+		new (userptr) T{x, y, z};
 
 		sq_setreleasehook(vm, 1, &vector_release<T>);
 
-		return SQ_OK;
+		return 0;
 	}
 
 	void squirrel_vm::error_func(HSQUIRRELVM vm, const SQChar *fmt, ...)
 	{
+		using namespace std::literals::string_view_literals;
+
 		squirrel_vm *actual_vm{static_cast<squirrel_vm *>(sq_getforeignptr(vm))};
 
 		va_list vargs;
@@ -262,7 +282,7 @@ namespace vmod::vm
 	#endif
 		va_end(vargs);
 
-		error("%s", err_buff);
+		error("%s"sv, err_buff);
 
 		if(actual_vm->err_callback) {
 			(void)actual_vm->err_callback(gsdk::SCRIPT_LEVEL_ERROR, err_buff);
@@ -271,6 +291,8 @@ namespace vmod::vm
 
 	void squirrel_vm::print_func(HSQUIRRELVM vm, const SQChar *fmt, ...)
 	{
+		using namespace std::literals::string_view_literals;
+
 		squirrel_vm *actual_vm{static_cast<squirrel_vm *>(sq_getforeignptr(vm))};
 
 		va_list vargs;
@@ -285,11 +307,24 @@ namespace vmod::vm
 	#endif
 		va_end(vargs);
 
-		info("%s", print_buff);
+		info("%s"sv, print_buff);
 
 		if(actual_vm->output_callback) {
 			actual_vm->output_callback(print_buff);
 		}
+	}
+
+	template <typename ...Args>
+	static inline auto sq_compilebuffer_strict(HSQUIRRELVM vm, Args &&...args) noexcept -> decltype(sq_compilebuffer(vm, std::forward<Args>(args)...))
+	{
+	#ifdef __VMOD_USING_QUIRREL
+		_ss(vm)->defaultLangFeatures = (LF_STRICT_BOOL|LF_EXPLICIT_ROOT_LOOKUP|LF_NO_FUNC_DECL_SUGAR|LF_NO_CLASS_DECL_SUGAR|LF_NO_PLUS_CONCAT|LF_EXPLICIT_THIS);
+	#endif
+		auto &&ret{sq_compilebuffer(vm, std::forward<Args>(args)...)};
+	#ifdef __VMOD_USING_QUIRREL
+		_ss(vm)->defaultLangFeatures = squirrel_vm::default_lang_feat;
+	#endif
+		return ret;
 	}
 
 	bool squirrel_vm::Init()
@@ -303,12 +338,10 @@ namespace vmod::vm
 		}
 
 	#ifdef __VMOD_USING_QUIRREL
-		_ss(impl)->defaultLangFeatures = LF_STRICT_BOOL|LF_EXPLICIT_ROOT_LOOKUP|LF_NO_PLUS_CONCAT;
+		_ss(impl)->defaultLangFeatures = default_lang_feat;
 	#endif
 
 		sq_setforeignptr(impl, this);
-
-		sq_resetobject(&last_exception);
 
 		sq_setprintfunc(impl, print_func, error_func);
 
@@ -324,10 +357,9 @@ namespace vmod::vm
 		}
 
 		{
-			sq_resetobject(&root_table);
-
 			sq_pushroottable(impl);
 
+			sq_resetobject(&root_table);
 			if(SQ_FAILED(sq_getstackobj(impl, -1, &root_table))) {
 				error("vmod vm: failed to get root table obj\n"sv);
 				sq_pop(impl, 1);
@@ -353,17 +385,6 @@ namespace vmod::vm
 
 			if(SQ_FAILED(sqstd_register_stringlib(impl))) {
 				error("vmod vm: failed to register stringlib\n"sv);
-				return false;
-			}
-
-			if(SQ_FAILED(sqstd_register_datetimelib(impl))) {
-				error("vmod vm: failed to register datetimelib\n"sv);
-				sq_pop(impl, 1);
-				return false;
-			}
-
-			if(SQ_FAILED(sqstd_register_systemlib(impl))) {
-				error("vmod vm: failed to register systemlib\n"sv);
 				sq_pop(impl, 1);
 				return false;
 			}
@@ -374,11 +395,116 @@ namespace vmod::vm
 				return false;
 			}
 
+			if(SQ_FAILED(sqstd_register_systemlib(impl))) {
+				error("vmod vm: failed to register systemlib\n"sv);
+				sq_pop(impl, 1);
+				return false;
+			}
+
 			if(SQ_FAILED(sqstd_register_iolib(impl))) {
 				error("vmod vm: failed to register iolib\n"sv);
 				sq_pop(impl, 1);
 				return false;
 			}
+
+			if(SQ_FAILED(sqstd_register_datetimelib(impl))) {
+				error("vmod vm: failed to register datetimelib\n"sv);
+				sq_pop(impl, 1);
+				return false;
+			}
+
+			sq_pop(impl, 1);
+		}
+
+	#ifdef __VMOD_USING_QUIRREL
+		modules.reset(new SqModules{impl});
+		modules->registerBaseLibs();
+		modules->registerSystemLib();
+		modules->registerIoLib();
+		modules->registerDateTimeLib();
+	#endif
+
+		{
+			sq_pushroottable(impl);
+
+		#ifdef __VMOD_USING_QUIRREL
+			sq_pushstring(impl, _SC("_quirrel_"), 9);
+			sq_pushbool(impl, SQTrue);
+			(void)sq_newslot(impl, -3, SQFalse);
+		#else
+			sq_pushstring(impl, _SC("_squirrel_"), 10);
+			sq_pushbool(impl, SQTrue);
+			(void)sq_newslot(impl, -3, SQFalse);
+		#endif
+
+		#ifdef __VMOD_USING_QUIRREL
+			sq_pushstring(impl, _SC("_version_"), 9);
+			sq_pushstring(impl, SQUIRREL_VERSION, -1);
+			(void)sq_newslot(impl, -3, SQFalse);
+
+			static_assert(SQUIRREL_VERSION_NUMBER_MINOR < 10);
+			static_assert(SQUIRREL_VERSION_NUMBER_PATCH < 10);
+
+			sq_pushstring(impl, _SC("_versionnumber_"), 15);
+			sq_pushinteger(impl, ((SQUIRREL_VERSION_NUMBER_MAJOR * 100) + (SQUIRREL_VERSION_NUMBER_MINOR * 10) + SQUIRREL_VERSION_NUMBER_PATCH));
+			(void)sq_newslot(impl, -3, SQFalse);
+
+			sq_pushstring(impl, _SC("_versionnumber_patch_"), 21);
+			sq_pushinteger(impl, SQUIRREL_VERSION_NUMBER_PATCH);
+			(void)sq_newslot(impl, -3, SQFalse);
+
+			sq_pushstring(impl, _SC("_versionnumber_minor_"), 21);
+			sq_pushinteger(impl, SQUIRREL_VERSION_NUMBER_MINOR);
+			(void)sq_newslot(impl, -3, SQFalse);
+
+			sq_pushstring(impl, _SC("_versionnumber_major_"), 21);
+			sq_pushinteger(impl, SQUIRREL_VERSION_NUMBER_MAJOR);
+			(void)sq_newslot(impl, -3, SQFalse);
+		#else
+			static_assert(SQUIRREL_VERSION_NUMBER >= 100 && SQUIRREL_VERSION_NUMBER <= 999);
+
+			sq_pushstring(impl, _SC("_versionnumber_patch_"), 21);
+			sq_pushinteger(impl, (SQUIRREL_VERSION_NUMBER % 10));
+			(void)sq_newslot(impl, -3, SQFalse);
+
+			sq_pushstring(impl, _SC("_versionnumber_minor_"), 21);
+			sq_pushinteger(impl, ((SQUIRREL_VERSION_NUMBER % 100) - (SQUIRREL_VERSION_NUMBER % 10)));
+			(void)sq_newslot(impl, -3, SQFalse);
+
+			sq_pushstring(impl, _SC("_versionnumber_major_"), 21);
+			sq_pushinteger(impl, (SQUIRREL_VERSION_NUMBER / 100));
+			(void)sq_newslot(impl, -3, SQFalse);
+		#endif
+
+		#ifdef __VMOD_USING_QUIRREL
+			sq_pushstring(impl, _SC("_charsize_"), 10);
+			sq_pushinteger(impl, sizeof(SQChar));
+			(void)sq_newslot(impl, -3, SQFalse);
+		#endif
+
+			sq_pushstring(impl, _SC("_charalign_"), 11);
+			sq_pushinteger(impl, alignof(SQChar));
+			(void)sq_newslot(impl, -3, SQFalse);
+
+		#ifdef __VMOD_USING_QUIRREL
+			sq_pushstring(impl, _SC("_intsize_"), 9);
+			sq_pushinteger(impl, sizeof(SQInteger));
+			(void)sq_newslot(impl, -3, SQFalse);
+		#endif
+
+			sq_pushstring(impl, _SC("_intalign_"), 10);
+			sq_pushinteger(impl, alignof(SQInteger));
+			(void)sq_newslot(impl, -3, SQFalse);
+
+		#ifdef __VMOD_USING_QUIRREL
+			sq_pushstring(impl, _SC("_floatsize_"), 11);
+			sq_pushinteger(impl, sizeof(SQFloat));
+			(void)sq_newslot(impl, -3, SQFalse);
+		#endif
+
+			sq_pushstring(impl, _SC("_floatalign_"), 12);
+			sq_pushinteger(impl, alignof(SQFloat));
+			(void)sq_newslot(impl, -3, SQFalse);
 
 			sq_pop(impl, 1);
 		}
@@ -394,14 +520,11 @@ namespace vmod::vm
 				}
 				if(debug_vm) {
 					if(SQ_FAILED(sq_setnativeclosurename(impl, -1, info.name.data()))) {
-						error("vmod vm: failed to set '%s' name\n"sv, info.name.data());
-						sq_pop(impl, 2);
-						return false;
+						warning("vmod vm: failed to set '%s' name\n"sv, info.name.data());
 					}
 				}
 				if(SQ_FAILED(sq_newslot(impl, -3, SQFalse))) {
 					error("vmod vm: failed to create '%s'\n"sv, info.name.data());
-					sq_pop(impl, 2);
 					return false;
 				}
 				return true;
@@ -412,9 +535,8 @@ namespace vmod::vm
 			sq_pushroottable(impl);
 
 			if(!register_func({
-				"developer"sv, developer, -1, "."sv
+				"developer"sv, developer, 1, "."sv
 			})) {
-				error("vmod vm: failed to register 'developer'\n"sv);
 				sq_pop(impl, 1);
 				return false;
 			}
@@ -422,7 +544,20 @@ namespace vmod::vm
 			if(!register_func({
 				"GetFunctionSignature"sv, get_func_signature, -2, ".cs"sv
 			})) {
-				error("vmod vm: failed to register 'GetFunctionSignature'\n"sv);
+				sq_pop(impl, 1);
+				return false;
+			}
+
+			if(!register_func({
+				"IsWeakref"sv, is_weak_ref, 3, "..."sv
+			})) {
+				sq_pop(impl, 1);
+				return false;
+			}
+
+			if(!register_func({
+				"DumpObject"sv, dump_object, 2, ".."sv
+			})) {
 				sq_pop(impl, 1);
 				return false;
 			}
@@ -431,7 +566,7 @@ namespace vmod::vm
 		}
 
 		auto register_class{
-			[this,register_func]<std::size_t S>(HSQOBJECT &classobj, std::string_view name, auto type, native_closure_info (&&funcs)[S]) noexcept -> bool {
+			[this,register_func]<std::size_t S>(HSQOBJECT &classobj, bool &got, std::string_view name, auto type, native_closure_info (&&funcs)[S]) noexcept -> bool {
 				using type_t = typename decltype(type)::type;
 
 				sq_pushstring(impl, name.data(), static_cast<SQInteger>(name.length()));
@@ -440,7 +575,7 @@ namespace vmod::vm
 					sq_pop(impl, 1);
 					return false;
 				}
-				if(SQ_FAILED(sq_settypetag(impl, -1, const_cast<std::type_info *>(&typeid(type_t))))) {
+				if(SQ_FAILED(sq_settypetag(impl, -1, typeid_ptr<type_t>()))) {
 					error("vmod vm: failed to set '%s' typetag\n"sv, name.data());
 					sq_pop(impl, 2);
 					return false;
@@ -466,10 +601,13 @@ namespace vmod::vm
 					return false;
 				}
 				sq_addref(impl, &classobj);
+				got = true;
+
 				if(SQ_FAILED(sq_newslot(impl, -3, SQFalse))) {
 					error("vmod vm: failed to create '%s'\n"sv, name.data());
 					sq_release(impl, &classobj);
-					sq_pop(impl, 2);
+					sq_resetobject(&classobj);
+					got = false;
 					return false;
 				}
 
@@ -481,25 +619,19 @@ namespace vmod::vm
 			sq_pushroottable(impl);
 
 			if(!register_class(
-				vector_class, "Vector"sv, std::type_identity<gsdk::Vector>{}, {
+				vector_class, vector_registered, "Vector"sv, std::type_identity<gsdk::Vector>{}, {
 					native_closure_info{"constructor"sv, vector_ctor<gsdk::Vector>, -1, ".nnn"sv}
 				})) {
-				error("vmod vm: failed to register 'Vector'\n"sv);
 				sq_pop(impl, 1);
 				return false;
-			} else {
-				vector_registered = true;
 			}
 
 			if(!register_class(
-				qangle_class, "QAngle"sv, std::type_identity<gsdk::QAngle>{}, {
+				qangle_class, qangle_registered, "QAngle"sv, std::type_identity<gsdk::QAngle>{}, {
 					native_closure_info{"constructor"sv, vector_ctor<gsdk::QAngle>, -1, ".nnn"sv}
 				})) {
-				error("vmod vm: failed to register 'QAngle'\n"sv);
 				sq_pop(impl, 1);
 				return false;
-			} else {
-				qangle_registered = true;
 			}
 
 			sq_pop(impl, 1);
@@ -517,13 +649,13 @@ namespace vmod::vm
 					std::size_t len{0};
 					std::unique_ptr<unsigned char[]> script_data{read_file(init_script_path, len)};
 
-					if(SQ_FAILED(sq_compilebuffer(impl, reinterpret_cast<const char *>(script_data.get()), static_cast<SQInteger>(len), _SC("init.nut"), SQTrue))) {
+					if(SQ_FAILED(sq_compilebuffer_strict(impl, reinterpret_cast<const char *>(script_data.get()), static_cast<SQInteger>(len), _SC("init.nut"), USQTrue))) {
 					#ifndef __VMOD_INIT_SCRIPT_HEADER_INCLUDED
 						error("vmod vm: failed to compile init script from file '%s'\n"sv, init_script_path.c_str());
 						return false;
 					#else
 						error("vmod vm: failed to compile init script from file '%s' re-trying with embedded\n"sv, init_script_path.c_str());
-						if(SQ_FAILED(sq_compilebuffer(impl, __vmod_vm_init_script.c_str(), static_cast<SQInteger>(__vmod_vm_init_script.length()), _SC("init.nut"), SQTrue))) {
+						if(SQ_FAILED(sq_compilebuffer_strict(impl, __vmod_vm_init_script.c_str(), static_cast<SQInteger>(__vmod_vm_init_script.length()), _SC("init.nut"), USQTrue))) {
 							error("vmod vm: failed to compile embedded init script\n"sv);
 							return false;
 						}
@@ -532,7 +664,7 @@ namespace vmod::vm
 				}
 			} else {
 			#ifdef __VMOD_INIT_SCRIPT_HEADER_INCLUDED
-				if(SQ_FAILED(sq_compilebuffer(impl, __vmod_vm_init_script.c_str(), static_cast<SQInteger>(__vmod_vm_init_script.length()), _SC("init.nut"), SQTrue))) {
+				if(SQ_FAILED(sq_compilebuffer_strict(impl, __vmod_vm_init_script.c_str(), static_cast<SQInteger>(__vmod_vm_init_script.length()), _SC("init.nut"), USQTrue))) {
 					error("vmod vm: failed to compile embedded init script\n"sv);
 					return false;
 				}
@@ -565,61 +697,59 @@ namespace vmod::vm
 			}
 		}
 
+		auto get_req_func{
+			[this](HSQOBJECT &funcobj, bool &got, std::string_view name) noexcept -> bool {
+				sq_pushstring(impl, name.data(), static_cast<SQInteger>(name.length()));
+				if(SQ_FAILED(sq_get(impl, -2))) {
+					error("vmod vm: failed to get '%s'\n"sv, name.data());
+					return false;
+				}
+				sq_resetobject(&funcobj);
+				if(SQ_FAILED(sq_getstackobj(impl, -1, &funcobj))) {
+					error("vmod vm: failed to get '%s' obj\n"sv, name.data());
+					sq_pop(impl, 1);
+					return false;
+				}
+				sq_addref(impl, &funcobj);
+				got = true;
+				sq_pop(impl, 1);
+				return true;
+			}
+		};
+
+		auto get_opt_func{
+			[this](HSQOBJECT &funcobj, bool &got, std::string_view name) noexcept -> void {
+				sq_pushstring(impl, name.data(), static_cast<SQInteger>(name.length()));
+				if(SQ_SUCCEEDED(sq_get(impl, -2))) {
+					sq_resetobject(&funcobj);
+					if(SQ_SUCCEEDED(sq_getstackobj(impl, -1, &funcobj))) {
+						sq_addref(impl, &funcobj);
+						got = true;
+					} else {
+						warning("vmod vm: failed to get '%s' obj\n"sv, name.data());
+					}
+					sq_pop(impl, 1);
+				} else {
+					warning("vmod vm: failed to get '%s'\n"sv, name.data());
+				}
+			}
+		};
+
 		{
 			sq_pushroottable(impl);
 
-			{
-				sq_pushstring(impl, _SC("VSquirrel_OnCreateScope"), 23);
-				if(SQ_FAILED(sq_get(impl, -2))) {
-					error("vmod vm: failed to get 'VSquirrel_OnCreateScope'\n"sv);
-					sq_pop(impl, 1);
-					return false;
-				}
-				sq_resetobject(&create_scope_func);
-				if(SQ_FAILED(sq_getstackobj(impl, -1, &create_scope_func))) {
-					error("vmod vm: failed to get 'VSquirrel_OnCreateScope' obj\n"sv);
-					sq_pop(impl, 1);
-					return false;
-				}
-				sq_addref(impl, &create_scope_func);
-				got_create_scope = true;
+			if(!get_req_func(create_scope_func, got_create_scope, "VSquirrel_OnCreateScope"sv)) {
 				sq_pop(impl, 1);
+				return false;
 			}
 
-			{
-				sq_pushstring(impl, _SC("VSquirrel_OnReleaseScope"), 24);
-				if(SQ_FAILED(sq_get(impl, -2))) {
-					error("vmod vm: failed to get 'VSquirrel_OnReleaseScope'\n"sv);
-					sq_pop(impl, 1);
-					return false;
-				}
-				sq_resetobject(&release_scope_func);
-				if(SQ_FAILED(sq_getstackobj(impl, -1, &release_scope_func))) {
-					error("vmod vm: failed to get 'VSquirrel_OnReleaseScope' obj\n"sv);
-					sq_pop(impl, 1);
-					return false;
-				}
-				sq_addref(impl, &release_scope_func);
-				got_release_scope = true;
+			if(!get_req_func(release_scope_func, got_release_scope, "VSquirrel_OnReleaseScope"sv)) {
 				sq_pop(impl, 1);
+				return false;
 			}
 
 			if(debug_vm) {
-				{
-					sq_pushstring(impl, _SC("RegisterFunctionDocumentation"), 29);
-					if(SQ_SUCCEEDED(sq_get(impl, -2))) {
-						sq_resetobject(&register_func_desc);
-						if(SQ_SUCCEEDED(sq_getstackobj(impl, -1, &register_func_desc))) {
-							sq_addref(impl, &register_func_desc);
-							got_reg_func_desc = true;
-						} else {
-							warning("vmod vm: failed to get 'RegisterFunctionDocumentation' obj\n"sv);
-						}
-						sq_pop(impl, 1);
-					} else {
-						warning("vmod vm: failed to get 'RegisterFunctionDocumentation'\n"sv);
-					}
-				}
+				get_opt_func(register_func_desc, got_reg_func_desc, "RegisterFunctionDocumentation"sv);
 			}
 
 			sq_pop(impl, 1);
@@ -633,32 +763,52 @@ namespace vmod::vm
 		if(impl) {
 			if(qangle_registered) {
 				sq_release(impl, &qangle_class);
+				sq_resetobject(&qangle_class);
+				qangle_registered = false;
 			}
 			if(got_last_exception) {
 				sq_release(impl, &last_exception);
+				sq_resetobject(&last_exception);
+				got_last_exception = false;
 			}
 			if(got_root_table) {
 				sq_release(impl, &root_table);
+				sq_resetobject(&root_table);
+				got_root_table = false;
 			}
 			if(vector_registered) {
 				sq_release(impl, &vector_class);
+				sq_resetobject(&vector_class);
+				vector_registered = false;
 			}
 			for(auto &&it : registered_classes) {
 				sq_release(impl, &it.second->obj);
+				sq_resetobject(&it.second->obj);
 			}
+			registered_classes.clear();
+			registered_funcs.clear();
 			if(got_create_scope) {
 				sq_release(impl, &create_scope_func);
+				sq_resetobject(&create_scope_func);
+				got_create_scope = false;
 			}
 			if(got_release_scope) {
 				sq_release(impl, &release_scope_func);
+				sq_resetobject(&release_scope_func);
+				got_release_scope = false;
 			}
 			if(got_reg_func_desc) {
 				sq_release(impl, &register_func_desc);
+				sq_resetobject(&register_func_desc);
+				got_reg_func_desc = false;
 			}
+			modules.reset(nullptr);
 			sq_collectgarbage(impl);
 			sq_close(impl);
 			impl = nullptr;
 		}
+
+		unique_ids = 0;
 	}
 
 	bool squirrel_vm::ConnectDebugger()
@@ -724,6 +874,19 @@ namespace vmod::vm
 		}
 	}
 
+	gsdk::HSCRIPT squirrel_vm::CompileScript_strict(const char *code, const char *name) noexcept
+	{
+		if(!name || name[0] == '\0') {
+			name = "<<unnamed>>";
+		}
+
+		if(SQ_FAILED(sq_compilebuffer_strict(impl, code, static_cast<SQInteger>(std::strlen(code)), name, USQTrue))) {
+			return gsdk::INVALID_HSCRIPT;
+		}
+
+		return compile_script();
+	}
+
 	gsdk::HSCRIPT squirrel_vm::CompileScript(const char *code, const char *name)
 	{
 		if(!name || name[0] == '\0') {
@@ -734,6 +897,11 @@ namespace vmod::vm
 			return gsdk::INVALID_HSCRIPT;
 		}
 
+		return compile_script();
+	}
+
+	gsdk::HSCRIPT squirrel_vm::compile_script() noexcept
+	{
 		HSQOBJECT *script_obj{new HSQOBJECT};
 		sq_resetobject(script_obj);
 
@@ -840,6 +1008,7 @@ namespace vmod::vm
 
 		HSQOBJECT *copy{new HSQOBJECT};
 		sq_resetobject(copy);
+
 		if(SQ_FAILED(sq_getstackobj(impl, -1, copy))) {
 			sq_release(impl, copy);
 			delete copy;
@@ -889,6 +1058,8 @@ namespace vmod::vm
 			} else {
 				sq_addref(impl, copy);
 			}
+
+			sq_pop(impl, 1);
 		}
 
 		sq_pop(impl, 1);
@@ -902,16 +1073,39 @@ namespace vmod::vm
 		delete obj;
 	}
 
-	void squirrel_vm::push(const gsdk::ScriptVariant_t &var) noexcept
+	bool squirrel_vm::push(const gsdk::ScriptVariant_t &var) noexcept
 	{
+		auto copy_vector{
+			[this,&var]<typename T>(const HSQOBJECT &classobj, T *(gsdk::ScriptVariant_t::*member)) noexcept -> bool {
+				sq_pushobject(impl, classobj);
+				if(SQ_FAILED(sq_createinstance(impl, -1))) {
+					sq_pop(impl, 1);
+					return false;
+				}
+
+				SQUserPointer userptr{nullptr};
+				if(SQ_FAILED(sq_getinstanceup(impl, -1, &userptr, typeid_ptr<T>()))) {
+					sq_pop(impl, 2);
+					return false;
+				}
+
+				new (userptr) T{*(var.*member)};
+
+				sq_remove(impl, -2);
+				return true;
+			}
+		};
+
 		switch(var.m_type) {
 			case gsdk::FIELD_VOID: {
 				sq_pushnull(impl);
-			} break;
+				return true;
+			}
 			case gsdk::FIELD_TIME:
 			case gsdk::FIELD_FLOAT: {
 				sq_pushfloat(impl, var.m_float);
-			} break;
+				return true;
+			}
 			case gsdk::FIELD_FLOAT64: {
 			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 				sq_pushfloat(impl, static_cast<float>(var.m_double));
@@ -920,40 +1114,48 @@ namespace vmod::vm
 			#else
 				#error
 			#endif
-			} break;
+				return true;
+			}
 			case gsdk::FIELD_STRING: {
 				const char *ccstr{gsdk::vscript::STRING(var.m_tstr)};
 
 				sq_pushstring(impl, ccstr, static_cast<SQInteger>(std::strlen(ccstr)));
-			} break;
+				return true;
+			}
 			case gsdk::FIELD_MODELNAME:
 			case gsdk::FIELD_SOUNDNAME:
 			case gsdk::FIELD_CSTRING: {
 				sq_pushstring(impl, var.m_ccstr, static_cast<SQInteger>(std::strlen(var.m_ccstr)));
-			} break;
+				return true;
+			}
 			case gsdk::FIELD_CHARACTER: {
 				char buff[2]{var.m_char, '\0'};
 				sq_pushstring(impl, buff, 1);
-			} break;
+				return true;
+			}
 			case gsdk::FIELD_SHORT: {
 				sq_pushinteger(impl, var.m_short);
-			} break;
+				return true;
+			}
 			case gsdk::FIELD_POSITIVEINTEGER_OR_NULL: {
 				if(var.m_int > 0) {
 					sq_pushinteger(impl, var.m_int);
 				} else {
 					sq_pushnull(impl);
 				}
-			} break;
+				return true;
+			}
 			case gsdk::FIELD_MODELINDEX:
 			case gsdk::FIELD_MATERIALINDEX:
 			case gsdk::FIELD_TICK:
 			case gsdk::FIELD_INTEGER: {
 				sq_pushinteger(impl, var.m_int);
-			} break;
+				return true;
+			}
 			case gsdk::FIELD_UINT32: {
 				sq_pushinteger(impl, static_cast<SQInteger>(var.m_uint));
-			} break;
+				return true;
+			}
 		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 			case gsdk::FIELD_INTEGER64: {
 			#if GSDK_ENGINE == GSDK_ENGINE_L4D2
@@ -961,7 +1163,8 @@ namespace vmod::vm
 			#else
 				sq_pushinteger(impl, static_cast<SQInteger>(var.m_long));
 			#endif
-			} break;
+				return true;
+			}
 		#endif
 			case gsdk::FIELD_UINT64: {
 			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
@@ -971,45 +1174,37 @@ namespace vmod::vm
 			#else
 				#error
 			#endif
-			} break;
+				return true;
+			} 
 			case gsdk::FIELD_BOOLEAN: {
 				sq_pushbool(impl, var.m_bool);
-			} break;
-			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE: {
-				if(var.m_object && var.m_object != gsdk::INVALID_HSCRIPT) {
-					sq_addref(impl, var.m_object);
-				}
-				[[fallthrough]];
+				return true;
 			}
+			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
 			case gsdk::FIELD_HSCRIPT: {
 				if(var.m_object && var.m_object != gsdk::INVALID_HSCRIPT) {
 					sq_pushobject(impl, *var.m_object);
 				} else {
 					sq_pushnull(impl);
 				}
-			} break;
+				return true;
+			}
 			case gsdk::FIELD_QANGLE: {
-				sq_pushobject(impl, qangle_class);
-				sq_createinstance(impl, -1);
-				sq_setinstanceup(impl, -1, var.m_vector);
-				sq_remove(impl, -2);
-			} break;
+				return copy_vector(qangle_class, &gsdk::ScriptVariant_t::m_qangle);
+			}
 			case gsdk::FIELD_POSITION_VECTOR:
 			case gsdk::FIELD_VECTOR: {
-				sq_pushobject(impl, vector_class);
-				sq_createinstance(impl, -1);
-				sq_setinstanceup(impl, -1, var.m_vector);
-				sq_remove(impl, -2);
-			} break;
+				return copy_vector(vector_class, &gsdk::ScriptVariant_t::m_vector);
+			}
 			case gsdk::FIELD_VARIANT: {
-				sq_pushnull(impl);
-			} break;
+				return false;
+			}
 			case gsdk::FIELD_TYPEUNKNOWN: {
-				sq_pushnull(impl);
-			} break;
+				return false;
+			}
 			default: {
-				sq_pushnull(impl);
-			} break;
+				return false;
+			}
 		}
 	}
 
@@ -1082,6 +1277,22 @@ namespace vmod::vm
 					return false;
 				}
 			}
+			case OT_NATIVECLOSURE:
+			case OT_TABLE: {
+				var.m_object = new HSQOBJECT;
+				sq_resetobject(var.m_object);
+				if(SQ_SUCCEEDED(sq_getstackobj(impl, idx, var.m_object))) {
+					sq_addref(impl, var.m_object);
+					var.m_type = gsdk::FIELD_HSCRIPT;
+					var.m_flags |= gsdk::SV_FREE;
+					return true;
+				} else {
+					delete var.m_object;
+					var.m_type = gsdk::FIELD_VOID;
+					var.m_object = gsdk::INVALID_HSCRIPT;
+					return false;
+				}
+			}
 			default: {
 				var.m_type = gsdk::FIELD_TYPEUNKNOWN;
 				var.m_object = gsdk::INVALID_HSCRIPT;
@@ -1090,7 +1301,7 @@ namespace vmod::vm
 		}
 	}
 
-	void squirrel_vm::get(const HSQOBJECT &obj, gsdk::ScriptVariant_t &var) noexcept
+	bool squirrel_vm::get(const HSQOBJECT &obj, gsdk::ScriptVariant_t &var) noexcept
 	{
 		std::memset(var.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
 
@@ -1098,19 +1309,23 @@ namespace vmod::vm
 			case OT_NULL: {
 				var.m_type = gsdk::FIELD_VOID;
 				var.m_object = gsdk::INVALID_HSCRIPT;
-			} break;
+				return true;
+			}
 			case OT_INTEGER: {
 				var.m_type = gsdk::FIELD_INTEGER;
 				var.m_int = sq_objtointeger(&obj);
-			} break;
+				return true;
+			}
 			case OT_FLOAT: {
 				var.m_type = gsdk::FIELD_FLOAT;
 				var.m_float = sq_objtofloat(&obj);
-			} break;
+				return true;
+			}
 			case OT_BOOL: {
 				var.m_type = gsdk::FIELD_BOOLEAN;
 				var.m_bool = sq_objtobool(&obj);
-			} break;
+				return true;
+			}
 			case OT_STRING: {
 				const SQChar *str{sq_objtostring(&obj)};
 				if(str) {
@@ -1130,11 +1345,33 @@ namespace vmod::vm
 					var.m_type = gsdk::FIELD_VOID;
 					var.m_object = gsdk::INVALID_HSCRIPT;
 				}
-			} break;
+				return true;
+			}
+			case OT_NATIVECLOSURE:
+			case OT_TABLE: {
+				sq_pushobject(impl, obj);
+
+				var.m_object = new HSQOBJECT;
+				sq_resetobject(var.m_object);
+				if(SQ_SUCCEEDED(sq_getstackobj(impl, -1, var.m_object))) {
+					sq_addref(impl, var.m_object);
+					sq_pop(impl, 1);
+					var.m_type = gsdk::FIELD_HSCRIPT;
+					var.m_flags |= gsdk::SV_FREE;
+					return true;
+				} else {
+					sq_pop(impl, 1);
+					delete var.m_object;
+					var.m_type = gsdk::FIELD_VOID;
+					var.m_object = gsdk::INVALID_HSCRIPT;
+					return false;
+				}
+			}
 			default: {
 				var.m_type = gsdk::FIELD_TYPEUNKNOWN;
 				var.m_object = gsdk::INVALID_HSCRIPT;
-			} break;
+				return false;
+			}
 		}
 	}
 
@@ -1155,7 +1392,9 @@ namespace vmod::vm
 
 		bool failed{false};
 
-		if(SQ_SUCCEEDED(sq_call(impl, 1+num_args, ret_var ? SQTrue : SQFalse , SQTrue))) {
+		if(SQ_FAILED(sq_call(impl, 1+num_args, ret_var ? SQTrue : SQFalse, SQTrue))) {
+			failed = true;
+		} else if(ret_var) {
 			HSQOBJECT ret_obj;
 			sq_resetobject(&ret_obj);
 
@@ -1166,8 +1405,6 @@ namespace vmod::vm
 			}
 
 			sq_pop(impl, 1);
-		} else {
-			failed = true;
 		}
 
 		sq_pop(impl, 1);
@@ -1183,27 +1420,101 @@ namespace vmod::vm
 
 	SQInteger squirrel_vm::static_func_call(HSQUIRRELVM vm)
 	{
-		return SQ_ERROR;
+		squirrel_vm *actual_vm{static_cast<squirrel_vm *>(sq_getforeignptr(vm))};
+
+		SQInteger top{sq_gettop(vm)};
+		if(top < 2) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr{nullptr};
+		if(SQ_FAILED(sq_getuserpointer(vm, -1, &userptr))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		gsdk::ScriptFunctionBinding_t *info{static_cast<gsdk::ScriptFunctionBinding_t *>(userptr)};
+
+		std::size_t num_params{info->m_desc.m_Parameters.size()};
+		if(static_cast<std::size_t>(top-2) != num_params) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		bool is_arg_void{num_params == 0};
+		bool is_ret_void{info->m_desc.m_ReturnType == gsdk::FIELD_VOID};
+
+		std::vector<gsdk::ScriptVariant_t> params;
+
+		if(!is_arg_void) {
+			params.resize(num_params);
+
+			for(std::size_t i{0}; i < num_params; ++i) {
+				if(!actual_vm->get(2+static_cast<SQInteger>(i), params[i])) {
+					return sq_throwerror(vm, _SC("wrong number of parameters"));
+				}
+			}
+		}
+
+		gsdk::ScriptVariant_t ret_var;
+		bool success{info->m_pfnBinding(info->m_pFunction, nullptr, is_arg_void ? nullptr : params.data(), static_cast<int>(num_params), is_ret_void ? nullptr : &ret_var)};
+
+		if(actual_vm->got_last_exception) {
+			sq_pushobject(vm, actual_vm->last_exception);
+
+			SQRESULT res{sq_throwobject(vm)};
+
+			sq_release(vm, &actual_vm->last_exception);
+			actual_vm->got_last_exception = false;
+
+			sq_resetobject(&actual_vm->last_exception);
+
+			return res;
+		} else if(!success) {
+			return sq_throwerror(vm, _SC("binding function failed"));
+		}
+
+		if(!is_ret_void) {
+			if(!actual_vm->push(ret_var)) {
+				return sq_throwerror(vm, _SC("failed to push return"));
+			}
+		}
+
+		return is_ret_void ? 0 : 1;
 	}
 
 	SQInteger squirrel_vm::member_func_call(HSQUIRRELVM vm)
 	{
-		return SQ_ERROR;
+		SQInteger top{sq_gettop(vm)};
+
+		debugtrap();
+
+		return sq_throwerror(vm, _SC("not implemented yet"));
 	}
 
-	SQInteger squirrel_vm::generic_ctor(HSQUIRRELVM vm)
+	SQInteger squirrel_vm::external_ctor(HSQUIRRELVM vm)
 	{
-		return SQ_ERROR;
+		debugtrap();
+
+		return sq_throwerror(vm, _SC("not implemented yet"));
 	}
 
 	SQInteger squirrel_vm::generic_dtor(SQUserPointer userptr, SQInteger size)
 	{
-		return SQ_ERROR;
+		instance_info_t *info{static_cast<instance_info_t *>(userptr)};
+
+		delete info;
+
+		return 0;
 	}
 
 	SQInteger squirrel_vm::external_dtor(SQUserPointer userptr, SQInteger size)
 	{
-		return SQ_ERROR;
+		instance_info_t *info{static_cast<instance_info_t *>(userptr)};
+
+		info->classinfo->m_pfnDestruct(info->ptr);
+
+		delete info;
+
+		return 0;
 	}
 
 	bool squirrel_vm::register_func(const gsdk::ScriptClassDesc_t *classinfo, const gsdk::ScriptFunctionBinding_t *info, std::string_view name_str) noexcept
@@ -1213,16 +1524,18 @@ namespace vmod::vm
 
 		sq_pushstring(impl, name_str.data(), static_cast<SQInteger>(name_str.length()));
 		if(classinfo && (info->m_flags & gsdk::SF_MEMBER_FUNC)) {
+			sq_pushuserpointer(impl, const_cast<gsdk::ScriptClassDesc_t *>(classinfo));
 			sq_pushuserpointer(impl, const_cast<gsdk::ScriptFunctionBinding_t *>(info));
-			sq_newclosure(impl, member_func_call, 1);
+			sq_newclosure(impl, member_func_call, 2);
 		} else {
 			sq_pushuserpointer(impl, const_cast<gsdk::ScriptFunctionBinding_t *>(info));
 			sq_newclosure(impl, static_func_call, 1);
 		}
 
-		if(SQ_FAILED(sq_setnativeclosurename(impl, -1, name_str.data()))) {
-			sq_pop(impl, 2);
-			return false;
+		if(debug_vm) {
+			if(SQ_FAILED(sq_setnativeclosurename(impl, -1, name_str.data()))) {
+				warning("vmod vm: failed to set '%s' name\n"sv, name_str.data());
+			}
 		}
 
 		std::string typemask{"."s};
@@ -1289,12 +1602,9 @@ namespace vmod::vm
 			}
 		}
 
-		if(SQ_FAILED(sq_setparamscheck(impl, static_cast<SQInteger>(info->m_desc.m_Parameters.size()), typemask.empty() ? nullptr : typemask.c_str()))) {
+		if(SQ_FAILED(sq_setparamscheck(impl, 1+static_cast<SQInteger>(info->m_desc.m_Parameters.size()), typemask.empty() ? nullptr : typemask.c_str()))) {
+			error("vmod vm: failed to set '%s' typemask '%s'\n"sv, name_str.data(), typemask.c_str());
 			sq_pop(impl, 2);
-			return false;
-		}
-
-		if(SQ_FAILED(sq_newslot(impl, -3, (classinfo && !(info->m_flags & gsdk::SF_MEMBER_FUNC)) ? SQTrue : SQFalse))) {
 			return false;
 		}
 
@@ -1304,7 +1614,7 @@ namespace vmod::vm
 				if(SQ_SUCCEEDED(sq_getstackobj(impl, -1, &func_obj))) {
 					std::string sig;
 
-					sig += bindings::docs::type_name(info->m_desc.m_ReturnType);
+					sig += bindings::docs::type_name(info->m_desc.m_ReturnType, true);
 					sig += ' ';
 					if(classinfo) {
 						sig += classinfo->m_pszScriptName;
@@ -1313,7 +1623,7 @@ namespace vmod::vm
 					sig += name_str;
 					sig += '(';
 					for(gsdk::ScriptDataType_t param : info->m_desc.m_Parameters) {
-						sig += bindings::docs::type_name(param);
+						sig += bindings::docs::type_name(param, true);
 						sig += ", "sv;
 					}
 					if(!info->m_desc.m_Parameters.empty()) {
@@ -1333,24 +1643,37 @@ namespace vmod::vm
 			}
 		}
 
+		if(SQ_FAILED(sq_newslot(impl, -3, (classinfo && !(info->m_flags & gsdk::SF_MEMBER_FUNC)) ? SQTrue : SQFalse))) {
+			error("vmod vm: failed to create '%s'\n"sv, name_str.data());
+			return false;
+		}
+
 		return true;
 	}
 
 	void squirrel_vm::RegisterFunction_nonvirtual(gsdk::ScriptFunctionBinding_t *info) noexcept
 	{
+		using namespace std::literals::string_view_literals;
+
 		std::string name_str{info->m_desc.m_pszScriptName};
 
 		if(registered_funcs.find(name_str) != registered_funcs.end()) {
+			warning("vmod vm: duplicate '%s'\n"sv, name_str.c_str());
 			return;
 		}
 
 		sq_pushroottable(impl);
 
-		(void)register_func(nullptr, info, name_str);
+		bool success{register_func(nullptr, info, name_str)};
+		if(!success) {
+			error("vmod vm: failed to register '%s'\n"sv, name_str.c_str());
+		}
 
 		sq_pop(impl, 1);
 
-		registered_funcs.emplace(std::move(name_str), func_info_t{info});
+		if(success) {
+			registered_funcs.emplace(std::move(name_str), func_info_t{info});
+		}
 	}
 
 	void squirrel_vm::RegisterFunction(gsdk::ScriptFunctionBinding_t *info)
@@ -1358,24 +1681,37 @@ namespace vmod::vm
 		RegisterFunction_nonvirtual(info);
 	}
 
-	bool squirrel_vm::register_class(const gsdk::ScriptClassDesc_t *info, HSQOBJECT **obj) noexcept
+	SQInteger squirrel_vm::instance_str(HSQUIRRELVM vm)
 	{
-		std::string classname_str{info->m_pszScriptName};
+		return sq_throwerror(vm, _SC("not implemented yet"));
+	}
+
+	SQInteger squirrel_vm::instance_valid(HSQUIRRELVM vm)
+	{
+		return sq_throwerror(vm, _SC("not implemented yet"));
+	}
+
+	bool squirrel_vm::register_class(const gsdk::ScriptClassDesc_t *info, std::string &&classname_str, HSQOBJECT **obj) noexcept
+	{
+		using namespace std::literals::string_view_literals;
 
 		HSQOBJECT *base_obj{nullptr};
 
 		bool has_base{info->m_pBaseDesc != nullptr};
 
 		if(has_base) {
-			auto base_it{registered_classes.find(std::string{info->m_pBaseDesc->m_pszScriptName})};
+			std::string basename_str{info->m_pBaseDesc->m_pszScriptName};
+
+			auto base_it{registered_classes.find(basename_str)};
 			if(base_it == registered_classes.end()) {
 				sq_pushroottable(impl);
 
-				bool success{register_class(info->m_pBaseDesc, &base_obj)};
+				bool success{register_class(info->m_pBaseDesc, std::move(basename_str), &base_obj)};
 
 				sq_pop(impl, 1);
 
 				if(!success) {
+					error("vmod vm: failed to register '%s' base '%s'\n"sv, classname_str.c_str(), basename_str.c_str());
 					return false;
 				}
 			} else {
@@ -1388,14 +1724,19 @@ namespace vmod::vm
 			sq_pushobject(impl, *base_obj);
 		}
 		if(SQ_FAILED(sq_newclass(impl, has_base ? SQTrue : SQFalse))) {
+			error("vmod vm: failed to create '%s'\n"sv, classname_str.c_str());
 			return false;
 		}
 
 		if(SQ_FAILED(sq_settypetag(impl, -1, const_cast<gsdk::ScriptClassDesc_t *>(info)))) {
+			sq_pop(impl, has_base ? 3 : 2);
+			error("vmod vm: failed to set '%s' typetag\n"sv, classname_str.c_str());
 			return false;
 		}
 
 		if(SQ_FAILED(sq_setclassudsize(impl, -1, sizeof(instance_info_t)))) {
+			sq_pop(impl, has_base ? 3 : 2);
+			error("vmod vm: failed to set '%s' size\n"sv, classname_str.c_str());
 			return false;
 		}
 
@@ -1403,11 +1744,62 @@ namespace vmod::vm
 
 		if(info->m_pfnConstruct) {
 			sq_pushstring(impl, _SC("constructor"), 11);
-			auto udata{reinterpret_cast<const gsdk::ScriptClassDesc_t **>(sq_newuserdata(impl, sizeof(gsdk::ScriptClassDesc_t *)))};
-			*udata = info;
-			sq_newclosure(impl, generic_ctor, 1);
-			if(SQ_FAILED(sq_newslot(impl, -3, SQFalse))) {
+			sq_pushuserpointer(impl, const_cast<gsdk::ScriptClassDesc_t *>(info));
+			sq_newclosure(impl, external_ctor, 1);
+			if(SQ_FAILED(sq_setparamscheck(impl, 1, _SC("x")))) {
+				error("vmod vm: failed to set '%s' constructor typemask\n"sv);
+				sq_pop(impl, has_base ? 3 : 2);
 				return false;
+			}
+			if(debug_vm) {
+				if(SQ_FAILED(sq_setnativeclosurename(impl, -1, _SC("constructor")))) {
+					warning("vmod vm: failed to set '%s' constructor name\n"sv);
+				}
+			}
+			if(SQ_FAILED(sq_newslot(impl, -3, SQFalse))) {
+				sq_pop(impl, has_base ? 3 : 2);
+				error("vmod vm: failed to create '%s' constructor\n"sv, classname_str.c_str());
+				return false;
+			}
+		}
+
+		{
+			{
+				sq_pushstring(impl, _SC("_tostring"), 9);
+				sq_pushuserpointer(impl, const_cast<gsdk::ScriptClassDesc_t *>(info));
+				sq_newclosure(impl, instance_str, 1);
+				if(SQ_FAILED(sq_setparamscheck(impl, 1, _SC("x")))) {
+					warning("vmod vm: failed to set '%s' _tostring typemask\n"sv);
+				}
+				if(debug_vm) {
+					if(SQ_FAILED(sq_setnativeclosurename(impl, -1, _SC("_tostring")))) {
+						warning("vmod vm: failed to set '%s' _tostring name\n"sv);
+					}
+				}
+				if(SQ_FAILED(sq_newslot(impl, -3, SQFalse))) {
+					warning("vmod vm: failed to create '%s' _tostring\n"sv, classname_str.c_str());
+				}
+			}
+
+			{
+				sq_pushstring(impl, _SC("IsValid"), 7);
+				sq_pushuserpointer(impl, const_cast<gsdk::ScriptClassDesc_t *>(info));
+				sq_newclosure(impl, instance_valid, 1);
+				if(SQ_FAILED(sq_setparamscheck(impl, 1, _SC("x")))) {
+					error("vmod vm: failed to set '%s' IsValid typemask\n"sv);
+					sq_pop(impl, has_base ? 3 : 2);
+					return false;
+				}
+				if(debug_vm) {
+					if(SQ_FAILED(sq_setnativeclosurename(impl, -1, _SC("IsValid")))) {
+						warning("vmod vm: failed to set '%s' IsValid name\n"sv);
+					}
+				}
+				if(SQ_FAILED(sq_newslot(impl, -3, SQFalse))) {
+					sq_pop(impl, has_base ? 3 : 2);
+					error("vmod vm: failed to create '%s' IsValid\n"sv, classname_str.c_str());
+					return false;
+				}
 			}
 		}
 
@@ -1415,28 +1807,34 @@ namespace vmod::vm
 			std::string funcname_str{func_info.m_desc.m_pszScriptName};
 
 			if(tmpinfo->registered_funcs.find(funcname_str) != tmpinfo->registered_funcs.end()) {
+				warning("vmod vm: duplicate '%s::%s'\n"sv, classname_str.c_str(), funcname_str.c_str());
 				continue;
 			}
 
 			if(!register_func(info, &func_info, funcname_str)) {
+				sq_pop(impl, has_base ? 3 : 2);
+				error("vmod vm: failed to register '%s::%s'\n"sv, classname_str.c_str(), funcname_str.c_str());
 				return false;
 			}
 
 			tmpinfo->registered_funcs.emplace(std::move(funcname_str), func_info_t{&func_info});
 		}
 
-		if(SQ_FAILED(sq_newslot(impl, -3, SQFalse))) {
-			return false;
-		}
-
 		sq_resetobject(&tmpinfo->obj);
 
 		if(SQ_FAILED(sq_getstackobj(impl, -1, &tmpinfo->obj))) {
-			sq_pop(impl, 1);
+			error("vmod vm: failed to get '%s' obj\n"sv, classname_str.c_str());
 			return false;
 		}
 
 		sq_addref(impl, &tmpinfo->obj);
+
+		if(SQ_FAILED(sq_newslot(impl, -3, SQFalse))) {
+			sq_release(impl, &tmpinfo->obj);
+			sq_resetobject(&tmpinfo->obj);
+			error("vmod vm: failed to create '%s'\n"sv, classname_str.c_str());
+			return false;
+		}
 
 		auto this_it{registered_classes.emplace(std::move(classname_str), std::move(tmpinfo)).first};
 
@@ -1444,18 +1842,28 @@ namespace vmod::vm
 			*obj = &this_it->second->obj;
 		}
 
+		last_registered_class = this_it;
+
 		return true;
 	}
 
 	bool squirrel_vm::RegisterClass_nonvirtual(gsdk::ScriptClassDesc_t *info) noexcept
 	{
-		if(registered_classes.find(std::string{info->m_pszScriptName}) != registered_classes.end()) {
+		using namespace std::literals::string_view_literals;
+
+		std::string classname_str{info->m_pszScriptName};
+
+		if(registered_classes.find(classname_str) != registered_classes.end()) {
+			warning("vmod vm: duplicate '%s'\n"sv, classname_str.c_str());
 			return true;
 		}
 
 		sq_pushroottable(impl);
 
-		bool success{register_class(info, nullptr)};
+		bool success{register_class(info, std::move(classname_str), nullptr)};
+		if(!success) {
+			error("vmod vm: failed to register '%s'\n"sv, classname_str.c_str());
+		}
 
 		sq_pop(impl, 1);
 
@@ -1469,13 +1877,15 @@ namespace vmod::vm
 
 	gsdk::HSCRIPT squirrel_vm::RegisterInstance_impl_nonvirtual(gsdk::ScriptClassDesc_t *info, void *ptr) noexcept
 	{
-		if(!squirrel_vm::RegisterClass_nonvirtual(info)) {
-			return gsdk::INVALID_HSCRIPT;
-		}
+		std::string classname_str{info->m_pszScriptName};
 
-		auto class_it{registered_classes.find(info->m_pszScriptName)};
+		auto class_it{registered_classes.find(classname_str)};
 		if(class_it == registered_classes.end()) {
-			return gsdk::INVALID_HSCRIPT;
+			if(!squirrel_vm::RegisterClass_nonvirtual(info)) {
+				return gsdk::INVALID_HSCRIPT;
+			}
+
+			class_it = last_registered_class;
 		}
 
 		sq_pushobject(impl, class_it->second->obj);
@@ -1485,12 +1895,6 @@ namespace vmod::vm
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		if(info->m_pfnDestruct) {
-			sq_setreleasehook(impl, -1, external_dtor);
-		} else {
-			sq_setreleasehook(impl, -1, generic_dtor);
-		}
-
 		SQUserPointer userptr{nullptr};
 		if(SQ_FAILED(sq_getinstanceup(impl, -1, &userptr, info))) {
 			sq_pop(impl, 2);
@@ -1498,6 +1902,12 @@ namespace vmod::vm
 		}
 
 		new (userptr) instance_info_t{info, ptr};
+
+		if(info->m_pfnDestruct) {
+			sq_setreleasehook(impl, -1, external_dtor);
+		} else {
+			sq_setreleasehook(impl, -1, generic_dtor);
+		}
 
 		HSQOBJECT *copy{new HSQOBJECT};
 		sq_resetobject(copy);
@@ -1533,6 +1943,20 @@ namespace vmod::vm
 
 	void squirrel_vm::RemoveInstance(gsdk::HSCRIPT obj)
 	{
+		sq_pushobject(impl, *obj);
+
+		sq_setreleasehook(impl, -1, nullptr);
+
+		SQUserPointer userptr{nullptr};
+		if(SQ_SUCCEEDED(sq_getinstanceup(impl, -1, &userptr, nullptr))) {
+			instance_info_t *info{static_cast<instance_info_t *>(userptr)};
+			delete info;
+		}
+
+		sq_setinstanceup(impl, -1, nullptr);
+
+		sq_pop(impl, 1);
+
 		sq_release(impl, obj);
 		delete obj;
 	}
@@ -1620,18 +2044,16 @@ namespace vmod::vm
 		sq_pushstring(impl, name, static_cast<SQInteger>(std::strlen(name)));
 
 		if(value) {
-			sq_pushstring(impl, value,static_cast<SQInteger>(std::strlen(value)));
+			sq_pushstring(impl, value, static_cast<SQInteger>(std::strlen(value)));
 		} else {
 			sq_pushnull(impl);
 		}
 
-		if(SQ_FAILED(sq_newslot(impl, -3, SQFalse))) {
-			return false;
-		}
+		bool success{SQ_SUCCEEDED(sq_newslot(impl, -3, SQFalse))};
 
 		sq_pop(impl, 1);
 
-		return true;
+		return success;
 	}
 
 	bool squirrel_vm::SetValue(gsdk::HSCRIPT obj, const char *name, const char *value)
@@ -1648,15 +2070,16 @@ namespace vmod::vm
 		}
 
 		sq_pushstring(impl, name, static_cast<SQInteger>(std::strlen(name)));
-		push(value);
-
-		if(SQ_FAILED(sq_newslot(impl, -3, SQFalse))) {
+		if(!push(value)) {
+			sq_pop(impl, 2);
 			return false;
 		}
 
+		bool success{SQ_SUCCEEDED(sq_newslot(impl, -3, SQFalse))};
+
 		sq_pop(impl, 1);
 
-		return true;
+		return success;
 	}
 
 	bool squirrel_vm::SetValue_impl(gsdk::HSCRIPT obj, const char *name, const gsdk::ScriptVariant_t &value)
@@ -1673,61 +2096,51 @@ namespace vmod::vm
 		}
 
 		sq_pushinteger(impl, idx);
-		push(value);
-
-		if(SQ_FAILED(sq_newslot(impl, -3, SQFalse))) {
+		if(!push(value)) {
+			sq_pop(impl, 2);
 			return false;
 		}
 
+		bool success{SQ_SUCCEEDED(sq_newslot(impl, -3, SQFalse))};
+
 		sq_pop(impl, 1);
 
-		return true;
+		return success;
+	}
+
+	void squirrel_vm::get_obj(gsdk::ScriptVariant_t &value) noexcept
+	{
+		std::memset(value.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
+
+		HSQOBJECT *copy{new HSQOBJECT};
+		sq_resetobject(copy);
+		if(SQ_FAILED(sq_getstackobj(impl, -1, copy))) {
+			sq_release(impl, copy);
+			delete copy;
+			value.m_type = gsdk::FIELD_TYPEUNKNOWN;
+			value.m_object = gsdk::INVALID_HSCRIPT;
+		} else {
+			sq_addref(impl, copy);
+			value.m_type = gsdk::FIELD_HSCRIPT;
+			value.m_object = copy;
+			value.m_flags |= gsdk::SV_FREE;
+		}
+
+		sq_pop(impl, 1);
 	}
 
 	void squirrel_vm::CreateTable_impl(gsdk::ScriptVariant_t &value)
 	{
 		sq_newtable(impl);
 
-		std::memset(value.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
-
-		HSQOBJECT *copy{new HSQOBJECT};
-		sq_resetobject(copy);
-		if(SQ_FAILED(sq_getstackobj(impl, -1, copy))) {
-			sq_release(impl, copy);
-			delete copy;
-			value.m_type = gsdk::FIELD_TYPEUNKNOWN;
-			value.m_object = gsdk::INVALID_HSCRIPT;
-		} else {
-			sq_addref(impl, copy);
-			value.m_type = gsdk::FIELD_HSCRIPT;
-			value.m_object = copy;
-			value.m_flags |= gsdk::SV_FREE;
-		}
-
-		sq_pop(impl, 1);
+		get_obj(value);
 	}
 
 	void squirrel_vm::CreateArray_impl_nonvirtual(gsdk::ScriptVariant_t &value) noexcept
 	{
 		sq_newarray(impl, 0);
 
-		std::memset(value.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
-
-		HSQOBJECT *copy{new HSQOBJECT};
-		sq_resetobject(copy);
-		if(SQ_FAILED(sq_getstackobj(impl, -1, copy))) {
-			sq_release(impl, copy);
-			delete copy;
-			value.m_type = gsdk::FIELD_TYPEUNKNOWN;
-			value.m_object = gsdk::INVALID_HSCRIPT;
-		} else {
-			sq_addref(impl, copy);
-			value.m_type = gsdk::FIELD_HSCRIPT;
-			value.m_object = copy;
-			value.m_flags |= gsdk::SV_FREE;
-		}
-
-		sq_pop(impl, 1);
+		get_obj(value);
 	}
 
 	void squirrel_vm::CreateArray_impl(gsdk::ScriptVariant_t &value)
@@ -1746,6 +2159,21 @@ namespace vmod::vm
 	}
 
 	int squirrel_vm::GetNumTableEntries(gsdk::HSCRIPT obj) const
+	{
+		if(obj) {
+			sq_pushobject(impl, *obj);
+		} else {
+			sq_pushroottable(impl);
+		}
+
+		int size{sq_getsize(impl, -1)};
+
+		sq_pop(impl, 1);
+
+		return size;
+	}
+
+	int squirrel_vm::GetArrayCount_nonvirtual(gsdk::HSCRIPT obj) noexcept
 	{
 		sq_pushobject(impl, *obj);
 
@@ -1781,11 +2209,9 @@ namespace vmod::vm
 				(void)get(-1, *value);
 			}
 
-			if(SQ_FAILED(sq_getinteger(impl, -3, &next_it))) {
-				next_it = -1;
-			}
-
 			sq_pop(impl, 2);
+
+			(void)sq_getinteger(impl, -1, &next_it);
 		}
 
 		sq_pop(impl, 2);
@@ -1812,6 +2238,8 @@ namespace vmod::vm
 
 		if(got) {
 			got = get(-1, *value);
+
+			sq_pop(impl, 1);
 		}
 
 		sq_pop(impl, 1);
@@ -1833,6 +2261,8 @@ namespace vmod::vm
 
 		if(got) {
 			got = get(-1, *value);
+
+			sq_pop(impl, 1);
 		}
 
 		sq_pop(impl, 1);
@@ -1842,8 +2272,7 @@ namespace vmod::vm
 
 	bool squirrel_vm::GetScalarValue(gsdk::HSCRIPT obj, gsdk::ScriptVariant_t *value)
 	{
-		get(*obj, *value);
-		return true;
+		return get(*obj, *value);
 	}
 
 	void squirrel_vm::ReleaseValue(gsdk::ScriptVariant_t &value)
@@ -1855,7 +2284,7 @@ namespace vmod::vm
 					sq_release(impl, value.m_object);
 					delete value.m_object;
 
-					value.m_flags &= ~gsdk::SV_FREE;
+					value.m_flags = gsdk::SV_NOFLAGS;
 					std::memset(value.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
 					value.m_object = gsdk::INVALID_HSCRIPT;
 					value.m_type = gsdk::FIELD_TYPEUNKNOWN;
@@ -1894,17 +2323,6 @@ namespace vmod::vm
 		return IsArray_nonvirtual(obj);
 	}
 
-	int squirrel_vm::GetArrayCount_nonvirtual(gsdk::HSCRIPT obj) noexcept
-	{
-		sq_pushobject(impl, *obj);
-
-		int size{sq_getsize(impl, -1)};
-
-		sq_pop(impl, 1);
-
-		return size;
-	}
-
 	int squirrel_vm::GetArrayCount(gsdk::HSCRIPT obj)
 	{
 		return GetArrayCount_nonvirtual(obj);
@@ -1914,10 +2332,14 @@ namespace vmod::vm
 	{
 		sq_pushobject(impl, *obj);
 
-		push(value);
+		if(!push(value)) {
+			sq_pop(impl, 1);
+			return;
+		}
+
 		(void)sq_arrayappend(impl, -2);
 
-		sq_pop(impl, 2);
+		sq_pop(impl, 1);
 	}
 
 	void squirrel_vm::WriteState(gsdk::CUtlBuffer *)
@@ -1957,14 +2379,14 @@ namespace vmod::vm
 
 	bool squirrel_vm::RaiseException_impl(const char *msg)
 	{
-		sq_resetobject(&last_exception);
-		got_last_exception = false;
-
 		sq_pushstring(impl, msg, static_cast<SQInteger>(std::strlen(msg)));
 
+		sq_resetobject(&last_exception);
 		if(SQ_SUCCEEDED(sq_getstackobj(impl, -1, &last_exception))) {
 			sq_addref(impl, &last_exception);
 			got_last_exception = true;
+		} else {
+			got_last_exception = false;
 		}
 
 		sq_pop(impl, 1);
@@ -1987,13 +2409,117 @@ namespace vmod::vm
 		return gsdk::INVALID_HSCRIPT;
 	}
 
-	gsdk::CSquirrelMetamethodDelegateImpl *squirrel_vm::MakeSquirrelMetamethod_Get_impl(gsdk::HSCRIPT &, const char *, gsdk::ISquirrelMetamethodDelegate *, bool)
+	class metamethod_delegate_impl final
 	{
-		return nullptr;
+		friend class squirrel_vm;
+
+	public:
+		inline metamethod_delegate_impl(gsdk::ISquirrelMetamethodDelegate *delegate, bool free) noexcept
+			: interface{delegate}, should_free{free}
+		{
+		}
+
+		inline ~metamethod_delegate_impl() noexcept
+		{
+			if(should_free) {
+				delete interface;
+			}
+		}
+
+	private:
+		gsdk::ISquirrelMetamethodDelegate *interface{nullptr};
+		bool should_free{true};
+
+	private:
+		metamethod_delegate_impl() = delete;
+		metamethod_delegate_impl(const metamethod_delegate_impl &) = delete;
+		metamethod_delegate_impl &operator=(const metamethod_delegate_impl &) = delete;
+		metamethod_delegate_impl(metamethod_delegate_impl &&) = delete;
+		metamethod_delegate_impl &operator=(metamethod_delegate_impl &&) = delete;
+	};
+
+	SQInteger squirrel_vm::metamethod_call(HSQUIRRELVM vm)
+	{
+		squirrel_vm *actual_vm{static_cast<squirrel_vm *>(sq_getforeignptr(vm))};
+
+		SQInteger top{sq_gettop(vm)};
+		if(top != 3) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr{nullptr};
+		if(SQ_FAILED(sq_getuserpointer(vm, -1, &userptr))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		metamethod_delegate_impl *delegate_impl{static_cast<metamethod_delegate_impl *>(userptr)};
+
+		const SQChar *name{nullptr};
+		SQInteger name_len{0};
+		if(SQ_FAILED(sq_getstringandsize(vm, -2, &name, &name_len))) {
+			return sq_throwerror(vm, _SC("failed to get name"));
+		}
+
+		gsdk::ScriptVariant_t value;
+		if(delegate_impl->interface->Get(name, value)) {
+			if(!actual_vm->push(value)) {
+				return sq_throwerror(vm, _SC("failed to push value"));
+			}
+		} else {
+			return sq_throwerror(vm, _SC("failed to get value"));
+		}
+
+		return 1;
 	}
 
-	void squirrel_vm::DestroySquirrelMetamethod_Get(gsdk::CSquirrelMetamethodDelegateImpl *)
+	gsdk::CSquirrelMetamethodDelegateImpl *squirrel_vm::MakeSquirrelMetamethod_Get_impl(gsdk::HSCRIPT &scope, const char *name, gsdk::ISquirrelMetamethodDelegate *delegate, bool free)
 	{
-		
+		if(scope) {
+			sq_pushobject(impl, *scope);
+		} else {
+			sq_pushroottable(impl);
+		}
+
+		sq_pushstring(impl, name, static_cast<SQInteger>(std::strlen(name)));
+
+		metamethod_delegate_impl *delegate_impl{nullptr};
+
+		if(SQ_SUCCEEDED(sq_get(impl, -2))) {
+			sq_newtable(impl);
+
+			delegate_impl = new metamethod_delegate_impl{delegate, free};
+
+			sq_pushstring(impl, _SC("_get"), 4);
+			sq_pushuserpointer(impl, delegate_impl);
+			sq_newclosure(impl, metamethod_call, 1);
+
+			if(SQ_SUCCEEDED(sq_newslot(impl, -3, SQFalse))) {
+				sq_pushstring(impl, _SC("cppdelegate"), 11);
+				sq_pushuserpointer(impl, delegate_impl);
+
+				if(SQ_SUCCEEDED(sq_newslot(impl, -3, SQFalse))) {
+					sq_setdelegate(impl, -2);
+				} else {
+					sq_pop(impl, 1);
+
+					delete delegate_impl;
+					delegate_impl = nullptr;
+				}
+			} else {
+				sq_pop(impl, 1);
+
+				delete delegate_impl;
+				delegate_impl = nullptr;
+			}
+		}
+
+		sq_pop(impl, 1);
+
+		return reinterpret_cast<gsdk::CSquirrelMetamethodDelegateImpl *>(delegate_impl);
+	}
+
+	void squirrel_vm::DestroySquirrelMetamethod_Get(gsdk::CSquirrelMetamethodDelegateImpl *delegate_impl)
+	{
+		delete reinterpret_cast<metamethod_delegate_impl *>(delegate_impl);
 	}
 }

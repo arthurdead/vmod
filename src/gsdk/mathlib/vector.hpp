@@ -23,7 +23,7 @@ namespace gsdk
 		Vector(Vector &&) noexcept = default;
 		Vector &operator=(Vector &&) noexcept = default;
 
-		inline Vector(vec_t x_ = 0.0f, vec_t y_ = 0.0f, vec_t z_ = 0.0f) noexcept
+		inline Vector(vec_t x_, vec_t y_, vec_t z_) noexcept
 			: x{x_}, y{y_}, z{z_}
 		{
 		}
@@ -42,7 +42,7 @@ namespace gsdk
 		QAngle(QAngle &&) noexcept = default;
 		QAngle &operator=(QAngle &&) noexcept = default;
 
-		inline QAngle(vec_t x_ = 0.0f, vec_t y_ = 0.0f, vec_t z_ = 0.0f) noexcept
+		inline QAngle(vec_t x_, vec_t y_, vec_t z_) noexcept
 			: x{x_}, y{y_}, z{z_}
 		{
 		}

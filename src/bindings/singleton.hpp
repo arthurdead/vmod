@@ -21,7 +21,7 @@ namespace vmod::bindings
 		void unbindings() noexcept;
 
 	private:
-		bool Get(const gsdk::CUtlString &name, gsdk::ScriptVariant_t &value) override final;
+		bool Get(const gsdk::CUtlConstString &name, gsdk::ScriptVariant_t &value) override final;
 
 	protected:
 		gsdk::HSCRIPT scope{gsdk::INVALID_HSCRIPT};

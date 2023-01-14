@@ -92,7 +92,7 @@ namespace vmod::bindings::cvar
 			var->ConVar::SetValue(value.m_bool);
 			break;
 			default:
-			main::instance().vm()->RaiseException("vmod: invalid type: '%s'", bindings::docs::type_name(value.m_type).data());
+			main::instance().vm()->RaiseException("vmod: invalid type: '%s'", bindings::docs::type_name(value.m_type, true).data());
 			break;
 		}
 	}

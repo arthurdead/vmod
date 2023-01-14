@@ -8,29 +8,29 @@
 // General
 //-----------------------------------------------------------------------------
 
-realPrint <- print
-print_indent <- 0
+::realPrint <- ::print;
+::print_indent <- 0;
 
-function print( text )
+::print = function( text )
 {
-	for ( local i = print_indent; i > 0; --i )
+	for ( local i = ::print_indent; i > 0; --i )
 	{
-		realPrint( "  " )
+		::realPrint( "  " );
 	}
-	realPrint( text )
-}
+	::realPrint( text );
+};
 
-function printl( text )
+::printl <- function( text )
 {
-	return print( text + "\n" );
-}
+	return ::print( text + "\n" );
+};
 
-function Msg( text )
+::Msg <- function( text )
 {
-	return print( text );
-}
+	return ::print( text );
+};
 
-function Assert( b, msg = null )
+::Assert <- function( b, msg = null )
 {
 	if ( b )
 		return;
@@ -47,12 +47,12 @@ function Assert( b, msg = null )
 
 //-----------------------------------------------------------------------------
 
-function FindCircularReference( target )
+::FindCircularReference <- function( target )
 {
 	local visits = {}
-	local result = false
+	local result = false;
 	
-	function RecursiveSearch( current )
+	local function RecursiveSearch( current )
 	{
 		if ( current in visits )
 		{
@@ -62,84 +62,84 @@ function FindCircularReference( target )
 		
 		foreach( key, val in current )
 		{
-			if ( val == target && !IsWeakref( target, key ) )
+			if ( val == target && !::IsWeakref( target, key ) )
 			{
-				print( "    Circular reference to " + target.tostring() + " in key " + key.tostring() + " slot " + val.tostring() + " of object " + current.tostring() + "\n" )
-				result = true
+				::print( "    Circular reference to " + target.tostring() + " in key " + key.tostring() + " slot " + val.tostring() + " of object " + current.tostring() + "\n" );
+				result = true;
 			}
 			else if ( typeof( val ) == "table" || typeof( val ) == "array" || typeof( val ) == "instance" )
 			{
-				if ( !IsWeakref( target, key ) )
+				if ( !::IsWeakref( target, key ) )
 				{
-					RecursiveSearch( val )
+					RecursiveSearch( val );
 				}
 			}
 		}
-	}
+	};
 	
 	if ( typeof( target ) == "table" || typeof( target ) == "array" || typeof( target ) == "instance" )
 		RecursiveSearch( target );
 		
-	return result
+	return result;
 }
 
-function FindCircularReferences( resurrecteds )
+::FindCircularReferences <- function( resurrecteds )
 {
-	printl( "Circular references:" )
+	::printl( "Circular references:" );
 
 	if ( resurrecteds == null )
 	{
-		printl( "    None");
-		return
+		::printl( "    None");
+		return;
 	}
 	
 	if ( typeof( resurrecteds ) != "array" )
 	{
-		throw "Bad input to FindCircularReference"
+		throw "Bad input to FindCircularReference";
 	}
 
 	foreach( val in resurrecteds )
 	{
-		FindCircularReference( val )
+		::FindCircularReference( val );
 	}
 	
-	print("Resurrected objects: ")
-	DumpObject( resurrecteds );
-}	
+	::print("Resurrected objects: ");
+	::DumpObject( resurrecteds );
+};
 
 //-----------------------------------------------------------------------------
 
-function ScriptDebugDumpKeys( name, table = null )
+::ScriptDebugDumpKeys <- function( name, table = null )
 {
 	if ( table == null )
 	{
-		table = getroottable()
+		table = ::getroottable();
 	}
 
 	if ( name == "" )
 	{
-		printl( table.tostring() + "\n{" );
+		::printl( table.tostring() + "\n{" );
 	}
 	else
 	{
-		printl( "Find \"" + name + "\"\n{" );
+		::printl( "Find \"" + name + "\"\n{" );
 	}
 	
 	local function PrintKey( keyPath, key, value )
 	{
-		printl( "    " + keyPath + " = " + value ); 
-	}
+		::printl( "    " + keyPath + " = " + value ); 
+	};
 	
-	ScriptDebugIterateKeys( name, PrintKey, table );
+	::ScriptDebugIterateKeys( name, PrintKey, table );
 	
-	printl( "}" );
-}
+	::printl( "}" );
+};
 
 //-----------------------------------------------------------------------------
 
-function ScriptDebugIterateKeys( name, callback, table = null )
+::ScriptDebugIterateKeys <- function( name, callback, table = null )
 {
-	local visits = {}
+	local visits = {};
 	local pattern;
 	
 	local function MatchRegexp( keyPath )
@@ -161,44 +161,44 @@ function ScriptDebugIterateKeys( name, callback, table = null )
 	
 	if ( table == null )
 	{
-		table = getroottable()
+		table = ::getroottable();
 	}
 
 	if ( name == "" )
 	{
-		matchFunc = MatchAll
+		matchFunc = MatchAll;
 	}
 	else if ( name[0] == '#' ) // exact
 	{
-		pattern = regexp( "^" + name + "$" )
-		matchFunc = MatchRegexp
+		pattern = ::regexp( "^" + name + "$" );
+		matchFunc = MatchRegexp;
 	}
 	else if ( name[0] == '@' ) // regexp
 	{
-		pattern = regexp( name.slice( 1 ) )
-		matchFunc = MatchRegexp
+		pattern = ::regexp( name.slice( 1 ) );
+		matchFunc = MatchRegexp;
 	}
 	else // general
 	{
-		matchFunc = MatchSubstring
+		matchFunc = MatchSubstring;
 	}
 		
-	ScriptDebugIterateKeysRecursive( matchFunc, null, table, visits, callback );
-}
+	::ScriptDebugIterateKeysRecursive( matchFunc, null, table, visits, callback );
+};
 
 //-----------------------------------------------------------------------------
 
-function ScriptDebugIterateKeysRecursive( matchFunc, path, current, visits, callback )
+::ScriptDebugIterateKeysRecursive <- function( matchFunc, path, current, visits, callback )
 {
 	if ( ! ( current in visits ) )
 	{
-		visits[current] <- true
+		visits[current] <- true;
 		
 		foreach( key, value in current )
 		{
 			if ( typeof(key) == "string" )
 			{
-				local keyPath = ( path ) ? path + "." + key : key
+				local keyPath = ( path ) ? path + "." + key : key;
 				if ( matchFunc(keyPath) )
 				{
 					callback( keyPath, key, value );
@@ -206,39 +206,38 @@ function ScriptDebugIterateKeysRecursive( matchFunc, path, current, visits, call
 				
 				if ( typeof(value) == "table" )
 				{
-					ScriptDebugIterateKeysRecursive( matchFunc, keyPath, value, visits, callback )
+					::ScriptDebugIterateKeysRecursive( matchFunc, keyPath, value, visits, callback );
 				}
 			}
 		}
 	}
-}
+};
 
 //-----------------------------------------------------------------------------
 // Documentation table
 //-----------------------------------------------------------------------------
 
-if ( developer() > 0 )
+if ( ::developer() > 0 )
 {
-	Documentation <-
+	::Documentation <-
 	{
 		classes = {}
 		functions = {}
 		instances = {}
-	}
+	};
 
-
-	function RetrieveNativeSignature( nativeFunction )
+	::RetrieveNativeSignature <- function( nativeFunction )
 	{
-		if ( nativeFunction in NativeFunctionSignatures )
+		if ( nativeFunction in ::NativeFunctionSignatures )
 		{
-			return NativeFunctionSignatures[nativeFunction]
+			return ::NativeFunctionSignatures[nativeFunction];
 		}
-		return "<unnamed>"
-	}
+		return "<unnamed>";
+	};
 	
-	function RegisterFunctionDocumentation( func, name, signature, description )
+	::RegisterFunctionDocumentation <- function( func, name, signature, description )
 	{
-		if ( description.len() )
+		if ( description.len() > 0 )
 		{
 			local b = ( description[0] == '#' );
 			if ( description[0] == '#' )
@@ -254,33 +253,33 @@ if ( developer() > 0 )
 				signature = "#";
 			}
 		}
-		Documentation.functions[name] <- [ signature, description ]
-	}
+		::Documentation.functions[name] <- [ signature, description ];
+	};
 
-	function Document( symbolOrTable, itemIfSymbol = null, descriptionIfSymbol = null )
+	::Document <- function( symbolOrTable, itemIfSymbol = null, descriptionIfSymbol = null )
 	{
 		if ( typeof( symbolOrTable ) == "table" )
 		{
 			foreach( symbol, itemDescription in symbolOrTable )
 			{
-				Assert( typeof(symbol) == "string" )
+				::Assert( typeof(symbol) == "string" )
 				
-				Document( symbol, itemDescription[0], itemDescription[1] );
+				::Document( symbol, itemDescription[0], itemDescription[1] );
 			}
 		}
 		else
 		{
-			printl( symbolOrTable + ":" + itemIfSymbol.tostring() + "/" + descriptionIfSymbol );
+			::printl( symbolOrTable + ":" + itemIfSymbol.tostring() + "/" + descriptionIfSymbol );
 		}
-	}
+	};
 	
-	function PrintHelp( string = "*", exact = false )
+	::PrintHelp <- function( string = "*", exact = false )
 	{
-		local matches = []
+		local matches = [];
 		
 		if ( string == "*" || !exact )
 		{
-			foreach( name, documentation in Documentation.functions )
+			foreach( name, documentation in ::Documentation.functions )
 			{
 				if ( string != "*" && name.tolower().find( string.tolower() ) == null )
 				{
@@ -292,13 +291,13 @@ if ( developer() > 0 )
 		} 
 		else if ( exact )
 		{
-			if ( string in Documentation.functions )
-				matches.append( string )
+			if ( string in ::Documentation.functions )
+				matches.append( string );
 		}
 		
 		if ( matches.len() == 0 )
 		{
-			printl( "Symbol " + string + " not found" );
+			::printl( "Symbol " + string + " not found" );
 			return;
 		}
 		
@@ -307,9 +306,9 @@ if ( developer() > 0 )
 		foreach( name in matches )
 		{
 			local result = name;
-			local documentation = Documentation.functions[name];
+			local documentation = ::Documentation.functions[name];
 			
-			printl( "Function:    " + name );
+			::printl( "Function:    " + name );
 			local signature;
 			if ( documentation[0] != "#" )
 			{
@@ -317,32 +316,32 @@ if ( developer() > 0 )
 			}
 			else
 			{
-				signature = GetFunctionSignature( this[name], name );
+				signature = ::GetFunctionSignature( ::getroottable()[name], name );
 			}
 			
-			printl( "Signature:   " + signature );
+			::printl( "Signature:   " + signature );
 			if ( documentation[1].len() )
-				printl( "Description: " + documentation[1] );
-			print( "\n" ); 
+				::printl( "Description: " + documentation[1] );
+			::print( "\n" ); 
 		}
 	}
 }
 else
 {
-	function RetrieveNativeSignature( nativeFunction ) { return "<unnamed>"; }
-	function RegisterFunctionDocumentation( func, name, signature, description ) {}
-	function Document( symbolOrTable, itemIfSymbol = null, descriptionIfSymbol = null ) {}
-	function PrintHelp( string = "*", exact = false )
+	::RetrieveNativeSignature <- function( nativeFunction ) { return "<unnamed>"; };
+	::RegisterFunctionDocumentation <- function( func, name, signature, description ) {};
+	::Document <- function( symbolOrTable, itemIfSymbol = null, descriptionIfSymbol = null ) {};
+	::PrintHelp <- function( string = "*", exact = false )
 	{
-		printl( "You must have started the script VM in developer mode to use this. Start a map/the app with '-dev'" );
-	}
+		::printl( "You must have started the script VM in developer mode to use this. Start a map/the app with '-dev'" );
+	};
 }
 
 //-----------------------------------------------------------------------------
 // VSquirrel support functions
 //-----------------------------------------------------------------------------
 
-function VSquirrel_OnCreateScope( name, outer )
+::VSquirrel_OnCreateScope <- function( name, outer )
 {
 	local result;
 	if ( !(name in outer) )
@@ -357,9 +356,9 @@ function VSquirrel_OnCreateScope( name, outer )
 		result.__vrefs += 1;
 	}
 	return result;
-}
+};
 
-function VSquirrel_OnReleaseScope( scope )
+::VSquirrel_OnReleaseScope <- function( scope )
 {
 	scope.__vrefs -= 1;
 	if ( scope.__vrefs < 0 )
@@ -372,44 +371,44 @@ function VSquirrel_OnReleaseScope( scope )
 		scope.__vname = null;
 		scope.setdelegate( null );
 	}
-}
+};
 
 
 //-----------------------------------------------------------------------------
 //
 //-----------------------------------------------------------------------------
-class CCallChainer
+::CCallChainer <- class
 {
 	constructor( prefixString, scopeForThis = null )
 	{
-		prefix = prefixString;
+		this.prefix = prefixString;
 		if ( scopeForThis != null )
-			scope = scopeForThis;
+			this.scope = scopeForThis;
 		else
-			scope = ::getroottable();
-		chains = {};
+			this.scope = ::getroottable();
+		this.chains = {};
 		
 		// Expose a bound global function to dispatch to this object
-		scope[ "Dispatch" + prefixString ] <- Call.bindenv( this );
+		this.scope[ "Dispatch" + prefixString ] <- this.Call.bindenv( this );
 	}
 	
 	function PostScriptExecute() 
 	{
-		foreach( key, value in scope )
+		foreach( key, value in this.scope )
 		{
 			if ( typeof( value ) == "function" ) 
 			{
-				if ( key.find( prefix ) == 0 )
+				if ( key.find( this.prefix ) == 0 )
 				{
-					local key_noprefix = key.slice( prefix.len() );
+					local key_noprefix = key.slice( this.prefix.len() );
 					
-					if ( !(key_noprefix in chains) )
+					if ( !(key_noprefix in this.chains) )
 					{
 						//::print( "Creating new call chain " + key_noprefix + "\n");
-						chains[key_noprefix] <- [];
+						this.chains[key_noprefix] <- [];
 					}
 					
-					local chain = chains[key_noprefix];
+					local chain = this.chains[key_noprefix];
 					
 					if ( !chain.len() || chain.top() != value )
 					{
@@ -423,16 +422,16 @@ class CCallChainer
 	
 	function Call( event, ... )
 	{
-		if ( event in chains )
+		if ( event in this.chains )
 		{
-			local chain = chains[event];
+			local chain = this.chains[event];
 			if ( chain.len() )
 			{
 				local i;
 				local args = [];
 				if ( vargv.len() > 0 )
 				{
-					args.push( scope );
+					args.push( this.scope );
 					for ( i = 0; i < vargv.len(); i++ )
 					{
 						args.push( vargv[i] );
@@ -468,53 +467,53 @@ class CCallChainer
 //-----------------------------------------------------------------------------
 //
 //-----------------------------------------------------------------------------
-class CSimpleCallChainer
+::CSimpleCallChainer <- class
 {
 	constructor( prefixString, scopeForThis = null, exactNameMatch = false )
 	{
-		prefix = prefixString;
+		this.prefix = prefixString;
 		if ( scopeForThis != null )
-			scope = scopeForThis;
+			this.scope = scopeForThis;
 		else
-			scope = ::getroottable();
-		chain = [];
+			this.scope = ::getroottable();
+		this.chain = [];
 		
 		// Expose a bound global function to dispatch to this object
-		scope[ "Dispatch" + prefixString ] <- Call.bindenv( this );
+		this.scope[ "Dispatch" + prefixString ] <- this.Call.bindenv( this );
 		
-		exactMatch = exactNameMatch
+		this.exactMatch = exactNameMatch;
 	}
 	
 	function PostScriptExecute() 
 	{
-		foreach( key, value in scope )
+		foreach( key, value in this.scope )
 		{
 			if ( typeof( value ) == "function" ) 
 			{
 				local foundMatch = false;
-				if ( exactMatch )
+				if ( this.exactMatch )
 				{
-					foundMatch = ( prefix == key );
+					foundMatch = ( this.prefix == key );
 				}
 				else
 				{
-					foundMatch = ( key.find( prefix ) == 0 )
+					foundMatch = ( key.find( this.prefix ) == 0 );
 				}
 						
 				if ( foundMatch )
 				{
-					if ( !exactMatch )
-						local key_noprefix = key.slice( prefix.len() );
+					if ( !this.exactMatch )
+						local key_noprefix = key.slice( this.prefix.len() );
 					
-					if ( !(chain) )
+					if ( !(this.chain) )
 					{
 						//::print( "Creating new call simple chain\n");
-						chain <- [];
+						this.chain <- [];
 					}
 					
-					if ( !chain.len() || chain != value )
+					if ( !this.chain.len() || this.chain != value )
 					{
-						chain.push( value );
+						this.chain.push( value );
 						//::print( "Added " + value + " to call chain.\n" );
 					}
 				}
@@ -524,29 +523,29 @@ class CSimpleCallChainer
 	
 	function Call( ... )
 	{
-		if ( chain.len() )
+		if ( this.chain.len() )
 		{
 			local i;
 			local args = [];
 			if ( vargv.len() > 0 )
 			{
-				args.push( scope );
+				args.push( this.scope );
 				for ( i = 0; i < vargv.len(); i++ )
 				{
 					args.push( vargv[i] );
 				}
 			}
-			for ( i = chain.len() - 1; i >= 0; i -= 1 )
+			for ( i = this.chain.len() - 1; i >= 0; i -= 1 )
 			{
-				local func = chain[i];
+				local func = this.chain[i];
 				local result;
 				if ( !args.len() )
 				{
-					result = func.pcall( scope );
+					result = func.pcall( this.scope );
 				}
 				else
 				{
-					result = func.pacall( scope, args ); 
+					result = func.pacall( this.scope, args ); 
 				}
 				if ( result != null && !result )
 					return false;
@@ -556,7 +555,7 @@ class CSimpleCallChainer
 		return true;
 	}
 	
-	exactMatch = false
+	exactMatch = false;
 	scope = null;
 	prefix = null;
 	chain = null;
@@ -592,66 +591,66 @@ class CSimpleCallChainer
 // any left unresolved will become a string prepended with '~', which later code can deal with
 //-----------------------------------------------------------------------------
 
-class LateBinder
+::LateBinder <- class
 {
 	// public:
 	function Begin( target, log = false )
 	{
-		m_log = log;
+		this.m_log = log;
 		
-		HookRootMetamethod( "_get", function( key ) { return "^" + key; } );
-		HookRootMetamethod( "_newslot", function( key, value ) { if ( typeof value == "table" ) { m_fixupSet.push( [ key, value ] ); this.rawset( key, value ); };  }.bindenv(this) );
-		m_targetTable = target;
+		this.HookRootMetamethod( "_get", function( key ) { return "^" + key; } );
+		this.HookRootMetamethod( "_newslot", function( key, value ) { if ( typeof value == "table" ) { this.m_fixupSet.push( [ key, value ] ); this.rawset( key, value ); };  }.bindenv(this) );
+		this.m_targetTable = target;
 		
-		Log( "Begin late bind on table " + m_targetTable );
+		this.Log( "Begin late bind on table " + this.m_targetTable );
 	}
 	
 	function End()
 	{
-		UnhookRootMetamethod( "_get" );
-		UnhookRootMetamethod( "_newslot" );
+		this.UnhookRootMetamethod( "_get" );
+		this.UnhookRootMetamethod( "_newslot" );
 
-		Log( "End late bind on table " + m_targetTable );
+		this.Log( "End late bind on table " + this.m_targetTable );
 		
-		foreach( subTablePair in m_fixupSet )
+		foreach( subTablePair in this.m_fixupSet )
 		{
-			EstablishDelegation( m_targetTable, subTablePair[1] );
+			this.EstablishDelegation( this.m_targetTable, subTablePair[1] );
 		}
 
-		Log( "Begin resolution... " )
-		m_logIndent++;
+		this.Log( "Begin resolution... " )
+		this.m_logIndent++;
 		
 		local found = true;
 		
 		while ( found )
 		{
-			foreach( subTablePair in m_fixupSet )
+			foreach( subTablePair in this.m_fixupSet )
 			{
-				Log( subTablePair[0] + " = " );
-				Log( "{" );
-				if ( !Resolve( subTablePair[1], subTablePair[1], false ) )
+				this.Log( subTablePair[0] + " = " );
+				this.Log( "{" );
+				if ( !this.Resolve( subTablePair[1], subTablePair[1], false ) )
 				{
 					found = false;
 				}
-				Log( "}" );
+				this.Log( "}" );
 			}
 		}
 			
-		m_logIndent--;
+		this.m_logIndent--;
 		
-		foreach( subTablePair in m_fixupSet )
+		foreach( subTablePair in this.m_fixupSet )
 		{
-			RemoveDelegation( subTablePair[1] );
+			this.RemoveDelegation( subTablePair[1] );
 		}
 		
-		Log( "...end resolution" );
+		this.Log( "...end resolution" );
 	}
 		
 	// private:
 	function HookRootMetamethod( name, value )
 	{
 		local saved = null;
-		local roottable = getroottable();
+		local roottable = ::getroottable();
 		if ( name in roottable )
 		{
 			saved = roottable[name];
@@ -663,7 +662,7 @@ class LateBinder
 	function UnhookRootMetamethod( name )
 	{
 		local saveSlot = "__saved" + name;
-		local roottable = getroottable();
+		local roottable = ::getroottable();
 		local saved = roottable[saveSlot];
 		if ( saved != null )
 		{
@@ -685,7 +684,7 @@ class LateBinder
 			local type = typeof value;
 			if ( type == "table" )
 			{
-				EstablishDelegation( childTable, value );
+				this.EstablishDelegation( childTable, value );
 			}
 		}
 	}
@@ -699,14 +698,14 @@ class LateBinder
 			local type = typeof value;
 			if ( type == "table" )
 			{
-				RemoveDelegation( value );
+				this.RemoveDelegation( value );
 			}
 		}
 	}
 
 	function Resolve( lookupTable, subTableOrArray, throwException = false )
 	{
-		m_logIndent++;
+		this.m_logIndent++;
 		local found = false;
 	
 		foreach( key, value in subTableOrArray )
@@ -717,7 +716,7 @@ class LateBinder
 				if ( value.len() )
 				{
 					local unresolvedId = null;
-					local controlChar = value[0]
+					local controlChar = value[0];
 					if ( controlChar == '^' )
 					{
 						found = true;
@@ -725,13 +724,13 @@ class LateBinder
 						if ( value_clean in lookupTable )
 						{
 							subTableOrArray[key] = lookupTable[value_clean];
-							Log( key + " = " + lookupTable[value_clean] + " <-- " + value_clean );
+							this.Log( key + " = " + lookupTable[value_clean] + " <-- " + value_clean );
 						}
 						else
 						{
 							subTableOrArray[key] = "~" + value_clean;
 							unresolvedId = value_clean;
-							Log( key + " = \"" + "~" + value_clean + "\" (unresolved)" );
+							this.Log( key + " = \"" + "~" + value_clean + "\" (unresolved)" );
 						}
 					}
 					else if ( controlChar == '@' )
@@ -767,13 +766,13 @@ class LateBinder
 						if ( depthSuccess == identifiers.len() )
 						{
 							subTableOrArray[key] = result;
-							Log( key + " = " + result + " <-- " + value );
+							this.Log( key + " = " + result + " <-- " + value );
 						}
 						else
 						{
 							subTableOrArray[key] = "~" + value.slice( 1 );
 							unresolvedId = value;
-							Log( key + " = \"" + "~" + value + "\" (unresolved)" );
+							this.Log( key + " = \"" + "~" + value + "\" (unresolved)" );
 						}
 					}
 					
@@ -781,8 +780,11 @@ class LateBinder
 					{
 						if ( throwException )
 						{
+							//TODO!!!! where did bind come from?
+							local bind = null;
+
 							local exception = "Unresolved symbol: " + bind + " in ";
-							foreach ( entry in m_bindNamesStack )
+							foreach ( entry in this.m_bindNamesStack )
 							{
 								exception += entry;
 								exception += "."
@@ -800,36 +802,36 @@ class LateBinder
 		{
 			local type = typeof value;
 			local isTable = ( type == "table" );
-			local isArray = ( type == "array" )
+			local isArray = ( type == "array" );
 			if ( isTable || isArray )
 			{
-				Log( key + " =" );
-				Log( isTable ? "{" : "[" );
+				this.Log( key + " =" );
+				this.Log( isTable ? "{" : "[" );
 				
-				m_bindNamesStack.push( key );
-				if ( Resolve( ( isTable ) ? value : lookupTable, value, throwException ) )
+				this.m_bindNamesStack.push( key );
+				if ( this.Resolve( ( isTable ) ? value : lookupTable, value, throwException ) )
 				{
 					found = true;
 				}
-				m_bindNamesStack.pop();
+				this.m_bindNamesStack.pop();
 				
-				Log( isTable ? "}" : "]" );
+				this.Log( isTable ? "}" : "]" );
 			}
 		}
-		m_logIndent--;
+		this.m_logIndent--;
 		return found;
 	}
 	
 	function Log( string )
 	{
-		if ( m_log )
+		if ( this.m_log )
 		{
-			for ( local i = 0; i < m_logIndent; i++ )
+			for ( local i = 0; i < this.m_logIndent; i++ )
 			{
-				print( "  " );
+				::print( "  " );
 			}
 			
-			printl( string );
+			::printl( string );
 		}
 	}
 
@@ -838,24 +840,24 @@ class LateBinder
 	m_bindNamesStack = [];
 	m_log = false;
 	m_logIndent = 0;
-}
+};
 
 // support function to assemble help strings for script calls - call once all your stuff is in the VM
-::_PublishedHelp <- {}
-function AddToScriptHelp( scopeTable )
+::_PublishedHelp <- {};
+::AddToScriptHelp <- function( scopeTable )
 {
 	foreach (idx, val in scopeTable )
 	{
 		if (typeof(val) == "function")
 		{
-			local helpstr = "scripthelp_" + idx
+			local helpstr = "scripthelp_" + idx;
 			if ( ( helpstr in scopeTable ) && ( ! (helpstr in ::_PublishedHelp) ) )
 			{
-//				RegisterFunctionDocumentation( val, idx, "#", scopeTable[helpstr] )
-				RegisterFunctionDocumentation( val, idx, GetFunctionSignature( val, idx ), scopeTable[helpstr] )
-				::_PublishedHelp[helpstr] <- true
-				printl("Registered " + helpstr + " for " + val.tostring)
+//				::RegisterFunctionDocumentation( val, idx, "#", scopeTable[helpstr] );
+				::RegisterFunctionDocumentation( val, idx, ::GetFunctionSignature( val, idx ), scopeTable[helpstr] );
+				::_PublishedHelp[helpstr] <- true;
+				::printl("Registered " + helpstr + " for " + val.tostring);
 			}
 		}
 	}
-}
+};

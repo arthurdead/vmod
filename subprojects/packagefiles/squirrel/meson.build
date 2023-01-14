@@ -117,7 +117,11 @@ squirrel_lib = static_library('squirrel',
 
 squirrel_dep = declare_dependency(
 	link_with: squirrel_lib,
-	include_directories: include_directories('include')
+	include_directories:
+		include_directories(
+			'include',
+			'sqmodules'
+		)
 )
 
 squirrel_internal_dep = declare_dependency(

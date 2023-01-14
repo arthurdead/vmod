@@ -7,6 +7,13 @@
 #include <memory>
 #include <string>
 
+#ifdef __VMOD_USING_QUIRREL
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#include <sqmodules.h>
+#pragma GCC diagnostic pop
+#endif
+
 #ifndef __VMOD_USING_QUIRREL
 	#error
 #endif
@@ -114,6 +121,15 @@ namespace vmod::vm
 		bool IsArray_nonvirtual(gsdk::HSCRIPT) noexcept;
 		bool IsTable_nonvirtual(gsdk::HSCRIPT) noexcept;
 
+		gsdk::HSCRIPT CompileScript_strict(const char *, const char * = nullptr) noexcept;
+
+	#ifdef __VMOD_USING_QUIRREL
+		static std::underlying_type_t<SQLangFeature> default_lang_feat;
+	#endif
+
+		HSQOBJECT vector_class;
+		HSQOBJECT qangle_class;
+
 	private:
 		static char err_buff[gsdk::MAXPRINTMSG];
 		static void error_func(HSQUIRRELVM vm, const SQChar *fmt, ...);
@@ -122,17 +138,25 @@ namespace vmod::vm
 
 		static SQInteger static_func_call(HSQUIRRELVM vm);
 		static SQInteger member_func_call(HSQUIRRELVM vm);
-		static SQInteger generic_ctor(HSQUIRRELVM vm);
+		static SQInteger external_ctor(HSQUIRRELVM vm);
+		static SQInteger metamethod_call(HSQUIRRELVM vm);
+		static SQInteger instance_str(HSQUIRRELVM vm);
+		static SQInteger instance_valid(HSQUIRRELVM vm);
+
 		static SQInteger generic_dtor(SQUserPointer userptr, SQInteger size);
 		static SQInteger external_dtor(SQUserPointer userptr, SQInteger size);
 
-		void push(const gsdk::ScriptVariant_t &var) noexcept;
-		static void get(const HSQOBJECT &obj, gsdk::ScriptVariant_t &var) noexcept;
+		bool push(const gsdk::ScriptVariant_t &var) noexcept;
+		bool get(const HSQOBJECT &obj, gsdk::ScriptVariant_t &var) noexcept;
 		bool get(SQInteger idx, gsdk::ScriptVariant_t &var) noexcept;
 
 		bool register_func(const gsdk::ScriptClassDesc_t *classinfo, const gsdk::ScriptFunctionBinding_t *info, std::string_view name_str) noexcept;
 
-		bool register_class(const gsdk::ScriptClassDesc_t *info, HSQOBJECT **obj) noexcept;
+		bool register_class(const gsdk::ScriptClassDesc_t *info, std::string &&classname_str, HSQOBJECT **obj) noexcept;
+
+		gsdk::HSCRIPT compile_script() noexcept;
+
+		void get_obj(gsdk::ScriptVariant_t &value) noexcept;
 
 		bool debug_vm{false};
 
@@ -141,12 +165,14 @@ namespace vmod::vm
 
 		HSQUIRRELVM impl{nullptr};
 
+	#ifdef __VMOD_USING_QUIRREL
+		std::unique_ptr<SqModules> modules;
+	#endif
+
 		std::size_t unique_ids{0};
 
-		HSQOBJECT vector_class;
 		bool vector_registered{false};
 
-		HSQOBJECT qangle_class;
 		bool qangle_registered{false};
 
 		HSQOBJECT create_scope_func;
@@ -227,7 +253,11 @@ namespace vmod::vm
 			class_info_t &operator=(const class_info_t &) = delete;
 		};
 
-		std::unordered_map<std::string, std::unique_ptr<class_info_t>> registered_classes;
+		using registered_classes_t = std::unordered_map<std::string, std::unique_ptr<class_info_t>>;
+
+		registered_classes_t registered_classes;
+
+		registered_classes_t::iterator last_registered_class;
 
 	private:
 		squirrel_vm(const squirrel_vm &) = delete;

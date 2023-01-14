@@ -56,6 +56,12 @@ namespace vmod
 {
 	constexpr std::uintptr_t uninitialized_memory{0xbebebebe};
 
+	template <typename T>
+	constexpr inline __attribute__((__always_inline__)) std::type_info *typeid_ptr() noexcept
+	{
+		return &const_cast<std::type_info &>(typeid(T));
+	}
+
 	inline __attribute__((__always_inline__)) void debugtrap() noexcept
 	{
 	#ifdef __clang__
