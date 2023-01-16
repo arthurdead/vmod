@@ -116,13 +116,14 @@ namespace vmod
 
 	main::~main() noexcept {}
 
-#ifndef __VMOD_USING_CUSTOM_VM
+#if !defined __VMOD_USING_CUSTOM_VM || defined __VMOD_OVERRIDE_INIT_SCRIPT
 	static
 #endif
 	const unsigned char *g_Script_init{nullptr};
 
 	static const unsigned char *g_Script_vscript_server{nullptr};
 	static const unsigned char *g_Script_spawn_helper{nullptr};
+
 	static gsdk::IScriptVM **g_pScriptVM_ptr{nullptr};
 	static bool(*VScriptServerInit)() {nullptr};
 	static void(*VScriptServerTerm)() {nullptr};
@@ -979,15 +980,6 @@ namespace vmod
 			}
 		}
 
-		std::string_view filesystem_lib_name{"filesystem_stdio.so"sv};
-		if(sv_engine->IsDedicatedServer()) {
-			filesystem_lib_name = "dedicated_srv.so"sv;
-		}
-		if(!filesystem_lib.load(bin_folder/filesystem_lib_name)) {
-			error("vmod: failed to open filesystem library: '%s'\n"sv, filesystem_lib.error_string().c_str());
-			return false;
-		}
-
 		std::string_view vstdlib_lib_name{"libvstdlib.so"sv};
 		if(sv_engine->IsDedicatedServer()) {
 			vstdlib_lib_name = "libvstdlib_srv.so"sv;
@@ -997,14 +989,13 @@ namespace vmod
 			return false;
 		}
 
-		cvar_dll_id_ = cvar->AllocateDLLIdentifier();
-
-		{
-			std::filesystem::path assets_dir{root_dir_};
-			assets_dir /= "assets"sv;
-
-			filesystem->AddSearchPath(assets_dir.c_str(), "GAME");
-			filesystem->AddSearchPath(assets_dir.c_str(), "mod");
+		std::string_view filesystem_lib_name{"filesystem_stdio.so"sv};
+		if(sv_engine->IsDedicatedServer()) {
+			filesystem_lib_name = "dedicated_srv.so"sv;
+		}
+		if(!filesystem_lib.load(bin_folder/filesystem_lib_name)) {
+			error("vmod: failed to open filesystem library: '%s'\n"sv, filesystem_lib.error_string().c_str());
+			return false;
 		}
 
 		std::string_view vscript_lib_name{"vscript.so"sv};
@@ -1029,24 +1020,13 @@ namespace vmod
 		#endif
 		}
 
-		base_script_path = root_dir_;
-		base_script_path /= "base/vmod_base"sv;
-		base_script_path.replace_extension(scripts_extension);
-
-		plugins_dir_ = root_dir_;
-		plugins_dir_ /= "plugins"sv;
-
-		if(!pp.initialize()) {
-			return false;
-		}
-
 		{
 			const auto &vscript_symbols{vscript_lib.symbols()};
 			const auto &vscript_global_qual{vscript_symbols.global()};
 
 			auto g_Script_init_it{vscript_global_qual.find("g_Script_init"s)};
 			if(g_Script_init_it == vscript_global_qual.end()) {
-			#ifndef __VMOD_USING_CUSTOM_VM
+			#if !defined __VMOD_USING_CUSTOM_VM || defined __VMOD_OVERRIDE_INIT_SCRIPT
 				warning("vmod: missing 'g_Script_init' symbol\n");
 			#else
 				error("vmod: missing 'g_Script_init' symbol\n");
@@ -1057,13 +1037,13 @@ namespace vmod
 		#ifdef __VMOD_USING_CUSTOM_VM
 			auto ScriptCreateSquirrelVM_it{vscript_global_qual.find("ScriptCreateSquirrelVM()"s)};
 			if(ScriptCreateSquirrelVM_it == vscript_global_qual.end()) {
-				error("vmod: missing 'ScriptCreateSquirrelVM' symbol\n");
+				error("vmod: missing 'ScriptCreateSquirrelVM()' symbol\n");
 				return false;
 			}
 
 			auto ScriptDestroySquirrelVM_it{vscript_global_qual.find("ScriptDestroySquirrelVM(IScriptVM*)"s)};
 			if(ScriptDestroySquirrelVM_it == vscript_global_qual.end()) {
-				error("vmod: missing 'ScriptDestroySquirrelVM' symbol\n");
+				error("vmod: missing 'ScriptDestroySquirrelVM(IScriptVM*)' symbol\n");
 				return false;
 			}
 		#endif
@@ -1230,7 +1210,7 @@ namespace vmod
 			sq_setparamscheck = ::sq_setparamscheck;
 		#endif
 
-		#ifndef __VMOD_USING_CUSTOM_VM
+		#if !defined __VMOD_USING_CUSTOM_VM || defined __VMOD_OVERRIDE_INIT_SCRIPT
 			if(g_Script_init_it != vscript_global_qual.end())
 		#endif
 			{
@@ -1276,26 +1256,26 @@ namespace vmod
 
 			auto VScriptServerInit_it{sv_global_qual.find("VScriptServerInit()"s)};
 			if(VScriptServerInit_it == sv_global_qual.end()) {
-				error("vmod: missing 'VScriptServerInit' symbol\n"sv);
+				error("vmod: missing 'VScriptServerInit()' symbol\n"sv);
 				return false;
 			}
 
 			auto VScriptServerTerm_it{sv_global_qual.find("VScriptServerTerm()"s)};
 			if(VScriptServerTerm_it == sv_global_qual.end()) {
-				error("vmod: missing 'VScriptServerTerm' symbol\n"sv);
+				error("vmod: missing 'VScriptServerTerm()' symbol\n"sv);
 				return false;
 			}
 
 		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
 			auto VScriptServerRunScript_it{sv_global_qual.find("VScriptRunScript(char const*, HSCRIPT__*, bool)"s)};
 			if(VScriptServerRunScript_it == sv_global_qual.end()) {
-				error("vmod: missing 'VScriptRunScript' symbol\n"sv);
+				error("vmod: missing 'VScriptRunScript(char const*, HSCRIPT__*, bool)' symbol\n"sv);
 				return false;
 			}
 		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, <=, GSDK_ENGINE_BRANCH_2010_V0)
 			auto VScriptServerRunScript_it{sv_global_qual.find("VScriptServerRunScript(char const*, HSCRIPT__*, bool)"s)};
 			if(VScriptServerRunScript_it == sv_global_qual.end()) {
-				error("vmod: missing 'VScriptServerRunScript' symbol\n"sv);
+				error("vmod: missing 'VScriptServerRunScript(char const*, HSCRIPT__*, bool)' symbol\n"sv);
 				return false;
 			}
 		#else
@@ -1305,7 +1285,7 @@ namespace vmod
 		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 			auto VScriptServerRunScriptForAllAddons_it{sv_global_qual.find("VScriptServerRunScriptForAllAddons(char const*, HSCRIPT__*, bool)"s)};
 			if(VScriptServerRunScriptForAllAddons_it == sv_global_qual.end()) {
-				error("vmod: missing 'VScriptServerRunScriptForAllAddons' symbol\n"sv);
+				error("vmod: missing 'VScriptServerRunScriptForAllAddons(char const*, HSCRIPT__*, bool)' symbol\n"sv);
 				return false;
 			}
 		#endif
@@ -1473,6 +1453,15 @@ namespace vmod
 			return false;
 		}
 
+		plugins_dir_ = root_dir_;
+		plugins_dir_ /= "plugins"sv;
+
+		cvar_dll_id_ = cvar->AllocateDLLIdentifier();
+
+		if(!pp.initialize()) {
+			return false;
+		}
+
 		vm_ = vsmgr->CreateVM(script_language);
 		if(!vm_) {
 			error("vmod: failed to create VM\n"sv);
@@ -1564,6 +1553,10 @@ namespace vmod
 		std::string base_script_name{"vmod_base"sv};
 		base_script_name += scripts_extension;
 
+		base_script_path = root_dir_;
+		base_script_path /= "base/vmod_base"sv;
+		base_script_path.replace_extension(scripts_extension);
+
 		if(std::filesystem::exists(base_script_path)) {
 			{
 				std::unique_ptr<unsigned char[]> script_data{read_file(base_script_path)};
@@ -1614,7 +1607,7 @@ namespace vmod
 		}
 
 		if(vm_->GetLanguage() == gsdk::SL_SQUIRREL) {
-		#if defined __VMOD_USING_CUSTOM_VM && defined __VMOD_USING_QUIRREL
+		#ifdef __VMOD_OVERRIDE_SERVER_INIT_SCRIPT
 			std::filesystem::path server_init_path{root_dir_};
 
 			server_init_path /= "base"sv;
@@ -1772,9 +1765,11 @@ namespace vmod
 
 				plugins.clear();
 
-				for(const std::filesystem::path &it : added_paths) {
-					filesystem->RemoveSearchPath(it.c_str(), "GAME");
-					filesystem->RemoveSearchPath(it.c_str(), "mod");
+				if(filesystem) {
+					for(const std::filesystem::path &it : added_paths) {
+						filesystem->RemoveSearchPath(it.c_str(), "GAME");
+						filesystem->RemoveSearchPath(it.c_str(), "mod");
+					}
 				}
 				added_paths.clear();
 
@@ -2003,7 +1998,7 @@ namespace vmod
 			[this](const gsdk::CCommand &) noexcept -> void {
 				std::filesystem::path dump_dir{root_dir_/"dumps"sv/"internal_scripts"sv};
 
-			#ifndef __VMOD_USING_CUSTOM_VM
+			#if !defined __VMOD_USING_CUSTOM_VM || defined __VMOD_OVERRIDE_INIT_SCRIPT
 				if(g_Script_init)
 			#endif
 				{
@@ -2381,6 +2376,14 @@ namespace vmod
 		);
 	#endif
 
+		if(filesystem) {
+			std::filesystem::path assets_dir{root_dir_};
+			assets_dir /= "assets"sv;
+
+			filesystem->AddSearchPath(assets_dir.c_str(), "GAME");
+			filesystem->AddSearchPath(assets_dir.c_str(), "mod");
+		}
+
 		sv_engine->InsertServerCommand("exec vmod/load.cfg\n");
 		sv_engine->ServerExecute();
 
@@ -2442,8 +2445,10 @@ namespace vmod
 					continue;
 				} else if(filename == "assets"sv) {
 					if(!(flags & load_plugins_flags::src_folder)) {
-						filesystem->AddSearchPath(path.c_str(), "GAME");
-						filesystem->AddSearchPath(path.c_str(), "mod");
+						if(filesystem) {
+							filesystem->AddSearchPath(path.c_str(), "GAME");
+							filesystem->AddSearchPath(path.c_str(), "mod");
+						}
 						added_paths.emplace_back(std::move(path));
 					} else {
 						remark("vmod: assets folder inside src folder: '%s'\n"sv, path.c_str());
@@ -2846,6 +2851,8 @@ namespace vmod
 	{
 		vmod_unload_plugins();
 
+		pp.shutdown();
+
 		if(vm_) {
 			if(to_string_func && to_string_func != gsdk::INVALID_HSCRIPT) {
 				vm_->ReleaseFunction(to_string_func);
@@ -2902,6 +2909,32 @@ namespace vmod
 		vmod_load_plugin.unregister();
 		vmod_list_plugins.unregister();
 		vmod_refresh_plugins.unregister();
+
+		vmod_dump_internal_scripts.unregister();
+		vmod_auto_dump_internal_scripts.unregister();
+
+		vmod_dump_squirrel_ver.unregister();
+		vmod_auto_dump_squirrel_ver.unregister();
+
+		vmod_dump_netprops.unregister();
+		vmod_auto_dump_netprops.unregister();
+
+		vmod_dump_datamaps.unregister();
+		vmod_auto_dump_datamaps.unregister();
+
+		vmod_dump_entity_classes.unregister();
+		vmod_auto_dump_entity_classes.unregister();
+
+	#ifndef GSDK_NO_SYMBOLS
+		vmod_dump_entity_vtables.unregister();
+		vmod_auto_dump_entity_vtables.unregister();
+
+		vmod_dump_entity_funcs.unregister();
+		vmod_auto_dump_entity_funcs.unregister();
+	#endif
+
+		vmod_gen_docs.unregister();
+		vmod_auto_gen_docs.unregister();
 
 		if(cvar_dll_id_ != gsdk::INVALID_CVAR_DLL_IDENTIFIER) {
 			cvar->UnregisterConCommands(cvar_dll_id_);

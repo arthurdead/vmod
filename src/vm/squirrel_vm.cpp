@@ -638,11 +638,15 @@ namespace vmod::vm
 		}
 
 		{
-		#ifdef __VMOD_USING_QUIRREL
+		#ifdef __VMOD_OVERRIDE_INIT_SCRIPT
 			std::filesystem::path init_script_path{main::instance().root_dir()};
 
 			init_script_path /= "base"sv;
 			init_script_path /= "vmod_init.nut"sv;
+
+			#ifdef __VMOD_INIT_SCRIPT_HEADER_INCLUDED
+			bool script_from_file{false};
+			#endif
 
 			if(std::filesystem::exists(init_script_path)) {
 				{
@@ -661,6 +665,11 @@ namespace vmod::vm
 						}
 					#endif
 					}
+				#ifdef __VMOD_INIT_SCRIPT_HEADER_INCLUDED
+					else {
+						script_from_file = true;
+					}
+				#endif
 				}
 			} else {
 			#ifdef __VMOD_INIT_SCRIPT_HEADER_INCLUDED
@@ -692,8 +701,24 @@ namespace vmod::vm
 			sq_pop(impl, 1);
 
 			if(failed) {
+			#ifdef __VMOD_OVERRIDE_INIT_SCRIPT
+				#ifdef __VMOD_INIT_SCRIPT_HEADER_INCLUDED
+				if(script_from_file)
+				#endif
+				{
+					error("vmod vm: failed to execute init script file '%s'\n"sv, init_script_path.c_str());
+					return false;
+				}
+				#ifdef __VMOD_INIT_SCRIPT_HEADER_INCLUDED
+				else {
+					error("vmod vm: failed to execute embedded init script file\n"sv);
+					return false;
+				}
+				#endif
+			#else
 				error("vmod vm: failed to execute 'g_Script_init'\n"sv);
 				return false;
+			#endif
 			}
 		}
 
@@ -1439,42 +1464,46 @@ namespace vmod::vm
 			return sq_throwerror(vm, _SC("wrong number of parameters"));
 		}
 
-		bool is_arg_void{num_params == 0};
-		bool is_ret_void{info->m_desc.m_ReturnType == gsdk::FIELD_VOID};
+		std::vector<gsdk::ScriptVariant_t> args;
 
-		std::vector<gsdk::ScriptVariant_t> params;
-
-		if(!is_arg_void) {
-			params.resize(num_params);
+		if(num_params > 0) {
+			args.resize(num_params);
 
 			for(std::size_t i{0}; i < num_params; ++i) {
-				if(!actual_vm->get(2+static_cast<SQInteger>(i), params[i])) {
-					return sq_throwerror(vm, _SC("wrong number of parameters"));
+				if(!actual_vm->get(2+static_cast<SQInteger>(i), args[i])) {
+					return sq_throwerror(vm, _SC("failed to get arg"));
 				}
 			}
 		}
 
+		return actual_vm->func_call(info, nullptr, args);
+	}
+
+	SQInteger squirrel_vm::func_call(const gsdk::ScriptFunctionBinding_t *info, void *obj, const std::vector<gsdk::ScriptVariant_t> &args) noexcept
+	{
+		bool is_ret_void{info->m_desc.m_ReturnType == gsdk::FIELD_VOID};
+
 		gsdk::ScriptVariant_t ret_var;
-		bool success{info->m_pfnBinding(info->m_pFunction, nullptr, is_arg_void ? nullptr : params.data(), static_cast<int>(num_params), is_ret_void ? nullptr : &ret_var)};
+		bool success{info->m_pfnBinding(info->m_pFunction, obj, args.empty() ? nullptr : args.data(), static_cast<int>(args.size()), is_ret_void ? nullptr : &ret_var)};
 
-		if(actual_vm->got_last_exception) {
-			sq_pushobject(vm, actual_vm->last_exception);
+		if(got_last_exception) {
+			sq_pushobject(impl, last_exception);
 
-			SQRESULT res{sq_throwobject(vm)};
+			SQRESULT res{sq_throwobject(impl)};
 
-			sq_release(vm, &actual_vm->last_exception);
-			actual_vm->got_last_exception = false;
+			sq_release(impl, &last_exception);
+			got_last_exception = false;
 
-			sq_resetobject(&actual_vm->last_exception);
+			sq_resetobject(&last_exception);
 
 			return res;
 		} else if(!success) {
-			return sq_throwerror(vm, _SC("binding function failed"));
+			return sq_throwerror(impl, _SC("binding function failed"));
 		}
 
 		if(!is_ret_void) {
-			if(!actual_vm->push(ret_var)) {
-				return sq_throwerror(vm, _SC("failed to push return"));
+			if(!push(ret_var)) {
+				return sq_throwerror(impl, _SC("failed to push return"));
 			}
 		}
 
@@ -1483,16 +1512,81 @@ namespace vmod::vm
 
 	SQInteger squirrel_vm::member_func_call(HSQUIRRELVM vm)
 	{
+		squirrel_vm *actual_vm{static_cast<squirrel_vm *>(sq_getforeignptr(vm))};
+
 		SQInteger top{sq_gettop(vm)};
+		if(top < 2) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
 
-		debugtrap();
+		SQUserPointer userptr1{nullptr};
+		if(SQ_FAILED(sq_getuserpointer(vm, -1, &userptr1))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
 
-		return sq_throwerror(vm, _SC("not implemented yet"));
+		SQUserPointer userptr2{nullptr};
+		if(SQ_FAILED(sq_getuserpointer(vm, -2, &userptr2))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		gsdk::ScriptClassDesc_t *classinfo{static_cast<gsdk::ScriptClassDesc_t *>(userptr1)};
+		gsdk::ScriptFunctionBinding_t *funcinfo{static_cast<gsdk::ScriptFunctionBinding_t *>(userptr2)};
+
+		void *obj{nullptr};
+
+		SQUserPointer userptr3{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -3, &userptr3, classinfo))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		instance_info_t *instinfo{static_cast<instance_info_t *>(userptr3)};
+		if(!instinfo->ptr) {
+			return sq_throwerror(vm, _SC("failed to get object ptr"));
+		}
+
+		obj = instinfo->ptr;
+
+		if(classinfo->pHelper) {
+			obj = classinfo->pHelper->GetProxied(obj);
+
+			if(!obj) {
+				return sq_throwerror(vm, _SC("failed to get object ptr"));
+			}
+		}
+
+		std::size_t num_params{funcinfo->m_desc.m_Parameters.size()};
+		if(static_cast<std::size_t>(top-3) != num_params) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		std::vector<gsdk::ScriptVariant_t> args;
+
+		if(num_params > 0) {
+			args.resize(num_params);
+
+			for(std::size_t i{0}; i < num_params; ++i) {
+				if(!actual_vm->get(3+static_cast<SQInteger>(i), args[i])) {
+					return sq_throwerror(vm, _SC("failed to get arg"));
+				}
+			}
+		}
+
+		return actual_vm->func_call(funcinfo, obj, args);
 	}
 
 	SQInteger squirrel_vm::external_ctor(HSQUIRRELVM vm)
 	{
-		debugtrap();
+		SQInteger top{sq_gettop(vm)};
+		if(top < 2) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr1{nullptr};
+		if(SQ_FAILED(sq_getuserpointer(vm, -1, &userptr1))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		gsdk::ScriptClassDesc_t *classinfo{static_cast<gsdk::ScriptClassDesc_t *>(userptr1)};
 
 		return sq_throwerror(vm, _SC("not implemented yet"));
 	}

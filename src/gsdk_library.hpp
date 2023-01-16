@@ -23,7 +23,7 @@ namespace vmod
 		template <typename T>
 		T *addr(std::string_view name) noexcept;
 
-		inline void *base() noexcept
+		inline unsigned char *base() noexcept
 		{ return base_addr; }
 
 		void unload() noexcept;
@@ -39,7 +39,7 @@ namespace vmod
 	private:
 		void *dl{nullptr};
 		gsdk::CreateInterfaceFn iface_fac{nullptr};
-		void *base_addr{nullptr};
+		unsigned char *base_addr{nullptr};
 
 	private:
 		gsdk_library(const gsdk_library &) = delete;

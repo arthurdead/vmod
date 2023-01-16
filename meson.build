@@ -17,6 +17,11 @@ link_args = [
 ]
 
 cpp_args = [
+	'-msse2',
+	'-msse4.1'
+]
+
+cpp_args += [
 	'-Wno-padded',
 	'-Wno-switch-enum'
 ]
@@ -440,6 +445,20 @@ if install
 		install_data(
 			vmod_server_init_script_src,
 			rename: join_paths(vmod_root,'base','vmod_server_init.nut'),
+			install_dir: addons
+		)
+	endif
+
+	if game == 'portal2'
+		install_data(
+			files('src/syms/portal2/vscript/vscript.so.yaml'),
+			rename: join_paths(vmod_root,'syms/vscript/vscript.so.yaml'),
+			install_dir: addons
+		)
+
+		install_data(
+			files('src/syms/portal2/server/server.so.yaml'),
+			rename: join_paths(vmod_root,'syms/server/server.so.yaml'),
 			install_dir: addons
 		)
 	endif

@@ -1,5 +1,6 @@
 #include "gsdk.hpp"
 #include "gsdk/server/server.hpp"
+#include "gsdk/tier0/commandline.hpp"
 
 namespace vmod
 {
@@ -17,7 +18,7 @@ namespace vmod
 	std::unordered_map<std::string, gsdk::ServerClass *> sv_classes;
 	gsdk::CStandardSendProxies *std_proxies{nullptr};
 #ifndef GSDK_NO_SYMBOLS
-	bool symbols_available{true};
+	bool symbols_available{false};
 #endif
 	gsdk::ConVar *developer{nullptr};
 
@@ -49,7 +50,9 @@ namespace vmod
 		}
 
 	#ifndef GSDK_NO_SYMBOLS
-		symbols_available = sv_engine->IsDedicatedServer();
+		if(CommandLine()->FindParm("-vmod_disable_syms") == 0) {
+			symbols_available = sv_engine->IsDedicatedServer();
+		}
 	#endif
 
 		sv_stringtables = iface<gsdk::IServerNetworkStringTableContainer>();
@@ -170,30 +173,28 @@ namespace vmod
 			if(symbols_available) {
 				std::uint64_t offset{symbol_cache::uncached_find_mangled_func(path, "_Z17FileSystemFactoryPKcPi"sv)};
 				if(offset == 0) {
-					err_str = "missing FileSystemFactory function"s;
-					return false;
-				}
+					warning("vmod: missing FileSystemFactory function\n"sv);
+				} else {
+				#ifndef __clang__
+					#pragma GCC diagnostic push
+					#pragma GCC diagnostic ignored "-Wconditionally-supported"
+				#endif
+					gsdk::CreateInterfaceFn FileSystemFactory{reinterpret_cast<gsdk::CreateInterfaceFn>(base() + offset)};
+				#ifndef __clang__
+					#pragma GCC diagnostic pop
+				#endif
 
-			#ifndef __clang__
-				#pragma GCC diagnostic push
-				#pragma GCC diagnostic ignored "-Wconditionally-supported"
-			#endif
-				gsdk::CreateInterfaceFn FileSystemFactory{reinterpret_cast<gsdk::CreateInterfaceFn>(static_cast<unsigned char *>(base()) + offset)};
-			#ifndef __clang__
-				#pragma GCC diagnostic pop
-			#endif
-
-				int status{gsdk::IFACE_OK};
-				filesystem = static_cast<gsdk::IFileSystem *>(FileSystemFactory(gsdk::IFileSystem::interface_name.data(), &status));
-				if(!filesystem || status != gsdk::IFACE_OK) {
-					err_str = "missing IFileSystem interface version "s;
-					err_str += gsdk::IFileSystem::interface_name;
-					return false;
+					int status{gsdk::IFACE_OK};
+					filesystem = static_cast<gsdk::IFileSystem *>(FileSystemFactory(gsdk::IFileSystem::interface_name.data(), &status));
+					if(!filesystem || status != gsdk::IFACE_OK) {
+						err_str = "missing IFileSystem interface version "s;
+						err_str += gsdk::IFileSystem::interface_name;
+						return false;
+					}
 				}
 			} else {
 		#endif
-				err_str = "missing FileSystemFactory function"s;
-				return false;
+				warning("vmod: missing FileSystemFactory function\n"sv);
 		#ifndef GSDK_NO_SYMBOLS
 			}
 		#endif

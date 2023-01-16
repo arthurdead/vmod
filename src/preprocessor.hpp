@@ -19,6 +19,7 @@ namespace vmod
 
 	private:
 		bool initialize() noexcept;
+		void shutdown() noexcept;
 
 		static squirrel_preprocessor *current;
 

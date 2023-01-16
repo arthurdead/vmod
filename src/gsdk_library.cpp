@@ -49,7 +49,7 @@ namespace vmod
 			#pragma GCC diagnostic pop
 		#endif
 
-			base_addr = base_info.dli_fbase;
+			base_addr = static_cast<unsigned char *>(base_info.dli_fbase);
 		}
 
 		return true;

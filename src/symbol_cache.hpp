@@ -19,10 +19,12 @@
 #include "hacking.hpp"
 #include "type_traits.hpp"
 
-#ifndef GSDK_NO_SYMBOLS
+#ifndef __VMOD_COMPILING_SYMBOL_TOOL
+#include <yaml.h>
+#endif
+
 #include <libelf.h>
 #include <gelf.h>
-#endif
 #include "libiberty.hpp"
 
 #ifdef __VMOD_COMPILING_VTABLE_DUMPER
@@ -38,11 +40,12 @@ namespace vmod
 
 		symbol_cache() noexcept = default;
 
-		bool load(const std::filesystem::path &path, void *base) noexcept;
+		bool load(const std::filesystem::path &path, unsigned char *base) noexcept;
 
 		inline const std::string &error_string() const noexcept
 		{ return err_str; }
 
+	public:
 		struct qualification_info
 		{
 			friend class symbol_cache;
@@ -65,14 +68,17 @@ namespace vmod
 
 				virtual ~name_info() noexcept;
 
-				name_info() noexcept = default;
-				name_info(name_info &&) noexcept = default;
-				name_info &operator=(name_info &&) noexcept = default;
+				inline name_info() noexcept
+				{
+				}
+				inline name_info(name_info &&other) noexcept
+				{ operator=(std::move(other)); }
+				name_info &operator=(name_info &&other) noexcept;
 
 			#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 				template <typename T>
 				inline T addr() const noexcept
-				{ return reinterpret_cast<T>(const_cast<void *>(addr_)); }
+				{ return reinterpret_cast<T>(const_cast<unsigned char *>(addr_)); }
 
 				template <typename T>
 				inline auto func() const noexcept -> function_pointer_t<T>
@@ -114,12 +120,150 @@ namespace vmod
 			#endif
 
 			private:
-			#if !defined __VMOD_COMPILING_SYMBOL_TOOL && !defined GSDK_NO_SYMBOLS
-				virtual void resolve(void *base) noexcept;
+			#if !defined __VMOD_COMPILING_SYMBOL_TOOL
+				void resolve_from_base(unsigned char *base) noexcept;
+				virtual void resolve_absolute(unsigned char *addr) noexcept;
 			#endif
 
-			#if !defined __VMOD_COMPILING_SYMBOL_TOOL && !defined GSDK_NO_SYMBOLS
-				std::uint64_t offset_{0};
+			#if !defined __VMOD_COMPILING_SYMBOL_TOOL
+			public:
+				struct alignas(unsigned char) null_or_byte_t final
+				{
+					static constexpr unsigned char null{42};
+
+					using value_t = std::decay_t<decltype(null)>;
+
+				public:
+					constexpr null_or_byte_t() noexcept = default;
+					constexpr null_or_byte_t(const null_or_byte_t &) noexcept = default;
+					constexpr null_or_byte_t &operator=(const null_or_byte_t &) noexcept = default;
+					constexpr null_or_byte_t(null_or_byte_t &&) noexcept = default;
+					constexpr null_or_byte_t &operator=(null_or_byte_t &&) noexcept = default;
+
+					constexpr inline null_or_byte_t(unsigned char other) noexcept
+						: value{static_cast<value_t>(other)}
+					{
+					}
+
+					constexpr inline null_or_byte_t(std::nullptr_t) noexcept
+						: value{null}
+					{
+					}
+
+					constexpr inline operator bool() const noexcept
+					{ return value != null; }
+					constexpr inline bool operator!() const noexcept
+					{ return value == null; }
+
+					constexpr inline bool operator==(std::nullptr_t) const noexcept
+					{ return value == null; }
+					constexpr inline bool operator!=(std::nullptr_t) const noexcept
+					{ return value != null; }
+
+					constexpr inline bool operator==(unsigned char other) const noexcept
+					{ return (value == null || static_cast<unsigned char>(value) == other); }
+					constexpr inline bool operator!=(unsigned char other) const noexcept
+					{ return (value != null && static_cast<unsigned char>(value) != other); }
+
+					constexpr inline operator unsigned char() const noexcept
+					{ return static_cast<unsigned char>(value); }
+
+				private:
+					value_t value{null};
+				};
+
+				static_assert(sizeof(null_or_byte_t) == sizeof(unsigned char));
+				static_assert(alignof(null_or_byte_t) == alignof(unsigned char));
+
+				struct bytes_info_t final
+				{
+					bytes_info_t() noexcept = default;
+					bytes_info_t(bytes_info_t &&) noexcept = default;
+					bytes_info_t &operator=(bytes_info_t &&) noexcept = default;
+
+					using values_t = std::vector<null_or_byte_t>;
+
+					values_t values;
+					std::vector<std::size_t> null_positions;
+
+					inline bytes_info_t &emplace_back(std::nullptr_t) noexcept
+					{
+						null_positions.emplace_back(values.size());
+						values.emplace_back(nullptr);
+						return *this;
+					}
+
+					inline bytes_info_t &emplace_back(unsigned char byte) noexcept
+					{
+						values.emplace_back(byte);
+						return *this;
+					}
+
+					inline std::size_t size() const noexcept
+					{ return values.size(); }
+
+					inline bool empty() const noexcept
+					{ return values.empty(); }
+
+					inline bool has_null() const noexcept
+					{ return !null_positions.empty(); }
+
+					using const_iterator = values_t::const_iterator;
+
+					inline unsigned char operator[](std::size_t i) const noexcept
+					{ return values[i]; }
+
+					inline const_iterator begin() const noexcept
+					{ return values.begin(); }
+					inline const_iterator end() const noexcept
+					{ return values.end(); }
+
+					inline const_iterator cbegin() const noexcept
+					{ return values.cbegin(); }
+					inline const_iterator cend() const noexcept
+					{ return values.cend(); }
+
+					inline const unsigned char *data() const noexcept
+					{ return reinterpret_cast<const unsigned char *>(values.data()); }
+
+				private:
+					bytes_info_t(const bytes_info_t &) = delete;
+					bytes_info_t &operator=(const bytes_info_t &) = delete;
+				};
+
+			private:
+				#ifndef GSDK_NO_SYMBOLS
+				enum class type : unsigned char
+				{
+					offset,
+					bytes
+				};
+				type type_{type::offset};
+				union {
+					std::uint64_t offset_{0};
+				#endif
+					bytes_info_t bytes_info;
+				#ifndef GSDK_NO_SYMBOLS
+				};
+				#endif
+
+			#ifndef GSDK_NO_SYMBOLS
+				inline void set_offset(std::uint64_t off) noexcept
+				{
+					type_ = type::offset;
+					offset_ = off;
+				}
+			#endif
+
+				inline void set_bytes(bytes_info_t &&info) noexcept
+				{
+				#ifndef GSDK_NO_SYMBOLS
+					type_ = type::bytes;
+					new (&bytes_info) bytes_info_t{std::move(info)};
+				#else
+					bytes_info = std::move(info);
+				#endif
+				}
 			#endif
 				std::size_t vindex{static_cast<std::size_t>(-1)};
 			#ifndef __VMOD_COMPILING_SYMBOL_TOOL
@@ -127,7 +271,7 @@ namespace vmod
 				std::size_t size_{0};
 				#endif
 				union {
-					void *addr_;
+					unsigned char *addr_;
 					generic_func_t func_;
 					generic_internal_mfp_t mfp_{nullptr};
 				};
@@ -214,7 +358,7 @@ namespace vmod
 
 			private:
 			#ifndef GSDK_NO_SYMBOLS
-				void resolve(void *base) noexcept;
+				void resolve_from_base(unsigned char *base) noexcept;
 			#endif
 
 				vtable_info() noexcept = default;
@@ -247,9 +391,7 @@ namespace vmod
 
 				using kind_t = gnu_v3_ctor_kinds;
 
-			#ifndef GSDK_NO_SYMBOLS
-				void resolve(void *base) noexcept override;
-			#endif
+				void resolve_absolute(unsigned char *addr) noexcept override;
 
 				ctor_info() noexcept = default;
 
@@ -273,8 +415,8 @@ namespace vmod
 
 				using kind_t = gnu_v3_dtor_kinds;
 
-			#if !defined __VMOD_COMPILING_SYMBOL_TOOL && !defined GSDK_NO_SYMBOLS
-				void resolve(void *base) noexcept override;
+			#ifndef __VMOD_COMPILING_SYMBOL_TOOL
+				void resolve_absolute(unsigned char *addr) noexcept override;
 			#endif
 
 				dtor_info() noexcept = default;
@@ -332,16 +474,23 @@ namespace vmod
 	#endif
 
 	#ifndef GSDK_NO_SYMBOLS
-		bool read_elf(int fd, void *base) noexcept;
+		bool read_elf_symbols(int fd, unsigned char *base) noexcept;
 	#endif
 
 	#ifdef __VMOD_COMPILING_VTABLE_DUMPER
-		bool read_macho(llvm::object::MachOObjectFile &obj, void *base) noexcept;
+		bool read_macho(llvm::object::MachOObjectFile &obj, unsigned char *base) noexcept;
 	#endif
 
 	#ifndef __VMOD_COMPILING_SYMBOL_TOOL
-		bool read_yamls(const std::filesystem::path &dir, void *base) noexcept;
-		bool read_yaml(const std::filesystem::path &path, void *base) noexcept;
+		bool read_elf_info(const std::filesystem::path &path) noexcept;
+		bool read_elf_info(int fd) noexcept;
+
+		bool read_yamls(const std::filesystem::path &dir, unsigned char *base) noexcept;
+		bool read_yaml(const std::filesystem::path &path, unsigned char *base) noexcept;
+
+		bool read_array_node(yaml_document_t &doc, yaml_node_t *node, std::string_view name, unsigned char *base) noexcept;
+		bool read_map_node(yaml_document_t &doc, yaml_node_t *node, std::string_view name, unsigned char *base) noexcept;
+		bool read_final_map_node(yaml_document_t &doc, yaml_node_t *node, std::string &&qualifier, std::string &&name, unsigned char *base) noexcept;
 	#endif
 
 	#ifndef GSDK_NO_SYMBOLS
@@ -353,9 +502,9 @@ namespace vmod
 			std::size_t size;
 		};
 
-		bool handle_component(std::string_view name_mangled, demangle_component *component, qualifications_t::iterator &qual_it, qualification_info::names_t::iterator &name_it, basic_sym_t &&sym, void *base, bool elf) noexcept;
+		bool handle_component(std::string_view name_mangled, demangle_component *component, qualifications_t::iterator &qual_it, qualification_info::names_t::iterator &name_it, basic_sym_t &&sym, unsigned char *base, bool elf) noexcept;
 
-		void resolve_vtables(void *base, bool elf) noexcept;
+		void resolve_vtables(unsigned char *base, bool elf) noexcept;
 
 		std::unordered_map<std::uint64_t, pair_t> offset_map;
 	#endif
@@ -364,6 +513,13 @@ namespace vmod
 		vtable_sizes_t vtable_sizes;
 
 		qualification_info global_qual;
+
+	#ifndef __VMOD_COMPILING_SYMBOL_TOOL
+		std::uint64_t memory_size{0};
+
+		std::uint64_t data_size{0};
+		std::uint64_t data_offset{0};
+	#endif
 
 	private:
 		symbol_cache(const symbol_cache &) = delete;

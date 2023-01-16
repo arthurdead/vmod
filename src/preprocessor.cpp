@@ -171,6 +171,16 @@ namespace vmod
 		return true;
 	}
 
+	void squirrel_preprocessor::shutdown() noexcept
+	{
+		if(initialized) {
+			TPP_FINALIZE();
+			initialized = false;
+		}
+
+		vmod_preproc_dump.unregister();
+	}
+
 	bool squirrel_preprocessor::preprocess(std::string &str, const std::filesystem::path &path, std::vector<std::filesystem::path> &incs) noexcept
 	{
 		using namespace std::literals::string_view_literals;

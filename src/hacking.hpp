@@ -402,6 +402,8 @@ namespace vmod
 	{ return reinterpret_cast<void *>(reinterpret_cast<std::uintptr_t>(ptr) & ~(alignment - 1)); }
 	constexpr inline std::size_t align(std::size_t value, std::size_t alignment) noexcept
 	{ return (value & ~(alignment - 1)); }
+	constexpr inline std::uint64_t align_up(std::uint64_t value, std::size_t alignment) noexcept
+	{ return ((value + (alignment - 1)) & ~(alignment - 1)); }
 
 	struct page_info final
 	{

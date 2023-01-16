@@ -24,7 +24,7 @@ int main(int argc, char *argv[], [[maybe_unused]] char *[])
 
 	std::filesystem::path ext{binary.extension()};
 
-	void *base{nullptr};
+	unsigned char *base{nullptr};
 
 	vmod::gsdk_library lib;
 	if(ext == ".so"sv) {

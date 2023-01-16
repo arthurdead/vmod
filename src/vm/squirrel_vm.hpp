@@ -2,6 +2,7 @@
 
 #include "../gsdk/config.hpp"
 #include "../vscript/vscript.hpp"
+#include "../vscript/vscript_internal.hpp"
 #include "../gsdk/tier0/dbg.hpp"
 #include <unordered_map>
 #include <memory>
@@ -14,7 +15,7 @@
 #pragma GCC diagnostic pop
 #endif
 
-#ifndef __VMOD_USING_QUIRREL
+#ifndef __VMOD_USING_CUSTOM_VM
 	#error
 #endif
 
@@ -145,6 +146,8 @@ namespace vmod::vm
 
 		static SQInteger generic_dtor(SQUserPointer userptr, SQInteger size);
 		static SQInteger external_dtor(SQUserPointer userptr, SQInteger size);
+
+		SQInteger func_call(const gsdk::ScriptFunctionBinding_t *info, void *obj, const std::vector<gsdk::ScriptVariant_t> &args) noexcept;
 
 		bool push(const gsdk::ScriptVariant_t &var) noexcept;
 		bool get(const HSQOBJECT &obj, gsdk::ScriptVariant_t &var) noexcept;

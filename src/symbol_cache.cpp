@@ -10,15 +10,15 @@
 #include <cstring>
 #include <iostream>
 #ifndef __VMOD_COMPILING_SYMBOL_TOOL
-#include <yaml.h>
 #include "filesystem.hpp"
 #include "gsdk.hpp"
 #include "main.hpp"
+#include <emmintrin.h>
+#include <smmintrin.h>
 #endif
 
 namespace vmod
 {
-	symbol_cache::qualification_info::name_info::~name_info() noexcept {}
 	symbol_cache::qualification_info::~qualification_info() noexcept {}
 	symbol_cache::class_info::~class_info() noexcept {}
 	symbol_cache::class_info::dtor_info::~dtor_info() noexcept {}
@@ -35,11 +35,11 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
-	#ifndef GSDK_NO_SYMBOLS
 		if(elf_version(EV_CURRENT) == EV_NONE) {
 			return false;
 		}
 
+	#ifndef GSDK_NO_SYMBOLS
 		cplus_demangle_set_style(gnu_v3_demangling);
 	#endif
 
@@ -51,7 +51,7 @@ namespace vmod
 		return true;
 	}
 
-	bool symbol_cache::load(const std::filesystem::path &path, void *base) noexcept
+	bool symbol_cache::load(const std::filesystem::path &path, unsigned char *base) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 		using namespace std::literals::string_literals;
@@ -64,6 +64,10 @@ namespace vmod
 			if(!symbols_available)
 			#endif
 			{
+				if(!read_elf_info(path)) {
+					return false;
+				}
+
 				std::filesystem::path yaml_dir{yamls_dir};
 				yaml_dir /= path.filename();
 				yaml_dir.replace_extension();
@@ -90,7 +94,7 @@ namespace vmod
 					return false;
 				}
 
-				if(!read_elf(fd, base)) {
+				if(!read_elf_symbols(fd, base)) {
 					close(fd);
 					return false;
 				}
@@ -125,7 +129,7 @@ namespace vmod
 
 			auto &&obj_ptr{*obj_expect};
 
-			base = const_cast<char *>((*buffer)->getBufferStart());
+			base = reinterpret_cast<unsigned char *>(const_cast<char *>((*buffer)->getBufferStart()));
 
 			if(!read_macho(*obj_ptr, base)) {
 				return false;
@@ -142,40 +146,84 @@ namespace vmod
 		}
 	}
 
-#if !defined __VMOD_COMPILING_SYMBOL_TOOL && !defined GSDK_NO_SYMBOLS
-	void symbol_cache::qualification_info::name_info::resolve(void *base) noexcept
+	symbol_cache::qualification_info::name_info &symbol_cache::qualification_info::name_info::operator=(name_info &&other) noexcept
+	{
+	#ifndef __VMOD_COMPILING_SYMBOL_TOOL
+		#ifndef GSDK_NO_SYMBOLS
+		if(other.type_ == type::offset) {
+			offset_ = std::move(other.offset_);
+		} else
+		#endif
+		{
+			bytes_info = std::move(other.bytes_info);
+		}
+	#endif
+		vindex = other.vindex;
+	#ifndef __VMOD_COMPILING_SYMBOL_TOOL
+		names = std::move(other.names);
+		#ifndef GSDK_NO_SYMBOLS
+		size_ = other.size_;
+		#endif
+		mfp_ = std::move(other.mfp_);
+	#endif
+		return *this;
+	}
+
+	symbol_cache::qualification_info::name_info::~name_info() noexcept
+	{
+	#if !defined __VMOD_COMPILING_SYMBOL_TOOL && !defined GSDK_NO_SYMBOLS
+		if(type_ == type::bytes) {
+			bytes_info.~bytes_info_t();
+		}
+	#endif
+	}
+
+#if !defined __VMOD_COMPILING_SYMBOL_TOOL
+	void symbol_cache::qualification_info::name_info::resolve_from_base(unsigned char *base) noexcept
+	{
+	#ifndef GSDK_NO_SYMBOLS
+		if(type_ == type::offset) {
+			resolve_absolute(base + offset_);
+		} else
+	#endif
+		{
+			debugtrap();
+		}
+	}
+
+	void symbol_cache::qualification_info::name_info::resolve_absolute(unsigned char *addr) noexcept
 	{
 	#ifndef __clang__
 		#pragma GCC diagnostic push
 		#pragma GCC diagnostic ignored "-Wconditionally-supported"
 	#endif
-		mfp_.addr = reinterpret_cast<generic_plain_mfp_t>(static_cast<unsigned char *>(base) + offset_);
+		mfp_.addr = reinterpret_cast<generic_plain_mfp_t>(addr);
 	#ifndef __clang__
 		#pragma GCC diagnostic pop
 	#endif
 		mfp_.adjustor = 0;
 	}
 
-	void symbol_cache::class_info::ctor_info::resolve(void *base) noexcept
+	void symbol_cache::class_info::ctor_info::resolve_absolute(unsigned char *addr) noexcept
 	{
 	#ifndef __clang__
 		#pragma GCC diagnostic push
 		#pragma GCC diagnostic ignored "-Wconditionally-supported"
 	#endif
-		generic_plain_mfp_t temp{reinterpret_cast<generic_plain_mfp_t>(static_cast<unsigned char *>(base) + offset_)};
+		generic_plain_mfp_t temp{reinterpret_cast<generic_plain_mfp_t>(addr)};
 	#ifndef __clang__
 		#pragma GCC diagnostic pop
 	#endif
 		mfp_ = mfp_from_func<void, generic_object_t>(temp);
 	}
 
-	void symbol_cache::class_info::dtor_info::resolve(void *base) noexcept
+	void symbol_cache::class_info::dtor_info::resolve_absolute(unsigned char *addr) noexcept
 	{
 	#ifndef __clang__
 		#pragma GCC diagnostic push
 		#pragma GCC diagnostic ignored "-Wconditionally-supported"
 	#endif
-		generic_plain_mfp_t temp{reinterpret_cast<generic_plain_mfp_t>(static_cast<unsigned char *>(base) + offset_)};
+		generic_plain_mfp_t temp{reinterpret_cast<generic_plain_mfp_t>(addr)};
 	#ifndef __clang__
 		#pragma GCC diagnostic pop
 	#endif
@@ -184,21 +232,25 @@ namespace vmod
 #endif
 
 #ifndef GSDK_NO_SYMBOLS
-	void symbol_cache::class_info::vtable_info::resolve(void *base) noexcept
+	void symbol_cache::class_info::vtable_info::resolve_from_base(unsigned char *base) noexcept
 	{
 	#ifndef __clang__
 		#pragma GCC diagnostic push
 		#pragma GCC diagnostic ignored "-Wcast-align"
 	#endif
-		prefix = reinterpret_cast<__cxxabiv1::vtable_prefix *>(static_cast<unsigned char *>(base) + offset);
+		prefix = reinterpret_cast<__cxxabiv1::vtable_prefix *>(base + offset);
 	#ifndef __clang__
 		#pragma GCC diagnostic pop
 	#endif
 	}
 
-	void symbol_cache::resolve_vtables(void *base, bool elf) noexcept
+	void symbol_cache::resolve_vtables(unsigned char *base, bool elf) noexcept
 	{
 		using namespace std::literals::string_view_literals;
+
+		if(offset_map.empty()) {
+			return;
+		}
 
 		for(auto &it : qualifications) {
 			class_info *info{dynamic_cast<class_info *>(it.second.get())};
@@ -230,7 +282,7 @@ namespace vmod
 #endif
 
 #ifdef __VMOD_COMPILING_VTABLE_DUMPER
-	bool symbol_cache::read_macho(llvm::object::MachOObjectFile &obj, void *base) noexcept
+	bool symbol_cache::read_macho(llvm::object::MachOObjectFile &obj, unsigned char *base) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -297,8 +349,117 @@ namespace vmod
 	}
 #endif
 
+#ifndef __VMOD_COMPILING_SYMBOL_TOOL
+	bool symbol_cache::read_elf_info(const std::filesystem::path &path) noexcept
+	{
+		int fd{open(path.c_str(), O_RDONLY)};
+		if(fd < 0) {
+			int err{errno};
+			err_str = strerror(err);
+			return false;
+		}
+
+		if(!read_elf_info(fd)) {
+			close(fd);
+			return false;
+		}
+
+		close(fd);
+		return true;
+	}
+
+	bool symbol_cache::read_elf_info(int fd) noexcept
+	{
+		using namespace std::literals::string_literals;
+		using namespace std::literals::string_view_literals;
+
+		Elf *elf{elf_begin(fd, ELF_C_READ, nullptr)};
+		if(!elf) {
+			int err{elf_errno()};
+			err_str = elf_errmsg(err);
+			return false;
+		}
+
+		if(elf_kind(elf) != ELF_K_ELF || gelf_getclass(elf) == ELFCLASSNONE) {
+			err_str = ""s;
+			elf_end(elf);
+			return false;
+		}
+
+		std::size_t num_phdrs{0};
+		elf_getphdrnum(elf, &num_phdrs);
+
+		std::size_t pagesize{static_cast<std::size_t>(sysconf(_SC_PAGESIZE))};
+
+		GElf_Phdr phdr;
+
+		for(std::size_t i{0}; i < num_phdrs; ++i) {
+			if(!gelf_getphdr(elf, static_cast<int>(i), &phdr)) {
+				continue;
+			}
+
+			if(phdr.p_type != PT_LOAD) {
+				continue;
+			}
+
+			if(phdr.p_flags != (PF_X|PF_R)) {
+				continue;
+			}
+
+			memory_size = align_up(phdr.p_filesz, pagesize);
+			break;
+		}
+
+		GElf_Shdr scn_hdr;
+
+		std::size_t strndx{0};
+		elf_getshdrstrndx(elf, &strndx);
+
+		Elf_Scn *scn{elf_nextscn(elf, nullptr)};
+		while(scn) {
+			struct scope_nextscn final {
+				inline scope_nextscn(Elf *elf_, Elf_Scn *&scn_) noexcept
+					: elf{elf_}, scn{scn_} {}
+				inline ~scope_nextscn() noexcept
+				{ scn = elf_nextscn(elf, scn); }
+			private:
+				Elf *elf;
+				Elf_Scn *&scn;
+			};
+
+			scope_nextscn snscn{elf, scn};
+
+			if(!gelf_getshdr(scn, &scn_hdr)) {
+				continue;
+			}
+
+			switch(scn_hdr.sh_type) {
+				case SHT_PROGBITS: break;
+				default: continue;
+			}
+
+			std::string_view name{elf_strptr(elf, strndx, scn_hdr.sh_name)};
+			if(name.empty()) {
+				continue;
+			}
+
+			if(name != ".data"sv) {
+				continue;
+			}
+
+			data_offset = scn_hdr.sh_offset;
+			data_size = scn_hdr.sh_size;
+			break;
+		}
+
+		elf_end(elf);
+
+		return true;
+	}
+#endif
+
 #ifndef GSDK_NO_SYMBOLS
-	bool symbol_cache::read_elf(int fd, void *base) noexcept
+	bool symbol_cache::read_elf_symbols(int fd, unsigned char *base) noexcept
 	{
 		using namespace std::literals::string_literals;
 		using namespace std::literals::string_view_literals;
@@ -379,9 +540,9 @@ namespace vmod
 						std::unique_ptr<qualification_info::name_info> info{new qualification_info::name_info};
 						std::uint64_t offset{basic_sym.off};
 					#ifndef __VMOD_COMPILING_SYMBOL_TOOL
-						info->offset_ = offset;
+						info->set_offset(offset);
 						info->size_ = basic_sym.size;
-						info->resolve(base);
+						info->resolve_from_base(base);
 					#endif
 						auto name_it{global_qual.names.emplace(name_mangled, std::move(info)).first};
 						offset_map.emplace(offset, pair_t{qualifications.end(),name_it});
@@ -420,8 +581,11 @@ namespace vmod
 #endif
 
 #ifndef __VMOD_COMPILING_SYMBOL_TOOL
-	bool symbol_cache::read_yaml(const std::filesystem::path &path, void *base) noexcept
+	bool symbol_cache::read_yaml(const std::filesystem::path &path, unsigned char *base) noexcept
 	{
+		using namespace std::literals::string_view_literals;
+		using namespace std::literals::string_literals;
+
 		struct scope_delete_parser final {
 			inline scope_delete_parser(yaml_parser_t &parser_) noexcept
 				: parser{parser_} {}
@@ -437,12 +601,12 @@ namespace vmod
 		scope_delete_parser sdp{parser};
 
 		std::size_t size{0};
-		std::unique_ptr<unsigned char[]> data{read_file(path, size)};
+		std::unique_ptr<unsigned char[]> yaml_data{read_file(path, size)};
 		if(size == 0) {
 			return false;
 		}
 
-		yaml_parser_set_input_string(&parser, data.get(), size);
+		yaml_parser_set_input_string(&parser, yaml_data.get(), size);
 
 		while(true) {
 			yaml_document_t temp_doc{};
@@ -455,14 +619,439 @@ namespace vmod
 				break;
 			}
 
-			//TODO!!!
-			debugtrap();
+			if(root->type != YAML_MAPPING_NODE ||
+				std::strcmp(reinterpret_cast<const char *>(root->tag), YAML_MAP_TAG) != 0) {
+				err_str = "root is not a map"s;
+				return false;
+			}
+
+			if(!read_map_node(temp_doc, root, {}, base)) {
+				return false;
+			}
 		}
 
 		return true;
 	}
 
-	bool symbol_cache::read_yamls(const std::filesystem::path &dir, void *base) noexcept
+	namespace detail
+	{
+		static bool is_string_node(yaml_node_t *node) noexcept
+		{
+			if(node->type != YAML_SCALAR_NODE) {
+				return false;
+			}
+
+			switch(node->data.scalar.style) {
+				case YAML_PLAIN_SCALAR_STYLE:
+				case YAML_SINGLE_QUOTED_SCALAR_STYLE:
+				case YAML_DOUBLE_QUOTED_SCALAR_STYLE: {
+					if(std::strcmp(reinterpret_cast<const char *>(node->tag), YAML_STR_TAG) == 0) {
+						return true;
+					} else {
+						return false;
+					}
+				}
+				default:
+				return false;
+			}
+		}
+
+		static bool is_null_node(yaml_node_t *node) noexcept
+		{
+			if(node->type != YAML_SCALAR_NODE) {
+				return false;
+			}
+
+			switch(node->data.scalar.style) {
+				case YAML_PLAIN_SCALAR_STYLE:{
+					if(std::strcmp(reinterpret_cast<const char *>(node->tag), YAML_STR_TAG) == 0) {
+						if(std::strcmp(reinterpret_cast<const char *>(node->data.scalar.value), "null") == 0) {
+							return true;
+						} else {
+							return false;
+						}
+					} else {
+						return false;
+					}
+				}
+				case YAML_LITERAL_SCALAR_STYLE: {
+					if(std::strcmp(reinterpret_cast<const char *>(node->tag), YAML_NULL_TAG) == 0) {
+						return true;
+					} else {
+						return false;
+					}
+				}
+				default:
+				return false;
+			}
+		}
+
+		template <typename T>
+		static bool read_int_node(yaml_node_t *node, T &value, int base = 10) noexcept
+		{
+			if(node->type != YAML_SCALAR_NODE) {
+				return false;
+			}
+
+			switch(node->data.scalar.style) {
+				case YAML_PLAIN_SCALAR_STYLE: {
+					if(std::strcmp(reinterpret_cast<const char *>(node->tag), YAML_STR_TAG) == 0) {
+						if(std::strncmp(reinterpret_cast<const char *>(node->data.scalar.value), "null", node->data.scalar.length) == 0) {
+							value = static_cast<T>(static_cast<std::make_unsigned_t<T>>(-1));
+							return true;
+						} else {
+							const char *begin{reinterpret_cast<const char *>(node->data.scalar.value)};
+
+							std::size_t len{node->data.scalar.length};
+
+							if(base == 16) {
+								if(len > 2) {
+									if(begin[0] == '0' &&
+										(begin[1] == 'x' || begin[1] == 'X')) {
+										begin += 2;
+										len -= 2;
+									}
+								}
+							}
+
+							const char *end{begin + len};
+
+							std::from_chars_result fc_res{std::from_chars(begin, end, value, base)};
+
+							if(fc_res.ec != std::error_code{} ||
+								fc_res.ptr != end) {
+								return false;
+							}
+
+							return true;
+						}
+					} else {
+						return false;
+					}
+				}
+				case YAML_LITERAL_SCALAR_STYLE: {
+					if(std::strcmp(reinterpret_cast<const char *>(node->tag), YAML_NULL_TAG) == 0) {
+						value = 0;
+						return true;
+					} else if(std::strcmp(reinterpret_cast<const char *>(node->tag), YAML_INT_TAG) == 0) {
+						switch(node->data.scalar.length) {
+							case sizeof(char):
+							value = static_cast<T>(*reinterpret_cast<char *>(node->data.scalar.value));
+							return true;
+							case sizeof(short):
+							value = static_cast<T>(*reinterpret_cast<short *>(node->data.scalar.value));
+							return true;
+							case sizeof(int):
+							value = static_cast<T>(*reinterpret_cast<int *>(node->data.scalar.value));
+							return true;
+							case sizeof(long long):
+							value = static_cast<T>(*reinterpret_cast<long long *>(node->data.scalar.value));
+							return true;
+							default:
+							return false;
+						}
+					} else {
+						return false;
+					}
+				}
+				default:
+				return false;
+			}
+		}
+
+		using bytes_info_t = symbol_cache::qualification_info::name_info::bytes_info_t;
+		using null_or_byte_t = symbol_cache::qualification_info::name_info::null_or_byte_t;
+
+		static unsigned char *resolve_bytes(unsigned char *base, std::uint64_t memory_size, const bytes_info_t &bytes) noexcept
+		{
+			std::size_t num_bytes{bytes.size()};
+
+			unsigned char *begin{base};
+			unsigned char *end{base + (memory_size - num_bytes)};
+
+			const unsigned char *bytes_begin{reinterpret_cast<const unsigned char *>(bytes.data())};
+
+			if(!bytes.has_null()) {
+				for(unsigned char *it{begin}; it != end; ++it) {
+					if(__builtin_memcmp(it, bytes_begin, num_bytes) == 0) {
+						return it;
+					}
+				}
+
+				return nullptr;
+			} else {
+				for(unsigned char *it{begin}; it != end; ++it) {
+					bool found{true};
+
+					std::size_t last_null_pos{0};
+					for(std::size_t null_pos : bytes.null_positions) {
+						std::size_t diff{null_pos-last_null_pos};
+						if(__builtin_memcmp(it+last_null_pos, bytes_begin+last_null_pos, diff) != 0) {
+							found = false;
+							break;
+						}
+						last_null_pos = null_pos;
+					}
+
+					if(found) {
+						if(__builtin_memcmp(it+last_null_pos, bytes_begin+last_null_pos, num_bytes-last_null_pos) == 0) {
+							return it;
+						}
+					}
+				}
+
+				return nullptr;
+			}
+		}
+	}
+
+	bool symbol_cache::read_final_map_node(yaml_document_t &doc, yaml_node_t *node, std::string &&qual, std::string &&name, unsigned char *base) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+		using namespace std::literals::string_literals;
+
+		std::unordered_map<std::string, yaml_node_t *> members;
+
+		auto build_err_str{
+			[this,&qual,name](std::string_view pre, std::string_view post) noexcept -> void {
+				if(!pre.empty()) {
+					err_str += pre;
+					err_str += ' ';
+				}
+				err_str += '\'';
+				if(!qual.empty()) {
+					err_str += qual;
+					err_str += "::"sv;
+				}
+				err_str += name;
+				err_str += "' "sv;
+				err_str += post;
+			}
+		};
+
+		for(yaml_node_pair_t *pair{node->data.mapping.pairs.start}; pair != node->data.mapping.pairs.top; ++pair) {
+			yaml_node_t *key_node{yaml_document_get_node(&doc, pair->key)};
+			if(!detail::is_string_node(key_node)) {
+				build_err_str("key in"sv, "is not a string"sv);
+				return false;
+			}
+
+			yaml_node_t *value_node{yaml_document_get_node(&doc, pair->value)};
+
+			std::string keystr{reinterpret_cast<const char *>(key_node->data.scalar.value), key_node->data.scalar.length};
+
+			members.emplace(std::move(keystr), value_node);
+		}
+
+		auto method_node_it{members.find("method"s)};
+		if(method_node_it == members.end()) {
+			build_err_str({}, "is missing method"sv);
+			return false;
+		}
+
+		if(!detail::is_string_node(method_node_it->second)) {
+			build_err_str({}, "method is not a string"sv);
+			return false;
+		}
+
+		std::string_view methodstr{reinterpret_cast<const char *>(method_node_it->second->data.scalar.value), method_node_it->second->data.scalar.length};
+
+		if(methodstr.compare(0, 9, "byte_scan"sv) == 0) {
+			auto bytes_node_it{members.find("bytes"s)};
+			if(bytes_node_it == members.end()) {
+				build_err_str({}, "is missing bytes"sv);
+				return false;
+			}
+
+			detail::bytes_info_t bytes;
+
+			switch(bytes_node_it->second->type) {
+				case YAML_SEQUENCE_NODE: {
+					if(std::strcmp(reinterpret_cast<const char *>(bytes_node_it->second->tag), YAML_SEQ_TAG) != 0) {
+						build_err_str({}, "bytes is not a array"sv);
+						return false;
+					}
+
+					for(yaml_node_item_t *item{bytes_node_it->second->data.sequence.items.start}; item != bytes_node_it->second->data.sequence.items.top; ++item) {
+						yaml_node_t *value_node{yaml_document_get_node(&doc, *item)};
+
+						if(detail::is_null_node(value_node)) {
+							bytes.emplace_back(nullptr);
+						} else {
+							unsigned char byte;
+							if(!detail::read_int_node<unsigned char>(value_node, byte, 16)) {
+								build_err_str({}, "bytes has a non byte value"sv);
+								return false;
+							}
+
+							bytes.emplace_back(byte);
+						}
+					}
+				} break;
+				default: {
+					build_err_str({}, "bytes is not a array"sv);
+					return false;
+				}
+			}
+
+			unsigned char *addr{nullptr};
+
+			if(methodstr.ends_with("_mem"sv)) {
+				addr = detail::resolve_bytes(base, memory_size, bytes);
+			} else if(methodstr.ends_with("_data"sv)) {
+				addr = detail::resolve_bytes(base + data_offset, data_size, bytes);
+			} else {
+				build_err_str({}, "unknown method '"sv);
+				err_str += methodstr;
+				err_str += '\'';
+				return false;
+			}
+
+			auto offset_node_it{members.find("offset"s)};
+			if(offset_node_it != members.end()) {
+				std::uint64_t off;
+				if(!detail::read_int_node<std::uint64_t>(offset_node_it->second, off, 16)) {
+					build_err_str({}, "invalid offset"sv);
+					return false;
+				}
+
+				addr += off;
+			}
+
+			if(!addr) {
+				debugtrap();
+				build_err_str({}, "address not found"sv);
+				return false;
+			}
+
+			if(qual.empty()) {
+				std::unique_ptr<qualification_info::name_info> info{new qualification_info::name_info};
+				info->set_bytes(std::move(bytes));
+				info->resolve_absolute(addr);
+				global_qual.names.emplace(std::move(name), std::move(info));
+			} else {
+				auto this_qual_it{qualifications.find(qual)};
+				if(this_qual_it == qualifications.end()) {
+					this_qual_it = qualifications.emplace(std::move(qual), new class_info{}).first;
+				}
+
+				std::unique_ptr<qualification_info::name_info> info{new qualification_info::name_info};
+				info->set_bytes(std::move(bytes));
+				info->resolve_absolute(addr);
+				this_qual_it->second->names.emplace(std::move(name), std::move(info));
+			}
+
+			return true;
+		} else {
+			build_err_str({}, "unknown method '"sv);
+			err_str += methodstr;
+			err_str += '\'';
+			return false;
+		}
+	}
+
+	bool symbol_cache::read_array_node(yaml_document_t &doc, yaml_node_t *node, std::string_view name, unsigned char *base) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+		using namespace std::literals::string_literals;
+
+		auto build_err_str{
+			[this,name](std::string_view post) noexcept -> void {
+				err_str = "value in '"s;
+				err_str += name;
+				err_str += "' "sv;
+				err_str += post;
+			}
+		};
+
+		for(yaml_node_item_t *item{node->data.sequence.items.start}; item != node->data.sequence.items.top; ++item) {
+			yaml_node_t *value_node{yaml_document_get_node(&doc, *item)};
+
+			switch(value_node->type) {
+				case YAML_MAPPING_NODE: {
+					if(std::strcmp(reinterpret_cast<const char *>(value_node->tag), YAML_MAP_TAG) != 0) {
+						build_err_str("is not a map"sv);
+						return false;
+					}
+
+					if(!read_map_node(doc, value_node, name, base)) {
+						return false;
+					}
+				} break;
+				default: {
+					build_err_str("is not a map"sv);
+					return false;
+				}
+			}
+		}
+
+		return true;
+	}
+
+	bool symbol_cache::read_map_node(yaml_document_t &doc, yaml_node_t *node, std::string_view name, unsigned char *base) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+		using namespace std::literals::string_literals;
+
+		for(yaml_node_pair_t *pair{node->data.mapping.pairs.start}; pair != node->data.mapping.pairs.top; ++pair) {
+			yaml_node_t *key_node{yaml_document_get_node(&doc, pair->key)};
+			if(!detail::is_string_node(key_node)) {
+				debugtrap();
+				err_str = "value in '"s;
+				err_str += name.empty() ? "root"sv : name;
+				err_str += "' is not a string"sv;
+				return false;
+			}
+
+			std::string_view keystr{reinterpret_cast<const char *>(key_node->data.scalar.value), key_node->data.scalar.length};
+
+			auto build_err_str{
+				[this,keystr,name](std::string_view post) noexcept -> void {
+					err_str = "'"s;
+					err_str += keystr;
+					err_str += "' in '"sv;
+					err_str += name.empty() ? "root"sv : name;
+					err_str += "' "sv;
+					err_str += post;
+				}
+			};
+
+			yaml_node_t *value_node{yaml_document_get_node(&doc, pair->value)};
+			switch(value_node->type) {
+				case YAML_MAPPING_NODE: {
+					if(std::strcmp(reinterpret_cast<const char *>(value_node->tag), YAML_MAP_TAG) != 0) {
+						build_err_str("is not a map"sv);
+						return false;
+					}
+
+					std::string tmpqual{name};
+					std::string tmpname{keystr};
+
+					if(!read_final_map_node(doc, value_node, std::move(tmpqual), std::move(tmpname), base)) {
+						return false;
+					}
+				} break;
+				case YAML_SEQUENCE_NODE: {
+					if(std::strcmp(reinterpret_cast<const char *>(value_node->tag), YAML_SEQ_TAG) != 0) {
+						build_err_str("is not a array"sv);
+						return false;
+					}
+
+					if(!read_array_node(doc, value_node, keystr, base)) {
+						return false;
+					}
+				} break;
+				default: {
+					build_err_str("is not a array or map"sv);
+					return false;
+				}
+			}
+		}
+
+		return true;
+	}
+
+	bool symbol_cache::read_yamls(const std::filesystem::path &dir, unsigned char *base) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -493,7 +1082,7 @@ namespace vmod
 #endif
 
 #ifndef GSDK_NO_SYMBOLS
-	bool symbol_cache::handle_component([[maybe_unused]] std::string_view name_mangled, demangle_component *component, qualifications_t::iterator &qual_it, qualification_info::names_t::iterator &name_it, basic_sym_t &&sym, void *base, [[maybe_unused]] bool elf) noexcept
+	bool symbol_cache::handle_component([[maybe_unused]] std::string_view name_mangled, demangle_component *component, qualifications_t::iterator &qual_it, qualification_info::names_t::iterator &name_it, basic_sym_t &&sym, unsigned char *base, [[maybe_unused]] bool elf) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -501,9 +1090,9 @@ namespace vmod
 		#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 			if(elf) {
 				std::unique_ptr<qualification_info::name_info> info{new qualification_info::name_info};
-				info->offset_ = sym.off;
+				info->set_offset(sym.off);
 				info->size_ = sym.size;
-				info->resolve(base);
+				info->resolve_from_base(base);
 				name_it = global_qual.names.emplace(name_mangled, std::move(info)).first;
 				qual_it = qualifications.end();
 				return true;
@@ -607,7 +1196,7 @@ namespace vmod
 				if(info) {
 					info->vtable_.size_ = vtable_size;
 					info->vtable_.offset = sym.off;
-					info->vtable_.resolve(base);
+					info->vtable_.resolve_from_base(base);
 				}
 
 				name_it = global_qual.names.end();
@@ -643,9 +1232,9 @@ namespace vmod
 								}
 
 								std::unique_ptr<qualification_info::name_info> info{new qualification_info::name_info};
-								info->offset_ = sym.off;
+								info->set_offset(sym.off);
 								info->size_ = sym.size;
-								info->resolve(base);
+								info->resolve_from_base(base);
 
 								name_it = tmp_name_it->second->names.emplace(std::move(local_name), std::move(info)).first;
 								qual_it = tmp_qual_it;
@@ -681,9 +1270,9 @@ namespace vmod
 					std::free(unmangled_buffer);
 
 					std::unique_ptr<qualification_info::name_info> info{new qualification_info::name_info};
-					info->offset_ = sym.off;
+					info->set_offset(sym.off);
 					info->size_ = sym.size;
-					info->resolve(base);
+					info->resolve_from_base(base);
 
 					name_it = global_qual.names.emplace(std::move(name_unmangled), std::move(info)).first;
 					qual_it = qualifications.end();
@@ -736,9 +1325,9 @@ namespace vmod
 								std::uint64_t offset{sym.off};
 							#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 								if(elf) {
-									info->offset_ = offset;
+									info->set_offset(offset);
 									info->size_ = sym.size;
-									info->resolve(base);
+									info->resolve_from_base(base);
 								}
 							#endif
 
@@ -837,9 +1426,9 @@ namespace vmod
 								std::uint64_t offset{sym.off};
 							#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 								if(elf) {
-									info->offset_ = offset;
+									info->set_offset(offset);
 									info->size_ = sym.size;
-									info->resolve(base);
+									info->resolve_from_base(base);
 								}
 							#endif
 
@@ -972,9 +1561,9 @@ namespace vmod
 								std::uint64_t offset{sym.off};
 							#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 								if(elf) {
-									info->offset_ = offset;
+									info->set_offset(offset);
 									info->size_ = sym.size;
-									info->resolve(base);
+									info->resolve_from_base(base);
 								}
 							#endif
 
@@ -1021,9 +1610,9 @@ namespace vmod
 									std::free(unmangled_buffer);
 
 									std::unique_ptr<qualification_info::name_info> info{new qualification_info::name_info};
-									info->offset_ = sym.off;
+									info->set_offset(sym.off);
 									info->size_ = sym.size;
-									info->resolve(base);
+									info->resolve_from_base(base);
 
 									name_it = global_qual.names.insert_or_assign(std::move(func_name), std::move(info)).first;
 									qual_it = qualifications.end();
