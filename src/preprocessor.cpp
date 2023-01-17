@@ -116,8 +116,7 @@ namespace vmod
 		TPPLexer_AddIncludePath(path_buff, include_dir.native().length());
 
 		include_dir = main::instance().game_dir();
-		include_dir /= "scripts"sv;
-		include_dir /= "vscripts"sv;
+		include_dir /= "scripts/vscripts"sv;
 		std::strncpy(path_buff, include_dir.c_str(), include_dir.native().length());
 		TPPLexer_AddIncludePath(path_buff, include_dir.native().length());
 

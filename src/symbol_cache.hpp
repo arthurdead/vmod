@@ -94,7 +94,7 @@ namespace vmod
 				}
 
 				#ifndef GSDK_NO_SYMBOLS
-				inline std::size_t size() const noexcept
+				inline std::uint64_t size() const noexcept
 				{ return size_; }
 				#endif
 			#endif
@@ -268,7 +268,7 @@ namespace vmod
 				std::size_t vindex{static_cast<std::size_t>(-1)};
 			#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 				#ifndef GSDK_NO_SYMBOLS
-				std::size_t size_{0};
+				std::uint64_t size_{0};
 				#endif
 				union {
 					unsigned char *addr_;
@@ -499,7 +499,7 @@ namespace vmod
 		struct basic_sym_t
 		{
 			std::uint64_t off;
-			std::size_t size;
+			std::uint64_t size;
 		};
 
 		bool handle_component(std::string_view name_mangled, demangle_component *component, qualifications_t::iterator &qual_it, qualification_info::names_t::iterator &name_it, basic_sym_t &&sym, unsigned char *base, bool elf) noexcept;

@@ -1,12 +1,12 @@
 #pragma once
 
-#include "../gsdk/config.hpp"
-#include "../vscript/vscript.hpp"
-#include "../vscript/vscript_internal.hpp"
-#include "../gsdk/tier0/dbg.hpp"
+#include "../../gsdk/config.hpp"
+#include "../../vscript/vscript.hpp"
+#include "../../gsdk/tier0/dbg.hpp"
 #include <unordered_map>
 #include <memory>
 #include <string>
+#include "../vm_shared.hpp"
 
 #ifdef __VMOD_USING_QUIRREL
 #pragma GCC diagnostic push
@@ -19,24 +19,6 @@
 	#error
 #endif
 
-#if GSDK_ENGINE == GSDK_ENGINE_L4D2 || GSDK_ENGINE == GSDK_ENGINE_TF2
-	#define __VMOD_SQUIRREL_VM_L4D2_TF2_OVERRIDE override
-#else
-	#define __VMOD_SQUIRREL_VM_L4D2_TF2_OVERRIDE
-#endif
-
-#if GSDK_ENGINE != GSDK_ENGINE_L4D2
-	#define __VMOD_SQUIRREL_VM_NOT_L4D2_OVERRIDE override
-#else
-	#define __VMOD_SQUIRREL_VM_NOT_L4D2_OVERRIDE
-#endif
-
-#if GSDK_ENGINE == GSDK_ENGINE_L4D2
-	#define __VMOD_SQUIRREL_VM_L4D2_OVERRIDE override
-#else
-	#define __VMOD_SQUIRREL_VM_L4D2_OVERRIDE
-#endif
-
 namespace vmod
 {
 	class main;
@@ -44,13 +26,13 @@ namespace vmod
 
 namespace vmod::vm
 {
-	class squirrel_vm final : public gsdk::IScriptVM
+	class squirrel final : public gsdk::IScriptVM
 	{
 		friend class vmod::main;
 
 	public:
-		squirrel_vm() noexcept = default;
-		virtual ~squirrel_vm() noexcept;
+		squirrel() noexcept = default;
+		virtual ~squirrel() noexcept;
 
 		bool Init() override;
 		void Shutdown() override;
@@ -58,9 +40,9 @@ namespace vmod::vm
 		void DisconnectDebugger() override;
 		gsdk::ScriptLanguage_t GetLanguage() override;
 		const char *GetLanguageName() override;
-		HSQUIRRELVM GetInternalVM() __VMOD_SQUIRREL_VM_L4D2_TF2_OVERRIDE;
+		HSQUIRRELVM GetInternalVM() __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
 		void AddSearchPath(const char *) override;
-		bool ForwardConsoleCommand(const gsdk::CCommandContext &, const gsdk::CCommand &) __VMOD_SQUIRREL_VM_L4D2_OVERRIDE;
+		bool ForwardConsoleCommand(const gsdk::CCommandContext &, const gsdk::CCommand &) __VMOD_CUSTOM_VM_L4D2_OVERRIDE;
 		bool Frame(float) override;
 		gsdk::ScriptStatus_t Run(const char *, bool = true) override;
 		gsdk::HSCRIPT CompileScript(const char *, const char * = nullptr) override;
@@ -68,7 +50,7 @@ namespace vmod::vm
 		gsdk::ScriptStatus_t Run(gsdk::HSCRIPT, gsdk::HSCRIPT = nullptr, bool = true) override;
 		gsdk::ScriptStatus_t Run(gsdk::HSCRIPT, bool) override;
 		gsdk::HSCRIPT CreateScope_impl(const char *, gsdk::HSCRIPT = nullptr) override;
-		gsdk::HSCRIPT ReferenceScope(gsdk::HSCRIPT) __VMOD_SQUIRREL_VM_L4D2_TF2_OVERRIDE;
+		gsdk::HSCRIPT ReferenceScope(gsdk::HSCRIPT) __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
 		void ReleaseScope(gsdk::HSCRIPT) override;
 		gsdk::HSCRIPT LookupFunction_impl(const char *, gsdk::HSCRIPT = nullptr) override;
 		void ReleaseFunction(gsdk::HSCRIPT) override;
@@ -83,34 +65,34 @@ namespace vmod::vm
 		bool ValueExists(gsdk::HSCRIPT, const char *) override;
 		bool SetValue(gsdk::HSCRIPT, const char *, const char *) override;
 		bool SetValue_impl(gsdk::HSCRIPT, const char *, const gsdk::ScriptVariant_t &) override;
-		bool SetValue_impl(gsdk::HSCRIPT, int, const gsdk::ScriptVariant_t &) __VMOD_SQUIRREL_VM_L4D2_OVERRIDE;
+		bool SetValue_impl(gsdk::HSCRIPT, int, const gsdk::ScriptVariant_t &) __VMOD_CUSTOM_VM_L4D2_OVERRIDE;
 		void CreateTable_impl(gsdk::ScriptVariant_t &) override;
-		bool IsTable(gsdk::HSCRIPT) __VMOD_SQUIRREL_VM_L4D2_OVERRIDE;
+		bool IsTable(gsdk::HSCRIPT) __VMOD_CUSTOM_VM_L4D2_OVERRIDE;
 		int GetNumTableEntries(gsdk::HSCRIPT) const override;
 		int GetKeyValue(gsdk::HSCRIPT, int, gsdk::ScriptVariant_t *, gsdk::ScriptVariant_t *) override;
 		bool GetValue_impl(gsdk::HSCRIPT, const char *, gsdk::ScriptVariant_t *) override;
-		bool GetValue_impl(gsdk::HSCRIPT, int, gsdk::ScriptVariant_t *) __VMOD_SQUIRREL_VM_L4D2_OVERRIDE;
-		bool GetScalarValue(gsdk::HSCRIPT, gsdk::ScriptVariant_t *) __VMOD_SQUIRREL_VM_L4D2_TF2_OVERRIDE;
+		bool GetValue_impl(gsdk::HSCRIPT, int, gsdk::ScriptVariant_t *) __VMOD_CUSTOM_VM_L4D2_OVERRIDE;
+		bool GetScalarValue(gsdk::HSCRIPT, gsdk::ScriptVariant_t *) __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
 		void ReleaseValue(gsdk::ScriptVariant_t &) override;
 		bool ClearValue(gsdk::HSCRIPT, const char *) override;
-		void CreateArray_impl(gsdk::ScriptVariant_t &) __VMOD_SQUIRREL_VM_L4D2_OVERRIDE;
-		bool IsArray(gsdk::HSCRIPT) __VMOD_SQUIRREL_VM_L4D2_OVERRIDE;
-		int GetArrayCount(gsdk::HSCRIPT) __VMOD_SQUIRREL_VM_L4D2_OVERRIDE;
-		void ArrayAddToTail(gsdk::HSCRIPT, const gsdk::ScriptVariant_t &) __VMOD_SQUIRREL_VM_L4D2_TF2_OVERRIDE;
+		void CreateArray_impl(gsdk::ScriptVariant_t &) __VMOD_CUSTOM_VM_L4D2_OVERRIDE;
+		bool IsArray(gsdk::HSCRIPT) __VMOD_CUSTOM_VM_L4D2_OVERRIDE;
+		int GetArrayCount(gsdk::HSCRIPT) __VMOD_CUSTOM_VM_L4D2_OVERRIDE;
+		void ArrayAddToTail(gsdk::HSCRIPT, const gsdk::ScriptVariant_t &) __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
 		void WriteState(gsdk::CUtlBuffer *) override;
 		void ReadState(gsdk::CUtlBuffer *) override;
-		void CollectGarbage(const char *, bool) __VMOD_SQUIRREL_VM_L4D2_TF2_OVERRIDE;
-		void RemoveOrphanInstances() __VMOD_SQUIRREL_VM_NOT_L4D2_OVERRIDE;
+		void CollectGarbage(const char *, bool) __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
+		void RemoveOrphanInstances() __VMOD_CUSTOM_VM_NOT_L4D2_OVERRIDE;
 		void DumpState() override;
 		void SetOutputCallback(gsdk::ScriptOutputFunc_t) override;
 		void SetErrorCallback(gsdk::ScriptErrorFunc_t) override;
 		bool RaiseException_impl(const char *) override;
-		gsdk::HSCRIPT GetRootTable() __VMOD_SQUIRREL_VM_L4D2_TF2_OVERRIDE;
-		gsdk::HSCRIPT CopyHandle(gsdk::HSCRIPT) __VMOD_SQUIRREL_VM_L4D2_TF2_OVERRIDE;
-		gsdk::HSCRIPT GetIdentity(gsdk::HSCRIPT) __VMOD_SQUIRREL_VM_L4D2_TF2_OVERRIDE;
-		gsdk::CSquirrelMetamethodDelegateImpl *MakeSquirrelMetamethod_Get_impl(gsdk::HSCRIPT &, const char *, gsdk::ISquirrelMetamethodDelegate *, bool) __VMOD_SQUIRREL_VM_L4D2_TF2_OVERRIDE;
-		void DestroySquirrelMetamethod_Get(gsdk::CSquirrelMetamethodDelegateImpl *) __VMOD_SQUIRREL_VM_L4D2_TF2_OVERRIDE;
-		int GetKeyValue2(gsdk::HSCRIPT, int, gsdk::ScriptVariant_t *, gsdk::ScriptVariant_t *) __VMOD_SQUIRREL_VM_L4D2_TF2_OVERRIDE;
+		gsdk::HSCRIPT GetRootTable() __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
+		gsdk::HSCRIPT CopyHandle(gsdk::HSCRIPT) __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
+		gsdk::HSCRIPT GetIdentity(gsdk::HSCRIPT) __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
+		gsdk::CSquirrelMetamethodDelegateImpl *MakeSquirrelMetamethod_Get_impl(gsdk::HSCRIPT &, const char *, gsdk::ISquirrelMetamethodDelegate *, bool) __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
+		void DestroySquirrelMetamethod_Get(gsdk::CSquirrelMetamethodDelegateImpl *) __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
+		int GetKeyValue2(gsdk::HSCRIPT, int, gsdk::ScriptVariant_t *, gsdk::ScriptVariant_t *) __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
 
 		void RegisterFunction_nonvirtual(gsdk::ScriptFunctionBinding_t *) noexcept;
 		bool RegisterClass_nonvirtual(gsdk::ScriptClassDesc_t *) noexcept;
@@ -263,9 +245,9 @@ namespace vmod::vm
 		registered_classes_t::iterator last_registered_class;
 
 	private:
-		squirrel_vm(const squirrel_vm &) = delete;
-		squirrel_vm &operator=(const squirrel_vm &) = delete;
-		squirrel_vm(squirrel_vm &&) = delete;
-		squirrel_vm &operator=(squirrel_vm &&) = delete;
+		squirrel(const squirrel &) = delete;
+		squirrel &operator=(const squirrel &) = delete;
+		squirrel(squirrel &&) = delete;
+		squirrel &operator=(squirrel &&) = delete;
 	};
 }

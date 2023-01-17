@@ -7,8 +7,9 @@
 #include "gsdk/tier0/dbg.hpp"
 #include <cstring>
 #include <dlfcn.h>
+
 #ifdef __VMOD_USING_CUSTOM_VM
-#include "vm/squirrel_vm.hpp"
+#include "vm/squirrel/vm.hpp"
 #endif
 
 #include "plugin.hpp"
@@ -43,12 +44,12 @@ namespace vmod
 	#ifdef __clang__
 		#pragma clang diagnostic pop
 	#endif
-		#define __VMOD_BASE_SCRIPT_HEADER_INCLUDED
+		#define __VMOD_SQUIRREL_BASE_SCRIPT_HEADER_INCLUDED
 	#endif
 	}
 
-#ifdef __VMOD_BASE_SCRIPT_HEADER_INCLUDED
-	static std::string __vmod_base_script{reinterpret_cast<const char *>(detail::__vmod_base_script_data), sizeof(detail::__vmod_base_script_data)};
+#ifdef __VMOD_SQUIRREL_BASE_SCRIPT_HEADER_INCLUDED
+	static std::string __squirrel_vmod_base_script{reinterpret_cast<const char *>(detail::__squirrel_vmod_base_script_data), sizeof(detail::__squirrel_vmod_base_script_data)};
 #endif
 }
 
@@ -65,26 +66,13 @@ namespace vmod
 	#ifdef __clang__
 		#pragma clang diagnostic pop
 	#endif
-		#define __VMOD_SERVER_SCRIPT_HEADER_INCLUDED
+		#define __VMOD_SQUIRREL_SERVER_SCRIPT_HEADER_INCLUDED
 	#endif
 	}
 
-#ifdef __VMOD_SERVER_SCRIPT_HEADER_INCLUDED
-	static std::string __vmod_server_init_script{reinterpret_cast<const char *>(detail::__vmod_server_init_script_data), sizeof(detail::__vmod_server_init_script_data)};
+#ifdef __VMOD_SQUIRREL_SERVER_SCRIPT_HEADER_INCLUDED
+	static std::string __squirrel_vmod_server_init_script{reinterpret_cast<const char *>(detail::__squirrel_vmod_server_init_script_data), sizeof(detail::__squirrel_vmod_server_init_script_data)};
 #endif
-}
-
-namespace vmod
-{
-	template <typename ...Args>
-	static inline auto CompileScript_strict(gsdk::IScriptVM *vm, Args &&...args) noexcept -> decltype(vm->CompileScript(std::forward<Args>(args)...))
-	{
-#ifdef __VMOD_USING_CUSTOM_VM
-		return static_cast<vm::squirrel_vm *>(vm)->CompileScript_strict(std::forward<Args>(args)...);
-#else
-		return vm->CompileScript(std::forward<Args>(args)...);
-#endif
-	}
 }
 
 namespace vmod
@@ -116,7 +104,7 @@ namespace vmod
 
 	main::~main() noexcept {}
 
-#if !defined __VMOD_USING_CUSTOM_VM || defined __VMOD_OVERRIDE_INIT_SCRIPT
+#ifndef __VMOD_SQUIRREL_NEED_INIT_SCRIPT
 	static
 #endif
 	const unsigned char *g_Script_init{nullptr};
@@ -686,13 +674,13 @@ namespace vmod
 	static detour<decltype(ScriptCreateSquirrelVM)> ScriptCreateSquirrelVM_detour;
 	static gsdk::IScriptVM *ScriptCreateSquirrelVM_detour_callback()
 	{
-		return new vm::squirrel_vm;
+		return new vm::squirrel;
 	}
 
 	static detour<decltype(ScriptDestroySquirrelVM)> ScriptDestroySquirrelVM_detour;
 	static void ScriptDestroySquirrelVM_detour_callback(gsdk::IScriptVM *vm)
 	{
-		delete static_cast<vm::squirrel_vm *>(vm);
+		delete static_cast<vm::squirrel *>(vm);
 	}
 #endif
 
@@ -1009,12 +997,27 @@ namespace vmod
 
 		gsdk::ScriptLanguage_t script_language{gsdk::SL_SQUIRREL};
 
+		std::filesystem::path base_scripts_dir{root_dir_};
+		base_scripts_dir /= "base"sv;
+
 		switch(script_language) {
 			case gsdk::SL_NONE: break;
-			case gsdk::SL_GAMEMONKEY: scripts_extension = ".gm"sv; break;
-			case gsdk::SL_SQUIRREL: scripts_extension = ".nut"sv; break;
-			case gsdk::SL_LUA: scripts_extension = ".lua"sv; break;
-			case gsdk::SL_PYTHON: scripts_extension = ".py"sv; break;
+			case gsdk::SL_GAMEMONKEY: {
+				scripts_extension = ".gm"sv;
+				base_scripts_dir /= "gamemonkey"sv;
+			} break;
+			case gsdk::SL_SQUIRREL: {
+				scripts_extension = ".nut"sv;
+				base_scripts_dir /= "squirrel"sv;
+			} break;
+			case gsdk::SL_LUA: {
+				scripts_extension = ".lua"sv;
+				base_scripts_dir /= "lua"sv;
+			} break;
+			case gsdk::SL_PYTHON: {
+				scripts_extension = ".py"sv;
+				base_scripts_dir /= "python"sv;
+			} break;
 		#ifndef __clang__
 			default: break;
 		#endif
@@ -1026,7 +1029,7 @@ namespace vmod
 
 			auto g_Script_init_it{vscript_global_qual.find("g_Script_init"s)};
 			if(g_Script_init_it == vscript_global_qual.end()) {
-			#if !defined __VMOD_USING_CUSTOM_VM || defined __VMOD_OVERRIDE_INIT_SCRIPT
+			#ifndef __VMOD_SQUIRREL_NEED_INIT_SCRIPT
 				warning("vmod: missing 'g_Script_init' symbol\n");
 			#else
 				error("vmod: missing 'g_Script_init' symbol\n");
@@ -1178,19 +1181,19 @@ namespace vmod
 			#endif
 			}
 		#else
-			RegisterFunction = reinterpret_cast<decltype(RegisterFunction)>(&vm::squirrel_vm::RegisterFunction_nonvirtual);
-			RegisterClass = reinterpret_cast<decltype(RegisterClass)>(&vm::squirrel_vm::RegisterClass_nonvirtual);
-			RegisterInstance = reinterpret_cast<decltype(RegisterInstance)>(&vm::squirrel_vm::RegisterInstance_impl_nonvirtual);
-			SetValue_str = reinterpret_cast<decltype(SetValue_str)>(static_cast<bool(vm::squirrel_vm::*)(gsdk::HSCRIPT, const char *, const char *)>(&vm::squirrel_vm::SetValue_nonvirtual));
-			SetValue_var = reinterpret_cast<decltype(SetValue_var)>(static_cast<bool(vm::squirrel_vm::*)(gsdk::HSCRIPT, const char *, const gsdk::ScriptVariant_t &)>(&vm::squirrel_vm::SetValue_impl_nonvirtual));
-			PrintFunc = vm::squirrel_vm::print_func;
-			ErrorFunc = vm::squirrel_vm::error_func;
+			RegisterFunction = reinterpret_cast<decltype(RegisterFunction)>(&vm::squirrel::RegisterFunction_nonvirtual);
+			RegisterClass = reinterpret_cast<decltype(RegisterClass)>(&vm::squirrel::RegisterClass_nonvirtual);
+			RegisterInstance = reinterpret_cast<decltype(RegisterInstance)>(&vm::squirrel::RegisterInstance_impl_nonvirtual);
+			SetValue_str = reinterpret_cast<decltype(SetValue_str)>(static_cast<bool(vm::squirrel::*)(gsdk::HSCRIPT, const char *, const char *)>(&vm::squirrel::SetValue_nonvirtual));
+			SetValue_var = reinterpret_cast<decltype(SetValue_var)>(static_cast<bool(vm::squirrel::*)(gsdk::HSCRIPT, const char *, const gsdk::ScriptVariant_t &)>(&vm::squirrel::SetValue_impl_nonvirtual));
+			PrintFunc = vm::squirrel::print_func;
+			ErrorFunc = vm::squirrel::error_func;
 
 			#if GSDK_ENGINE == GSDK_ENGINE_TF2
-			gsdk::IScriptVM::CreateArray_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::CreateArray_ptr)>(&vm::squirrel_vm::CreateArray_impl_nonvirtual);
-			gsdk::IScriptVM::GetArrayCount_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::GetArrayCount_ptr)>(&vm::squirrel_vm::GetArrayCount_nonvirtual);
-			gsdk::IScriptVM::IsArray_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::IsArray_ptr)>(&vm::squirrel_vm::IsArray_nonvirtual);
-			gsdk::IScriptVM::IsTable_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::IsTable_ptr)>(&vm::squirrel_vm::IsTable_nonvirtual);
+			gsdk::IScriptVM::CreateArray_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::CreateArray_ptr)>(&vm::squirrel::CreateArray_impl_nonvirtual);
+			gsdk::IScriptVM::GetArrayCount_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::GetArrayCount_ptr)>(&vm::squirrel::GetArrayCount_nonvirtual);
+			gsdk::IScriptVM::IsArray_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::IsArray_ptr)>(&vm::squirrel::IsArray_nonvirtual);
+			gsdk::IScriptVM::IsTable_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::IsTable_ptr)>(&vm::squirrel::IsTable_nonvirtual);
 			#endif
 		#endif
 
@@ -1210,7 +1213,7 @@ namespace vmod
 			sq_setparamscheck = ::sq_setparamscheck;
 		#endif
 
-		#if !defined __VMOD_USING_CUSTOM_VM || defined __VMOD_OVERRIDE_INIT_SCRIPT
+		#ifndef __VMOD_SQUIRREL_NEED_INIT_SCRIPT
 			if(g_Script_init_it != vscript_global_qual.end())
 		#endif
 			{
@@ -1550,45 +1553,20 @@ namespace vmod
 			return false;
 		}
 
-		std::string base_script_name{"vmod_base"sv};
-		base_script_name += scripts_extension;
-
-		base_script_path = root_dir_;
-		base_script_path /= "base/vmod_base"sv;
+		std::filesystem::path base_script_path{base_scripts_dir};
+		base_script_path /= "vmod_base"sv;
 		base_script_path.replace_extension(scripts_extension);
 
-		if(std::filesystem::exists(base_script_path)) {
-			{
-				std::unique_ptr<unsigned char[]> script_data{read_file(base_script_path)};
+		bool base_script_from_file{false};
 
-				base_script = CompileScript_strict(vm_, reinterpret_cast<const char *>(script_data.get()), base_script_path.c_str());
-				if(!base_script || base_script == gsdk::INVALID_HSCRIPT) {
-				#ifndef __VMOD_BASE_SCRIPT_HEADER_INCLUDED
-					error("vmod: failed to compile base script from file '%s'\n"sv, base_script_path.c_str());
-					return false;
-				#else
-					error("vmod: failed to compile base script from file '%s' re-trying with embedded\n"sv, base_script_path.c_str());
-					base_script = CompileScript_strict(vm_, __vmod_base_script.c_str(), base_script_name.c_str());
-					if(!base_script || base_script == gsdk::INVALID_HSCRIPT) {
-						error("vmod: failed to compile embedded base script\n"sv);
-						return false;
-					}
-				#endif
-				} else {
-					base_script_from_file = true;
-				}
-			}
-		} else {
-		#ifndef __VMOD_BASE_SCRIPT_HEADER_INCLUDED
-			error("vmod: missing base script file '%s'\n"sv, base_script_path.c_str());
+		if(!compile_internal_script(vm_, base_script_path,
+	#ifdef __VMOD_SQUIRREL_BASE_SCRIPT_HEADER_INCLUDED
+		(script_language == gsdk::SL_SQUIRREL) ? reinterpret_cast<const unsigned char *>(__squirrel_vmod_base_script.c_str()) : nullptr
+	#else
+		nullptr
+	#endif
+		, base_script, base_script_from_file)) {
 			return false;
-		#else
-			base_script = CompileScript_strict(vm_, __vmod_base_script.c_str(), base_script_name.c_str());
-			if(!base_script || base_script == gsdk::INVALID_HSCRIPT) {
-				error("vmod: failed to compile embedded base script\n"sv);
-				return false;
-			}
-		#endif
 		}
 
 		base_script_scope = vm_->CreateScope("__vmod_base_script_scope__", nullptr);
@@ -1606,55 +1584,34 @@ namespace vmod
 			return false;
 		}
 
-		if(vm_->GetLanguage() == gsdk::SL_SQUIRREL) {
-		#ifdef __VMOD_OVERRIDE_SERVER_INIT_SCRIPT
-			std::filesystem::path server_init_path{root_dir_};
+	#ifdef __VMOD_SQUIRREL_OVERRIDE_SERVER_INIT_SCRIPT
+		std::filesystem::path server_init_script_path{base_scripts_dir};
+		server_init_script_path /= "vmod_server_init"sv;
+		server_init_script_path.replace_extension(scripts_extension);
 
-			server_init_path /= "base"sv;
-			server_init_path /= "vmod_server_init.nut"sv;
+		bool server_init_script_from_file{false};
 
-			if(std::filesystem::exists(server_init_path)) {
-				{
-					std::unique_ptr<unsigned char[]> script_data{read_file(server_init_path)};
-
-					server_init_script = CompileScript_strict(vm_, reinterpret_cast<const char *>(script_data.get()), server_init_path.c_str());
-					if(!server_init_script || server_init_script == gsdk::INVALID_HSCRIPT) {
-					#ifndef __VMOD_SERVER_SCRIPT_HEADER_INCLUDED
-						error("vmod: failed to compile server init script from file '%s'\n"sv, server_init_path.c_str());
-						return false;
-					#else
-						error("vmod: failed to compile server init script from file '%s' re-trying with embedded\n"sv, server_init_path.c_str());
-						server_init_script = CompileScript_strict(vm_, __vmod_server_init_script.c_str(), "vscript_server.nut");
-						if(!server_init_script || server_init_script == gsdk::INVALID_HSCRIPT) {
-							error("vmod: failed to compile embedded base script\n"sv);
-							return false;
-						}
-					#endif
-					}
-				}
-			} else {
-			#ifndef __VMOD_SERVER_SCRIPT_HEADER_INCLUDED
-				error("vmod: missing server init script file '%s'\n"sv, server_init_path.c_str());
-				return false;
-			#else
-				server_init_script = CompileScript_strict(vm_, __vmod_server_init_script.c_str(), "vscript_server.nut");
-				if(!server_init_script || server_init_script == gsdk::INVALID_HSCRIPT) {
-					error("vmod: failed to compile embedded server init script\n"sv);
-					return false;
-				}
-			#endif
-			}
+		if(!compile_internal_script(vm_, server_init_script_path,
+		#ifdef __VMOD_SQUIRREL_SERVER_SCRIPT_HEADER_INCLUDED
+		(script_language == gsdk::SL_SQUIRREL) ? reinterpret_cast<const unsigned char *>(__squirrel_vmod_server_init_script.c_str()) : nullptr
 		#else
+		nullptr
+		#endif
+		, server_init_script, server_init_script_from_file)) {
+			return false;
+		}
+	#else
+		if(script_language == gsdk::SL_SQUIRREL) {
 			server_init_script = vm_->CompileScript(reinterpret_cast<const char *>(g_Script_vscript_server), "vscript_server.nut");
 			if(!server_init_script || server_init_script == gsdk::INVALID_HSCRIPT) {
 				error("vmod: failed to compile server init script\n"sv);
 				return false;
 			}
-		#endif
 		} else {
 			error("vmod: server init script not supported on this language\n"sv);
 			return false;
 		}
+	#endif
 
 		if(vm_->Run(server_init_script, nullptr, true) == gsdk::SCRIPT_ERROR) {
 			error("vmod: failed to run server init script\n"sv);
@@ -1696,18 +1653,21 @@ namespace vmod
 
 		vscript_server_init_called = true;
 
-		auto get_func_from_base_script{[this](gsdk::HSCRIPT &func, std::string_view funcname) noexcept -> bool {
-			func = vm_->LookupFunction(funcname.data(), base_script_scope);
-			if(!func || func == gsdk::INVALID_HSCRIPT) {
-				if(base_script_from_file) {
-					error("vmod: base script '%s' missing '%s' function\n"sv, base_script_path.c_str(), funcname.data());
-				} else {
-					error("vmod: base script missing '%s' function\n"sv, funcname.data());
+		auto get_func_from_base_script{
+			[this,base_script_from_file,&base_script_path = std::as_const(base_script_path)]
+			(gsdk::HSCRIPT &func, std::string_view funcname) noexcept -> bool {
+				func = vm_->LookupFunction(funcname.data(), base_script_scope);
+				if(!func || func == gsdk::INVALID_HSCRIPT) {
+					if(base_script_from_file) {
+						error("vmod: base script '%s' missing '%s' function\n"sv, base_script_path.c_str(), funcname.data());
+					} else {
+						error("vmod: base script missing '%s' function\n"sv, funcname.data());
+					}
+					return false;
 				}
-				return false;
+				return true;
 			}
-			return true;
-		}};
+		};
 
 		if(!get_func_from_base_script(to_string_func, "__vmod_to_string__"sv)) {
 			return false;
@@ -1998,7 +1958,7 @@ namespace vmod
 			[this](const gsdk::CCommand &) noexcept -> void {
 				std::filesystem::path dump_dir{root_dir_/"dumps"sv/"internal_scripts"sv};
 
-			#if !defined __VMOD_USING_CUSTOM_VM || defined __VMOD_OVERRIDE_INIT_SCRIPT
+			#ifndef __VMOD_SQUIRREL_NEED_INIT_SCRIPT
 				if(g_Script_init)
 			#endif
 				{

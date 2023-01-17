@@ -1,12 +1,12 @@
-#include "squirrel_vm.hpp"
-#include "../gsdk.hpp"
-#include "../main.hpp"
+#include "vm.hpp"
+#include "../../gsdk.hpp"
+#include "../../main.hpp"
 #include <string>
 #include <string_view>
-#include "../gsdk/mathlib/vector.hpp"
-#include "../bindings/docs.hpp"
-#include "../filesystem.hpp"
-#include "../gsdk/tier1/utlstring.hpp"
+#include "../../gsdk/mathlib/vector.hpp"
+#include "../../bindings/docs.hpp"
+#include "../../filesystem.hpp"
+#include "../../gsdk/tier1/utlstring.hpp"
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -42,25 +42,25 @@ namespace vmod::vm
 	#ifdef __clang__
 		#pragma clang diagnostic pop
 	#endif
-		#define __VMOD_INIT_SCRIPT_HEADER_INCLUDED
+		#define __VMOD_SQUIRREL_INIT_SCRIPT_HEADER_INCLUDED
 	#endif
 	}
 
-#ifdef __VMOD_INIT_SCRIPT_HEADER_INCLUDED
-	static std::string __vmod_vm_init_script{reinterpret_cast<const char *>(detail::__vmod_vm_init_script_data), sizeof(detail::__vmod_vm_init_script_data)};
+#ifdef __VMOD_SQUIRREL_INIT_SCRIPT_HEADER_INCLUDED
+	static std::string __squirrel_vmod_init_script{reinterpret_cast<const char *>(detail::__squirrel_vmod_init_script_data), sizeof(detail::__squirrel_vmod_init_script_data)};
 #endif
 }
 
 namespace vmod::vm
 {
-	char squirrel_vm::err_buff[gsdk::MAXPRINTMSG];
-	char squirrel_vm::print_buff[gsdk::MAXPRINTMSG];
+	char squirrel::err_buff[gsdk::MAXPRINTMSG];
+	char squirrel::print_buff[gsdk::MAXPRINTMSG];
 
 #ifdef __VMOD_USING_QUIRREL
-	std::underlying_type_t<SQLangFeature> squirrel_vm::default_lang_feat{LF_STRICT_BOOL|LF_NO_PLUS_CONCAT|LF_EXPLICIT_ROOT_LOOKUP};
+	std::underlying_type_t<SQLangFeature> squirrel::default_lang_feat{LF_STRICT_BOOL|LF_NO_PLUS_CONCAT|LF_EXPLICIT_ROOT_LOOKUP};
 #endif
 
-	squirrel_vm::~squirrel_vm() noexcept {}
+	squirrel::~squirrel() noexcept {}
 
 	static SQInteger developer(HSQUIRRELVM vm)
 	{
@@ -264,11 +264,11 @@ namespace vmod::vm
 		return 0;
 	}
 
-	void squirrel_vm::error_func(HSQUIRRELVM vm, const SQChar *fmt, ...)
+	void squirrel::error_func(HSQUIRRELVM vm, const SQChar *fmt, ...)
 	{
 		using namespace std::literals::string_view_literals;
 
-		squirrel_vm *actual_vm{static_cast<squirrel_vm *>(sq_getforeignptr(vm))};
+		squirrel *actual_vm{static_cast<squirrel *>(sq_getforeignptr(vm))};
 
 		va_list vargs;
 		va_start(vargs, fmt);
@@ -289,11 +289,11 @@ namespace vmod::vm
 		}
 	}
 
-	void squirrel_vm::print_func(HSQUIRRELVM vm, const SQChar *fmt, ...)
+	void squirrel::print_func(HSQUIRRELVM vm, const SQChar *fmt, ...)
 	{
 		using namespace std::literals::string_view_literals;
 
-		squirrel_vm *actual_vm{static_cast<squirrel_vm *>(sq_getforeignptr(vm))};
+		squirrel *actual_vm{static_cast<squirrel *>(sq_getforeignptr(vm))};
 
 		va_list vargs;
 		va_start(vargs, fmt);
@@ -322,12 +322,52 @@ namespace vmod::vm
 	#endif
 		auto &&ret{sq_compilebuffer(vm, std::forward<Args>(args)...)};
 	#ifdef __VMOD_USING_QUIRREL
-		_ss(vm)->defaultLangFeatures = squirrel_vm::default_lang_feat;
+		_ss(vm)->defaultLangFeatures = squirrel::default_lang_feat;
 	#endif
 		return ret;
 	}
 
-	bool squirrel_vm::Init()
+	static bool compile_internal_squirrel_script(HSQUIRRELVM vm, std::filesystem::path path, const unsigned char *data, bool &from_file) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		std::filesystem::path filename{path.filename()};
+
+		if(std::filesystem::exists(path)) {
+			std::size_t len{0};
+			std::unique_ptr<unsigned char[]> script_data{read_file(path, len)};
+
+			if(SQ_FAILED(sq_compilebuffer_strict(vm, reinterpret_cast<const char *>(script_data.get()), static_cast<SQInteger>(len), filename.c_str(), USQTrue))) {
+				if(data) {
+					error("vmod: failed to compile '%s' from file '%s' re-trying with embedded data\n"sv, filename.c_str(), path.c_str());
+					if(SQ_FAILED(sq_compilebuffer_strict(vm, reinterpret_cast<const char *>(data), static_cast<SQInteger>(std::strlen(reinterpret_cast<const char *>(data))), filename.c_str(), USQTrue))) {
+						error("vmod: failed to compile '%s' from embedded data\n"sv, data);
+						return false;
+					}
+				} else {
+					error("vmod: failed to compile '%s' from file '%s'\n"sv, filename.c_str(), path.c_str());
+					return false;
+				}
+			} else {
+				from_file = true;
+			}
+		} else {
+			if(data) {
+				warning("vmod: missing '%s' file trying embedded data\n"sv, filename.c_str());
+				if(SQ_FAILED(sq_compilebuffer_strict(vm, reinterpret_cast<const char *>(data), static_cast<SQInteger>(std::strlen(reinterpret_cast<const char *>(data))), filename.c_str(), USQTrue))) {
+					error("vmod: failed to compile '%s' from embedded data\n"sv, filename.c_str());
+					return false;
+				}
+			} else {
+				error("vmod: missing '%s' file '%s'\n"sv, filename.c_str(), path.c_str());
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	bool squirrel::Init()
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -638,49 +678,20 @@ namespace vmod::vm
 		}
 
 		{
-		#ifdef __VMOD_OVERRIDE_INIT_SCRIPT
+		#ifdef __VMOD_SQUIRREL_OVERRIDE_INIT_SCRIPT
 			std::filesystem::path init_script_path{main::instance().root_dir()};
+			init_script_path /= "base/squirrel/vmod_init.nut"sv;
 
-			init_script_path /= "base"sv;
-			init_script_path /= "vmod_init.nut"sv;
-
-			#ifdef __VMOD_INIT_SCRIPT_HEADER_INCLUDED
 			bool script_from_file{false};
-			#endif
 
-			if(std::filesystem::exists(init_script_path)) {
-				{
-					std::size_t len{0};
-					std::unique_ptr<unsigned char[]> script_data{read_file(init_script_path, len)};
-
-					if(SQ_FAILED(sq_compilebuffer_strict(impl, reinterpret_cast<const char *>(script_data.get()), static_cast<SQInteger>(len), _SC("init.nut"), USQTrue))) {
-					#ifndef __VMOD_INIT_SCRIPT_HEADER_INCLUDED
-						error("vmod vm: failed to compile init script from file '%s'\n"sv, init_script_path.c_str());
-						return false;
-					#else
-						error("vmod vm: failed to compile init script from file '%s' re-trying with embedded\n"sv, init_script_path.c_str());
-						if(SQ_FAILED(sq_compilebuffer_strict(impl, __vmod_vm_init_script.c_str(), static_cast<SQInteger>(__vmod_vm_init_script.length()), _SC("init.nut"), USQTrue))) {
-							error("vmod vm: failed to compile embedded init script\n"sv);
-							return false;
-						}
-					#endif
-					}
-				#ifdef __VMOD_INIT_SCRIPT_HEADER_INCLUDED
-					else {
-						script_from_file = true;
-					}
-				#endif
-				}
-			} else {
-			#ifdef __VMOD_INIT_SCRIPT_HEADER_INCLUDED
-				if(SQ_FAILED(sq_compilebuffer_strict(impl, __vmod_vm_init_script.c_str(), static_cast<SQInteger>(__vmod_vm_init_script.length()), _SC("init.nut"), USQTrue))) {
-					error("vmod vm: failed to compile embedded init script\n"sv);
-					return false;
-				}
-			#else
-				error("vmod vm: missing init script file '%s'\n"sv, init_script_path.c_str());
+			if(!compile_internal_squirrel_script(impl, init_script_path, 
+		#ifdef __VMOD_SQUIRREL_INIT_SCRIPT_HEADER_INCLUDED
+			reinterpret_cast<const unsigned char *>(__squirrel_vmod_init_script.c_str())
+		#else
+			nullptr
+		#endif
+			, script_from_file)) {
 				return false;
-			#endif
 			}
 		#else
 			if(!g_Script_init) {
@@ -701,20 +712,14 @@ namespace vmod::vm
 			sq_pop(impl, 1);
 
 			if(failed) {
-			#ifdef __VMOD_OVERRIDE_INIT_SCRIPT
-				#ifdef __VMOD_INIT_SCRIPT_HEADER_INCLUDED
-				if(script_from_file)
-				#endif
-				{
+			#ifdef __VMOD_SQUIRREL_OVERRIDE_INIT_SCRIPT
+				if(script_from_file) {
 					error("vmod vm: failed to execute init script file '%s'\n"sv, init_script_path.c_str());
 					return false;
-				}
-				#ifdef __VMOD_INIT_SCRIPT_HEADER_INCLUDED
-				else {
+				} else {
 					error("vmod vm: failed to execute embedded init script file\n"sv);
 					return false;
 				}
-				#endif
 			#else
 				error("vmod vm: failed to execute 'g_Script_init'\n"sv);
 				return false;
@@ -783,7 +788,7 @@ namespace vmod::vm
 		return true;
 	}
 
-	void squirrel_vm::Shutdown()
+	void squirrel::Shutdown()
 	{
 		if(impl) {
 			if(qangle_registered) {
@@ -836,7 +841,7 @@ namespace vmod::vm
 		unique_ids = 0;
 	}
 
-	bool squirrel_vm::ConnectDebugger()
+	bool squirrel::ConnectDebugger()
 	{
 		if(debug_vm) {
 			return true;
@@ -845,40 +850,40 @@ namespace vmod::vm
 		}
 	}
 
-	void squirrel_vm::DisconnectDebugger()
+	void squirrel::DisconnectDebugger()
 	{
 	}
 
-	gsdk::ScriptLanguage_t squirrel_vm::GetLanguage()
+	gsdk::ScriptLanguage_t squirrel::GetLanguage()
 	{
 		return gsdk::SL_SQUIRREL;
 	}
 
-	const char *squirrel_vm::GetLanguageName()
+	const char *squirrel::GetLanguageName()
 	{
 		return "Squirrel";
 	}
 
-	HSQUIRRELVM squirrel_vm::GetInternalVM()
+	HSQUIRRELVM squirrel::GetInternalVM()
 	{
 		return impl;
 	}
 
-	void squirrel_vm::AddSearchPath([[maybe_unused]] const char *)
+	void squirrel::AddSearchPath([[maybe_unused]] const char *)
 	{
 	}
 
-	bool squirrel_vm::ForwardConsoleCommand([[maybe_unused]] const gsdk::CCommandContext &, [[maybe_unused]] const gsdk::CCommand &)
+	bool squirrel::ForwardConsoleCommand([[maybe_unused]] const gsdk::CCommandContext &, [[maybe_unused]] const gsdk::CCommand &)
 	{
 		return false;
 	}
 
-	bool squirrel_vm::Frame([[maybe_unused]] float)
+	bool squirrel::Frame([[maybe_unused]] float)
 	{
 		return true;
 	}
 
-	gsdk::ScriptStatus_t squirrel_vm::Run(const char *code, bool wait)
+	gsdk::ScriptStatus_t squirrel::Run(const char *code, bool wait)
 	{
 		if(SQ_FAILED(sq_compilebuffer(impl, code, static_cast<SQInteger>(std::strlen(code)), "<<unnamed>>", SQTrue))) {
 			return gsdk::SCRIPT_ERROR;
@@ -899,7 +904,7 @@ namespace vmod::vm
 		}
 	}
 
-	gsdk::HSCRIPT squirrel_vm::CompileScript_strict(const char *code, const char *name) noexcept
+	gsdk::HSCRIPT squirrel::CompileScript_strict(const char *code, const char *name) noexcept
 	{
 		if(!name || name[0] == '\0') {
 			name = "<<unnamed>>";
@@ -912,7 +917,7 @@ namespace vmod::vm
 		return compile_script();
 	}
 
-	gsdk::HSCRIPT squirrel_vm::CompileScript(const char *code, const char *name)
+	gsdk::HSCRIPT squirrel::CompileScript(const char *code, const char *name)
 	{
 		if(!name || name[0] == '\0') {
 			name = "<<unnamed>>";
@@ -925,7 +930,7 @@ namespace vmod::vm
 		return compile_script();
 	}
 
-	gsdk::HSCRIPT squirrel_vm::compile_script() noexcept
+	gsdk::HSCRIPT squirrel::compile_script() noexcept
 	{
 		HSQOBJECT *script_obj{new HSQOBJECT};
 		sq_resetobject(script_obj);
@@ -943,13 +948,13 @@ namespace vmod::vm
 		return script_obj;
 	}
 
-	void squirrel_vm::ReleaseScript(gsdk::HSCRIPT obj)
+	void squirrel::ReleaseScript(gsdk::HSCRIPT obj)
 	{
 		sq_release(impl, obj);
 		delete obj;
 	}
 
-	gsdk::ScriptStatus_t squirrel_vm::Run(gsdk::HSCRIPT obj, gsdk::HSCRIPT scope, bool wait)
+	gsdk::ScriptStatus_t squirrel::Run(gsdk::HSCRIPT obj, gsdk::HSCRIPT scope, bool wait)
 	{
 		sq_pushobject(impl, *obj);
 
@@ -972,7 +977,7 @@ namespace vmod::vm
 		}
 	}
 
-	gsdk::ScriptStatus_t squirrel_vm::Run(gsdk::HSCRIPT obj, bool wait)
+	gsdk::ScriptStatus_t squirrel::Run(gsdk::HSCRIPT obj, bool wait)
 	{
 		sq_pushobject(impl, *obj);
 
@@ -991,7 +996,7 @@ namespace vmod::vm
 		}
 	}
 
-	gsdk::HSCRIPT squirrel_vm::CreateScope_impl(const char *name, gsdk::HSCRIPT parent)
+	gsdk::HSCRIPT squirrel::CreateScope_impl(const char *name, gsdk::HSCRIPT parent)
 	{
 		sq_pushobject(impl, create_scope_func);
 
@@ -1027,7 +1032,7 @@ namespace vmod::vm
 		return scope;
 	}
 
-	gsdk::HSCRIPT squirrel_vm::ReferenceScope(gsdk::HSCRIPT obj)
+	gsdk::HSCRIPT squirrel::ReferenceScope(gsdk::HSCRIPT obj)
 	{
 		sq_pushobject(impl, *obj);
 
@@ -1046,7 +1051,7 @@ namespace vmod::vm
 		return copy;
 	}
 
-	void squirrel_vm::ReleaseScope(gsdk::HSCRIPT obj)
+	void squirrel::ReleaseScope(gsdk::HSCRIPT obj)
 	{
 		sq_pushobject(impl, release_scope_func);
 
@@ -1061,7 +1066,7 @@ namespace vmod::vm
 		sq_pop(impl, 1);
 	}
 
-	gsdk::HSCRIPT squirrel_vm::LookupFunction_impl(const char *name, gsdk::HSCRIPT scope)
+	gsdk::HSCRIPT squirrel::LookupFunction_impl(const char *name, gsdk::HSCRIPT scope)
 	{
 		if(scope) {
 			sq_pushobject(impl, *scope);
@@ -1092,13 +1097,13 @@ namespace vmod::vm
 		return copy;
 	}
 
-	void squirrel_vm::ReleaseFunction(gsdk::HSCRIPT obj)
+	void squirrel::ReleaseFunction(gsdk::HSCRIPT obj)
 	{
 		sq_release(impl, obj);
 		delete obj;
 	}
 
-	bool squirrel_vm::push(const gsdk::ScriptVariant_t &var) noexcept
+	bool squirrel::push(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		auto copy_vector{
 			[this,&var]<typename T>(const HSQOBJECT &classobj, T *(gsdk::ScriptVariant_t::*member)) noexcept -> bool {
@@ -1233,7 +1238,7 @@ namespace vmod::vm
 		}
 	}
 
-	bool squirrel_vm::get(SQInteger idx, gsdk::ScriptVariant_t &var) noexcept
+	bool squirrel::get(SQInteger idx, gsdk::ScriptVariant_t &var) noexcept
 	{
 		std::memset(var.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
 
@@ -1326,7 +1331,7 @@ namespace vmod::vm
 		}
 	}
 
-	bool squirrel_vm::get(const HSQOBJECT &obj, gsdk::ScriptVariant_t &var) noexcept
+	bool squirrel::get(const HSQOBJECT &obj, gsdk::ScriptVariant_t &var) noexcept
 	{
 		std::memset(var.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
 
@@ -1400,7 +1405,7 @@ namespace vmod::vm
 		}
 	}
 
-	gsdk::ScriptStatus_t squirrel_vm::ExecuteFunction_impl(gsdk::HSCRIPT obj, const gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret_var, gsdk::HSCRIPT scope, bool wait)
+	gsdk::ScriptStatus_t squirrel::ExecuteFunction_impl(gsdk::HSCRIPT obj, const gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret_var, gsdk::HSCRIPT scope, bool wait)
 	{
 		sq_pushobject(impl, *obj);
 
@@ -1443,9 +1448,9 @@ namespace vmod::vm
 		}
 	}
 
-	SQInteger squirrel_vm::static_func_call(HSQUIRRELVM vm)
+	SQInteger squirrel::static_func_call(HSQUIRRELVM vm)
 	{
-		squirrel_vm *actual_vm{static_cast<squirrel_vm *>(sq_getforeignptr(vm))};
+		squirrel *actual_vm{static_cast<squirrel *>(sq_getforeignptr(vm))};
 
 		SQInteger top{sq_gettop(vm)};
 		if(top < 2) {
@@ -1479,7 +1484,7 @@ namespace vmod::vm
 		return actual_vm->func_call(info, nullptr, args);
 	}
 
-	SQInteger squirrel_vm::func_call(const gsdk::ScriptFunctionBinding_t *info, void *obj, const std::vector<gsdk::ScriptVariant_t> &args) noexcept
+	SQInteger squirrel::func_call(const gsdk::ScriptFunctionBinding_t *info, void *obj, const std::vector<gsdk::ScriptVariant_t> &args) noexcept
 	{
 		bool is_ret_void{info->m_desc.m_ReturnType == gsdk::FIELD_VOID};
 
@@ -1510,9 +1515,9 @@ namespace vmod::vm
 		return is_ret_void ? 0 : 1;
 	}
 
-	SQInteger squirrel_vm::member_func_call(HSQUIRRELVM vm)
+	SQInteger squirrel::member_func_call(HSQUIRRELVM vm)
 	{
-		squirrel_vm *actual_vm{static_cast<squirrel_vm *>(sq_getforeignptr(vm))};
+		squirrel *actual_vm{static_cast<squirrel *>(sq_getforeignptr(vm))};
 
 		SQInteger top{sq_gettop(vm)};
 		if(top < 2) {
@@ -1574,7 +1579,7 @@ namespace vmod::vm
 		return actual_vm->func_call(funcinfo, obj, args);
 	}
 
-	SQInteger squirrel_vm::external_ctor(HSQUIRRELVM vm)
+	SQInteger squirrel::external_ctor(HSQUIRRELVM vm)
 	{
 		SQInteger top{sq_gettop(vm)};
 		if(top < 2) {
@@ -1591,7 +1596,7 @@ namespace vmod::vm
 		return sq_throwerror(vm, _SC("not implemented yet"));
 	}
 
-	SQInteger squirrel_vm::generic_dtor(SQUserPointer userptr, SQInteger size)
+	SQInteger squirrel::generic_dtor(SQUserPointer userptr, SQInteger size)
 	{
 		instance_info_t *info{static_cast<instance_info_t *>(userptr)};
 
@@ -1600,7 +1605,7 @@ namespace vmod::vm
 		return 0;
 	}
 
-	SQInteger squirrel_vm::external_dtor(SQUserPointer userptr, SQInteger size)
+	SQInteger squirrel::external_dtor(SQUserPointer userptr, SQInteger size)
 	{
 		instance_info_t *info{static_cast<instance_info_t *>(userptr)};
 
@@ -1611,7 +1616,7 @@ namespace vmod::vm
 		return 0;
 	}
 
-	bool squirrel_vm::register_func(const gsdk::ScriptClassDesc_t *classinfo, const gsdk::ScriptFunctionBinding_t *info, std::string_view name_str) noexcept
+	bool squirrel::register_func(const gsdk::ScriptClassDesc_t *classinfo, const gsdk::ScriptFunctionBinding_t *info, std::string_view name_str) noexcept
 	{
 		using namespace std::literals::string_literals;
 		using namespace std::literals::string_view_literals;
@@ -1745,7 +1750,7 @@ namespace vmod::vm
 		return true;
 	}
 
-	void squirrel_vm::RegisterFunction_nonvirtual(gsdk::ScriptFunctionBinding_t *info) noexcept
+	void squirrel::RegisterFunction_nonvirtual(gsdk::ScriptFunctionBinding_t *info) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -1770,22 +1775,22 @@ namespace vmod::vm
 		}
 	}
 
-	void squirrel_vm::RegisterFunction(gsdk::ScriptFunctionBinding_t *info)
+	void squirrel::RegisterFunction(gsdk::ScriptFunctionBinding_t *info)
 	{
 		RegisterFunction_nonvirtual(info);
 	}
 
-	SQInteger squirrel_vm::instance_str(HSQUIRRELVM vm)
+	SQInteger squirrel::instance_str(HSQUIRRELVM vm)
 	{
 		return sq_throwerror(vm, _SC("not implemented yet"));
 	}
 
-	SQInteger squirrel_vm::instance_valid(HSQUIRRELVM vm)
+	SQInteger squirrel::instance_valid(HSQUIRRELVM vm)
 	{
 		return sq_throwerror(vm, _SC("not implemented yet"));
 	}
 
-	bool squirrel_vm::register_class(const gsdk::ScriptClassDesc_t *info, std::string &&classname_str, HSQOBJECT **obj) noexcept
+	bool squirrel::register_class(const gsdk::ScriptClassDesc_t *info, std::string &&classname_str, HSQOBJECT **obj) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -1941,7 +1946,7 @@ namespace vmod::vm
 		return true;
 	}
 
-	bool squirrel_vm::RegisterClass_nonvirtual(gsdk::ScriptClassDesc_t *info) noexcept
+	bool squirrel::RegisterClass_nonvirtual(gsdk::ScriptClassDesc_t *info) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -1964,18 +1969,18 @@ namespace vmod::vm
 		return success;
 	}
 
-	bool squirrel_vm::RegisterClass(gsdk::ScriptClassDesc_t *info)
+	bool squirrel::RegisterClass(gsdk::ScriptClassDesc_t *info)
 	{
 		return RegisterClass_nonvirtual(info);
 	}
 
-	gsdk::HSCRIPT squirrel_vm::RegisterInstance_impl_nonvirtual(gsdk::ScriptClassDesc_t *info, void *ptr) noexcept
+	gsdk::HSCRIPT squirrel::RegisterInstance_impl_nonvirtual(gsdk::ScriptClassDesc_t *info, void *ptr) noexcept
 	{
 		std::string classname_str{info->m_pszScriptName};
 
 		auto class_it{registered_classes.find(classname_str)};
 		if(class_it == registered_classes.end()) {
-			if(!squirrel_vm::RegisterClass_nonvirtual(info)) {
+			if(!squirrel::RegisterClass_nonvirtual(info)) {
 				return gsdk::INVALID_HSCRIPT;
 			}
 
@@ -2017,12 +2022,12 @@ namespace vmod::vm
 		return copy;
 	}
 
-	gsdk::HSCRIPT squirrel_vm::RegisterInstance_impl(gsdk::ScriptClassDesc_t *info, void *ptr)
+	gsdk::HSCRIPT squirrel::RegisterInstance_impl(gsdk::ScriptClassDesc_t *info, void *ptr)
 	{
 		return RegisterInstance_impl_nonvirtual(info, ptr);
 	}
 
-	void squirrel_vm::SetInstanceUniqeId(gsdk::HSCRIPT obj, const char *id)
+	void squirrel::SetInstanceUniqeId(gsdk::HSCRIPT obj, const char *id)
 	{
 		sq_pushobject(impl, *obj);
 
@@ -2035,7 +2040,7 @@ namespace vmod::vm
 		sq_pop(impl, 1);
 	}
 
-	void squirrel_vm::RemoveInstance(gsdk::HSCRIPT obj)
+	void squirrel::RemoveInstance(gsdk::HSCRIPT obj)
 	{
 		sq_pushobject(impl, *obj);
 
@@ -2055,7 +2060,7 @@ namespace vmod::vm
 		delete obj;
 	}
 
-	void *squirrel_vm::GetInstanceValue_impl(gsdk::HSCRIPT obj, gsdk::ScriptClassDesc_t *classinfo)
+	void *squirrel::GetInstanceValue_impl(gsdk::HSCRIPT obj, gsdk::ScriptClassDesc_t *classinfo)
 	{
 		sq_pushobject(impl, *obj);
 
@@ -2091,7 +2096,7 @@ namespace vmod::vm
 		return ptr;
 	}
 
-	bool squirrel_vm::GenerateUniqueKey(const char *root, char *buff, int len)
+	bool squirrel::GenerateUniqueKey(const char *root, char *buff, int len)
 	{
 		std::size_t len_siz{static_cast<std::size_t>(len)};
 
@@ -2110,7 +2115,7 @@ namespace vmod::vm
 		return true;
 	}
 
-	bool squirrel_vm::ValueExists(gsdk::HSCRIPT scope, const char *name)
+	bool squirrel::ValueExists(gsdk::HSCRIPT scope, const char *name)
 	{
 		if(scope) {
 			sq_pushobject(impl, *scope);
@@ -2127,7 +2132,7 @@ namespace vmod::vm
 		return got;
 	}
 
-	bool squirrel_vm::SetValue_nonvirtual(gsdk::HSCRIPT obj, const char *name, const char *value) noexcept
+	bool squirrel::SetValue_nonvirtual(gsdk::HSCRIPT obj, const char *name, const char *value) noexcept
 	{
 		if(obj) {
 			sq_pushobject(impl, *obj);
@@ -2150,12 +2155,12 @@ namespace vmod::vm
 		return success;
 	}
 
-	bool squirrel_vm::SetValue(gsdk::HSCRIPT obj, const char *name, const char *value)
+	bool squirrel::SetValue(gsdk::HSCRIPT obj, const char *name, const char *value)
 	{
 		return SetValue_nonvirtual(obj, name, value);
 	}
 
-	bool squirrel_vm::SetValue_impl_nonvirtual(gsdk::HSCRIPT obj, const char *name, const gsdk::ScriptVariant_t &value) noexcept
+	bool squirrel::SetValue_impl_nonvirtual(gsdk::HSCRIPT obj, const char *name, const gsdk::ScriptVariant_t &value) noexcept
 	{
 		if(obj) {
 			sq_pushobject(impl, *obj);
@@ -2176,12 +2181,12 @@ namespace vmod::vm
 		return success;
 	}
 
-	bool squirrel_vm::SetValue_impl(gsdk::HSCRIPT obj, const char *name, const gsdk::ScriptVariant_t &value)
+	bool squirrel::SetValue_impl(gsdk::HSCRIPT obj, const char *name, const gsdk::ScriptVariant_t &value)
 	{
 		return SetValue_impl_nonvirtual(obj, name, value);
 	}
 
-	bool squirrel_vm::SetValue_impl(gsdk::HSCRIPT obj, int idx, const gsdk::ScriptVariant_t &value)
+	bool squirrel::SetValue_impl(gsdk::HSCRIPT obj, int idx, const gsdk::ScriptVariant_t &value)
 	{
 		if(obj) {
 			sq_pushobject(impl, *obj);
@@ -2202,7 +2207,7 @@ namespace vmod::vm
 		return success;
 	}
 
-	void squirrel_vm::get_obj(gsdk::ScriptVariant_t &value) noexcept
+	void squirrel::get_obj(gsdk::ScriptVariant_t &value) noexcept
 	{
 		std::memset(value.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
 
@@ -2223,36 +2228,36 @@ namespace vmod::vm
 		sq_pop(impl, 1);
 	}
 
-	void squirrel_vm::CreateTable_impl(gsdk::ScriptVariant_t &value)
+	void squirrel::CreateTable_impl(gsdk::ScriptVariant_t &value)
 	{
 		sq_newtable(impl);
 
 		get_obj(value);
 	}
 
-	void squirrel_vm::CreateArray_impl_nonvirtual(gsdk::ScriptVariant_t &value) noexcept
+	void squirrel::CreateArray_impl_nonvirtual(gsdk::ScriptVariant_t &value) noexcept
 	{
 		sq_newarray(impl, 0);
 
 		get_obj(value);
 	}
 
-	void squirrel_vm::CreateArray_impl(gsdk::ScriptVariant_t &value)
+	void squirrel::CreateArray_impl(gsdk::ScriptVariant_t &value)
 	{
 		CreateArray_impl_nonvirtual(value);
 	}
 
-	bool squirrel_vm::IsTable_nonvirtual(gsdk::HSCRIPT obj) noexcept
+	bool squirrel::IsTable_nonvirtual(gsdk::HSCRIPT obj) noexcept
 	{
 		return sq_istable(*obj);
 	}
 
-	bool squirrel_vm::IsTable(gsdk::HSCRIPT obj)
+	bool squirrel::IsTable(gsdk::HSCRIPT obj)
 	{
 		return IsTable_nonvirtual(obj);
 	}
 
-	int squirrel_vm::GetNumTableEntries(gsdk::HSCRIPT obj) const
+	int squirrel::GetNumTableEntries(gsdk::HSCRIPT obj) const
 	{
 		if(obj) {
 			sq_pushobject(impl, *obj);
@@ -2267,7 +2272,7 @@ namespace vmod::vm
 		return size;
 	}
 
-	int squirrel_vm::GetArrayCount_nonvirtual(gsdk::HSCRIPT obj) noexcept
+	int squirrel::GetArrayCount_nonvirtual(gsdk::HSCRIPT obj) noexcept
 	{
 		sq_pushobject(impl, *obj);
 
@@ -2278,7 +2283,7 @@ namespace vmod::vm
 		return size;
 	}
 
-	int squirrel_vm::GetKeyValue(gsdk::HSCRIPT obj, int it, gsdk::ScriptVariant_t *key, gsdk::ScriptVariant_t *value)
+	int squirrel::GetKeyValue(gsdk::HSCRIPT obj, int it, gsdk::ScriptVariant_t *key, gsdk::ScriptVariant_t *value)
 	{
 		if(obj) {
 			sq_pushobject(impl, *obj);
@@ -2313,12 +2318,12 @@ namespace vmod::vm
 		return next_it;
 	}
 
-	int squirrel_vm::GetKeyValue2(gsdk::HSCRIPT obj, int it, gsdk::ScriptVariant_t *key, gsdk::ScriptVariant_t *value)
+	int squirrel::GetKeyValue2(gsdk::HSCRIPT obj, int it, gsdk::ScriptVariant_t *key, gsdk::ScriptVariant_t *value)
 	{
-		return squirrel_vm::GetKeyValue(obj, it, key, value);
+		return squirrel::GetKeyValue(obj, it, key, value);
 	}
 
-	bool squirrel_vm::GetValue_impl(gsdk::HSCRIPT obj, const char *name, gsdk::ScriptVariant_t *value)
+	bool squirrel::GetValue_impl(gsdk::HSCRIPT obj, const char *name, gsdk::ScriptVariant_t *value)
 	{
 		if(obj) {
 			sq_pushobject(impl, *obj);
@@ -2341,7 +2346,7 @@ namespace vmod::vm
 		return got;
 	}
 
-	bool squirrel_vm::GetValue_impl(gsdk::HSCRIPT obj, int idx, gsdk::ScriptVariant_t *value)
+	bool squirrel::GetValue_impl(gsdk::HSCRIPT obj, int idx, gsdk::ScriptVariant_t *value)
 	{
 		if(obj) {
 			sq_pushobject(impl, *obj);
@@ -2364,12 +2369,12 @@ namespace vmod::vm
 		return got;
 	}
 
-	bool squirrel_vm::GetScalarValue(gsdk::HSCRIPT obj, gsdk::ScriptVariant_t *value)
+	bool squirrel::GetScalarValue(gsdk::HSCRIPT obj, gsdk::ScriptVariant_t *value)
 	{
 		return get(*obj, *value);
 	}
 
-	void squirrel_vm::ReleaseValue(gsdk::ScriptVariant_t &value)
+	void squirrel::ReleaseValue(gsdk::ScriptVariant_t &value)
 	{
 		switch(value.m_type) {
 			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
@@ -2390,7 +2395,7 @@ namespace vmod::vm
 		}
 	}
 
-	bool squirrel_vm::ClearValue(gsdk::HSCRIPT obj, const char *name)
+	bool squirrel::ClearValue(gsdk::HSCRIPT obj, const char *name)
 	{
 		if(obj) {
 			sq_pushobject(impl, *obj);
@@ -2407,22 +2412,22 @@ namespace vmod::vm
 		return removed;
 	}
 
-	bool squirrel_vm::IsArray_nonvirtual(gsdk::HSCRIPT obj) noexcept
+	bool squirrel::IsArray_nonvirtual(gsdk::HSCRIPT obj) noexcept
 	{
 		return sq_isarray(*obj);
 	}
 
-	bool squirrel_vm::IsArray(gsdk::HSCRIPT obj)
+	bool squirrel::IsArray(gsdk::HSCRIPT obj)
 	{
 		return IsArray_nonvirtual(obj);
 	}
 
-	int squirrel_vm::GetArrayCount(gsdk::HSCRIPT obj)
+	int squirrel::GetArrayCount(gsdk::HSCRIPT obj)
 	{
 		return GetArrayCount_nonvirtual(obj);
 	}
 
-	void squirrel_vm::ArrayAddToTail(gsdk::HSCRIPT obj, const gsdk::ScriptVariant_t &value)
+	void squirrel::ArrayAddToTail(gsdk::HSCRIPT obj, const gsdk::ScriptVariant_t &value)
 	{
 		sq_pushobject(impl, *obj);
 
@@ -2436,42 +2441,42 @@ namespace vmod::vm
 		sq_pop(impl, 1);
 	}
 
-	void squirrel_vm::WriteState(gsdk::CUtlBuffer *)
+	void squirrel::WriteState(gsdk::CUtlBuffer *)
 	{
 		debugtrap();
 	}
 
-	void squirrel_vm::ReadState(gsdk::CUtlBuffer *)
+	void squirrel::ReadState(gsdk::CUtlBuffer *)
 	{
 		debugtrap();
 	}
 
-	void squirrel_vm::CollectGarbage(const char *, bool)
+	void squirrel::CollectGarbage(const char *, bool)
 	{
 		sq_collectgarbage(impl);
 	}
 
-	void squirrel_vm::RemoveOrphanInstances()
+	void squirrel::RemoveOrphanInstances()
 	{
 		sq_collectgarbage(impl);
 	}
 
-	void squirrel_vm::DumpState()
+	void squirrel::DumpState()
 	{
 		
 	}
 
-	void squirrel_vm::SetOutputCallback(gsdk::ScriptOutputFunc_t func)
+	void squirrel::SetOutputCallback(gsdk::ScriptOutputFunc_t func)
 	{
 		output_callback = func;
 	}
 
-	void squirrel_vm::SetErrorCallback(gsdk::ScriptErrorFunc_t func)
+	void squirrel::SetErrorCallback(gsdk::ScriptErrorFunc_t func)
 	{
 		err_callback = func;
 	}
 
-	bool squirrel_vm::RaiseException_impl(const char *msg)
+	bool squirrel::RaiseException_impl(const char *msg)
 	{
 		sq_pushstring(impl, msg, static_cast<SQInteger>(std::strlen(msg)));
 
@@ -2488,24 +2493,24 @@ namespace vmod::vm
 		return true;
 	}
 
-	gsdk::HSCRIPT squirrel_vm::GetRootTable()
+	gsdk::HSCRIPT squirrel::GetRootTable()
 	{
 		return &root_table;
 	}
 
-	gsdk::HSCRIPT squirrel_vm::CopyHandle(gsdk::HSCRIPT)
+	gsdk::HSCRIPT squirrel::CopyHandle(gsdk::HSCRIPT)
 	{
 		return gsdk::INVALID_HSCRIPT;
 	}
 
-	gsdk::HSCRIPT squirrel_vm::GetIdentity(gsdk::HSCRIPT)
+	gsdk::HSCRIPT squirrel::GetIdentity(gsdk::HSCRIPT)
 	{
 		return gsdk::INVALID_HSCRIPT;
 	}
 
 	class metamethod_delegate_impl final
 	{
-		friend class squirrel_vm;
+		friend class squirrel;
 
 	public:
 		inline metamethod_delegate_impl(gsdk::ISquirrelMetamethodDelegate *delegate, bool free) noexcept
@@ -2532,9 +2537,9 @@ namespace vmod::vm
 		metamethod_delegate_impl &operator=(metamethod_delegate_impl &&) = delete;
 	};
 
-	SQInteger squirrel_vm::metamethod_call(HSQUIRRELVM vm)
+	SQInteger squirrel::metamethod_call(HSQUIRRELVM vm)
 	{
-		squirrel_vm *actual_vm{static_cast<squirrel_vm *>(sq_getforeignptr(vm))};
+		squirrel *actual_vm{static_cast<squirrel *>(sq_getforeignptr(vm))};
 
 		SQInteger top{sq_gettop(vm)};
 		if(top != 3) {
@@ -2566,7 +2571,7 @@ namespace vmod::vm
 		return 1;
 	}
 
-	gsdk::CSquirrelMetamethodDelegateImpl *squirrel_vm::MakeSquirrelMetamethod_Get_impl(gsdk::HSCRIPT &scope, const char *name, gsdk::ISquirrelMetamethodDelegate *delegate, bool free)
+	gsdk::CSquirrelMetamethodDelegateImpl *squirrel::MakeSquirrelMetamethod_Get_impl(gsdk::HSCRIPT &scope, const char *name, gsdk::ISquirrelMetamethodDelegate *delegate, bool free)
 	{
 		if(scope) {
 			sq_pushobject(impl, *scope);
@@ -2612,7 +2617,7 @@ namespace vmod::vm
 		return reinterpret_cast<gsdk::CSquirrelMetamethodDelegateImpl *>(delegate_impl);
 	}
 
-	void squirrel_vm::DestroySquirrelMetamethod_Get(gsdk::CSquirrelMetamethodDelegateImpl *delegate_impl)
+	void squirrel::DestroySquirrelMetamethod_Get(gsdk::CSquirrelMetamethodDelegateImpl *delegate_impl)
 	{
 		delete reinterpret_cast<metamethod_delegate_impl *>(delegate_impl);
 	}

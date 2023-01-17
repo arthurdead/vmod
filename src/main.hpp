@@ -192,10 +192,8 @@ namespace vmod
 
 		gsdk::HSCRIPT server_init_script{gsdk::INVALID_HSCRIPT};
 
-		std::filesystem::path base_script_path;
 		gsdk::HSCRIPT base_script_scope{gsdk::INVALID_HSCRIPT};
 		gsdk::HSCRIPT base_script{gsdk::INVALID_HSCRIPT};
-		bool base_script_from_file{false};
 
 		gsdk::HSCRIPT to_string_func{gsdk::INVALID_HSCRIPT};
 		gsdk::HSCRIPT to_int_func{gsdk::INVALID_HSCRIPT};

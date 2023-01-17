@@ -532,7 +532,7 @@ namespace vmod
 					default: continue;
 				}
 
-				basic_sym_t basic_sym{static_cast<std::uint64_t>(sym.st_value), static_cast<std::size_t>(sym.st_size)};
+				basic_sym_t basic_sym{static_cast<std::uint64_t>(sym.st_value), static_cast<std::uint64_t>(sym.st_size)};
 
 				if(bind == STB_GLOBAL) {
 					if(name_mangled == "__cxa_pure_virtual"sv ||
@@ -1182,7 +1182,7 @@ namespace vmod
 
 				std::size_t vtable_size{0};
 				if(sym.size > 0) {
-					vtable_size = ((sym.size - (sizeof(__cxxabiv1::vtable_prefix) - sizeof(__cxxabiv1::vtable_prefix::origin))) / sizeof(generic_plain_mfp_t));
+					vtable_size = ((static_cast<std::size_t>(sym.size) - (sizeof(__cxxabiv1::vtable_prefix) - sizeof(__cxxabiv1::vtable_prefix::origin))) / sizeof(generic_plain_mfp_t));
 				}
 
 				vtable_sizes.emplace(qual_name, vtable_size);

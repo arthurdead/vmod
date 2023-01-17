@@ -104,7 +104,7 @@ namespace vmod::bindings::syms
 			{ return it->second->func<generic_func_t>(); }
 			inline generic_mfp_t script_mfp() const noexcept
 			{ return it->second->mfp<generic_mfp_t>(); }
-			inline std::size_t script_size() const noexcept
+			inline std::uint64_t script_size() const noexcept
 			{ return it->second->size(); }
 			inline std::size_t script_vindex() const noexcept
 			{ return it->second->virtual_index(); }
