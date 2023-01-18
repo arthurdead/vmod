@@ -27,25 +27,16 @@ namespace vmod::bindings::mem
 		inline bool initialize() noexcept
 		{ return register_instance(&desc, this); }
 
-		inline container(std::size_t size_, bool ent_) noexcept
-			: ent{ent_}, size{size_}
+		enum class type : unsigned char
 		{
-			if(ent_) {
-				ptr = static_cast<unsigned char *>(sv_engine->PvAllocEntPrivateData(static_cast<long>(size_)));
-			} else {
-				ptr = static_cast<unsigned char *>(std::malloc(size_));
-			}
-		}
+			normal,
+			entity,
+			game
+		};
 
-		inline container(std::align_val_t align, std::size_t size_) noexcept
-			: ptr{static_cast<unsigned char *>(std::aligned_alloc(static_cast<std::size_t>(align), size_))}, size{size_}
-		{
-		}
-
-		inline container(std::size_t num, std::size_t size_) noexcept
-			: ptr{static_cast<unsigned char *>(std::calloc(num, size_))}, size{num * size_}
-		{
-		}
+		container(std::size_t size_, type type_) noexcept;
+		container(std::align_val_t align, std::size_t size_, bool game) noexcept;
+		container(std::size_t num, std::size_t size_, bool game) noexcept;
 
 		void script_set_free_callback(gsdk::HSCRIPT func) noexcept;
 
@@ -57,9 +48,10 @@ namespace vmod::bindings::mem
 		inline std::size_t script_size() const noexcept
 		{ return size; }
 
-		bool ent{false};
-		unsigned char *ptr;
-		std::size_t size;
+		type type{type::normal};
+		unsigned char *ptr{nullptr};
+		std::size_t size{0};
+		bool aligned{false};
 		gsdk::HSCRIPT free_callback{gsdk::INVALID_HSCRIPT};
 
 	private:

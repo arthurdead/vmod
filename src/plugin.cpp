@@ -440,16 +440,18 @@ namespace vmod
 			values_table = gsdk::INVALID_HSCRIPT;
 		}
 
-		if(vm->ValueExists(public_scope_, "functions")) {
-			vm->ClearValue(public_scope_, "functions");
-		}
+		if(public_scope_ && public_scope_ != gsdk::INVALID_HSCRIPT) {
+			if(vm->ValueExists(public_scope_, "functions")) {
+				vm->ClearValue(public_scope_, "functions");
+			}
 
-		if(vm->ValueExists(public_scope_, "values")) {
-			vm->ClearValue(public_scope_, "values");
-		}
+			if(vm->ValueExists(public_scope_, "values")) {
+				vm->ClearValue(public_scope_, "values");
+			}
 
-		if(vm->ValueExists(public_scope_, "plugin")) {
-			vm->ClearValue(public_scope_, "plugin");
+			if(vm->ValueExists(public_scope_, "plugin")) {
+				vm->ClearValue(public_scope_, "plugin");
+			}
 		}
 
 		if(instance_ && instance_ != gsdk::INVALID_HSCRIPT) {

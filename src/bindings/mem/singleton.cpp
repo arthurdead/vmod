@@ -323,7 +323,7 @@ namespace vmod::bindings::mem
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		container *block{new container{size, false}};
+		container *block{new container{size, container::type::normal}};
 
 		if(!block->initialize()) {
 			delete block;
@@ -342,7 +342,7 @@ namespace vmod::bindings::mem
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		container *block{new container{size, true}};
+		container *block{new container{size, container::type::entity}};
 
 		if(!block->initialize()) {
 			delete block;
@@ -371,7 +371,7 @@ namespace vmod::bindings::mem
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		container *block{new container{align, size}};
+		container *block{new container{align, size, false}};
 
 		if(!block->initialize()) {
 			delete block;
@@ -388,7 +388,7 @@ namespace vmod::bindings::mem
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		container *block{new container{static_cast<std::align_val_t>(type->alignment), type->size}};
+		container *block{new container{static_cast<std::align_val_t>(type->alignment), type->size, false}};
 		if(!block->initialize()) {
 			delete block;
 			return gsdk::INVALID_HSCRIPT;
@@ -411,7 +411,7 @@ namespace vmod::bindings::mem
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		container *block{new container{num, size}};
+		container *block{new container{num, size, false}};
 		if(!block->initialize()) {
 			delete block;
 			return gsdk::INVALID_HSCRIPT;

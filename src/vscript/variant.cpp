@@ -1,4 +1,5 @@
 #include "variant.hpp"
+#include "../gsdk/tier0/memalloc.hpp"
 
 namespace vmod::vscript
 {
@@ -83,7 +84,8 @@ namespace vmod::vscript
 			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
 			case gsdk::FIELD_HSCRIPT:
 			return detail::to_bool(var.m_object);
-			default: return {};
+			default:
+			return {};
 		}
 	}
 
@@ -91,13 +93,7 @@ namespace vmod::vscript
 	{
 		if(!value.empty()) {
 			std::size_t len{value.length()};
-		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-			var.m_cstr = static_cast<char *>(std::malloc(len+1));
-		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
-			var.m_cstr = new char[len+1];
-		#else
-			#error
-		#endif
+			var.m_cstr = gsdk::alloc_string(len+1);
 			std::strncpy(var.m_cstr, value.c_str(), len);
 			var.m_cstr[len] = '\0';
 			var.m_flags |= gsdk::SV_FREE;
@@ -110,13 +106,7 @@ namespace vmod::vscript
 	{
 		if(!value.empty()) {
 			std::size_t len{value.native().length()};
-		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-			var.m_cstr = static_cast<char *>(std::malloc(len+1));
-		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
-			var.m_cstr = new char[len+1];
-		#else
-			#error
-		#endif
+			var.m_cstr = gsdk::alloc_string(len+1);
 			std::strncpy(var.m_cstr, value.c_str(), len);
 			var.m_cstr[len] = '\0';
 			var.m_flags |= gsdk::SV_FREE;

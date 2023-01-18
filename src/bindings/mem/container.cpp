@@ -1,5 +1,6 @@
 #include "container.hpp"
 #include "../../main.hpp"
+#include "../../gsdk/tier0/memalloc.hpp"
 
 namespace vmod::bindings::mem
 {
@@ -53,6 +54,43 @@ namespace vmod::bindings::mem
 
 	}
 
+	container::container(std::size_t size_, enum type type_) noexcept
+		: type{type_}, size{size_}
+	{
+		switch(type_) {
+			case type::normal:
+			ptr = static_cast<unsigned char *>(std::malloc(size_));
+			break;
+			case type::entity:
+			ptr = static_cast<unsigned char *>(sv_engine->PvAllocEntPrivateData(static_cast<long>(size_)));
+			break;
+			case type::game:
+			ptr = static_cast<unsigned char *>(g_pMemAlloc->Alloc(size_));
+			break;
+		}
+	}
+
+	container::container(std::align_val_t align, std::size_t size_, bool game) noexcept
+		: type{game ? type::game : type::normal}, size{size_}, aligned{true}
+	{
+		if(game) {
+			//TODO!!!!
+			ptr = static_cast<unsigned char *>(g_pMemAlloc->Alloc(size_));
+		} else {
+			ptr = static_cast<unsigned char *>(std::aligned_alloc(static_cast<std::size_t>(align), size_));
+		}
+	}
+
+	container::container(std::size_t num, std::size_t size_, bool game) noexcept
+		: type{game ? type::game : type::normal}, size{num * size_}
+	{
+		if(game) {
+			ptr = static_cast<unsigned char *>(g_pMemAlloc->CAlloc(num, size_));
+		} else {
+			ptr = static_cast<unsigned char *>(std::calloc(num, size_));
+		}
+	}
+
 	container::~container() noexcept
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
@@ -65,10 +103,21 @@ namespace vmod::bindings::mem
 				vm->ReleaseFunction(free_callback);
 			}
 
-			if(ent) {
-				sv_engine->FreeEntPrivateData(ptr);
-			} else {
+			switch(type) {
+				case type::normal:
 				std::free(ptr);
+				break;
+				case type::entity:
+				sv_engine->FreeEntPrivateData(ptr);
+				break;
+				case type::game: {
+					if(aligned) {
+						//TODO!!!!
+						g_pMemAlloc->Free(ptr);
+					} else {
+						g_pMemAlloc->Free(ptr);
+					}
+				}break;
 			}
 		}
 	}

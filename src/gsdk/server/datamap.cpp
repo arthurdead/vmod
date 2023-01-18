@@ -10,7 +10,7 @@ namespace gsdk
 	{
 		if(flags & FTYPEDESC_FREE_NAME) {
 			if(fieldName) {
-				std::free(const_cast<char *>(fieldName));
+				delete[] const_cast<char *>(fieldName);
 				fieldName = nullptr;
 			}
 			flags &= ~FTYPEDESC_FREE_NAME;
@@ -18,7 +18,7 @@ namespace gsdk
 
 		if(flags & FTYPEDESC_FREE_EXTERNALNAME) {
 			if(externalName) {
-				std::free(const_cast<char *>(externalName));
+				delete[] const_cast<char *>(externalName);
 				externalName = nullptr;
 			}
 			flags &= ~FTYPEDESC_FREE_EXTERNALNAME;
@@ -40,7 +40,7 @@ namespace gsdk
 		flags = other.flags;
 		if(other.flags & FTYPEDESC_FREE_NAME) {
 			std::size_t len{std::strlen(other.fieldName)};
-			fieldName = static_cast<char *>(std::malloc(len+1));
+			fieldName = new char[len+1];
 			std::strncpy(const_cast<char *>(fieldName), other.fieldName, len);
 			const_cast<char *>(fieldName)[len] = '\0';
 		} else {
@@ -48,7 +48,7 @@ namespace gsdk
 		}
 		if(other.flags & FTYPEDESC_FREE_EXTERNALNAME) {
 			std::size_t len{std::strlen(other.externalName)};
-			externalName = static_cast<char *>(std::malloc(len+1));
+			externalName = new char[len+1];
 			std::strncpy(const_cast<char *>(externalName), other.externalName, len);
 			const_cast<char *>(externalName)[len] = '\0';
 		} else {
@@ -262,7 +262,7 @@ namespace gsdk
 		short *other_flags{other.get_flags()};
 		if(other_flags && (*other_flags & FTYPEDESC_FREE_NAME)) {
 			std::size_t len{std::strlen(other.dataClassName)};
-			dataClassName = static_cast<char *>(std::malloc(len+1));
+			dataClassName = new char[len+1];
 			std::strncpy(const_cast<char *>(dataClassName), other.dataClassName, len);
 			const_cast<char *>(dataClassName)[len] = '\0';
 		} else {
@@ -295,7 +295,7 @@ namespace gsdk
 		if(flags) {
 			if(*flags & FTYPEDESC_FREE_NAME) {
 				if(dataClassName) {
-					std::free(const_cast<char *>(dataClassName));
+					delete[] const_cast<char *>(dataClassName);
 					dataClassName = nullptr;
 				}
 				*flags &= ~FTYPEDESC_FREE_NAME;

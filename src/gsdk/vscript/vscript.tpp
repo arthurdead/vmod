@@ -1,3 +1,5 @@
+#include "../tier0/memalloc.hpp"
+
 namespace gsdk
 {
 	template <typename T>
@@ -31,17 +33,11 @@ namespace gsdk
 				case FIELD_UTLSTRINGTOKEN:
 				//delete m_utlstringtoken;
 				break;
-				case FIELD_CSTRING: {
-				#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-					std::free(m_cstr);
-				#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
-					delete[] m_cstr;
-				#else
-					#error
-				#endif
-				} break;
+				case FIELD_CSTRING:
+				free_string(m_cstr);
+				break;
 				default:
-				std::free(static_cast<void *>(m_data));
+				gsdk::free(static_cast<void *>(m_data));
 				break;
 			}
 

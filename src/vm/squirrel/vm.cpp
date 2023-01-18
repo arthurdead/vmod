@@ -220,7 +220,7 @@ namespace vmod::vm
 			return SQ_ERROR;
 		}
 
-		delete static_cast<T *>(userptr);
+		static_cast<T *>(userptr)->~T();
 
 		return 0;
 	}
@@ -568,7 +568,7 @@ namespace vmod::vm
 	}
 
 	template <typename T>
-	static SQInteger vector3d_typeof(HSQUIRRELVM vm)
+	static SQInteger vector_typeof(HSQUIRRELVM vm)
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -662,7 +662,11 @@ namespace vmod::vm
 	#endif
 		va_end(vargs);
 
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
+		ColorSpewMessage(gsdk::SPEW_WARNING, &info_clr, "%s", print_buff);
+	#else
 		info("%s"sv, print_buff);
+	#endif
 
 		if(actual_vm->output_callback) {
 			actual_vm->output_callback(print_buff);
@@ -1019,7 +1023,7 @@ namespace vmod::vm
 						native_closure_info{"constructor"sv, vector3d_ctor<T>, -1, "xnnn"sv},
 						native_closure_info{"_get"sv, vector3d_get<T>, 2, "xs|i"sv},
 						native_closure_info{"_tostring"sv, vector3d_str<T>, 1, "x"sv},
-						native_closure_info{"_typeof"sv, vector3d_typeof<T>, 1, "x"sv},
+						native_closure_info{"_typeof"sv, vector_typeof<T>, 1, "x"sv},
 						native_closure_info{"_set"sv, vector3d_set<T>, 3, "xs|in"sv},
 						native_closure_info{"_add"sv, vector3d_add<T, false>, 2, "xx|n"sv},
 						native_closure_info{"_sub"sv, vector3d_sub<T, false>, 2, "xx|n"sv},
@@ -1577,19 +1581,32 @@ namespace vmod::vm
 				}
 				return true;
 			}
-			case gsdk::FIELD_QANGLE: {
-				return create_vector3d<gsdk::QAngle>(impl, qangle_class, *var.m_qangle);
-			}
+			case gsdk::FIELD_QANGLE:
+			return create_vector3d<gsdk::QAngle>(impl, qangle_class, *var.m_qangle);
 			case gsdk::FIELD_POSITION_VECTOR:
-			case gsdk::FIELD_VECTOR: {
-				return create_vector3d<gsdk::Vector>(impl, vector_class, *var.m_vector);
+			case gsdk::FIELD_VECTOR:
+			return create_vector3d<gsdk::Vector>(impl, vector_class, *var.m_vector);
+			case gsdk::FIELD_CLASSPTR:
+			case gsdk::FIELD_FUNCTION: {
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+				sq_pushinteger(impl, static_cast<SQInteger>(var.m_ulonglong));
+			#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+				sq_pushinteger(impl, static_cast<SQInteger>(var.m_ulong));
+			#else
+				#error
+			#endif
+				return true;
+			}
+			case gsdk::FIELD_EHANDLE: {
+				return false;
+			}
+			case gsdk::FIELD_EDICT: {
+				return false;
 			}
 			case gsdk::FIELD_VARIANT: {
 				return false;
 			}
-			case gsdk::FIELD_TYPEUNKNOWN: {
-				return false;
-			}
+			case gsdk::FIELD_TYPEUNKNOWN:
 			default: {
 				return false;
 			}
@@ -1648,13 +1665,7 @@ namespace vmod::vm
 				if(SQ_SUCCEEDED(sq_getstringandsize(impl, idx, &value, &len))) {
 					var.m_type = gsdk::FIELD_CSTRING;
 					std::size_t len_siz{static_cast<std::size_t>(len)};
-				#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-					var.m_cstr = static_cast<char *>(std::malloc(len_siz+1));
-				#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
-					var.m_cstr = new char[len_siz+1];
-				#else
-					#error
-				#endif
+					var.m_cstr = gsdk::alloc_string(len_siz+1);
 					std::strncpy(var.m_cstr, value, len_siz);
 					var.m_cstr[len_siz] = '\0';
 					var.m_flags |= gsdk::SV_FREE;
@@ -1666,6 +1677,11 @@ namespace vmod::vm
 				}
 			}
 			case OT_NATIVECLOSURE:
+			case OT_CLOSURE: {
+				[[fallthrough]];
+			}
+			case OT_ARRAY:
+			case OT_INSTANCE:
 			case OT_TABLE: {
 				var.m_object = new HSQOBJECT;
 				sq_resetobject(var.m_object);
@@ -1719,13 +1735,7 @@ namespace vmod::vm
 				if(str) {
 					var.m_type = gsdk::FIELD_CSTRING;
 					std::size_t len{std::strlen(str)};
-				#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-					var.m_cstr = static_cast<char *>(std::malloc(len+1));
-				#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
-					var.m_cstr = new char[len+1];
-				#else
-					#error
-				#endif
+					var.m_cstr = gsdk::alloc_string(len+1);
 					std::strncpy(var.m_cstr, str, len);
 					var.m_cstr[len] = '\0';
 					var.m_flags |= gsdk::SV_FREE;
@@ -1736,6 +1746,11 @@ namespace vmod::vm
 				return true;
 			}
 			case OT_NATIVECLOSURE:
+			case OT_CLOSURE: {
+				[[fallthrough]];
+			}
+			case OT_ARRAY:
+			case OT_INSTANCE:
 			case OT_TABLE: {
 				sq_pushobject(impl, obj);
 
@@ -1966,7 +1981,7 @@ namespace vmod::vm
 			return SQ_ERROR;
 		}
 
-		delete static_cast<instance_info_t *>(userptr);
+		static_cast<instance_info_t *>(userptr)->~instance_info_t();
 
 		return 0;
 	}
@@ -1981,7 +1996,7 @@ namespace vmod::vm
 
 		info->classinfo->m_pfnDestruct(info->ptr);
 
-		delete info;
+		info->~instance_info_t();
 
 		return 0;
 	}
@@ -2014,63 +2029,67 @@ namespace vmod::vm
 
 		for(gsdk::ScriptDataType_t param : info->m_desc.m_Parameters) {
 			switch(param) {
-				case gsdk::FIELD_VOID: {
-					typemask += 'o';
-				} break;
-				case gsdk::FIELD_TIME: {
-					typemask += 'f';
-				} break;
+				case gsdk::FIELD_VOID:
+				typemask += 'o';
+				break;
+				case gsdk::FIELD_TIME:
+				typemask += 'f';
+				break;
 				case gsdk::FIELD_FLOAT64:
-				case gsdk::FIELD_FLOAT: {
-					typemask += 'n';
-				} break;
+				case gsdk::FIELD_FLOAT:
+				typemask += 'n';
+				break;
 				case gsdk::FIELD_STRING:
 				case gsdk::FIELD_MODELNAME:
 				case gsdk::FIELD_SOUNDNAME:
-				case gsdk::FIELD_CSTRING: {
-					typemask += 's';
-				} break;
-				case gsdk::FIELD_CHARACTER: {
-					typemask += 's';
-				} break;
-				case gsdk::FIELD_POSITIVEINTEGER_OR_NULL: {
-					typemask += "i|o"sv;
-				} break;
+				case gsdk::FIELD_CSTRING:
+				typemask += 's';
+				break;
+				case gsdk::FIELD_CHARACTER:
+				typemask += 's';
+				break;
+				case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
+				typemask += "i|o"sv;
+				break;
 				case gsdk::FIELD_MODELINDEX:
 				case gsdk::FIELD_MATERIALINDEX:
-				case gsdk::FIELD_TICK:{
-					typemask += 'i';
-				} break;
+				case gsdk::FIELD_TICK:
+				typemask += 'i';
+				break;
 			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 				case gsdk::FIELD_INTEGER64:
 			#endif
 				case gsdk::FIELD_SHORT:
 				case gsdk::FIELD_UINT64:
 				case gsdk::FIELD_UINT32:
-				case gsdk::FIELD_INTEGER: {
-					typemask += 'n';
-				} break;
-				case gsdk::FIELD_BOOLEAN: {
-					typemask += 'b';
-				} break;
+				case gsdk::FIELD_INTEGER:
+				typemask += 'n';
+				break;
+				case gsdk::FIELD_CLASSPTR:
+				case gsdk::FIELD_FUNCTION:
+				typemask += 'i';
+				break;
+				case gsdk::FIELD_BOOLEAN:
+				typemask += 'b';
+				break;
 				case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
-				case gsdk::FIELD_HSCRIPT: {
-					typemask += '.';
-				} break;
+				case gsdk::FIELD_HSCRIPT:
+				typemask += '.';
+				break;
 				case gsdk::FIELD_QANGLE:
 				case gsdk::FIELD_POSITION_VECTOR:
-				case gsdk::FIELD_VECTOR: {
-					typemask += 'x';
-				} break;
-				case gsdk::FIELD_VARIANT: {
-					typemask += '.';
-				} break;
-				case gsdk::FIELD_TYPEUNKNOWN: {
-					typemask += '.';
-				} break;
+				case gsdk::FIELD_VECTOR:
+				typemask += 'x';
+				break;
+				case gsdk::FIELD_VARIANT:
+				typemask += "t|a|x|n|s|b|o|c"sv;
+				break;
+				case gsdk::FIELD_TYPEUNKNOWN:
 				default: {
-					typemask += '.';
-				} break;
+					error("vmod vm: unknown param type in '%s'\n"sv, name_str.data());
+					sq_pop(impl, 2);
+					return false;
+				}
 			}
 		}
 
@@ -2165,12 +2184,12 @@ namespace vmod::vm
 			return sq_throwerror(vm, _SC("failed to get userptr"));
 		}
 
+		gsdk::ScriptClassDesc_t *classinfo{static_cast<gsdk::ScriptClassDesc_t *>(userptr1)};
+
 		SQUserPointer userptr2{nullptr};
-		if(SQ_FAILED(sq_getuserpointer(vm, -2, &userptr2))) {
+		if(SQ_FAILED(sq_getinstanceup(vm, -2, &userptr2, classinfo))) {
 			return sq_throwerror(vm, _SC("failed to get userptr"));
 		}
-
-		gsdk::ScriptClassDesc_t *classinfo{static_cast<gsdk::ScriptClassDesc_t *>(userptr1)};
 
 		instance_info_t *instinfo{static_cast<instance_info_t *>(userptr2)};
 
@@ -2479,7 +2498,7 @@ namespace vmod::vm
 
 		SQUserPointer userptr{nullptr};
 		if(SQ_SUCCEEDED(sq_getinstanceup(impl, -1, &userptr, nullptr))) {
-			delete static_cast<instance_info_t *>(userptr);
+			static_cast<instance_info_t *>(userptr)->~instance_info_t();
 		}
 
 		sq_pop(impl, 1);

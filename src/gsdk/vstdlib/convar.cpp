@@ -1,4 +1,5 @@
 #include "convar.hpp"
+#include "../tier0/memalloc.hpp"
 #include <charconv>
 #include <cstring>
 #include <cstdlib>
@@ -272,9 +273,9 @@ namespace gsdk
 		}
 
 		if(m_pszString) {
-			m_pszString = static_cast<char *>(std::realloc(m_pszString, 2));
+			m_pszString = realloc_string(m_pszString, 2);
 		} else {
-			m_pszString = static_cast<char *>(std::malloc(2));
+			m_pszString = reallocatable_string(2);
 		}
 
 		m_pszString[0] = '\0';
@@ -291,9 +292,9 @@ namespace gsdk
 
 		if(!ConCommandBase::IsFlagSet(FCVAR_NEVER_AS_STRING)) {
 			if(m_pszString) {
-				m_pszString = static_cast<char *>(std::realloc(m_pszString, len+1));
+				m_pszString = realloc_string(m_pszString, len+1);
 			} else {
-				m_pszString = static_cast<char *>(std::malloc(len+1));
+				m_pszString = reallocatable_string(len+1);
 			}
 
 			std::strncpy(m_pszString, value, len);
@@ -345,9 +346,9 @@ namespace gsdk
 			constexpr std::size_t len{6 + 6};
 
 			if(m_pszString) {
-				m_pszString = static_cast<char *>(std::realloc(m_pszString, len+1));
+				m_pszString = realloc_string(m_pszString, len+1);
 			} else {
-				m_pszString = static_cast<char *>(std::malloc(len+1));
+				m_pszString = reallocatable_string(len+1);
 			}
 
 			char *begin{m_pszString};
@@ -376,9 +377,9 @@ namespace gsdk
 
 		if(!ConCommandBase::IsFlagSet(FCVAR_NEVER_AS_STRING)) {
 			if(m_pszString) {
-				m_pszString = static_cast<char *>(std::realloc(m_pszString, 2));
+				m_pszString = realloc_string(m_pszString, 2);
 			} else {
-				m_pszString = static_cast<char *>(std::malloc(2));
+				m_pszString = reallocatable_string(2);
 			}
 
 			std::strncpy(m_pszString, value ? "1" : "0", 1);
@@ -405,9 +406,9 @@ namespace gsdk
 			constexpr std::size_t len{6};
 
 			if(m_pszString) {
-				m_pszString = static_cast<char *>(std::realloc(m_pszString, len+1));
+				m_pszString = realloc_string(m_pszString, len+1);
 			} else {
-				m_pszString = static_cast<char *>(std::malloc(len+1));
+				m_pszString = reallocatable_string(len+1);
 			}
 
 			char *begin{m_pszString};
@@ -439,9 +440,9 @@ namespace gsdk
 			constexpr std::size_t len{(3+1) * 4};
 
 			if(m_pszString) {
-				m_pszString = static_cast<char *>(std::realloc(m_pszString, len+1));
+				m_pszString = realloc_string(m_pszString, len+1);
 			} else {
-				m_pszString = static_cast<char *>(std::malloc(len+1));
+				m_pszString = reallocatable_string(len+1);
 			}
 
 			{
@@ -499,7 +500,7 @@ namespace gsdk
 	ConVar::~ConVar()
 	{
 		if(m_pszString) {
-			std::free(m_pszString);
+			free_reallocatable_string(m_pszString);
 		}
 	}
 

@@ -57,6 +57,8 @@ extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdec
 extern "C" __attribute__((__visibility__("default"))) gsdk::SpewOutputFunc_t __attribute__((__cdecl__)) GetSpewOutputFunc();
 
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) SpewActivate(const char *, int);
+
+extern "C" __attribute__((__visibility__("default"))) gsdk::SpewRetval_t __attribute__((__cdecl__)) ColorSpewMessage(gsdk::SpewType_t, const gsdk::Color *, const char *, ...);
 #endif
 
 extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) Error(const char *, ...);

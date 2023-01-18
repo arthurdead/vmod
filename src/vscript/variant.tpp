@@ -89,7 +89,8 @@ namespace vmod::vscript
 				case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
 				case gsdk::FIELD_HSCRIPT:
 				return static_cast<T>(to_float(var.m_object));
-				default: return {};
+				default:
+				return {};
 			}
 		}
 
@@ -176,7 +177,8 @@ namespace vmod::vscript
 				case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
 				case gsdk::FIELD_HSCRIPT:
 				return static_cast<T>(to_int(var.m_object));
-				default: return {};
+				default:
+				return {};
 			}
 		}
 
@@ -566,10 +568,10 @@ namespace vmod::vscript
 	{
 		switch(var.m_type) {
 			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
-			case gsdk::FIELD_HSCRIPT: {
-				return var.m_object;
-			}
-			default: return gsdk::INVALID_HSCRIPT;
+			case gsdk::FIELD_HSCRIPT:
+			return var.m_object;
+			default:
+			return gsdk::INVALID_HSCRIPT;
 		}
 	}
 
@@ -621,15 +623,14 @@ namespace vmod::vscript
 	inline std::filesystem::path to_value_impl<std::filesystem::path>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
-			case gsdk::FIELD_STRING: {
-				return gsdk::vscript::STRING(var.m_tstr);
-			}
+			case gsdk::FIELD_STRING:
+			return gsdk::vscript::STRING(var.m_tstr);
 			case gsdk::FIELD_MODELNAME:
 			case gsdk::FIELD_SOUNDNAME:
-			case gsdk::FIELD_CSTRING: {
-				return var.m_ccstr;
-			}
-			default: return {};
+			case gsdk::FIELD_CSTRING:
+			return var.m_ccstr;
+			default:
+			return {};
 		}
 	}
 
@@ -665,7 +666,9 @@ namespace vmod::vscript
 	inline void *to_value_impl<void *>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
+		#ifndef __VMOD_USING_CUSTOM_VM
 			case gsdk::FIELD_INTEGER:
+		#endif
 		#if __SIZEOF_POINTER__ == __SIZEOF_INT__
 			case gsdk::FIELD_UINT32:
 		#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
@@ -674,7 +677,8 @@ namespace vmod::vscript
 			#error
 		#endif
 			return var.m_ptr;
-			default: return nullptr;
+			default:
+			return nullptr;
 		}
 	}
 
@@ -710,7 +714,9 @@ namespace vmod::vscript
 	inline generic_func_t to_value_impl<generic_func_t>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
+		#ifndef __VMOD_USING_CUSTOM_VM
 			case gsdk::FIELD_INTEGER:
+		#endif
 			case gsdk::FIELD_FUNCTION:
 		#ifndef __clang__
 			#pragma GCC diagnostic push
@@ -720,7 +726,8 @@ namespace vmod::vscript
 		#ifndef __clang__
 			#pragma GCC diagnostic pop
 		#endif
-			default: return nullptr;
+			default:
+			return nullptr;
 		}
 	}
 
@@ -747,7 +754,9 @@ namespace vmod::vscript
 	inline generic_plain_mfp_t to_value_impl<generic_plain_mfp_t>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
+		#ifndef __VMOD_USING_CUSTOM_VM
 			case gsdk::FIELD_INTEGER:
+		#endif
 			case gsdk::FIELD_FUNCTION:
 		#ifndef __clang__
 			#pragma GCC diagnostic push
@@ -757,7 +766,8 @@ namespace vmod::vscript
 		#ifndef __clang__
 			#pragma GCC diagnostic pop
 		#endif
-			default: return nullptr;
+			default:
+			return nullptr;
 		}
 	}
 
@@ -795,7 +805,9 @@ namespace vmod::vscript
 	inline generic_mfp_t to_value_impl<generic_mfp_t>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
+		#ifndef __VMOD_USING_CUSTOM_VM
 			case gsdk::FIELD_INTEGER:
+		#endif
 			case gsdk::FIELD_FUNCTION: {
 			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 				generic_internal_mfp_t internal{var.m_ulonglong};
@@ -806,7 +818,8 @@ namespace vmod::vscript
 				#error
 			#endif
 			}
-			default: return nullptr;
+			default:
+			return nullptr;
 		}
 	}
 
@@ -843,7 +856,9 @@ namespace vmod::vscript
 	inline generic_internal_mfp_t to_value_impl<generic_internal_mfp_t>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
+		#ifndef __VMOD_USING_CUSTOM_VM
 			case gsdk::FIELD_INTEGER:
+		#endif
 			case gsdk::FIELD_FUNCTION: {
 			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 				generic_internal_mfp_t internal{var.m_ulonglong};
@@ -854,7 +869,8 @@ namespace vmod::vscript
 				#error
 			#endif
 			}
-			default: return nullptr;
+			default:
+			return nullptr;
 		}
 	}
 
@@ -891,7 +907,9 @@ namespace vmod::vscript
 	inline generic_internal_mfp_va_t to_value_impl<generic_internal_mfp_va_t>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
+		#ifndef __VMOD_USING_CUSTOM_VM
 			case gsdk::FIELD_INTEGER:
+		#endif
 			case gsdk::FIELD_FUNCTION: {
 			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 				generic_internal_mfp_va_t internal{var.m_ulonglong};
@@ -902,7 +920,8 @@ namespace vmod::vscript
 				#error
 			#endif
 			}
-			default: return nullptr;
+			default:
+			return nullptr;
 		}
 	}
 
@@ -939,7 +958,9 @@ namespace vmod::vscript
 	inline mfp_or_func_t to_value_impl<mfp_or_func_t>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
+		#ifndef __VMOD_USING_CUSTOM_VM
 			case gsdk::FIELD_INTEGER:
+		#endif
 			case gsdk::FIELD_FUNCTION: {
 				mfp_or_func_t internal;
 			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
@@ -951,7 +972,8 @@ namespace vmod::vscript
 			#endif
 				return internal;
 			}
-			default: return nullptr;
+			default:
+			return nullptr;
 		}
 	}
 
@@ -979,7 +1001,9 @@ namespace vmod::vscript
 	inline generic_vtable_t to_value_impl<generic_vtable_t>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
+		#ifndef __VMOD_USING_CUSTOM_VM
 			case gsdk::FIELD_INTEGER:
+		#endif
 		#if __SIZEOF_POINTER__ == __SIZEOF_INT__
 			case gsdk::FIELD_UINT32:
 		#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
@@ -988,7 +1012,8 @@ namespace vmod::vscript
 			#error
 		#endif
 			return static_cast<generic_vtable_t>(var.m_ptr);
-			default: return nullptr;
+			default:
+			return nullptr;
 		}
 	}
 
@@ -1008,10 +1033,13 @@ namespace vmod::vscript
 	inline generic_object_t *to_value_impl<generic_object_t *>(const gsdk::ScriptVariant_t &var) noexcept
 	{
 		switch(var.m_type) {
+		#ifndef __VMOD_USING_CUSTOM_VM
 			case gsdk::FIELD_INTEGER:
+		#endif
 			case gsdk::FIELD_CLASSPTR:
 			return static_cast<generic_object_t *>(var.m_ptr);
-			default: return nullptr;
+			default:
+			return nullptr;
 		}
 	}
 
@@ -1037,11 +1065,15 @@ namespace vmod::vscript
 			case gsdk::FIELD_EDICT:
 			return nullptr;
 			case gsdk::FIELD_INTEGER:
+		#ifdef __VMOD_USING_CUSTOM_VM
+			return nullptr;
+		#endif
 			case gsdk::FIELD_CLASSPTR:
 			return static_cast<gsdk::CBaseEntity *>(var.m_ptr);
 			case gsdk::FIELD_HSCRIPT:
 			return gsdk::CBaseEntity::from_instance(var.m_object);
-			default: return nullptr;
+			default:
+			return nullptr;
 		}
 	}
 
