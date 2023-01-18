@@ -523,7 +523,7 @@ else
 	
 	function Call( ... )
 	{
-		if ( this.chain.len() )
+		if ( this.chain.len() > 0 )
 		{
 			local i;
 			local args = [];

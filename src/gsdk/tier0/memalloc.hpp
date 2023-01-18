@@ -100,7 +100,9 @@ namespace gsdk
 	#pragma GCC diagnostic pop
 }
 
+#ifndef GSDK_NO_ALLOC_OVERRIDE
 extern "C" __attribute__((__visibility__("default"))) gsdk::IMemAlloc *g_pMemAlloc;
+#endif
 
 namespace gsdk
 {

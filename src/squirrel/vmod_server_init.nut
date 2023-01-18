@@ -11,7 +11,7 @@
 
 ::EntFire <- function( target, action, value = null, delay = 0.0, activator = null )
 {
-	if ( !value )
+	if ( value == null )
 	{
 		value = "";
 	}
@@ -171,7 +171,7 @@ revisit, otherwise we'll leave if off and broken.
 					if ( !(eventName in useTable) )
 					{
 						useTable[eventName] <- [];
-						if (regFunc)
+						if (regFunc != null)
 							regFunc( eventName );
 					}
 					// Don't add duplicates. TODO: Perf on this...

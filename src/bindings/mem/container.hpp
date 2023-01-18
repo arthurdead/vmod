@@ -31,7 +31,9 @@ namespace vmod::bindings::mem
 		{
 			normal,
 			entity,
-			game
+		#ifndef GSDK_NO_ALLOC_OVERRIDE
+			game,
+		#endif
 		};
 
 		container(std::size_t size_, type type_) noexcept;

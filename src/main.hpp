@@ -83,6 +83,8 @@ namespace vmod
 
 		static main &instance() noexcept;
 
+		bool dump_scripts() const noexcept;
+
 	private:
 		static void CreateNetworkStringTables_detour_callback(gsdk::IServerGameDLL *dll);
 		static void RemoveAllTables_detour_callback(gsdk::IServerNetworkStringTableContainer *cont);

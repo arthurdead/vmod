@@ -64,29 +64,41 @@ namespace vmod::bindings::mem
 			case type::entity:
 			ptr = static_cast<unsigned char *>(sv_engine->PvAllocEntPrivateData(static_cast<long>(size_)));
 			break;
+		#ifndef GSDK_NO_ALLOC_OVERRIDE
 			case type::game:
 			ptr = static_cast<unsigned char *>(g_pMemAlloc->Alloc(size_));
 			break;
+		#endif
 		}
 	}
 
 	container::container(std::align_val_t align, std::size_t size_, bool game) noexcept
-		: type{game ? type::game : type::normal}, size{size_}, aligned{true}
+		: size{size_}, aligned{true}
 	{
+	#ifndef GSDK_NO_ALLOC_OVERRIDE
 		if(game) {
+			type = type::game;
 			//TODO!!!!
 			ptr = static_cast<unsigned char *>(g_pMemAlloc->Alloc(size_));
-		} else {
+		} else
+	#endif
+		{
+			type = type::normal;
 			ptr = static_cast<unsigned char *>(std::aligned_alloc(static_cast<std::size_t>(align), size_));
 		}
 	}
 
 	container::container(std::size_t num, std::size_t size_, bool game) noexcept
-		: type{game ? type::game : type::normal}, size{num * size_}
+		: size{num * size_}
 	{
+	#ifndef GSDK_NO_ALLOC_OVERRIDE
 		if(game) {
+			type = type::game;
 			ptr = static_cast<unsigned char *>(g_pMemAlloc->CAlloc(num, size_));
-		} else {
+		} else
+	#endif
+		{
+			type = type::normal;
 			ptr = static_cast<unsigned char *>(std::calloc(num, size_));
 		}
 	}
@@ -110,6 +122,7 @@ namespace vmod::bindings::mem
 				case type::entity:
 				sv_engine->FreeEntPrivateData(ptr);
 				break;
+			#ifndef GSDK_NO_ALLOC_OVERRIDE
 				case type::game: {
 					if(aligned) {
 						//TODO!!!!
@@ -117,7 +130,8 @@ namespace vmod::bindings::mem
 					} else {
 						g_pMemAlloc->Free(ptr);
 					}
-				}break;
+				} break;
+			#endif
 			}
 		}
 	}

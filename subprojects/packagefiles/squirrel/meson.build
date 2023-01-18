@@ -17,7 +17,12 @@ project('squirrel', 'cpp',
 )
 
 cpp_args = [
-	'-include__protofix.h'
+	'-include__protofix.h',
+
+	#TODO!!! the l4d2 scripts are really bad
+	'-DSQ_ALLOW_IF_ASSIGNMENT',
+	'-DSQ_ALLOW_LOOP_ASSIGNMENT',
+	'-DSQ_ALLOW_CONFLICTING_LOCALS'
 ]
 
 enable_vartrace = false

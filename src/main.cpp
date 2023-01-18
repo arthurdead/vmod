@@ -111,6 +111,7 @@ namespace vmod
 
 	static const unsigned char *g_Script_vscript_server{nullptr};
 	static const unsigned char *g_Script_spawn_helper{nullptr};
+	static const unsigned char **szAddCode{nullptr};
 
 	static gsdk::IScriptVM **g_pScriptVM_ptr{nullptr};
 	static bool(*VScriptServerInit)() {nullptr};
@@ -144,6 +145,10 @@ namespace vmod
 	static gsdk::ScriptClassDesc_t **sv_classdesc_pHead{nullptr};
 #endif
 	static gsdk::CUtlVector<gsdk::SendTable *> *g_SendTables{nullptr};
+
+#if GSDK_ENGINE != GSDK_ENGINE_TF2
+	static vscript::function_desc register_scripthook_listener_desc;
+#endif
 
 	static vscript::variant game_sq_versionnumber;
 	static vscript::variant game_sq_version;
@@ -279,13 +284,78 @@ namespace vmod
 		(pthis->*DestroyVM_original)(vm);
 	}
 
+	bool main::dump_scripts() const noexcept
+	{
+		return vmod_auto_dump_internal_scripts.get<bool>() || true;
+	}
+
+	static gsdk::HSCRIPT(gsdk::IScriptVM::*CompileScript_original)(const char *, const char *) {nullptr};
+	static gsdk::HSCRIPT CompileScript_detour_callback(gsdk::IScriptVM *pthis, const char *script, const char *name) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		main &main{main::instance()};
+
+		if(main.dump_scripts()) {
+			std::filesystem::path dump_path{main.root_dir()};
+			dump_path /= "dumps/compiled_scripts"sv;
+			if(name && name[0] != '\0') {
+				dump_path /= "named"sv;
+				dump_path /= name;
+			} else {
+				dump_path /= "unnamed"sv;
+
+				std::size_t hash{std::hash<std::string_view>{}(script)};
+
+				std::string tmp;
+				tmp.resize(12);
+
+				char *begin{tmp.data()};
+				char *end{begin + tmp.size()};
+
+				std::to_chars_result tc_res{std::to_chars(begin, end, hash)};
+				tc_res.ptr[0] = '\0';
+
+				dump_path /= begin;
+			}
+
+			write_file(dump_path, reinterpret_cast<const unsigned char *>(script), std::strlen(script));
+		}
+
+		return (pthis->*CompileScript_original)(script, name);
+	}
+
 	static gsdk::ScriptStatus_t(gsdk::IScriptVM::*Run_original)(const char *, bool) {nullptr};
 	static gsdk::ScriptStatus_t Run_detour_callback(gsdk::IScriptVM *pthis, const char *script, bool wait) noexcept
 	{
+		using namespace std::literals::string_view_literals;
+
 		if(in_vscript_server_init) {
 			if(script == reinterpret_cast<const char *>(g_Script_vscript_server)) {
 				return gsdk::SCRIPT_DONE;
 			}
+		}
+
+		main &main{main::instance()};
+
+		if(main.dump_scripts()) {
+			std::filesystem::path dump_path{main.root_dir()};
+			dump_path /= "dumps/compiled_scripts/unnamed"sv;
+
+			std::size_t hash{std::hash<std::string_view>{}(script)};
+
+			std::string tmp;
+			tmp.resize(12);
+
+			char *begin{tmp.data()};
+			char *end{begin + tmp.size()};
+
+			std::to_chars_result tc_res{std::to_chars(begin, end, hash)};
+			tc_res.ptr[0] = '\0';
+
+			dump_path /= begin;
+
+			write_file(dump_path, reinterpret_cast<const unsigned char *>(script), std::strlen(script));
 		}
 
 		return (pthis->*Run_original)(script, wait);
@@ -311,6 +381,11 @@ namespace vmod
 			if(std::strcmp(script, "mapspawn") == 0) {
 				return true;
 			}
+		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+			else if(std::strcmp(script, "response_testbed") == 0) {
+				return true;
+			}
+		#endif
 		}
 
 		return VScriptServerRunScriptForAllAddons_detour(script, scope, warn);
@@ -321,14 +396,19 @@ namespace vmod
 	static bool VScriptServerInit_detour_callback() noexcept
 	{
 		in_vscript_server_init = true;
-		bool ret{vscript_server_init_called ? true : VScriptServerInit_detour()};
 		gsdk::IScriptVM *vm{main::instance().vm()};
 		*g_pScriptVM_ptr = vm;
 		gsdk::g_pScriptVM = vm;
+		bool ret{vscript_server_init_called ? true : VScriptServerInit_detour()};
+		if(!vscript_server_init_called) {
+			*g_pScriptVM_ptr = vm;
+			gsdk::g_pScriptVM = vm;
+		}
 		if(vscript_server_init_called) {
 			VScriptServerRunScript_detour("mapspawn", nullptr, false);
 		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 			VScriptServerRunScriptForAllAddons_detour("mapspawn", nullptr, false);
+			VScriptServerRunScriptForAllAddons_detour("response_testbed", nullptr, false);
 		#endif
 		}
 		in_vscript_server_init = false;
@@ -684,6 +764,13 @@ namespace vmod
 	}
 #endif
 
+#if GSDK_ENGINE != GSDK_ENGINE_TF2
+	static void RegisterScriptHookListener(std::string_view name)
+	{
+		//TODO!!!!!
+	}
+#endif
+
 	bool main::detours_prevm() noexcept
 	{
 		if(RegisterFunction) {
@@ -791,6 +878,7 @@ namespace vmod
 
 		generic_vtable_t vm_vtable{vtable_from_object(vm_)};
 
+		CompileScript_original = swap_vfunc(vm_vtable, &gsdk::IScriptVM::CompileScript, CompileScript_detour_callback);
 		Run_original = swap_vfunc(vm_vtable, static_cast<decltype(Run_original)>(&gsdk::IScriptVM::Run), Run_detour_callback);
 		SetErrorCallback_original = swap_vfunc(vm_vtable, &gsdk::IScriptVM::SetErrorCallback, SetErrorCallback_detour_callback);
 
@@ -1403,6 +1491,23 @@ namespace vmod
 			}
 		#endif
 
+			auto CLogicScript_it{sv_symbols.find("CLogicScript"s)};
+			if(CLogicScript_it == sv_symbols.end()) {
+				warning("vmod: missing 'CLogicScript' symbols\n"sv);
+			} else {
+				auto RunVScripts_it{CLogicScript_it->second->find("RunVScripts()"s)};
+				if(RunVScripts_it == CLogicScript_it->second->end()) {
+					warning("vmod: missing 'CLogicScript::RunVScripts()' symbol\n"sv);
+				} else {
+					auto szAddCode_it{RunVScripts_it->second->find("szAddCode"s)};
+					if(szAddCode_it != RunVScripts_it->second->end()) {
+						szAddCode = szAddCode_it->second->addr<const unsigned char **>();
+					} else {
+						warning("vmod: missing 'CLogicScript::RunVScripts()::szAddCode' symbol\n"sv);
+					}
+				}
+			}
+
 			auto g_Script_spawn_helper_it{sv_global_qual.find("g_Script_spawn_helper"s)};
 			if(g_Script_spawn_helper_it == sv_global_qual.end()) {
 				warning("vmod: missing 'g_Script_spawn_helper' symbol\n");
@@ -1625,6 +1730,12 @@ namespace vmod
 				return false;
 			}
 		}
+	#endif
+
+	#if GSDK_ENGINE != GSDK_ENGINE_TF2
+		register_scripthook_listener_desc.initialize(RegisterScriptHookListener, "RegisterScriptHookListener"sv, "RegisterScriptHookListener"sv);
+
+		vm_->RegisterFunction(&register_scripthook_listener_desc);
 	#endif
 
 		if(!VScriptServerInit_detour_callback()) {
@@ -1963,6 +2074,10 @@ namespace vmod
 			#endif
 				{
 					write_file(dump_dir/"init.nut"sv, g_Script_init, std::strlen(reinterpret_cast<const char *>(g_Script_init)+1));
+				}
+
+				if(szAddCode) {
+					write_file(dump_dir/"szAddCode.nut"sv, *szAddCode, std::strlen(reinterpret_cast<const char *>(*szAddCode)+1));
 				}
 
 				if(g_Script_spawn_helper) {
@@ -2342,6 +2457,11 @@ namespace vmod
 
 			filesystem->AddSearchPath(assets_dir.c_str(), "GAME");
 			filesystem->AddSearchPath(assets_dir.c_str(), "mod");
+
+			std::filesystem::path vscript_override_dir{root_dir_};
+			vscript_override_dir /= "script_overrides"sv;
+
+			filesystem->AddSearchPath(vscript_override_dir.c_str(), "GAME");
 		}
 
 		sv_engine->InsertServerCommand("exec vmod/load.cfg\n");

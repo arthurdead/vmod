@@ -10,3 +10,35 @@ index ae54d39..fed42d9 100644
      {_SC("contains"),string_contains,-2, _SC("s s n")},
      {_SC("tolower"),string_tolower,-1, _SC("s n n")},
      {_SC("toupper"),string_toupper,-1, _SC("s n n")},
+diff --git a/squirrel/sqcompiler.cpp b/squirrel/sqcompiler.cpp
+index 0fa1065..c1353b3 100644
+--- a/squirrel/sqcompiler.cpp
++++ b/squirrel/sqcompiler.cpp
+@@ -598,12 +598,16 @@ public:
+                 if (op == _SC('='))
+                     switch (expression_context)
+                     {
++                    #ifndef SQ_ALLOW_IF_ASSIGNMENT
+                         case SQE_IF:
+                             Error(_SC("'=' inside 'if' is forbidden"));
+                             break;
++                    #endif
++                    #ifndef SQ_ALLOW_LOOP_ASSIGNMENT
+                         case SQE_LOOP_CONDITION:
+                             Error(_SC("'=' inside loop condition is forbidden"));
+                             break;
++                    #endif
+                         case SQE_SWITCH:
+                             Error(_SC("'=' inside switch is forbidden"));
+                             break;
+@@ -1394,8 +1398,10 @@ public:
+     void CheckDuplicateLocalIdentifier(const SQObject &name, const SQChar *desc, bool ignore_global_consts)
+     {
+         bool assignable = false;
++    #ifndef SQ_ALLOW_CONFLICTING_LOCALS
+         if (_fs->GetLocalVariable(name, assignable) >= 0)
+             Error(_SC("%s name '%s' conflicts with existing local variable"), desc, _string(name)->_val);
++    #endif
+         if (_stringval(name) == _stringval(_fs->_name))
+             Error(_SC("%s name '%s' conflicts with function name"), desc, _stringval(name));
+ 

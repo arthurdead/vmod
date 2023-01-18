@@ -59,7 +59,7 @@ namespace vmod::vm
 	char squirrel::print_buff[gsdk::MAXPRINTMSG];
 
 #ifdef __VMOD_USING_QUIRREL
-	std::underlying_type_t<SQLangFeature> squirrel::default_lang_feat{LF_STRICT_BOOL|LF_NO_PLUS_CONCAT|LF_EXPLICIT_ROOT_LOOKUP};
+	std::underlying_type_t<SQLangFeature> squirrel::default_lang_feat{LF_STRICT_BOOL};
 #endif
 
 	char squirrel::instance_str_buff[gsdk::MAXPRINTMSG];
@@ -197,7 +197,20 @@ namespace vmod::vm
 
 	static SQInteger is_weak_ref(HSQUIRRELVM vm)
 	{
-		return sq_throwerror(vm, _SC("not implemented yet"));
+		SQInteger top{sq_gettop(vm)};
+		if(top != 3) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		if(SQ_FAILED(sq_get(vm, -2))) {
+			sq_pushbool(vm, SQFalse);
+		} else {
+			bool weakref{sq_gettype(vm, -1) == OT_WEAKREF};
+			sq_pop(vm, 1);
+			sq_pushbool(vm, weakref);
+		}
+
+		return 1;
 	}
 
 	static SQInteger dump_object(HSQUIRRELVM vm, SQInteger idx, std::size_t depth, SQPRINTFUNCTION func) noexcept
@@ -911,7 +924,8 @@ namespace vmod::vm
 	static inline auto sq_compilebuffer_strict(HSQUIRRELVM vm, Args &&...args) noexcept -> decltype(sq_compilebuffer(vm, std::forward<Args>(args)...))
 	{
 	#ifdef __VMOD_USING_QUIRREL
-		_ss(vm)->defaultLangFeatures = (LF_STRICT_BOOL|LF_EXPLICIT_ROOT_LOOKUP|LF_NO_FUNC_DECL_SUGAR|LF_NO_CLASS_DECL_SUGAR|LF_NO_PLUS_CONCAT|LF_EXPLICIT_THIS);
+		//TODO!!!! fix errors with LF_NO_PLUS_CONCAT
+		_ss(vm)->defaultLangFeatures = (LF_STRICT_BOOL|LF_EXPLICIT_ROOT_LOOKUP|LF_NO_FUNC_DECL_SUGAR|LF_NO_CLASS_DECL_SUGAR|/*LF_NO_PLUS_CONCAT|*/LF_EXPLICIT_THIS);
 	#endif
 		auto &&ret{sq_compilebuffer(vm, std::forward<Args>(args)...)};
 	#ifdef __VMOD_USING_QUIRREL
@@ -1670,6 +1684,27 @@ namespace vmod::vm
 
 	void squirrel::ReleaseScope(gsdk::HSCRIPT obj)
 	{
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		//TODO!!!! CDirector::TermScripts is calling this on a table instead of a scope investigate why
+
+		sq_pushobject(impl, *obj);
+		sq_pushstring(impl, _SC("__vrefs"), 7);
+
+		bool got{SQ_SUCCEEDED(sq_get(impl, -2))};
+		if(got) {
+			sq_pop(impl, 1);
+		}
+
+		sq_pop(impl, 1);
+
+		if(!got) {
+			sq_release(impl, obj);
+			delete obj;
+			return;
+		}
+	#endif
+
+
 		sq_pushobject(impl, release_scope_func);
 
 		sq_pushroottable(impl);
@@ -1716,6 +1751,11 @@ namespace vmod::vm
 
 	void squirrel::ReleaseFunction(gsdk::HSCRIPT obj)
 	{
+		//TODO!!! CDirector::PostRunScript gives invalid function find out why
+		if(obj == gsdk::INVALID_HSCRIPT) {
+			return;
+		}
+
 		sq_release(impl, obj);
 		delete obj;
 	}
@@ -2014,6 +2054,11 @@ namespace vmod::vm
 
 	gsdk::ScriptStatus_t squirrel::ExecuteFunction_impl(gsdk::HSCRIPT obj, const gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret_var, gsdk::HSCRIPT scope, bool wait)
 	{
+		//TODO!!! CDirector::PostRunScript gives invalid function find out why
+		if(obj == gsdk::INVALID_HSCRIPT) {
+			return gsdk::SCRIPT_ERROR;
+		}
+
 		sq_pushobject(impl, *obj);
 
 		if(scope) {
@@ -2029,7 +2074,7 @@ namespace vmod::vm
 
 		bool failed{false};
 
-		if(SQ_FAILED(sq_call(impl, 1+num_args, ret_var ? SQTrue : SQFalse, SQTrue))) {
+		if(SQ_FAILED(sq_call(impl, static_cast<SQInteger>(1+num_args_siz), ret_var ? SQTrue : SQFalse, SQTrue))) {
 			failed = true;
 		} else if(ret_var) {
 			HSQOBJECT ret_obj;
@@ -2083,9 +2128,7 @@ namespace vmod::vm
 			args.resize(num_params_siz);
 
 			for(std::size_t i{0}; i < num_params_siz; ++i) {
-				SQInteger idx{static_cast<SQInteger>((-(num_params-3)) + static_cast<ssize_t>(i))};
-
-				if(!actual_vm->get(idx, args[i])) {
+				if(!actual_vm->get(static_cast<SQInteger>(2+i), args[i])) {
 					return sq_throwerror(vm, _SC("failed to get arg"));
 				}
 			}
@@ -2117,7 +2160,7 @@ namespace vmod::vm
 		gsdk::ScriptFunctionBinding_t *funcinfo{static_cast<gsdk::ScriptFunctionBinding_t *>(userptr2)};
 
 		SQUserPointer userptr3{nullptr};
-		if(SQ_FAILED(sq_getinstanceup(vm, -3, &userptr3, classinfo))) {
+		if(SQ_FAILED(sq_getinstanceup(vm, 1, &userptr3, classinfo))) {
 			return sq_throwerror(vm, _SC("failed to get userptr"));
 		}
 
@@ -2141,9 +2184,7 @@ namespace vmod::vm
 			args.resize(num_params_siz);
 
 			for(std::size_t i{0}; i < num_params_siz; ++i) {
-				SQInteger idx{static_cast<SQInteger>((-(num_params-4)) + static_cast<ssize_t>(i))};
-
-				if(!actual_vm->get(idx, args[i])) {
+				if(!actual_vm->get(static_cast<SQInteger>(2+i), args[i])) {
 					return sq_throwerror(vm, _SC("failed to get arg"));
 				}
 			}
@@ -2743,6 +2784,11 @@ namespace vmod::vm
 
 	void *squirrel::GetInstanceValue_impl(gsdk::HSCRIPT obj, gsdk::ScriptClassDesc_t *classinfo)
 	{
+		//TODO!!! investigate DoEntFire
+		if(obj == gsdk::INVALID_HSCRIPT) {
+			return nullptr;
+		}
+
 		sq_pushobject(impl, *obj);
 
 		if(classinfo) {
