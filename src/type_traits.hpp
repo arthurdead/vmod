@@ -197,4 +197,72 @@ namespace vmod
 
 	template <typename T>
 	constexpr bool class_is_singleton_v{detail::class_is_singleton<T>};
+
+	namespace detail
+	{
+		template <typename T, typename U>
+		concept is_addable =
+			requires () { std::declval<T>() += std::declval<U>(); }
+		;
+	}
+
+	struct is_addable
+	{
+		template <typename T, typename U>
+		static constexpr bool value{detail::is_addable<T, U>};
+	};
+
+	template <typename T, typename U>
+	constexpr bool is_addable_v{detail::is_addable<T, U>};
+
+	namespace detail
+	{
+		template <typename T, typename U>
+		concept is_subtractable =
+			requires () { std::declval<T>() -= std::declval<U>(); }
+		;
+	}
+
+	struct is_subtractable
+	{
+		template <typename T, typename U>
+		static constexpr bool value{detail::is_subtractable<T, U>};
+	};
+
+	template <typename T, typename U>
+	constexpr bool is_subtractable_v{detail::is_subtractable<T, U>};
+
+	namespace detail
+	{
+		template <typename T, typename U>
+		concept is_multiplicable =
+			requires () { std::declval<T>() *= std::declval<U>(); }
+		;
+	}
+
+	struct is_multiplicable
+	{
+		template <typename T, typename U>
+		static constexpr bool value{detail::is_multiplicable<T, U>};
+	};
+
+	template <typename T, typename U>
+	constexpr bool is_multiplicable_v{detail::is_multiplicable<T, U>};
+
+	namespace detail
+	{
+		template <typename T, typename U>
+		concept is_divisible =
+			requires () { std::declval<T>() /= std::declval<U>(); }
+		;
+	}
+
+	struct is_divisible
+	{
+		template <typename T, typename U>
+		static constexpr bool value{detail::is_divisible<T, U>};
+	};
+
+	template <typename T, typename U>
+	constexpr bool is_divisible_v{detail::is_divisible<T, U>};
 }
