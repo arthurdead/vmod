@@ -200,9 +200,243 @@ namespace vmod::vm
 		return sq_throwerror(vm, _SC("not implemented yet"));
 	}
 
+	static SQInteger dump_object(HSQUIRRELVM vm, SQInteger idx, std::size_t depth, SQPRINTFUNCTION func) noexcept
+	{
+		auto ident{
+			[vm,func](std::size_t depth_) noexcept {
+				if(depth_ > 0) {
+					func(vm, "%*s", (depth_ * 2), " ");
+				}
+			}
+		};
+
+		auto dump_closure{
+			[vm,idx,func,ident,depth](bool native) noexcept -> void {
+				ident(depth);
+
+				SQInteger params{0};
+				SQInteger freevars{0};
+				if(SQ_FAILED(sq_getclosureinfo(vm, idx, &params, &freevars))) {
+					params = -1;
+				}
+
+				const SQChar *name{nullptr};
+				SQInteger len{0};
+				if(SQ_SUCCEEDED(sq_getclosurename(vm, idx))) {
+					(void)sq_getstringandsize(vm, -1, &name, &len);
+					sq_pop(vm, 1);
+				}
+
+				if(!name) {
+					name = "<<unnamed>>";
+				}
+
+				if(native) {
+					func(vm, "<<native closure: %s: %i>>", name, params);
+				} else {
+					func(vm, "<<closure: %s: %i>>", name, params);
+				}
+			}
+		};
+
+		switch(sq_gettype(vm, idx)) {
+			case OT_NULL: {
+				ident(depth);
+
+				func(vm, "null");
+			} break;
+			case OT_INTEGER: {
+				ident(depth);
+
+				SQInteger i{0};
+				if(SQ_SUCCEEDED(sq_getinteger(vm, idx, &i))) {
+					func(vm, "%i", i);
+				} else {
+					func(vm, "<<failed to get integer>>");
+				}
+			} break;
+			case OT_FLOAT: {
+				ident(depth);
+
+				SQFloat f{0.0f};
+				if(SQ_SUCCEEDED(sq_getfloat(vm, idx, &f))) {
+					func(vm, "%f", static_cast<double>(f));
+				} else {
+					func(vm, "<<failed to get float>>");
+				}
+			} break;
+			case OT_BOOL: {
+				ident(depth);
+
+				SQBool b{SQFalse};
+				if(SQ_SUCCEEDED(sq_getbool(vm, idx, &b))) {
+					func(vm, "%hu", b);
+				} else {
+					func(vm, "<<failed to get bool>>");
+				}
+			} break;
+			case OT_STRING: {
+				ident(depth);
+
+				const SQChar *s{nullptr};
+				SQInteger len{0};
+				if(SQ_SUCCEEDED(sq_getstringandsize(vm, idx, &s, &len))) {
+					func(vm, "%.*s", len, s);
+				} else {
+					func(vm, "<<failed to get bool>>");
+				}
+			} break;
+			case OT_TABLE: {
+				func(vm, "\n");
+				ident(depth);
+				func(vm, "{\n");
+
+				sq_pushnull(vm);
+
+				while(SQ_SUCCEEDED(sq_next(vm, -2))) {
+					(void)dump_object(vm, -2, depth+1, func);
+
+					func(vm, " = ");
+
+					std::size_t value_depth{0};
+
+					switch(sq_gettype(vm, -1)) {
+						case OT_TABLE:
+						case OT_ARRAY:
+						value_depth = depth+1;
+						break;
+						default:
+						break;
+					}
+
+					(void)dump_object(vm, -1, value_depth, func);
+					func(vm, "\n");
+
+					sq_pop(vm, 2);
+				}
+
+				sq_pop(vm, 1);
+
+				ident(depth);
+				func(vm, "}");
+			} break;
+			case OT_ARRAY: {
+				func(vm, "\n");
+				ident(depth);
+				func(vm, "[\n");
+
+				std::size_t size{static_cast<std::size_t>(sq_getsize(vm, idx))};
+				for(std::size_t i{0}; i < size; ++i) {
+					sq_pushinteger(vm, static_cast<SQInteger>(i));
+
+					if(SQ_SUCCEEDED(sq_get(vm, -2))) {
+						(void)dump_object(vm, -1, depth+1, func);
+						func(vm, "\n");
+
+						sq_pop(vm, 1);
+					} else {
+						ident(depth+1);
+						func(vm, "<<failed to get>>\n");
+					}
+				}
+
+				ident(depth);
+				func(vm, "]");
+			} break;
+			case OT_USERDATA: {
+				ident(depth);
+
+				SQUserPointer userptr{nullptr};
+				SQUserPointer typetag{nullptr};
+				if(SQ_SUCCEEDED(sq_getuserdata(vm, idx, &userptr, &typetag))) {
+					func(vm, "<<userdata: %p: %p>>", typetag, userptr);
+				} else {
+					func(vm, "<<userdata>>");
+				}
+			} break;
+			case OT_NATIVECLOSURE: {
+				dump_closure(true);
+			} break;
+			case OT_CLOSURE: {
+				dump_closure(false);
+			} break;
+			case OT_GENERATOR: {
+				ident(depth);
+
+				func(vm, "<<generator>>");
+			} break;
+			case OT_USERPOINTER: {
+				ident(depth);
+
+				SQUserPointer userptr{nullptr};
+				if(SQ_SUCCEEDED(sq_getuserpointer(vm, idx, &userptr))) {
+					func(vm, "<<userptr: %p>>", userptr);
+				} else {
+					func(vm, "<<userptr>>");
+				}
+			} break;
+			case OT_THREAD: {
+				ident(depth);
+
+				func(vm, "<<thread>>");
+			} break;
+			case OT_FUNCPROTO: {
+				ident(depth);
+
+				func(vm, "<<funcproto>>");
+			} break;
+			case OT_CLASS: {
+				ident(depth);
+
+				SQUserPointer typetag{nullptr};
+				if(SQ_SUCCEEDED(sq_gettypetag(vm, idx, &typetag))) {
+					func(vm, "<<class: %p>>", typetag);
+				} else {
+					func(vm, "<<class>>");
+				}
+			} break;
+			case OT_INSTANCE: {
+				ident(depth);
+
+				func(vm, "<<instance>>");
+			} break;
+			case OT_WEAKREF: {
+				if(SQ_SUCCEEDED(sq_getweakrefval(vm, idx))) {
+					(void)dump_object(vm, -1, depth, func);
+
+					sq_pop(vm, 1);
+				} else {
+					ident(depth);
+					func(vm, "<<weakref>>");
+				}
+			} break;
+			case OT_OUTER: {
+				ident(depth);
+
+				func(vm, "<<outer>>");
+			} break;
+		#ifndef __clang__
+			default: break;
+		#endif
+		}
+
+		return 0;
+	}
+
 	static SQInteger dump_object(HSQUIRRELVM vm)
 	{
-		return sq_throwerror(vm, _SC("not implemented yet"));
+		SQInteger top{sq_gettop(vm)};
+		if(top != 2) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQPRINTFUNCTION func{sq_getprintfunc(vm)};
+
+		(void)dump_object(vm, -1, 0, func);
+
+		func(vm, "\n");
+
+		return SQ_OK;
 	}
 
 	struct native_closure_info
