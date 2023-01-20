@@ -32,7 +32,7 @@ config_args = [
 
 tpp_lib = static_library('tpp',
 	files(
-		join_paths('src','tpp.c')
+		'src/tpp.c'
 	),
 	gnu_symbol_visibility: 'inlineshidden',
 	include_directories:

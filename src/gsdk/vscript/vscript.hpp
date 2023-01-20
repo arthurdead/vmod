@@ -65,7 +65,6 @@ SQUIRREL_API SQInteger sq_getversion();
 #pragma GCC diagnostic ignored "-Weffc++"
 #pragma GCC diagnostic ignored "-Wuseless-cast"
 #pragma GCC diagnostic ignored "-Wswitch-enum"
-#pragma GCC diagnostic ignored "-Wreorder-ctor"
 #endif
 #include <sqstate.h>
 #include <squtils.h>
@@ -156,6 +155,8 @@ namespace gsdk
 		}
 
 		void free() noexcept;
+
+		HSCRIPT release_object() noexcept;
 
 		inline ~CVariantBase() noexcept
 		{ free(); }
@@ -530,20 +531,9 @@ namespace gsdk
 	public:
 		template <typename T>
 		inline T *GetInstanceValue(HSCRIPT instance, ScriptClassDesc_t *desc) noexcept
-		{ return reinterpret_cast<T *>(GetInstanceValue_impl(instance, desc)); }
+		{ return static_cast<T *>(GetInstanceValue_impl(instance, desc)); }
 		template <typename T>
-		inline T *GetInstanceValue(HSCRIPT instance) noexcept
-		{
-			using desc_t = decltype(T::desc);
-
-			static_assert(std::is_base_of_v<ScriptClassDesc_t, desc_t>);
-
-			if constexpr(std::is_pointer_v<desc_t>) {
-				return static_cast<T *>(GetInstanceValue_impl(instance, T::desc));
-			} else {
-				return static_cast<T *>(GetInstanceValue_impl(instance, &T::desc));
-			}
-		}
+		T *GetInstanceValue(HSCRIPT instance) noexcept;
 		virtual bool GenerateUniqueKey(const char *, char *, int) = 0;
 		template <std::size_t S>
 		bool GenerateUniqueKey(const char *root, char (&buffer)[S]) noexcept
@@ -587,7 +577,7 @@ namespace gsdk
 	#endif
 	public:
 		bool GetValue(HSCRIPT scope, const char *name, ScriptVariant_t *var) noexcept;
-		bool GetValue(HSCRIPT scope, const char *name, HSCRIPT *object) noexcept;
+		bool GetValue(HSCRIPT scope, const char *name, HSCRIPT *object) noexcept = delete;
 		virtual void ReleaseValue(ScriptVariant_t &) = 0;
 		void ReleaseValue(HSCRIPT object) noexcept;
 		void ReleaseObject(HSCRIPT object) noexcept;

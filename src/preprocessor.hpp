@@ -21,6 +21,9 @@ namespace vmod
 		bool initialize() noexcept;
 		void shutdown() noexcept;
 
+		static void warn_func(const char *fmt, va_list args) __attribute__((__format__(__printf__, 2, 0)));
+		static void msg_func(const char *fmt, va_list args) __attribute__((__format__(__printf__, 2, 0)));
+
 		static squirrel_preprocessor *current;
 
 		ConVar vmod_preproc_dump;

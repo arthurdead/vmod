@@ -213,7 +213,7 @@ namespace vmod::vm
 		return 1;
 	}
 
-	static SQInteger dump_object(HSQUIRRELVM vm, SQInteger idx, std::size_t depth, SQPRINTFUNCTION func) noexcept
+	static void dump_object(HSQUIRRELVM vm, SQInteger idx, std::size_t depth, SQPRINTFUNCTION func) noexcept
 	{
 		auto ident{
 			[vm,func](std::size_t depth_) noexcept {
@@ -307,7 +307,7 @@ namespace vmod::vm
 				sq_pushnull(vm);
 
 				while(SQ_SUCCEEDED(sq_next(vm, -2))) {
-					(void)dump_object(vm, -2, depth+1, func);
+					dump_object(vm, -2, depth+1, func);
 
 					func(vm, " = ");
 
@@ -322,7 +322,7 @@ namespace vmod::vm
 						break;
 					}
 
-					(void)dump_object(vm, -1, value_depth, func);
+					dump_object(vm, -1, value_depth, func);
 					func(vm, "\n");
 
 					sq_pop(vm, 2);
@@ -343,7 +343,7 @@ namespace vmod::vm
 					sq_pushinteger(vm, static_cast<SQInteger>(i));
 
 					if(SQ_SUCCEEDED(sq_get(vm, -2))) {
-						(void)dump_object(vm, -1, depth+1, func);
+						dump_object(vm, -1, depth+1, func);
 						func(vm, "\n");
 
 						sq_pop(vm, 1);
@@ -415,7 +415,7 @@ namespace vmod::vm
 			} break;
 			case OT_WEAKREF: {
 				if(SQ_SUCCEEDED(sq_getweakrefval(vm, idx))) {
-					(void)dump_object(vm, -1, depth, func);
+					dump_object(vm, -1, depth, func);
 
 					sq_pop(vm, 1);
 				} else {
@@ -432,8 +432,6 @@ namespace vmod::vm
 			default: break;
 		#endif
 		}
-
-		return 0;
 	}
 
 	static SQInteger dump_object(HSQUIRRELVM vm)
@@ -445,11 +443,11 @@ namespace vmod::vm
 
 		SQPRINTFUNCTION func{sq_getprintfunc(vm)};
 
-		(void)dump_object(vm, -1, 0, func);
+		dump_object(vm, -1, 0, func);
 
 		func(vm, "\n");
 
-		return SQ_OK;
+		return 0;
 	}
 
 	struct native_closure_info
@@ -990,7 +988,14 @@ namespace vmod::vm
 
 		sq_setforeignptr(impl, this);
 
+	#ifndef __clang__
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wsuggest-attribute=format"
+	#endif
 		sq_setprintfunc(impl, print_func, error_func);
+	#ifndef __clang__
+		#pragma GCC diagnostic pop
+	#endif
 
 	#ifndef __VMOD_VM_FORCE_DEBUG
 		debug_vm = (vmod::developer->GetInt() > 0);
@@ -2256,7 +2261,9 @@ namespace vmod::vm
 			return SQ_ERROR;
 		}
 
-		static_cast<instance_info_t *>(userptr)->~instance_info_t();
+		instance_info_t *info{static_cast<instance_info_t *>(userptr)};
+
+		info->~instance_info_t();
 
 		return 0;
 	}
@@ -2724,7 +2731,9 @@ namespace vmod::vm
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		new (userptr) instance_info_t{info, ptr};
+		instance_info_t *instinfo{static_cast<instance_info_t *>(userptr)};
+
+		new (instinfo) instance_info_t{info, ptr};
 
 		if(info->m_pfnDestruct) {
 			sq_setreleasehook(impl, -1, instance_release_external);
@@ -2837,9 +2846,16 @@ namespace vmod::vm
 			return false;
 		}
 
-		if(std::snprintf(buff, len_siz, "%zu_%s", unique_ids, root) < 0) {
+	#ifndef __clang__
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wformat-truncation="
+	#endif
+		if(std::snprintf(buff, len_siz, "%s_%zu", root, unique_ids) < 0) {
 			return false;
 		}
+	#ifndef __clang__
+		#pragma GCC diagnostic pop
+	#endif
 
 		++unique_ids;
 		return true;
@@ -3184,19 +3200,33 @@ namespace vmod::vm
 		debugtrap();
 	}
 
-	void squirrel::CollectGarbage(const char *, bool)
+	void squirrel::CollectGarbage(const char *name, bool unk)
 	{
+		if(name) {
+			//TODO!!! FindCircularReferences
+		}
+
 		sq_collectgarbage(impl);
 	}
 
 	void squirrel::RemoveOrphanInstances()
 	{
 		sq_collectgarbage(impl);
+
+		//TODO!!! check ptr value of all instance_info_t
 	}
 
 	void squirrel::DumpState()
 	{
-		
+		sq_pushroottable(impl);
+
+		SQPRINTFUNCTION func{sq_getprintfunc(impl)};
+
+		dump_object(impl, -1, 0, func);
+
+		func(impl, "\n");
+
+		sq_pop(impl, 1);
 	}
 
 	void squirrel::SetOutputCallback(gsdk::ScriptOutputFunc_t func)

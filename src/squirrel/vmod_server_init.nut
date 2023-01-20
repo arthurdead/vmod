@@ -49,7 +49,7 @@
 			scope[key] <- val;
 		}
 	}
-}
+};
 
 /*
 UNDONE FOR PORTAL2 BRANCH:

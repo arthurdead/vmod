@@ -69,6 +69,9 @@ namespace vmod::bindings::mem
 			ptr = static_cast<unsigned char *>(g_pMemAlloc->Alloc(size_));
 			break;
 		#endif
+		#ifndef __clang__
+			default: break;
+		#endif
 		}
 	}
 
@@ -131,6 +134,9 @@ namespace vmod::bindings::mem
 						g_pMemAlloc->Free(ptr);
 					}
 				} break;
+			#endif
+			#ifndef __clang__
+				default: break;
 			#endif
 			}
 		}

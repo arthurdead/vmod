@@ -13,7 +13,7 @@ namespace gsdk
 				delete[] const_cast<char *>(fieldName);
 				fieldName = nullptr;
 			}
-			flags &= ~FTYPEDESC_FREE_NAME;
+			flags &= ~static_cast<short>(FTYPEDESC_FREE_NAME);
 		}
 
 		if(flags & FTYPEDESC_FREE_EXTERNALNAME) {
@@ -21,7 +21,7 @@ namespace gsdk
 				delete[] const_cast<char *>(externalName);
 				externalName = nullptr;
 			}
-			flags &= ~FTYPEDESC_FREE_EXTERNALNAME;
+			flags &= ~static_cast<short>(FTYPEDESC_FREE_EXTERNALNAME);
 		}
 
 		if(flags & FTYPEDESC_FREE_DATAMAP) {
@@ -29,7 +29,7 @@ namespace gsdk
 				delete td;
 				td = nullptr;
 			}
-			flags &= ~FTYPEDESC_FREE_DATAMAP;
+			flags &= ~static_cast<short>(FTYPEDESC_FREE_DATAMAP);
 		}
 	}
 
@@ -298,11 +298,11 @@ namespace gsdk
 					delete[] const_cast<char *>(dataClassName);
 					dataClassName = nullptr;
 				}
-				*flags &= ~FTYPEDESC_FREE_NAME;
+				*flags &= ~static_cast<short>(FTYPEDESC_FREE_NAME);
 			}
 
 			if(*flags & FTYPEDESC_FREE_DATAMAP) {
-				*flags &= ~FTYPEDESC_FREE_DATAMAP;
+				*flags &= ~static_cast<short>(FTYPEDESC_FREE_DATAMAP);
 				if(dataDesc) {
 					delete[] dataDesc;
 					dataDesc = nullptr;

@@ -134,13 +134,13 @@ namespace vmod
 #endif
 #ifndef __VMOD_USING_CUSTOM_VM
 	static void(gsdk::IScriptVM::*RegisterFunctionGuts)(gsdk::ScriptFunctionBinding_t *, gsdk::ScriptClassDesc_t *) {nullptr};
+	static SQRESULT(*sq_setparamscheck)(HSQUIRRELVM, SQInteger, const SQChar *) {nullptr};
 #endif
 	static void(gsdk::IScriptVM::*RegisterFunction)(gsdk::ScriptFunctionBinding_t *) {nullptr};
 	static bool(gsdk::IScriptVM::*RegisterClass)(gsdk::ScriptClassDesc_t *) {nullptr};
 	static gsdk::HSCRIPT(gsdk::IScriptVM::*RegisterInstance)(gsdk::ScriptClassDesc_t *, void *) {nullptr};
 	static bool(gsdk::IScriptVM::*SetValue_var)(gsdk::HSCRIPT, const char *, const gsdk::ScriptVariant_t &) {nullptr};
 	static bool(gsdk::IScriptVM::*SetValue_str)(gsdk::HSCRIPT, const char *, const char *) {nullptr};
-	static SQRESULT(*sq_setparamscheck)(HSQUIRRELVM, SQInteger, const SQChar *) {nullptr};
 #if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
 	static gsdk::ScriptClassDesc_t **sv_classdesc_pHead{nullptr};
 #endif
@@ -186,6 +186,9 @@ namespace vmod
 				case gsdk::SCRIPT_LEVEL_WARNING: {
 					warning("%s"sv, txt);
 				} break;
+			#ifndef __clang__
+				default: break;
+			#endif
 			}
 			ret = false;
 		}
@@ -472,9 +475,9 @@ namespace vmod
 		va_end(varg_list);
 	}
 
+#ifndef __VMOD_USING_CUSTOM_VM
 	static gsdk::ScriptFunctionBinding_t *current_binding{nullptr};
 
-#ifndef __VMOD_USING_CUSTOM_VM
 	static detour<decltype(RegisterFunctionGuts)> RegisterFunctionGuts_detour;
 	static void RegisterFunctionGuts_detour_callback(gsdk::IScriptVM *vm, gsdk::ScriptFunctionBinding_t *binding, gsdk::ScriptClassDesc_t *classdesc)
 	{
@@ -498,7 +501,6 @@ namespace vmod
 			}
 		}
 	}
-#endif
 
 	static detour<decltype(sq_setparamscheck)> sq_setparamscheck_detour;
 	static SQRESULT sq_setparamscheck_detour_callback(HSQUIRRELVM v, SQInteger nparamscheck, const SQChar *typemask)
@@ -518,6 +520,7 @@ namespace vmod
 
 		return sq_setparamscheck_detour(v, nparamscheck, temp_typemask.c_str());
 	}
+#endif
 
 	static void (gsdk::IServerGameDLL::*CreateNetworkStringTables_original)() {nullptr};
 	void main::CreateNetworkStringTables_detour_callback(gsdk::IServerGameDLL *dll)
@@ -765,7 +768,7 @@ namespace vmod
 #endif
 
 #if GSDK_ENGINE != GSDK_ENGINE_TF2
-	static void RegisterScriptHookListener(std::string_view name)
+	static void RegisterScriptHookListener(std::string_view name) noexcept
 	{
 		//TODO!!!!!
 	}
@@ -824,20 +827,34 @@ namespace vmod
 			RegisterFunctionGuts_detour.initialize(RegisterFunctionGuts, RegisterFunctionGuts_detour_callback);
 			RegisterFunctionGuts_detour.enable();
 		}
-	#endif
 
 		if(sq_setparamscheck) {
 			sq_setparamscheck_detour.initialize(sq_setparamscheck, sq_setparamscheck_detour_callback);
 			sq_setparamscheck_detour.enable();
 		}
+	#endif
 
 		if(PrintFunc) {
+		#ifndef __clang__
+			#pragma GCC diagnostic push
+			#pragma GCC diagnostic ignored "-Wsuggest-attribute=format"
+		#endif
 			PrintFunc_detour.initialize(PrintFunc, PrintFunc_detour_callback);
+		#ifndef __clang__
+			#pragma GCC diagnostic pop
+		#endif
 			PrintFunc_detour.enable();
 		}
 
 		if(ErrorFunc) {
+		#ifndef __clang__
+			#pragma GCC diagnostic push
+			#pragma GCC diagnostic ignored "-Wsuggest-attribute=format"
+		#endif
 			ErrorFunc_detour.initialize(ErrorFunc, ErrorFunc_detour_callback);
+		#ifndef __clang__
+			#pragma GCC diagnostic pop
+		#endif
 			ErrorFunc_detour.enable();
 		}
 
@@ -940,7 +957,14 @@ namespace vmod
 
 		{
 			Dl_info info;
+		#ifndef __clang__
+			#pragma GCC diagnostic push
+			#pragma GCC diagnostic ignored "-Wconditionally-supported"
+		#endif
 			dladdr(reinterpret_cast<void *>(::CreateInterface), &info);
+		#ifndef __clang__
+			#pragma GCC diagnostic pop
+		#endif
 
 			std::filesystem::path lib_path{info.dli_fname};
 
@@ -1297,8 +1321,6 @@ namespace vmod
 			#ifndef __VMOD_USING_QUIRREL
 			game_sq_ver = ::sq_getversion();
 			#endif
-
-			sq_setparamscheck = ::sq_setparamscheck;
 		#endif
 
 		#ifndef __VMOD_SQUIRREL_NEED_INIT_SCRIPT
@@ -2012,17 +2034,17 @@ namespace vmod
 				bindings::docs::write(game_docs, game_vscript_func_bindings, false);
 				bindings::docs::write(game_docs, game_vscript_values);
 
-				gsdk::HSCRIPT const_table;
+				gsdk::ScriptVariant_t const_table;
 				if(vm_->GetValue(nullptr, "Constants", &const_table)) {
 					std::string file;
 
 					bindings::docs::gen_date(file);
 
-					int num{vm_->GetNumTableEntries(const_table)};
+					int num{vm_->GetNumTableEntries(const_table.m_object)};
 					for(int i{0}, it{0}; it != -1 && i < num; ++i) {
 						vscript::variant key;
 						vscript::variant value;
-						it = vm_->GetKeyValue(const_table, it, &key, &value);
+						it = vm_->GetKeyValue(const_table.m_object, it, &key, &value);
 
 						std::string_view enum_name{key.get<std::string_view>()};
 
@@ -2150,7 +2172,7 @@ namespace vmod
 								}
 
 								std::function<void(gsdk::typedescription_t &, std::string_view, std::size_t)> write_prop{
-									[&file,&write_table](gsdk::typedescription_t &targetprop, std::string_view name, std::size_t funcdepth) noexcept -> void {
+									[&file,&write_table](gsdk::typedescription_t &targetprop, std::string_view propname, std::size_t funcdepth) noexcept -> void {
 										if(targetprop.td) {
 											write_table(*targetprop.td, targetprop.td->dataClassName ? targetprop.td->dataClassName : "<<unknown>>"sv, funcdepth);
 										}
@@ -2199,7 +2221,7 @@ namespace vmod
 										}
 
 										file += ' ';
-										file += name;
+										file += propname;
 
 										if(targetprop.fieldSize > 1) {
 											file += '[';
@@ -2670,7 +2692,7 @@ namespace vmod
 			internal_vscript_func_bindings.emplace_back(&func);
 		}
 
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2 || __VMOD_USING_CUSTOM_VM
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2 || defined __VMOD_USING_CUSTOM_VM
 		{
 			gsdk::ScriptFunctionBinding_t &func{isweakref_desc};
 
@@ -2700,7 +2722,7 @@ namespace vmod
 			internal_vscript_func_bindings.emplace_back(&func);
 		}
 
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2 || __VMOD_USING_CUSTOM_VM
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2 || defined __VMOD_USING_CUSTOM_VM
 		{
 			gsdk::ScriptFunctionBinding_t &func{dumpobject_desc};
 

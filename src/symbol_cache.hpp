@@ -78,7 +78,16 @@ namespace vmod
 			#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 				template <typename T>
 				inline T addr() const noexcept
-				{ return reinterpret_cast<T>(const_cast<unsigned char *>(addr_)); }
+				{
+				#ifndef __clang__
+					#pragma GCC diagnostic push
+					#pragma GCC diagnostic ignored "-Wcast-align"
+				#endif
+					return reinterpret_cast<T>(const_cast<unsigned char *>(addr_));
+				#ifndef __clang__
+					#pragma GCC diagnostic pop
+				#endif
+				}
 
 				template <typename T>
 				inline auto func() const noexcept -> function_pointer_t<T>

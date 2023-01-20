@@ -735,6 +735,10 @@ namespace vmod
 						return true;
 					} else if(std::strcmp(reinterpret_cast<const char *>(node->tag), YAML_INT_TAG) == 0) {
 						switch(node->data.scalar.length) {
+						#ifndef __clang__
+							#pragma GCC diagnostic push
+							#pragma GCC diagnostic ignored "-Wcast-align"
+						#endif
 							case sizeof(char):
 							value = static_cast<T>(*reinterpret_cast<char *>(node->data.scalar.value));
 							return true;
@@ -747,6 +751,9 @@ namespace vmod
 							case sizeof(long long):
 							value = static_cast<T>(*reinterpret_cast<long long *>(node->data.scalar.value));
 							return true;
+						#ifndef __clang__
+							#pragma GCC diagnostic pop
+						#endif
 							default:
 							return false;
 						}

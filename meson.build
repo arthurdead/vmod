@@ -31,9 +31,7 @@ cpp_args += [
 	'-Wno-error=unused-parameter',
 	'-Wno-error=unused-function',
 	'-Wno-error=unreachable-code',
-	'-Wno-error=unused-lambda-capture',
 	'-Wno-error=unused-macros',
-	'-Wno-error=unused-template'
 ]
 
 cpp_args += [
@@ -58,7 +56,9 @@ if compiler.get_id() == 'clang'
 		'-Wno-error=old-style-cast',
 		'-Wno-error=weak-vtables',
 		'-Wno-error=cast-function-type',
-		'-Wno-error=unused-but-set-variable'
+		'-Wno-error=unused-but-set-variable',
+		'-Wno-error=unused-lambda-capture',
+		'-Wno-error=unused-template',
 	]
 
 	cpp_args += [
@@ -72,12 +72,13 @@ elif compiler.get_id() == 'gcc'
 		'-Wno-ctor-dtor-privacy',
 		'-Wno-effc++',
 		'-Wno-abi-tag',
-		'-Wno-unused-const-variable'
+		'-Wno-unused-const-variable',
 	]
 
 	cpp_args += [
 		'-Wno-error=cpp',
-		'-Wno-error=useless-cast'
+		'-Wno-error=useless-cast',
+		'-Wno-error=duplicated-branches'
 	]
 endif
 

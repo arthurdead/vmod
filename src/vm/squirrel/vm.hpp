@@ -26,6 +26,8 @@ namespace vmod
 
 namespace vmod::vm
 {
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 	class squirrel final : public gsdk::IScriptVM
 	{
 		friend class vmod::main;
@@ -115,9 +117,9 @@ namespace vmod::vm
 
 	private:
 		static char err_buff[gsdk::MAXPRINTMSG];
-		static void error_func(HSQUIRRELVM vm, const SQChar *fmt, ...);
+		static void error_func(HSQUIRRELVM vm, const SQChar *fmt, ...) __attribute__((__format__(__printf__, 2, 3)));
 		static char print_buff[gsdk::MAXPRINTMSG];
-		static void print_func(HSQUIRRELVM vm, const SQChar *fmt, ...);
+		static void print_func(HSQUIRRELVM vm, const SQChar *fmt, ...) __attribute__((__format__(__printf__, 2, 3)));
 
 		static SQInteger static_func_call(HSQUIRRELVM vm);
 		static SQInteger member_func_call(HSQUIRRELVM vm);
@@ -254,4 +256,5 @@ namespace vmod::vm
 		squirrel(squirrel &&) = delete;
 		squirrel &operator=(squirrel &&) = delete;
 	};
+	#pragma GCC diagnostic pop
 }

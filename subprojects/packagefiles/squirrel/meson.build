@@ -38,40 +38,40 @@ complete_squirrel = is_quirrel
 
 sources = [
 	files(
-		join_paths('squirrel','sqapi.cpp'),
-		join_paths('squirrel','sqbaselib.cpp'),
-		join_paths('squirrel','sqclass.cpp'),
-		join_paths('squirrel','sqcompiler.cpp'),
-		join_paths('squirrel','sqdebug.cpp'),
-		join_paths('squirrel','sqfuncstate.cpp'),
-		join_paths('squirrel','sqlexer.cpp'),
-		join_paths('squirrel','sqmem.cpp'),
-		join_paths('squirrel','sqobject.cpp'),
-		join_paths('squirrel','sqstate.cpp'),
-		join_paths('squirrel','sqtable.cpp'),
-		join_paths('squirrel','sqvm.cpp')
+		'squirrel/sqapi.cpp',
+		'squirrel/sqbaselib.cpp',
+		'squirrel/sqclass.cpp',
+		'squirrel/sqcompiler.cpp',
+		'squirrel/sqdebug.cpp',
+		'squirrel/sqfuncstate.cpp',
+		'squirrel/sqlexer.cpp',
+		'squirrel/sqmem.cpp',
+		'squirrel/sqobject.cpp',
+		'squirrel/sqstate.cpp',
+		'squirrel/sqtable.cpp',
+		'squirrel/sqvm.cpp'
 	)
 ]
 
 if is_quirrel
 	sources += [
 		files(
-			join_paths('squirrel','sqdirect.cpp'),
-			join_paths('squirrel','sqstringlib.cpp'),
-			join_paths('squirrel','sqoptimizer.cpp')
+			'squirrel/sqdirect.cpp',
+			'squirrel/sqstringlib.cpp',
+			'squirrel/sqoptimizer.cpp'
 		)
 	]
 
 	if enable_vartrace
 		sources += [
 			files(
-				join_paths('squirrel','vartrace.cpp')
+				'squirrel/vartrace.cpp'
 			)
 		]
 	else
 		sources += [
 			files(
-				join_paths('squirrel','vartracestub.cpp')
+				'squirrel/vartracestub.cpp'
 			)
 		]
 	endif
@@ -80,21 +80,21 @@ endif
 if complete_squirrel
 	sources += [
 		files(
-			join_paths('sqstdlib','sqstdaux.cpp'),
-			join_paths('sqstdlib','sqstdblob.cpp'),
-			join_paths('sqstdlib','sqstdio.cpp'),
-			join_paths('sqstdlib','sqstdmath.cpp'),
-			join_paths('sqstdlib','sqstdrex.cpp'),
-			join_paths('sqstdlib','sqstdstream.cpp'),
-			join_paths('sqstdlib','sqstdstring.cpp'),
-			join_paths('sqstdlib','sqstdsystem.cpp')
+			'sqstdlib/sqstdaux.cpp',
+			'sqstdlib/sqstdblob.cpp',
+			'sqstdlib/sqstdio.cpp',
+			'sqstdlib/sqstdmath.cpp',
+			'sqstdlib/sqstdrex.cpp',
+			'sqstdlib/sqstdstream.cpp',
+			'sqstdlib/sqstdstring.cpp',
+			'sqstdlib/sqstdsystem.cpp'
 		)
 	]
 
 	if is_quirrel
 		sources += [
 			files(
-				join_paths('sqstdlib','sqstddatetime.cpp')
+				'sqstdlib/sqstddatetime.cpp'
 			)
 		]
 	endif
@@ -103,8 +103,8 @@ endif
 if complete_squirrel and is_quirrel
 	sources += [
 		files(
-			join_paths('sqmodules','sqmodules.cpp'),
-			join_paths('sqmodules','path.cpp')
+			'sqmodules/sqmodules.cpp',
+			'sqmodules/path.cpp'
 		)
 	]
 endif

@@ -43,7 +43,7 @@
 	{
 		throw "Assertion failed";
 	}
-}
+};
 
 //-----------------------------------------------------------------------------
 
@@ -81,7 +81,7 @@
 		RecursiveSearch( target );
 		
 	return result;
-}
+};
 
 ::FindCircularReferences <- function( resurrecteds )
 {

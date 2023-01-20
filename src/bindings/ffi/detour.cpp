@@ -47,7 +47,7 @@ namespace vmod::bindings::ffi
 	{
 		std::size_t required_args{args_types.size()};
 		if(!args || num_args != required_args) {
-			main::instance().vm()->RaiseException("vmod: wrong number of parameters expected %zu got %i", num_args, required_args);
+			main::instance().vm()->RaiseException("vmod: wrong number of parameters expected %zu got %zu", num_args, required_args);
 			return vscript::null();
 		}
 

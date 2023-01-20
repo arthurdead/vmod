@@ -46,6 +46,13 @@ namespace gsdk
 	using SpewOutputFunc_t = SpewRetval_t(*)(SpewType_t, const char *);
 
 	constexpr int MAXPRINTMSG{4096};
+	constexpr int MAX_LOGGING_MESSAGE_LENGTH{2048};
+
+	using LoggingChannelID_t = int;
+
+	constexpr LoggingChannelID_t INVALID_LOGGING_CHANNEL_ID{-1};
+
+	constexpr Color UNSPECIFIED_LOGGING_COLOR{0, 0, 0, 0};
 }
 
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)

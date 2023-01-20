@@ -27,15 +27,15 @@ endif
 
 iberty_lib = static_library('iberty',
 	files(
-		join_paths('libiberty','cp-demangle.c'),
-		join_paths('libiberty','cp-demint.c'),
-		join_paths('libiberty','cplus-dem.c'),
-		join_paths('libiberty','rust-demangle.c'),
-		join_paths('libiberty','d-demangle.c'),
-		join_paths('libiberty','safe-ctype.c'),
-		join_paths('libiberty','xmalloc.c'),
-		join_paths('libiberty','xstrdup.c'),
-		join_paths('libiberty','xexit.c')
+		'libiberty/cp-demangle.c',
+		'libiberty/cp-demint.c',
+		'libiberty/cplus-dem.c',
+		'libiberty/rust-demangle.c',
+		'libiberty/d-demangle.c',
+		'libiberty/safe-ctype.c',
+		'libiberty/xmalloc.c',
+		'libiberty/xstrdup.c',
+		'libiberty/xexit.c'
 	),
 	gnu_symbol_visibility: 'inlineshidden',
 	include_directories:

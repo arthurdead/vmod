@@ -37,6 +37,44 @@ namespace vmod
 		current = this;
 	}
 
+	void squirrel_preprocessor::warn_func(const char *fmt, va_list args)
+	{
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+		std::vsnprintf(msg_buff, sizeof(msg_buff), fmt, args);
+		#pragma GCC diagnostic pop
+
+		constexpr std::size_t warn_begin_len{__builtin_strlen(TPP_WARNF_WARN_BEGIN)};
+		constexpr std::size_t err_begin_len{__builtin_strlen(TPP_WARNF_WARN_BEGIN)};
+
+		if(std::strncmp(msg_buff, TPP_WARNF_WARN_BEGIN, warn_begin_len) == 0) {
+			current->print_state = print_state::warning;
+		} else if(std::strncmp(msg_buff, TPP_WARNF_ERROR_BEGIN, err_begin_len) == 0) {
+			current->print_state = print_state::error;
+		}
+
+		switch(current->print_state) {
+			case print_state::warning:
+			warning("%s", msg_buff);
+			break;
+			case print_state::error:
+			error("%s", msg_buff);
+			break;
+			default:
+			info("%s", msg_buff);
+			break;
+		}
+	}
+
+	void squirrel_preprocessor::msg_func(const char *fmt, va_list args)
+	{
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+		std::vsnprintf(msg_buff, sizeof(msg_buff), fmt, args);
+		#pragma GCC diagnostic pop
+		info("%s", msg_buff);
+	}
+
 	bool squirrel_preprocessor::initialize() noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -69,44 +107,8 @@ namespace vmod
 				return 1;
 			};
 		TPPLexer_Current->l_callbacks.c_unknown_file = nullptr;
-		TPPLexer_Current->l_callbacks.c_warn =
-			[](const char *fmt, va_list args) __attribute__((__format__(__printf__, 2, 0))) noexcept -> void
-			{
-				#pragma GCC diagnostic push
-				#pragma GCC diagnostic ignored "-Wformat-nonliteral"
-				std::vsnprintf(msg_buff, sizeof(msg_buff), fmt, args);
-				#pragma GCC diagnostic pop
-
-				constexpr std::size_t warn_begin_len{__builtin_strlen(TPP_WARNF_WARN_BEGIN)};
-				constexpr std::size_t err_begin_len{__builtin_strlen(TPP_WARNF_WARN_BEGIN)};
-
-				if(std::strncmp(msg_buff, TPP_WARNF_WARN_BEGIN, warn_begin_len) == 0) {
-					current->print_state = print_state::warning;
-				} else if(std::strncmp(msg_buff, TPP_WARNF_ERROR_BEGIN, err_begin_len) == 0) {
-					current->print_state = print_state::error;
-				}
-
-				switch(current->print_state) {
-					case print_state::warning:
-					warning("%s", msg_buff);
-					break;
-					case print_state::error:
-					error("%s", msg_buff);
-					break;
-					default:
-					info("%s", msg_buff);
-					break;
-				}
-			};
-		TPPLexer_Current->l_callbacks.c_message =
-			[](const char *fmt, va_list args) __attribute__((__format__(__printf__, 2, 0))) noexcept -> void
-			{
-				#pragma GCC diagnostic push
-				#pragma GCC diagnostic ignored "-Wformat-nonliteral"
-				std::vsnprintf(msg_buff, sizeof(msg_buff), fmt, args);
-				#pragma GCC diagnostic pop
-				info("%s", msg_buff);
-			};
+		TPPLexer_Current->l_callbacks.c_warn = warn_func;
+		TPPLexer_Current->l_callbacks.c_message = msg_func;
 
 		std::error_code err;
 

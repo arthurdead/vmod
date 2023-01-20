@@ -53,13 +53,7 @@ namespace gsdk
 	#else
 		#error
 	#endif
-		HSCRIPT ret{var.m_object};
-	#ifndef __VMOD_USING_CUSTOM_VM
-		if(!ret) {
-			ret = INVALID_HSCRIPT;
-		}
-	#endif
-		return ret;
+		return var.release_object();
 	}
 #endif
 
@@ -255,12 +249,6 @@ namespace gsdk
 		if(scope == INVALID_HSCRIPT) {
 			return SCRIPT_ERROR;
 		}
-
-		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
-		if(!scope) {
-			scope = GetRootTable();
-		}
-		#endif
 	#endif
 
 	#ifndef __VMOD_USING_CUSTOM_VM
@@ -280,12 +268,6 @@ namespace gsdk
 			return false;
 		}
 
-		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
-		if(!scope) {
-			scope = GetRootTable();
-		}
-		#endif
-
 		ScriptVariant_t temp;
 		temp.m_type = fixup_var_field(var.m_type);
 		temp.m_flags = var.m_flags & ~SV_FREE;
@@ -302,16 +284,10 @@ namespace gsdk
 		if(scope == INVALID_HSCRIPT) {
 			return false;
 		}
-
-		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
-		if(!scope) {
-			scope = GetRootTable();
-		}
-		#endif
 	#endif
 
 		bool ret{SetValue(scope, name, static_cast<const ScriptVariant_t &>(var))};
-		var.m_flags &= ~SV_FREE;
+		var.free();
 		return ret;
 	}
 
@@ -325,12 +301,6 @@ namespace gsdk
 		if(scope == INVALID_HSCRIPT) {
 			return false;
 		}
-
-		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
-		if(!scope) {
-			scope = GetRootTable();
-		}
-		#endif
 	#endif
 
 		ScriptVariant_t var;
@@ -344,39 +314,17 @@ namespace gsdk
 	{
 		ScriptVariant_t var;
 		CreateTable_impl(var);
-		HSCRIPT ret{var.m_object};
-	#ifndef __VMOD_USING_CUSTOM_VM
-		if(!ret) {
-			ret = INVALID_HSCRIPT;
-		}
-	#endif
-		return ret;
+		return var.release_object();
 	}
 
 	void IScriptVM::ReleaseTable(HSCRIPT table) noexcept
 	{
-		if(!table || table == INVALID_HSCRIPT) {
-			return;
-		}
-
-		ScriptVariant_t var;
-		var.m_type = FIELD_HSCRIPT;
-		var.m_flags = SV_NOFLAGS;
-		var.m_object = table;
-		ReleaseValue(var);
+		ReleaseObject(table);
 	}
 
 	void IScriptVM::ReleaseArray(HSCRIPT array) noexcept
 	{
-		if(!array || array == INVALID_HSCRIPT) {
-			return;
-		}
-
-		ScriptVariant_t var;
-		var.m_type = FIELD_HSCRIPT;
-		var.m_flags = SV_NOFLAGS;
-		var.m_object = array;
-		ReleaseValue(var);
+		ReleaseObject(array);
 	}
 
 	HSCRIPT IScriptVM::CreateScope(const char *script, HSCRIPT parent) noexcept
@@ -414,53 +362,14 @@ namespace gsdk
 		if(scope == INVALID_HSCRIPT) {
 			return false;
 		}
-
-		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
-		if(!scope) {
-			scope = GetRootTable();
-		}
-		#endif
 	#endif
 
 		return GetValue_impl(scope, name, var);
 	}
 
-	bool IScriptVM::GetValue(HSCRIPT scope, const char *name, HSCRIPT *object) noexcept
-	{
-	#ifndef __VMOD_USING_CUSTOM_VM
-		if(scope == INVALID_HSCRIPT) {
-			return false;
-		}
-
-		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
-		if(!scope) {
-			scope = GetRootTable();
-		}
-		#endif
-	#endif
-
-		ScriptVariant_t tmp;
-		bool ret{GetValue(scope, name, &tmp)};
-		if(ret && tmp.m_type == FIELD_HSCRIPT && (tmp.m_object && tmp.m_object != INVALID_HSCRIPT)) {
-			*object = tmp.m_object;
-		} else {
-			*object = INVALID_HSCRIPT;
-		}
-
-		return ret;
-	}
-
 	void IScriptVM::ReleaseValue(HSCRIPT object) noexcept
 	{
-		if(!object || object == INVALID_HSCRIPT) {
-			return;
-		}
-
-		ScriptVariant_t var;
-		var.m_type = FIELD_HSCRIPT;
-		var.m_flags = SV_NOFLAGS;
-		var.m_object = object;
-		ReleaseValue(var);
+		ReleaseObject(object);
 	}
 
 	void IScriptVM::ReleaseObject(HSCRIPT object) noexcept
@@ -483,12 +392,6 @@ namespace gsdk
 		if(scope == INVALID_HSCRIPT) {
 			return nullptr;
 		}
-
-		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
-		if(!scope) {
-			scope = GetRootTable();
-		}
-		#endif
 	#endif
 
 		return MakeSquirrelMetamethod_Get_impl(scope, name, delegate, free);
@@ -504,7 +407,7 @@ namespace gsdk
 	#endif
 
 		ArrayAddToTail(array, static_cast<const ScriptVariant_t &>(var));
-		var.m_flags &= ~SV_FREE;
+		var.free();
 	}
 
 	bool IScriptVM::SetInstanceUniqeId2(HSCRIPT instance, const char *root) noexcept
@@ -545,15 +448,15 @@ namespace gsdk
 	ScriptFunctionBinding_t::~ScriptFunctionBinding_t() noexcept
 	{
 		if(m_flags & SF_FREE_SCRIPT_NAME) {
-			std::free(const_cast<char *>(m_desc.m_pszScriptName));
+			delete[] const_cast<char *>(m_desc.m_pszScriptName);
 		}
 
 		if(m_flags & SF_FREE_NAME) {
-			std::free(const_cast<char *>(m_desc.m_pszFunction));
+			delete[] const_cast<char *>(m_desc.m_pszFunction);
 		}
 
 		if(m_flags & SF_FREE_DESCRIPTION) {
-			std::free(const_cast<char *>(m_desc.m_pszDescription));
+			delete[] const_cast<char *>(m_desc.m_pszDescription);
 		}
 	}
 }
