@@ -339,7 +339,7 @@ namespace vmod::bindings::ent
 				info->net_prefix = copy_prefix(net_prefix, net_vtable_size);
 
 				generic_vtable_t new_ent_vtable{vtable_from_prefix(info->ent_prefix.get())};
-				generic_vtable_t new_net_vtable{vtable_from_prefix(info->ent_prefix.get())};
+				generic_vtable_t new_net_vtable{vtable_from_prefix(info->net_prefix.get())};
 
 				info->GetDataDescMap_original = new_ent_vtable[gsdk::CBaseEntity::GetDataDescMap_vindex];
 				info->GetDataDescMap_closure.initialize(FFI_DEFAULT_ABI, new_ent_vtable[gsdk::CBaseEntity::GetDataDescMap_vindex], GetDataDescMap_binding, *info);
