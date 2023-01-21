@@ -618,7 +618,7 @@ namespace gsdk
 	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 		virtual HSCRIPT GetRootTable() = 0;
 		virtual HSCRIPT CopyHandle(HSCRIPT) = 0;
-		virtual HSCRIPT GetIdentity(HSCRIPT) = 0;
+		virtual SQObjectType GetIdentity(HSCRIPT) = 0;
 	#endif
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 	private:
@@ -634,7 +634,7 @@ namespace gsdk
 		virtual void ArrayAddToTail(HSCRIPT, const ScriptVariant_t &) = 0;
 		virtual HSCRIPT GetRootTable() = 0;
 		virtual HSCRIPT CopyHandle(HSCRIPT) = 0;
-		virtual HSCRIPT GetIdentity(HSCRIPT) = 0;
+		virtual SQObjectType GetIdentity(HSCRIPT) = 0;
 		virtual void CollectGarbage(const char *, bool) = 0;
 	#endif
 	};

@@ -1668,7 +1668,7 @@ namespace vmod::vm
 		return scope;
 	}
 
-	gsdk::HSCRIPT squirrel::ReferenceScope(gsdk::HSCRIPT obj)
+	gsdk::HSCRIPT squirrel::CopyHandle(gsdk::HSCRIPT obj)
 	{
 		sq_pushobject(impl, *obj);
 
@@ -1685,6 +1685,13 @@ namespace vmod::vm
 
 		sq_pop(impl, 1);
 		return copy;
+	}
+
+	gsdk::HSCRIPT squirrel::ReferenceScope(gsdk::HSCRIPT obj)
+	{
+		//TODO!!!! increment __vrefs ?
+
+		return CopyHandle(obj);
 	}
 
 	void squirrel::ReleaseScope(gsdk::HSCRIPT obj)
@@ -1708,7 +1715,6 @@ namespace vmod::vm
 			return;
 		}
 	#endif
-
 
 		sq_pushobject(impl, release_scope_func);
 
@@ -3192,11 +3198,15 @@ namespace vmod::vm
 
 	void squirrel::WriteState(gsdk::CUtlBuffer *)
 	{
+		//TODO!!!
+
 		debugtrap();
 	}
 
 	void squirrel::ReadState(gsdk::CUtlBuffer *)
 	{
+		//TODO!!!
+
 		debugtrap();
 	}
 
@@ -3261,14 +3271,9 @@ namespace vmod::vm
 		return &root_table;
 	}
 
-	gsdk::HSCRIPT squirrel::CopyHandle(gsdk::HSCRIPT)
+	SQObjectType squirrel::GetIdentity(gsdk::HSCRIPT obj)
 	{
-		return gsdk::INVALID_HSCRIPT;
-	}
-
-	gsdk::HSCRIPT squirrel::GetIdentity(gsdk::HSCRIPT)
-	{
-		return gsdk::INVALID_HSCRIPT;
+		return sq_type(*obj);
 	}
 
 	class metamethod_delegate_impl final

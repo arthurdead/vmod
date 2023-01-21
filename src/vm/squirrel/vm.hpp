@@ -91,7 +91,7 @@ namespace vmod::vm
 		bool RaiseException_impl(const char *) override;
 		gsdk::HSCRIPT GetRootTable() __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
 		gsdk::HSCRIPT CopyHandle(gsdk::HSCRIPT) __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
-		gsdk::HSCRIPT GetIdentity(gsdk::HSCRIPT) __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
+		SQObjectType GetIdentity(gsdk::HSCRIPT) __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
 		gsdk::CSquirrelMetamethodDelegateImpl *MakeSquirrelMetamethod_Get_impl(gsdk::HSCRIPT &, const char *, gsdk::ISquirrelMetamethodDelegate *, bool) __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
 		void DestroySquirrelMetamethod_Get(gsdk::CSquirrelMetamethodDelegateImpl *) __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
 		int GetKeyValue2(gsdk::HSCRIPT, int, gsdk::ScriptVariant_t *, gsdk::ScriptVariant_t *) __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
