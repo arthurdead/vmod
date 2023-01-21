@@ -357,7 +357,7 @@ lib = shared_library('vmod',
 	name_prefix: '',
 	dependencies: dependencies + vmod_dependencies,
 	install: install,
-	install_dir: addons,
+	install_dir: vmod_bin,
 	cpp_args: cpp_args + gsdk_cpp_args,
 	link_args: link_args
 )
@@ -402,7 +402,7 @@ configure_file(
 	input: files('src/vsp.vdf'),
 	output: (lib.name()+'.vdf'),
 	configuration: {
-		'LIBNAME': lib.name()
+		'LIBNAME': 'vmod/bin/' + lib.name()
 	},
 	install: install,
 	install_dir: addons

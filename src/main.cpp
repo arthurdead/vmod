@@ -111,7 +111,7 @@ namespace vmod
 
 	static const unsigned char *g_Script_vscript_server{nullptr};
 	static const unsigned char *g_Script_spawn_helper{nullptr};
-	static const unsigned char **szAddCode{nullptr};
+	static const unsigned char *szAddCode{nullptr};
 
 	static gsdk::IScriptVM **g_pScriptVM_ptr{nullptr};
 	static bool(*VScriptServerInit)() {nullptr};
@@ -968,12 +968,13 @@ namespace vmod
 
 			std::filesystem::path lib_path{info.dli_fname};
 
-			std::filesystem::path addons_dir{lib_path.parent_path()};
+			std::filesystem::path bin_dir{lib_path.parent_path()};
+			std::filesystem::path vmod_dir{bin_dir.parent_path()};
+			std::filesystem::path addons_dir{vmod_dir.parent_path()};
 
 			game_dir_ = addons_dir.parent_path();
 
-			root_dir_ = addons_dir;
-			root_dir_ /= "vmod"sv;
+			root_dir_ = vmod_dir;
 		}
 
 		if(!symbol_cache::initialize()) {
@@ -1523,7 +1524,7 @@ namespace vmod
 				} else {
 					auto szAddCode_it{RunVScripts_it->second->find("szAddCode"s)};
 					if(szAddCode_it != RunVScripts_it->second->end()) {
-						szAddCode = szAddCode_it->second->addr<const unsigned char **>();
+						szAddCode = szAddCode_it->second->addr<const unsigned char *>();
 					} else {
 						warning("vmod: missing 'CLogicScript::RunVScripts()::szAddCode' symbol\n"sv);
 					}
@@ -2099,7 +2100,7 @@ namespace vmod
 				}
 
 				if(szAddCode) {
-					write_file(dump_dir/"szAddCode.nut"sv, *szAddCode, std::strlen(reinterpret_cast<const char *>(*szAddCode)+1));
+					write_file(dump_dir/"szAddCode.nut"sv, szAddCode, std::strlen(reinterpret_cast<const char *>(szAddCode)+1));
 				}
 
 				if(g_Script_spawn_helper) {
