@@ -84,30 +84,54 @@ endif
 
 engine_dir = get_option('engine_dir')
 game = get_option('game')
+
+gsdk_cpp_args = []
+
+#INFO!!! keep these synced with gsdk/config.hpp
 if game == 'portal2'
+	engine_branch = '2010'
+	engine_branch_ver = 1
+	no_symbols = true
+	gsdk_cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_PORTAL2']
+elif game == 'tf'
+	engine_branch = '2007'
+	engine_branch_ver = 2
+	no_symbols = false
+	gsdk_cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_TF2']
+elif game == 'left4dead2'
+	engine_branch = '2010'
+	engine_branch_ver = 0
+	no_symbols = false
+	gsdk_cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_L4D2']
+else
+	error('unknown game')
+endif
+
+dedicated = game != 'portal2'
+
+if game == 'portal2' and dedicated
+	error('portal2 doenst support dedicated')
+endif
+
+if not dedicated
+	no_symbols = true
+endif
+
+game_dir = join_paths(engine_dir,game)
+
+if engine_branch == '2010' and engine_branch_ver >= 1
 	engine_bin = join_paths(engine_dir,'bin/linux32')
+	game_bin = join_paths(game_dir,'bin/linux32')
 else
 	engine_bin = join_paths(engine_dir,'bin')
+	game_bin = join_paths(game_dir,'bin')
 endif
-game_dir = join_paths(engine_dir,game)
-game_bin = join_paths(game_dir,'bin')
+
 addons = join_paths(game_dir,'addons')
 vmod_root = join_paths(addons,'vmod')
 vmod_bin = join_paths(vmod_root,'bin')
 
-dedicated = game != 'portal2'
-
 install = engine_dir != '' and game != ''
-
-gsdk_cpp_args = []
-
-if game == 'tf'
-	gsdk_cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_TF2']
-elif game == 'portal2'
-	gsdk_cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_PORTAL2']
-elif game == 'left4dead2'
-	gsdk_cpp_args += ['-DGSDK_ENGINE=GSDK_ENGINE_L4D2']
-endif
 
 thirdparty_default_options = [
 	'warning_level=0',
@@ -301,6 +325,28 @@ if engine_dir != ''
 	)
 
 	dependencies += [tier0,vstdlib]
+
+	if not no_symbols and dedicated
+		server = declare_dependency(
+			link_args: [
+				join_paths(game_bin,'server_srv.so')
+			]
+		)
+
+		vscript = declare_dependency(
+			link_args: [
+				join_paths(engine_bin,'vscript_srv.so')
+			]
+		)
+
+		engine = declare_dependency(
+			link_args: [
+				join_paths(engine_bin,'engine_srv.so')
+			]
+		)
+
+		dependencies += [server,vscript,engine]
+	endif
 endif
 
 lib = shared_library('vmod',
