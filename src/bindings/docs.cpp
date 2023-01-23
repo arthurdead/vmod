@@ -393,7 +393,7 @@ namespace vmod::bindings::docs
 			return description;
 		}
 
-		static std::string_view type_name(gsdk::ScriptDataType_t type, std::size_t size, bool vscript) noexcept
+		static std::string_view type_name(gsdk::ScriptDataType_t type, std::size_t size, bool vscript, int flags) noexcept
 		{
 			using namespace std::literals::string_view_literals;
 
@@ -431,9 +431,9 @@ namespace vmod::bindings::docs
 					}
 				}
 				case gsdk::FIELD_MODELINDEX:
-				return "model_index"sv;
+				return "modelindex"sv;
 				case gsdk::FIELD_MATERIALINDEX:
-				return "material_index"sv;
+				return "materialindex"sv;
 				case gsdk::FIELD_TICK:
 				return "int"sv;
 				case gsdk::FIELD_FLOAT64:
@@ -484,17 +484,26 @@ namespace vmod::bindings::docs
 					}
 				}
 				case gsdk::FIELD_MODELNAME:
-				return "model_path"sv;
+				return "modelpath"sv;
 				case gsdk::FIELD_SOUNDNAME:
-				return "sound_path"sv;
+				return "soundpath"sv;
 				case gsdk::FIELD_VARIANT:
 				return "variant"sv;
 				case gsdk::FIELD_EHANDLE:
 				return "EHANDLE"sv;
 				case gsdk::FIELD_EDICT:
 				return "edict"sv;
-				case gsdk::FIELD_FUNCTION:
-				return "function *"sv;
+				case gsdk::FIELD_FUNCTION: {
+					if(vscript) {
+						return "function *"sv;
+					} else if(flags & gsdk::FTYPEDESC_OUTPUT) {
+						return "output"sv;
+					} else if(flags & gsdk::FTYPEDESC_FUNCTIONTABLE) {
+						return "function *"sv;
+					} else {
+						return "input"sv;
+					}
+				}
 				case gsdk::FIELD_CLASSPTR:
 				return "object *"sv;
 				case gsdk::FIELD_COLOR32:
@@ -511,14 +520,14 @@ namespace vmod::bindings::docs
 		}
 	}
 
-	std::string_view type_name(gsdk::ScriptDataType_t type, std::size_t size) noexcept
+	std::string_view type_name(gsdk::ScriptDataType_t type, std::size_t size, int flags) noexcept
 	{
-		return detail::type_name(type, size, false);
+		return detail::type_name(type, size, false, flags);
 	}
 
 	std::string_view type_name(gsdk::ScriptDataType_t type, bool vscript) noexcept
 	{
-		return detail::type_name(type, static_cast<std::size_t>(-1), vscript);
+		return detail::type_name(type, static_cast<std::size_t>(-1), vscript, gsdk::FTYPEDESC_NOFLAGS);
 	}
 
 	std::string_view get_class_desc_name(const gsdk::ScriptClassDesc_t *desc) noexcept

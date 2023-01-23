@@ -230,6 +230,9 @@ namespace vmod
 		ConCommand vmod_dump_datamaps;
 		ConVar vmod_auto_dump_datamaps;
 
+		ConCommand vmod_dump_keyvalues;
+		ConVar vmod_auto_dump_keyvalues;
+
 		ConCommand vmod_dump_entity_classes;
 		ConVar vmod_auto_dump_entity_classes;
 

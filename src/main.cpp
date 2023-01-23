@@ -2140,9 +2140,15 @@ namespace vmod
 
 		vmod_auto_dump_datamaps.initialize("vmod_auto_dump_datamaps"sv, false);
 
-		vmod_dump_datamaps.initialize("vmod_dump_datamaps"sv,
-			[this](const gsdk::CCommand &) noexcept -> void {
-				std::filesystem::path dump_dir{root_dir_/"dumps"sv/"datamaps"sv};
+		auto dump_datamaps_impl{
+			[this](bool only_keyvalues) noexcept -> void {
+				std::filesystem::path dump_dir{root_dir_/"dumps"sv};
+
+				if(only_keyvalues) {
+					dump_dir /= "keyvalues"sv;
+				} else {
+					dump_dir /= "datamaps"sv;
+				}
 
 				for(const auto &it : sv_datamaps) {
 					std::string file;
@@ -2150,7 +2156,7 @@ namespace vmod
 					bindings::docs::gen_date(file);
 
 					std::function<void(gsdk::datamap_t &, std::string_view, std::size_t)> write_table{
-						[&file,&write_table](gsdk::datamap_t &targettable, std::string_view tablename, std::size_t depth) noexcept -> void {
+						[&file,&write_table,only_keyvalues](gsdk::datamap_t &targettable, std::string_view tablename, std::size_t depth) noexcept -> void {
 							bindings::docs::ident(file, depth);
 							file += "class "sv;
 							file += tablename;
@@ -2193,6 +2199,7 @@ namespace vmod
 											} else {
 												file += "<<unknown>>"sv;
 											}
+											file += ' ';
 										} else {
 											switch(type) {
 												case gsdk::FIELD_VOID: {
@@ -2218,10 +2225,12 @@ namespace vmod
 												} break;
 											}
 
-											file += bindings::docs::type_name(type, size);
+											file += bindings::docs::type_name(type, size, targetprop.flags);
+											if(*(file.end()-1) != '*') {
+												file += ' ';
+											}
 										}
 
-										file += ' ';
 										file += propname;
 
 										if(targetprop.fieldSize > 1) {
@@ -2242,7 +2251,7 @@ namespace vmod
 
 										if(targetprop.flags & gsdk::FTYPEDESC_INPUT) {
 											file += '(';
-											file += bindings::docs::type_name(targetprop.fieldType, size);
+											file += bindings::docs::type_name(targetprop.fieldType, size, targetprop.flags);
 											file += ')';
 										}
 
@@ -2264,26 +2273,27 @@ namespace vmod
 
 								if(prop.flags & gsdk::FTYPEDESC_INPUT ||
 									prop.flags & gsdk::FTYPEDESC_OUTPUT) {
-									write_prop(prop, prop.externalName ? prop.externalName : "<<unknown>>"sv, depth+1);
-								} else if(prop.flags & gsdk::FTYPEDESC_FUNCTIONTABLE) {
-									std::string funcname;
-									if(prop.fieldName) {
-										funcname = prop.fieldName;
-										funcname.erase(0, tablename.length());
-									} else {
-										funcname = "<<unknown>>"s;
+									if(only_keyvalues) {
+										write_prop(prop, prop.externalName ? prop.externalName : "<<unknown>>"sv, depth+1);
 									}
-									write_prop(prop, funcname, depth+1);
+								} else if(prop.flags & gsdk::FTYPEDESC_FUNCTIONTABLE) {
+									if(!only_keyvalues) {
+										std::string funcname;
+										if(prop.fieldName) {
+											funcname = prop.fieldName;
+											funcname.erase(0, tablename.length());
+										} else {
+											funcname = "<<unknown>>"s;
+										}
+										write_prop(prop, funcname, depth+1);
+									}
 								} else if(prop.flags & gsdk::FTYPEDESC_KEY) {
-									bindings::docs::ident(file, depth+1);
-									file += "union\n"sv;
-									bindings::docs::ident(file, depth+1);
-									file += "{\n"sv;
-									write_prop(prop, prop.fieldName ? prop.fieldName : "<<unknown>>"sv, depth+2);
-									write_prop(prop, prop.externalName ? prop.externalName : "<<unknown>>"sv, depth+2);
-									bindings::docs::ident(file, depth+1);
-									file += "};\n"sv;
-								} else {
+									if(only_keyvalues) {
+										write_prop(prop, prop.externalName ? prop.externalName : "<<unknown>>"sv, depth+1);
+									} else {
+										write_prop(prop, prop.fieldName ? prop.fieldName : "<<unknown>>"sv, depth+1);
+									}
+								} else if(!only_keyvalues) {
 									write_prop(prop, prop.fieldName ? prop.fieldName : "<<unknown>>"sv, depth+1);
 								}
 							}
@@ -2301,6 +2311,20 @@ namespace vmod
 
 					write_file(dump_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
 				}
+			}
+		};
+
+		vmod_dump_datamaps.initialize("vmod_dump_datamaps"sv,
+			[dump_datamaps_impl](const gsdk::CCommand &) -> void {
+				dump_datamaps_impl(false);
+			}
+		);
+
+		vmod_auto_dump_keyvalues.initialize("vmod_auto_dump_keyvalues"sv, false);
+
+		vmod_dump_keyvalues.initialize("vmod_dump_keyvalues"sv,
+			[dump_datamaps_impl](const gsdk::CCommand &) -> void {
+				dump_datamaps_impl(true);
 			}
 		);
 
@@ -2890,6 +2914,10 @@ namespace vmod
 			vmod_dump_datamaps();
 		}
 
+		if(vmod_auto_dump_keyvalues.get<bool>()) {
+			vmod_dump_keyvalues();
+		}
+
 		if(vmod_auto_dump_entity_classes.get<bool>()) {
 			vmod_dump_entity_classes();
 		}
@@ -3024,6 +3052,9 @@ namespace vmod
 
 		vmod_dump_datamaps.unregister();
 		vmod_auto_dump_datamaps.unregister();
+
+		vmod_dump_keyvalues.unregister();
+		vmod_auto_dump_keyvalues.unregister();
 
 		vmod_dump_entity_classes.unregister();
 		vmod_auto_dump_entity_classes.unregister();
