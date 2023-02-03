@@ -81,6 +81,20 @@ SQUIRREL_API SQInteger sq_getversion();
 #pragma GCC diagnostic pop
 #endif
 
+#if defined __VMOD_USING_CUSTOM_VM && defined __VMOD_ENABLE_SOURCEPAWN
+namespace vmod::vm
+{
+	struct sp_object;
+
+	enum class sp_object_type : int;
+}
+
+namespace SourcePawn
+{
+	class ISourcePawnEnvironment;
+}
+#endif
+
 namespace gsdk
 {
 	class CUtlBuffer;
@@ -99,7 +113,10 @@ namespace gsdk
 		SL_SQUIRREL,
 		SL_LUA,
 		SL_PYTHON,
-		SL_DEFAULT = SL_SQUIRREL
+	#if defined __VMOD_USING_CUSTOM_VM && defined __VMOD_ENABLE_SOURCEPAWN
+		SL_SOURCEPAWN,
+	#endif
+		SL_DEFAULT = SL_SQUIRREL,
 	};
 
 	#pragma GCC diagnostic push
@@ -137,7 +154,34 @@ namespace gsdk
 
 	enum ExtendedFieldType : int;
 
+	struct generic_handle__ final
+	{
+	private:
+		~generic_handle__() = delete;
+		generic_handle__() = delete;
+		generic_handle__(const generic_handle__ &) = delete;
+		generic_handle__ &operator=(const generic_handle__ &) = delete;
+		generic_handle__(generic_handle__ &&) = delete;
+		generic_handle__ &operator=(generic_handle__ &&) = delete;
+	};
+
+	using HSCRIPT__ = generic_handle__;
+	using HINTERNALVM__ = generic_handle__;
+
+#ifdef __VMOD_COMPILING_SQUIRREL_VM
 	using HSCRIPT = HSQOBJECT *;
+	using HINTERNALVM = HSQUIRRELVM;
+	using HIDENTITY = SQObjectType;
+#elif defined __VMOD_COMPILING_SOURCEPAWN_VM
+	using HSCRIPT = vmod::vm::sp_object *;
+	using HINTERNALVM = SourcePawn::ISourcePawnEnvironment *;
+	using HIDENTITY = vmod::vm::sp_object_type;
+#else
+	using HSCRIPT = HSCRIPT__ *;
+	using HINTERNALVM = HINTERNALVM__ *;
+	using HIDENTITY = int;
+#endif
+
 	inline HSCRIPT INVALID_HSCRIPT{reinterpret_cast<HSCRIPT>(-1)};
 
 	class CVariantDefaultAllocator;
@@ -487,7 +531,7 @@ namespace gsdk
 		virtual ScriptLanguage_t GetLanguage() = 0;
 		virtual const char *GetLanguageName() = 0;
 	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
-		virtual HSQUIRRELVM GetInternalVM() = 0;
+		virtual HINTERNALVM GetInternalVM() = 0;
 	#endif
 		virtual void AddSearchPath(const char *) = 0;
 	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
@@ -618,7 +662,7 @@ namespace gsdk
 	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 		virtual HSCRIPT GetRootTable() = 0;
 		virtual HSCRIPT CopyHandle(HSCRIPT) = 0;
-		virtual SQObjectType GetIdentity(HSCRIPT) = 0;
+		virtual HIDENTITY GetIdentity(HSCRIPT) = 0;
 	#endif
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 	private:
@@ -629,12 +673,12 @@ namespace gsdk
 		virtual int GetKeyValue2(HSCRIPT, int, ScriptVariant_t *, ScriptVariant_t *) = 0;
 	#endif
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
-		virtual HSQUIRRELVM GetInternalVM() = 0;
+		virtual HINTERNALVM GetInternalVM() = 0;
 		virtual bool GetScalarValue(HSCRIPT, ScriptVariant_t *) = 0;
 		virtual void ArrayAddToTail(HSCRIPT, const ScriptVariant_t &) = 0;
 		virtual HSCRIPT GetRootTable() = 0;
 		virtual HSCRIPT CopyHandle(HSCRIPT) = 0;
-		virtual SQObjectType GetIdentity(HSCRIPT) = 0;
+		virtual HIDENTITY GetIdentity(HSCRIPT) = 0;
 		virtual void CollectGarbage(const char *, bool) = 0;
 	#endif
 	};

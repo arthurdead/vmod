@@ -15,7 +15,8 @@ project('libiberty', 'c',
 )
 
 c_args = [
-	'-Wno-implicit-function-declaration'
+	'-Wno-implicit-function-declaration',
+	'-Wno-switch'
 ]
 
 compiler = meson.get_compiler('c')

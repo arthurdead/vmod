@@ -1,0 +1,9 @@
+[wrap-git]
+directory = amtl
+url = https://github.com/alliedmodders/amtl.git
+revision = master
+depth = 1
+patch_directory = amtl
+
+[provide]
+dependency_names = amtl

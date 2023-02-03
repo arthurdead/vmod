@@ -1,0 +1,10 @@
+[wrap-git]
+directory = sourcepawn
+url = https://github.com/alliedmodders/sourcepawn.git
+revision = master
+depth = 1
+patch_directory = sourcepawn
+diff_files = sourcepawn/vmod_fixes.patch
+
+[provide]
+dependency_names = sourcepawn

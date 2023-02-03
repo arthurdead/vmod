@@ -8,5 +8,8 @@
 /subprojects/squirrel_???/
 /subprojects/quirrel/
 /subprojects/tpp/
+/subprojects/sourcepawn/
+/subprojects/amtl/
 /*.sublime-workspace
 /*.sublime-project
+

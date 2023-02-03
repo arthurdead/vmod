@@ -152,7 +152,7 @@ thirdparty_default_options_c = thirdparty_default_options + [
 ]
 
 thirdparty_default_options_cpp = thirdparty_default_options + [
-	#'cpp_std=gnu++20',
+	'cpp_std=gnu++20',
 	'cpp_eh=none',
 	'cpp_rtti=false'
 ]
@@ -176,6 +176,7 @@ custom_vm = true
 
 if custom_vm
 	use_quirrel = true
+	enable_sourcepawn = false
 
 	if use_quirrel
 		squirrel_ver = 'quirrel'
@@ -187,6 +188,13 @@ if custom_vm
 		default_options: thirdparty_default_options_cpp,
 		required: true
 	)
+
+	if enable_sourcepawn
+		sourcepawn = subproject('sourcepawn',
+			default_options: thirdparty_default_options_cpp,
+			required: false
+		)
+	endif
 else
 	if game == 'portal2'
 		squirrel_ver = 'squirrel_223'
@@ -205,58 +213,6 @@ if xxd_exe.found()
 	xxd_named = generator(xxd_exe,
 		arguments: ['-n','@EXTRA_ARGS@','-i','@INPUT@','@OUTPUT@'],
 		output: '@PLAINNAME@.h'
-	)
-endif
-
-if custom_vm
-	vm_cpp_args = ['-D__VMOD_USING_CUSTOM_VM']
-
-	vm_dependencies = [
-		squirrel.get_variable('squirrel_dep'),
-		squirrel.get_variable('squirrel_internal_dep')
-	]
-
-	if use_quirrel
-		squirrel_vmod_init_script_src = files('src/vm/squirrel/vmod_init.nut')
-
-		if xxd_exe.found()
-			squirrel_vmod_init_script = declare_dependency(
-				sources: xxd_named.process(
-					squirrel_vmod_init_script_src,
-					extra_args: '__squirrel_vmod_init_script_data'
-				)
-			)
-
-			vm_dependencies += [squirrel_vmod_init_script]
-		endif
-
-		squirrel_vmod_server_init_script_src = files('src/squirrel/vmod_server_init.nut')
-
-		if xxd_exe.found()
-			squirrel_vmod_server_init_script = declare_dependency(
-				sources: xxd_named.process(
-					squirrel_vmod_server_init_script_src,
-					extra_args: '__squirrel_vmod_server_init_script_data'
-				)
-			)
-
-			vm_dependencies += [squirrel_vmod_server_init_script]
-		endif
-	endif
-
-	vm_lib = static_library('vm',
-		files(
-			'src/vm/squirrel/vm.cpp'
-		),
-		dependencies: vm_dependencies,
-		gnu_symbol_visibility: 'inlineshidden',
-		implicit_include_directories: true,
-		cpp_args: cpp_args + gsdk_cpp_args + vm_cpp_args
-	)
-
-	vm_dep = declare_dependency(
-		link_with: vm_lib,
-		compile_args: vm_cpp_args
 	)
 endif
 
@@ -280,14 +236,6 @@ vmod_dependencies = [
 	squirrel.get_variable('squirrel_internal_dep')
 ]
 
-vtable_dumper_dependencies = [
-	dependency('llvm')
-]
-
-if custom_vm
-	vmod_dependencies += [vm_dep]
-endif
-
 squirrel_vmod_base_script_src = files('src/squirrel/vmod_base.nut')
 
 if xxd_exe.found()
@@ -299,6 +247,48 @@ if xxd_exe.found()
 	)
 
 	vmod_dependencies += [squirrel_vmod_base_script]
+endif
+
+vm_cpp_args = []
+
+if custom_vm
+	vm_cpp_args += ['-D__VMOD_USING_CUSTOM_VM']
+
+	if use_quirrel
+		squirrel_vmod_init_script_src = files('src/vm/squirrel/vmod_init.nut')
+
+		if xxd_exe.found()
+			squirrel_vmod_init_script = declare_dependency(
+				sources: xxd_named.process(
+					squirrel_vmod_init_script_src,
+					extra_args: '__squirrel_vmod_init_script_data'
+				)
+			)
+
+			vmod_dependencies += [squirrel_vmod_init_script]
+		endif
+
+		squirrel_vmod_server_init_script_src = files('src/squirrel/vmod_server_init.nut')
+
+		if xxd_exe.found()
+			squirrel_vmod_server_init_script = declare_dependency(
+				sources: xxd_named.process(
+					squirrel_vmod_server_init_script_src,
+					extra_args: '__squirrel_vmod_server_init_script_data'
+				)
+			)
+
+			vmod_dependencies += [squirrel_vmod_server_init_script]
+		endif
+	endif
+
+	if enable_sourcepawn
+		vm_cpp_args += ['-D__VMOD_ENABLE_SOURCEPAWN']
+
+		vmod_dependencies += [
+			sourcepawn.get_variable('sourcepawn_dep')
+		]
+	endif
 endif
 
 if engine_dir != ''
@@ -349,7 +339,7 @@ if engine_dir != ''
 	endif
 endif
 
-lib = shared_library('vmod',
+sources = [
 	files(
 		'src/main.cpp',
 		'src/filesystem.cpp',
@@ -398,13 +388,29 @@ lib = shared_library('vmod',
 		'src/gsdk/vstdlib/convar.cpp',
 		'src/gsdk/engine/vsp.cpp'
 	),
+]
+
+if custom_vm
+	sources += [
+		files(
+			'src/vm/squirrel/vm.cpp'
+		)
+	]
+
+	if enable_sourcepawn
+		sources += [files('src/vm/squirrel/vm.cpp')]
+	endif
+endif
+
+lib = shared_library('vmod',
+	sources,
 	gnu_symbol_visibility: 'inlineshidden',
 	implicit_include_directories: true,
 	name_prefix: '',
 	dependencies: dependencies + vmod_dependencies,
 	install: install,
 	install_dir: vmod_bin,
-	cpp_args: cpp_args + gsdk_cpp_args,
+	cpp_args: cpp_args + vm_cpp_args + gsdk_cpp_args,
 	link_args: link_args
 )
 
@@ -418,7 +424,7 @@ vtable_dumper = executable('vtable_dumper',
 	gnu_symbol_visibility: 'inlineshidden',
 	implicit_include_directories: true,
 	name_prefix: '',
-	dependencies: dependencies + vtable_dumper_dependencies,
+	dependencies: dependencies + [dependency('llvm')],
 	install: install,
 	install_dir: vmod_bin,
 	install_rpath: engine_bin,

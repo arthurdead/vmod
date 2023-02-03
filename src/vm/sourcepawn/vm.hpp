@@ -8,12 +8,35 @@
 #include <string>
 #include "../vm_shared.hpp"
 
-#ifdef __VMOD_USING_QUIRREL
 #pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
-#include <sqmodules.h>
+#pragma GCC diagnostic ignored "-Wshadow-field-in-constructor"
+#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
+#pragma GCC diagnostic ignored "-Wdocumentation"
+#pragma GCC diagnostic ignored "-Wextra-semi"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wweak-vtables"
+#pragma GCC diagnostic ignored "-Wsign-conversion"
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#pragma GCC diagnostic ignored "-Wshorten-64-to-32"
+#pragma GCC diagnostic ignored "-Wmissing-noreturn"
+#pragma GCC diagnostic ignored "-Wimplicit-int-conversion"
+#pragma GCC diagnostic ignored "-Wsigned-enum-bitfield"
+#pragma GCC diagnostic ignored "-Wshadow"
+#pragma GCC diagnostic ignored "-Winconsistent-missing-destructor-override"
+#pragma GCC diagnostic ignored "-Wsuggest-destructor-override"
+#include <sp_vm_api.h>
+#include <compile-context.h>
+#include <compile-options.h>
+#include <source-manager.h>
+#include <source-file.h>
+#include <lexer.h>
+#include <parser.h>
+#include <errors.h>
+#include <semantics.h>
+#include <code-generator.h>
+#include <assembler.h>
+#include <sc.h>
 #pragma GCC diagnostic pop
-#endif
 
 #ifndef __VMOD_USING_CUSTOM_VM
 	#error
@@ -26,17 +49,56 @@ namespace vmod
 
 namespace vmod::vm
 {
-	static_assert(sizeof(SQObjectType) == sizeof(int));
+	enum class sp_object_type : int
+	{
+		unknown,
+		runtime,
+		function,
+	};
+
+	static_assert(sizeof(sp_object_type) == sizeof(int));
+
+	struct sp_object
+	{
+		~sp_object() noexcept;
+
+		sp_object_type type{sp_object_type::unknown};
+
+		static_assert(sizeof(cell_t) >= sizeof(funcid_t));
+
+		union {
+			SourcePawn::IPluginRuntime *runtime;
+			SourcePawn::IPluginFunction *function;
+			cell_t value;
+		};
+
+		inline sp_object(SourcePawn::IPluginRuntime *value_) noexcept
+			: type{sp_object_type::runtime}, runtime{value_}
+		{
+		}
+
+		inline sp_object(SourcePawn::IPluginFunction *value_) noexcept
+			: type{sp_object_type::function}, function{value_}
+		{
+		}
+
+	private:
+		sp_object() = delete;
+		sp_object(const sp_object &) = delete;
+		sp_object &operator=(const sp_object &) = delete;
+		sp_object(sp_object &&) = delete;
+		sp_object &operator=(sp_object &&) = delete;
+	};
 
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
-	class squirrel final : public gsdk::IScriptVM
+	class sourcepawn final : public gsdk::IScriptVM
 	{
 		friend class vmod::main;
 
 	public:
-		squirrel() noexcept = default;
-		virtual ~squirrel() noexcept;
+		sourcepawn() noexcept = default;
+		virtual ~sourcepawn() noexcept;
 
 		bool Init() override;
 		void Shutdown() override;
@@ -110,153 +172,46 @@ namespace vmod::vm
 
 		gsdk::HSCRIPT CompileScript_strict(const char *, const char * = nullptr) noexcept;
 
-	#ifdef __VMOD_USING_QUIRREL
-		static std::underlying_type_t<SQLangFeature> default_lang_feat;
-	#endif
+	private:
+		struct compile_res
+		{
+			std::filesystem::path bin_path;
+			bool success;
 
-		HSQOBJECT vector_class;
-		HSQOBJECT qangle_class;
+			inline bool operator!() const noexcept
+			{ return success; }
+			inline operator bool() const noexcept
+			{ return success; }
+
+			inline operator std::filesystem::path &&() && noexcept
+			{ return std::move(bin_path); }
+			inline operator const std::filesystem::path &() const noexcept
+			{ return bin_path; }
+
+			inline operator const char *() const noexcept
+			{ return bin_path.c_str(); }
+		};
+
+		bool push(const gsdk::ScriptVariant_t &value, SourcePawn::IPluginFunction *func) noexcept;
+
+		compile_res compile_code(const char *code, bool strict) noexcept;
+		compile_res cleanup_compile(bool success, std::string &&hash, ParseTree *tree) noexcept;
+
+		gsdk::HSCRIPT load(compile_res &&res) noexcept;
+
+		SourcePawn::ISourcePawnEnvironment *env{nullptr};
+		SourcePawn::ISourcePawnEngine2 *api{nullptr};
+
+		CompileContext compiler_ctx;
+
+		std::filesystem::path src_dir;
+		std::filesystem::path bin_dir;
 
 	private:
-		static char err_buff[gsdk::MAXPRINTMSG];
-		static void error_func(HSQUIRRELVM vm, const SQChar *fmt, ...) __attribute__((__format__(__printf__, 2, 3)));
-		static char print_buff[gsdk::MAXPRINTMSG];
-		static void print_func(HSQUIRRELVM vm, const SQChar *fmt, ...) __attribute__((__format__(__printf__, 2, 3)));
-
-		static SQInteger static_func_call(HSQUIRRELVM vm);
-		static SQInteger member_func_call(HSQUIRRELVM vm);
-
-		static SQInteger metamethod_get_call(HSQUIRRELVM vm);
-
-		static SQInteger instance_external_ctor(HSQUIRRELVM vm);
-
-		static char instance_str_buff[gsdk::MAXPRINTMSG];
-		static SQInteger instance_str(HSQUIRRELVM vm);
-
-		static SQInteger instance_valid(HSQUIRRELVM vm);
-		static SQInteger instance_release_generic(SQUserPointer userptr, SQInteger size);
-		static SQInteger instance_release_external(SQUserPointer userptr, SQInteger size);
-
-		SQInteger func_call(const gsdk::ScriptFunctionBinding_t *info, void *obj, const std::vector<gsdk::ScriptVariant_t> &args) noexcept;
-
-		bool push(const gsdk::ScriptVariant_t &var) noexcept;
-		bool get(HSQOBJECT obj, gsdk::ScriptVariant_t &var) noexcept;
-		bool get(SQInteger idx, gsdk::ScriptVariant_t &var) noexcept;
-
-		bool register_func(const gsdk::ScriptClassDesc_t *classinfo, const gsdk::ScriptFunctionBinding_t *info, std::string_view name_str) noexcept;
-
-		bool register_class(const gsdk::ScriptClassDesc_t *info, std::string &&classname_str, HSQOBJECT **obj) noexcept;
-
-		gsdk::HSCRIPT compile_script() noexcept;
-
-		void get_obj(gsdk::ScriptVariant_t &value) noexcept;
-
-		bool debug_vm{false};
-
-		gsdk::ScriptOutputFunc_t output_callback{nullptr};
-		gsdk::ScriptErrorFunc_t err_callback{nullptr};
-
-		HSQUIRRELVM impl{nullptr};
-
-	#ifdef __VMOD_USING_QUIRREL
-		std::unique_ptr<SqModules> modules;
-	#endif
-
-		std::size_t unique_ids{0};
-
-		bool vector_registered{false};
-
-		bool qangle_registered{false};
-
-		HSQOBJECT create_scope_func;
-		bool got_create_scope{false};
-
-		HSQOBJECT release_scope_func;
-		bool got_release_scope{false};
-
-		HSQOBJECT register_func_desc;
-		bool got_reg_func_desc{false};
-
-		HSQOBJECT root_table;
-		bool got_root_table{false};
-
-		HSQOBJECT last_exception;
-		bool got_last_exception{false};
-
-		struct instance_info_t
-		{
-			instance_info_t(instance_info_t &&) noexcept = default;
-			instance_info_t &operator=(instance_info_t &&) noexcept = default;
-
-			inline instance_info_t(const gsdk::ScriptClassDesc_t *info_, void *ptr_) noexcept
-				: classinfo{info_}, ptr{ptr_}
-			{
-			}
-
-			const gsdk::ScriptClassDesc_t *classinfo{nullptr};
-			void *ptr{nullptr};
-			std::string id;
-
-		private:
-			instance_info_t() = delete;
-			instance_info_t(const instance_info_t &) = delete;
-			instance_info_t &operator=(const instance_info_t &) = delete;
-		};
-
-		struct func_info_t
-		{
-			func_info_t(func_info_t &&) noexcept = default;
-			func_info_t &operator=(func_info_t &&) noexcept = default;
-
-			inline func_info_t(const gsdk::ScriptFunctionBinding_t *ptr_) noexcept
-				: ptr{ptr_}
-			{
-			}
-
-			const gsdk::ScriptFunctionBinding_t *ptr{nullptr};
-
-		private:
-			func_info_t() = delete;
-			func_info_t(const func_info_t &) = delete;
-			func_info_t &operator=(const func_info_t &) = delete;
-		};
-
-		using registered_funcs_t = std::unordered_map<std::string, func_info_t>;
-
-		registered_funcs_t registered_funcs;
-
-		struct class_info_t
-		{
-			class_info_t(class_info_t &&) noexcept = default;
-			class_info_t &operator=(class_info_t &&) noexcept = default;
-
-			inline class_info_t(const gsdk::ScriptClassDesc_t *ptr_) noexcept
-				: ptr{ptr_}
-			{
-			}
-
-			const gsdk::ScriptClassDesc_t *ptr{nullptr};
-			HSQOBJECT obj;
-
-			registered_funcs_t registered_funcs;
-
-		private:
-			class_info_t() = delete;
-			class_info_t(const class_info_t &) = delete;
-			class_info_t &operator=(const class_info_t &) = delete;
-		};
-
-		using registered_classes_t = std::unordered_map<std::string, std::unique_ptr<class_info_t>>;
-
-		registered_classes_t registered_classes;
-
-		registered_classes_t::iterator last_registered_class;
-
-	private:
-		squirrel(const squirrel &) = delete;
-		squirrel &operator=(const squirrel &) = delete;
-		squirrel(squirrel &&) = delete;
-		squirrel &operator=(squirrel &&) = delete;
+		sourcepawn(const sourcepawn &) = delete;
+		sourcepawn &operator=(const sourcepawn &) = delete;
+		sourcepawn(sourcepawn &&) = delete;
+		sourcepawn &operator=(sourcepawn &&) = delete;
 	};
 	#pragma GCC diagnostic pop
 }

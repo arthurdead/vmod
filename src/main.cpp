@@ -9,7 +9,11 @@
 #include <dlfcn.h>
 
 #ifdef __VMOD_USING_CUSTOM_VM
-#include "vm/squirrel/vm.hpp"
+	#include "vm/squirrel/vm.hpp"
+
+	#ifdef __VMOD_ENABLE_SOURCEPAWN
+		#include "vm/sourcepawn/vm.hpp"
+	#endif
 #endif
 
 #include "plugin.hpp"
@@ -1131,6 +1135,12 @@ namespace vmod
 				scripts_extension = ".py"sv;
 				base_scripts_dir /= "python"sv;
 			} break;
+		#if defined __VMOD_USING_CUSTOM_VM && defined __VMOD_ENABLE_SOURCEPAWN
+			case gsdk::SL_SOURCEPAWN: {
+				scripts_extension = ".sp"sv;
+				base_scripts_dir /= "sourcepawn"sv;
+			} break;
+		#endif
 		#ifndef __clang__
 			default: break;
 		#endif

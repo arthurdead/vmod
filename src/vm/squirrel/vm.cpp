@@ -1,3 +1,5 @@
+#define __VMOD_COMPILING_SQUIRREL_VM
+
 #include "vm.hpp"
 #include "../../gsdk.hpp"
 #include "../../main.hpp"
@@ -1500,7 +1502,7 @@ namespace vmod::vm
 		return "Squirrel";
 	}
 
-	HSQUIRRELVM squirrel::GetInternalVM()
+	gsdk::HINTERNALVM squirrel::GetInternalVM()
 	{
 		return impl;
 	}
@@ -2080,7 +2082,10 @@ namespace vmod::vm
 
 		std::size_t num_args_siz{static_cast<std::size_t>(num_args)};
 		for(std::size_t i{0}; i < num_args_siz; ++i) {
-			push(args[i]);
+			if(!push(args[i])) {
+				debugtrap(); //TODO!!! pop pushed values
+				return gsdk::SCRIPT_ERROR;
+			}
 		}
 
 		bool failed{false};
@@ -3271,7 +3276,7 @@ namespace vmod::vm
 		return &root_table;
 	}
 
-	SQObjectType squirrel::GetIdentity(gsdk::HSCRIPT obj)
+	gsdk::HIDENTITY squirrel::GetIdentity(gsdk::HSCRIPT obj)
 	{
 		return sq_type(*obj);
 	}

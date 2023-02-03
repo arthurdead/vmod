@@ -70,7 +70,7 @@ namespace vmod::bindings::ent
 		static bool bindings() noexcept;
 		static void unbindings() noexcept;
 
-		~sendtable() override;
+		~sendtable() noexcept override;
 
 	private:
 		static vscript::class_desc<sendtable> desc;

@@ -1,0 +1,39 @@
+diff --git a/compiler/assembler.cpp b/compiler/assembler.cpp
+index 1e588d5..7100440 100644
+--- a/compiler/assembler.cpp
++++ b/compiler/assembler.cpp
+@@ -37,7 +37,7 @@
+ #include <smx/smx-v1-opcodes.h>
+ #include <smx/smx-v1.h>
+ #include <sp_vm_api.h>
+-#include <zlib/zlib.h>
++#include <zlib.h>
+ #include "assembler.h"
+ #include "compile-context.h"
+ #include "compile-options.h"
+diff --git a/vm/api.cpp b/vm/api.cpp
+index 752ddb3..adba07a 100644
+--- a/vm/api.cpp
++++ b/vm/api.cpp
+@@ -16,7 +16,7 @@
+ #include <assert.h>
+ #include "environment.h"
+ #include "api.h"
+-#include <zlib/zlib.h>
++#include <zlib.h>
+ #if defined __GNUC__
+ #include <unistd.h>
+ #endif
+diff --git a/vm/smx-v1-image.cpp b/vm/smx-v1-image.cpp
+index 271ee4c..23cb2c3 100644
+--- a/vm/smx-v1-image.cpp
++++ b/vm/smx-v1-image.cpp
+@@ -11,7 +11,7 @@
+ 
+ #include <amtl/am-string.h>
+ #include "smx-v1-image.h"
+-#include <zlib/zlib.h>
++#include <zlib.h>
+ #include "environment.h"
+ 
+ using namespace ke;

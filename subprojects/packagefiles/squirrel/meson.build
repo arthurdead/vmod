@@ -11,14 +11,17 @@ project('squirrel', 'cpp',
 		'b_lundef=true',
 		'strip=true',
 		'cpp_std=gnu++17',
-		'cpp_eh=default',
+		'cpp_eh=none',
 		'cpp_rtti=false'
 	]
 )
 
 cpp_args = [
 	'-include__protofix.h',
+	'-Wno-switch'
+]
 
+cpp_args += [
 	#TODO!!! the l4d2 scripts are really bad
 	'-DSQ_ALLOW_IF_ASSIGNMENT',
 	'-DSQ_ALLOW_LOOP_ASSIGNMENT',
