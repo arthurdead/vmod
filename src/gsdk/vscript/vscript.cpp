@@ -47,7 +47,14 @@ namespace gsdk
 	{
 		ScriptVariant_t var;
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
-		(this->*CreateArray_ptr)(var);
+		gsdk::ScriptLanguage_t lang{GetLanguage()};
+		switch(lang) {
+			case gsdk::SL_SQUIRREL:
+			(this->*squirrel_CreateArray_ptr)(var);
+			break;
+			default:
+			return INVALID_HSCRIPT;
+		}
 	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
 		CreateArray_impl(var);
 	#else
@@ -58,10 +65,10 @@ namespace gsdk
 #endif
 
 #if GSDK_ENGINE == GSDK_ENGINE_TF2
-	void(IScriptVM::*IScriptVM::CreateArray_ptr)(ScriptVariant_t &) {nullptr};
-	int(IScriptVM::*IScriptVM::GetArrayCount_ptr)(HSCRIPT) const {nullptr};
-	bool(IScriptVM::*IScriptVM::IsArray_ptr)(HSCRIPT) const {nullptr};
-	bool(IScriptVM::*IScriptVM::IsTable_ptr)(HSCRIPT) const {nullptr};
+	void(IScriptVM::*IScriptVM::squirrel_CreateArray_ptr)(ScriptVariant_t &) {nullptr};
+	int(IScriptVM::*IScriptVM::squirrel_GetArrayCount_ptr)(HSCRIPT) const {nullptr};
+	bool(IScriptVM::*IScriptVM::squirrel_IsArray_ptr)(HSCRIPT) const {nullptr};
+	bool(IScriptVM::*IScriptVM::squirrel_IsTable_ptr)(HSCRIPT) const {nullptr};
 
 	int IScriptVM::GetArrayCount(HSCRIPT array) const noexcept
 	{
@@ -71,7 +78,13 @@ namespace gsdk
 		}
 	#endif
 
-		return (this->*GetArrayCount_ptr)(array);
+		gsdk::ScriptLanguage_t lang{GetLanguage()};
+		switch(lang) {
+			case gsdk::SL_SQUIRREL:
+			return (this->*squirrel_GetArrayCount_ptr)(array);
+			default:
+			return 0;
+		}
 	}
 
 	bool IScriptVM::IsArray(HSCRIPT array) const noexcept
@@ -82,7 +95,13 @@ namespace gsdk
 		}
 	#endif
 
-		return (this->*IsArray_ptr)(array);
+		gsdk::ScriptLanguage_t lang{GetLanguage()};
+		switch(lang) {
+			case gsdk::SL_SQUIRREL:
+			return (this->*squirrel_IsArray_ptr)(array);
+			default:
+			return false;
+		}
 	}
 
 	bool IScriptVM::IsTable(HSCRIPT table) const noexcept
@@ -93,7 +112,13 @@ namespace gsdk
 		}
 	#endif
 
-		return (this->*IsTable_ptr)(table);
+		gsdk::ScriptLanguage_t lang{GetLanguage()};
+		switch(lang) {
+			case gsdk::SL_SQUIRREL:
+			return (this->*squirrel_IsTable_ptr)(table);
+			default:
+			return false;
+		}
 	}
 #endif
 
@@ -104,7 +129,13 @@ namespace gsdk
 			return false;
 		}
 
-		return (array->_type == OT_ARRAY);
+		gsdk::ScriptLanguage_t lang{GetLanguage()};
+		switch(lang) {
+			case gsdk::SL_SQUIRREL:
+			return (reinterpret_cast<HSQOBJECT *>(array)->_type == OT_ARRAY);
+			default:
+			return false;
+		}
 	}
 
 	bool IScriptVM::IsTable(HSCRIPT table) const noexcept
@@ -113,7 +144,13 @@ namespace gsdk
 			return false;
 		}
 
-		return (table->_type == OT_TABLE);
+		gsdk::ScriptLanguage_t lang{GetLanguage()};
+		switch(lang) {
+			case gsdk::SL_SQUIRREL:
+			return (reinterpret_cast<HSQOBJECT *>(table)->_type == OT_TABLE);
+			default:
+			return false;
+		}
 	}
 
 	void IScriptVM::ArrayAddToTail(HSCRIPT array, const ScriptVariant_t &var)
@@ -122,11 +159,14 @@ namespace gsdk
 			return;
 		}
 
-		if(array->_type != OT_ARRAY) {
-			return;
+		gsdk::ScriptLanguage_t lang{GetLanguage()};
+		switch(lang) {
+			case gsdk::SL_SQUIRREL:
+			//array->_unVal.pArray->Append();
+			break;
+			default:
+			break;
 		}
-
-		//array->_unVal.pArray->Append();
 	}
 
 	HSCRIPT IScriptVM::CreateArray() noexcept
@@ -140,43 +180,57 @@ namespace gsdk
 			return 0;
 		}
 
-		if(array->_type != OT_ARRAY) {
-			return false;
+		gsdk::ScriptLanguage_t lang{GetLanguage()};
+		switch(lang) {
+			case gsdk::SL_SQUIRREL:
+			return reinterpret_cast<HSQOBJECT *>(array)->_unVal.pArray->Size();
+			default:
+			return 0;
 		}
-
-		return array->_unVal.pArray->Size();
 	}
 
 	bool IScriptVM::GetScalarValue(HSCRIPT object, ScriptVariant_t *var) noexcept
 	{
 		std::memset(var->m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
 
-		switch(object->_type) {
-			case OT_NULL: {
-				var->m_type = FIELD_VOID;
-				var->m_object = INVALID_HSCRIPT;
-				return true;
-			}
-			case OT_INTEGER: {
-				var->m_type = FIELD_INTEGER;
-				var->m_int = object->_unVal.nInteger;
-				return true;
-			}
-			case OT_FLOAT: {
-				var->m_type = FIELD_FLOAT;
-				var->m_float = object->_unVal.fFloat;
-				return true;
-			}
-			case OT_BOOL: {
-				var->m_type = FIELD_BOOLEAN;
-				var->m_bool = (object->_unVal.nInteger > 0 ? true : false);
-				return true;
-			}
-			case OT_STRING: {
-				//TODO!!!!
-				var->m_type = FIELD_CSTRING;
-				var->m_ccstr = nullptr;
-				return false;
+		gsdk::ScriptLanguage_t lang{GetLanguage()};
+		switch(lang) {
+			case gsdk::SL_SQUIRREL: {
+				HSQOBJECT *sqobj{reinterpret_cast<HSQOBJECT *>(object)};
+
+				switch(sqobj->_type) {
+					case OT_NULL: {
+						var->m_type = FIELD_VOID;
+						var->m_object = INVALID_HSCRIPT;
+						return true;
+					}
+					case OT_INTEGER: {
+						var->m_type = FIELD_INTEGER;
+						var->m_int = sqobj->_unVal.nInteger;
+						return true;
+					}
+					case OT_FLOAT: {
+						var->m_type = FIELD_FLOAT;
+						var->m_float = sqobj->_unVal.fFloat;
+						return true;
+					}
+					case OT_BOOL: {
+						var->m_type = FIELD_BOOLEAN;
+						var->m_bool = (sqobj->_unVal.nInteger > 0 ? true : false);
+						return true;
+					}
+					case OT_STRING: {
+						//TODO!!!!
+						var->m_type = FIELD_CSTRING;
+						var->m_ccstr = nullptr;
+						return false;
+					}
+					default: {
+						var->m_type = FIELD_TYPEUNKNOWN;
+						var->m_object = INVALID_HSCRIPT;
+						return false;
+					}
+				}
 			}
 			default: {
 				var->m_type = FIELD_TYPEUNKNOWN;

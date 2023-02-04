@@ -168,19 +168,9 @@ namespace gsdk
 	using HSCRIPT__ = generic_handle__;
 	using HINTERNALVM__ = generic_handle__;
 
-#ifdef __VMOD_COMPILING_SQUIRREL_VM
-	using HSCRIPT = HSQOBJECT *;
-	using HINTERNALVM = HSQUIRRELVM;
-	using HIDENTITY = SQObjectType;
-#elif defined __VMOD_COMPILING_SOURCEPAWN_VM
-	using HSCRIPT = vmod::vm::sp_object *;
-	using HINTERNALVM = SourcePawn::ISourcePawnEnvironment *;
-	using HIDENTITY = vmod::vm::sp_object_type;
-#else
 	using HSCRIPT = HSCRIPT__ *;
 	using HINTERNALVM = HINTERNALVM__ *;
 	using HIDENTITY = int;
-#endif
 
 	inline HSCRIPT INVALID_HSCRIPT{reinterpret_cast<HSCRIPT>(-1)};
 
@@ -516,10 +506,10 @@ namespace gsdk
 	#endif
 
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
-		static void(IScriptVM::*CreateArray_ptr)(ScriptVariant_t &);
-		static int(IScriptVM::*GetArrayCount_ptr)(HSCRIPT) const;
-		static bool(IScriptVM::*IsArray_ptr)(HSCRIPT) const;
-		static bool(IScriptVM::*IsTable_ptr)(HSCRIPT) const;
+		static void(IScriptVM::*squirrel_CreateArray_ptr)(ScriptVariant_t &);
+		static int(IScriptVM::*squirrel_GetArrayCount_ptr)(HSCRIPT) const;
+		static bool(IScriptVM::*squirrel_IsArray_ptr)(HSCRIPT) const;
+		static bool(IScriptVM::*squirrel_IsTable_ptr)(HSCRIPT) const;
 	#endif
 
 		static constexpr std::size_t unique_id_max{4095 + 6 + 64};
@@ -528,8 +518,8 @@ namespace gsdk
 		virtual void Shutdown() = 0;
 		virtual bool ConnectDebugger() = 0;
 		virtual void DisconnectDebugger() = 0;
-		virtual ScriptLanguage_t GetLanguage() = 0;
-		virtual const char *GetLanguageName() = 0;
+		virtual ScriptLanguage_t GetLanguage() const = 0;
+		virtual const char *GetLanguageName() const = 0;
 	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 		virtual HINTERNALVM GetInternalVM() = 0;
 	#endif
@@ -689,6 +679,32 @@ namespace gsdk
 #endif
 
 	extern IScriptVM *g_pScriptVM;
+}
+
+namespace vmod
+{
+#ifdef __VMOD_USING_CUSTOM_VM
+	#ifdef __clang__
+	#pragma clang diagnostic push
+	#pragma clang diagnostic ignored "-Wweak-vtables"
+	#pragma clang diagnostic ignored "-Wnon-virtual-dtor"
+	#else
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
+	#endif
+	class IScriptVM : public gsdk::IScriptVM
+	{
+	public:
+		//TODO!!! insert missing funcs
+	};
+	#ifdef __clang__
+	#pragma clang diagnostic pop
+	#else
+	#pragma GCC diagnostic pop
+	#endif
+#else
+	using IScriptVM = gsdk::IScriptVM;
+#endif
 }
 
 #include "vscript.tpp"

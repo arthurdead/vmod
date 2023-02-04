@@ -30,7 +30,7 @@ namespace vmod::vm
 
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
-	class squirrel final : public gsdk::IScriptVM
+	class squirrel final : public IScriptVM
 	{
 		friend class vmod::main;
 
@@ -42,8 +42,8 @@ namespace vmod::vm
 		void Shutdown() override;
 		bool ConnectDebugger() override;
 		void DisconnectDebugger() override;
-		gsdk::ScriptLanguage_t GetLanguage() override;
-		const char *GetLanguageName() override;
+		gsdk::ScriptLanguage_t GetLanguage() const override;
+		const char *GetLanguageName() const override;
 		gsdk::HINTERNALVM GetInternalVM() __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
 		void AddSearchPath(const char *) override;
 		bool ForwardConsoleCommand(const gsdk::CCommandContext &, const gsdk::CCommand &) __VMOD_CUSTOM_VM_L4D2_OVERRIDE;

@@ -1199,26 +1199,26 @@ namespace vmod
 
 			if(CSquirrelVM_it != vscript_symbols.end()) {
 			#if GSDK_ENGINE == GSDK_ENGINE_TF2
-				auto CreateArray_it{CSquirrelVM_it->second->find("CreateArray(CVariantBase<CVariantDefaultAllocator>&)"s)};
-				if(CreateArray_it == CSquirrelVM_it->second->end()) {
+				auto squirrel_CreateArray_it{CSquirrelVM_it->second->find("CreateArray(CVariantBase<CVariantDefaultAllocator>&)"s)};
+				if(squirrel_CreateArray_it == CSquirrelVM_it->second->end()) {
 					error("vmod: missing 'CSquirrelVM::CreateArray(CVariantBase<CVariantDefaultAllocator>&)' symbol\n"sv);
 					return false;
 				}
 
-				auto GetArrayCount_it{CSquirrelVM_it->second->find("GetArrayCount(HSCRIPT__*)"s)};
-				if(GetArrayCount_it == CSquirrelVM_it->second->end()) {
+				auto squirrel_GetArrayCount_it{CSquirrelVM_it->second->find("GetArrayCount(HSCRIPT__*)"s)};
+				if(squirrel_GetArrayCount_it == CSquirrelVM_it->second->end()) {
 					error("vmod: missing 'CSquirrelVM::GetArrayCount(HSCRIPT__*)' symbol\n"sv);
 					return false;
 				}
 
-				auto IsArray_it{CSquirrelVM_it->second->find("IsArray(HSCRIPT__*)"s)};
-				if(IsArray_it == CSquirrelVM_it->second->end()) {
+				auto squirrel_IsArray_it{CSquirrelVM_it->second->find("IsArray(HSCRIPT__*)"s)};
+				if(squirrel_IsArray_it == CSquirrelVM_it->second->end()) {
 					error("vmod: missing 'CSquirrelVM::IsArray(HSCRIPT__*)' symbol\n"sv);
 					return false;
 				}
 
-				auto IsTable_it{CSquirrelVM_it->second->find("IsTable(HSCRIPT__*)"s)};
-				if(IsTable_it == CSquirrelVM_it->second->end()) {
+				auto squirrel_IsTable_it{CSquirrelVM_it->second->find("IsTable(HSCRIPT__*)"s)};
+				if(squirrel_IsTable_it == CSquirrelVM_it->second->end()) {
 					error("vmod: missing 'CSquirrelVM::IsTable(HSCRIPT__*)' symbol\n"sv);
 					return false;
 				}
@@ -1297,10 +1297,10 @@ namespace vmod
 				}
 
 			#if GSDK_ENGINE == GSDK_ENGINE_TF2
-				gsdk::IScriptVM::CreateArray_ptr = CreateArray_it->second->mfp<decltype(gsdk::IScriptVM::CreateArray_ptr)>();
-				gsdk::IScriptVM::GetArrayCount_ptr = GetArrayCount_it->second->mfp<decltype(gsdk::IScriptVM::GetArrayCount_ptr)>();
-				gsdk::IScriptVM::IsArray_ptr = IsArray_it->second->mfp<decltype(gsdk::IScriptVM::IsArray_ptr)>();
-				gsdk::IScriptVM::IsTable_ptr = IsTable_it->second->mfp<decltype(gsdk::IScriptVM::IsTable_ptr)>();
+				gsdk::IScriptVM::squirrel_CreateArray_ptr = squirrel_CreateArray_it->second->mfp<decltype(gsdk::IScriptVM::squirrel_CreateArray_ptr)>();
+				gsdk::IScriptVM::squirrel_GetArrayCount_ptr = squirrel_GetArrayCount_it->second->mfp<decltype(gsdk::IScriptVM::squirrel_GetArrayCount_ptr)>();
+				gsdk::IScriptVM::squirrel_IsArray_ptr = squirrel_IsArray_it->second->mfp<decltype(gsdk::IScriptVM::squirrel_IsArray_ptr)>();
+				gsdk::IScriptVM::squirrel_IsTable_ptr = squirrel_IsTable_it->second->mfp<decltype(gsdk::IScriptVM::squirrel_IsTable_ptr)>();
 			#endif
 			}
 		#else
@@ -1313,10 +1313,10 @@ namespace vmod
 			ErrorFunc = vm::squirrel::error_func;
 
 			#if GSDK_ENGINE == GSDK_ENGINE_TF2
-			gsdk::IScriptVM::CreateArray_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::CreateArray_ptr)>(&vm::squirrel::CreateArray_impl_nonvirtual);
-			gsdk::IScriptVM::GetArrayCount_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::GetArrayCount_ptr)>(&vm::squirrel::GetArrayCount_nonvirtual);
-			gsdk::IScriptVM::IsArray_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::IsArray_ptr)>(&vm::squirrel::IsArray_nonvirtual);
-			gsdk::IScriptVM::IsTable_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::IsTable_ptr)>(&vm::squirrel::IsTable_nonvirtual);
+			gsdk::IScriptVM::squirrel_CreateArray_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::squirrel_CreateArray_ptr)>(&vm::squirrel::CreateArray_impl_nonvirtual);
+			gsdk::IScriptVM::squirrel_GetArrayCount_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::squirrel_GetArrayCount_ptr)>(&vm::squirrel::GetArrayCount_nonvirtual);
+			gsdk::IScriptVM::squirrel_IsArray_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::squirrel_IsArray_ptr)>(&vm::squirrel::IsArray_nonvirtual);
+			gsdk::IScriptVM::squirrel_IsTable_ptr = reinterpret_cast<decltype(gsdk::IScriptVM::squirrel_IsTable_ptr)>(&vm::squirrel::IsTable_nonvirtual);
 			#endif
 		#endif
 
@@ -1603,7 +1603,7 @@ namespace vmod
 			return false;
 		}
 
-		vm_ = vsmgr->CreateVM(script_language);
+		vm_ = reinterpret_cast<IScriptVM *>(vsmgr->CreateVM(script_language));
 		if(!vm_) {
 			error("vmod: failed to create VM\n"sv);
 			return false;

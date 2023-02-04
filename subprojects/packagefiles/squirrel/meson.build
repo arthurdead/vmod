@@ -18,7 +18,8 @@ project('squirrel', 'cpp',
 
 cpp_args = [
 	'-include__protofix.h',
-	'-Wno-switch'
+	'-Wno-switch',
+	'-Wno-deprecated-array-compare'
 ]
 
 cpp_args += [

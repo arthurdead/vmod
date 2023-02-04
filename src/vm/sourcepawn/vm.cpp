@@ -10,6 +10,11 @@ namespace vmod::vm
 {
 	sourcepawn::~sourcepawn() noexcept {}
 
+	static inline sp_object *vs_cast(gsdk::HSCRIPT obj) noexcept
+	{ return __builtin_bit_cast(sp_object *, obj); }
+	static inline gsdk::HSCRIPT vs_cast(sp_object *obj) noexcept
+	{ return __builtin_bit_cast(gsdk::HSCRIPT, obj); }
+
 	bool sourcepawn::Init()
 	{
 		using namespace std::literals::string_view_literals;
@@ -76,12 +81,12 @@ namespace vmod::vm
 		
 	}
 
-	gsdk::ScriptLanguage_t sourcepawn::GetLanguage()
+	gsdk::ScriptLanguage_t sourcepawn::GetLanguage() const
 	{
 		return gsdk::SL_SOURCEPAWN;
 	}
 
-	const char *sourcepawn::GetLanguageName()
+	const char *sourcepawn::GetLanguageName() const
 	{
 		return "sourcepawn";
 	}
@@ -253,7 +258,7 @@ namespace vmod::vm
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		return new sp_object{runtime};
+		return vs_cast(new sp_object{runtime});
 	}
 
 	gsdk::HSCRIPT sourcepawn::CompileScript_strict(const char *code, const char *name) noexcept
@@ -278,7 +283,7 @@ namespace vmod::vm
 
 	void sourcepawn::ReleaseScript(gsdk::HSCRIPT object)
 	{
-		delete object;
+		delete vs_cast(object);
 	}
 
 	gsdk::ScriptStatus_t sourcepawn::Run(gsdk::HSCRIPT object, gsdk::HSCRIPT scope, bool wait)
@@ -288,7 +293,7 @@ namespace vmod::vm
 
 	gsdk::ScriptStatus_t sourcepawn::Run(gsdk::HSCRIPT object, bool wait)
 	{
-		SourcePawn::IPluginFunction *main{object->runtime->GetFunctionByName("main")};
+		SourcePawn::IPluginFunction *main{vs_cast(object)->runtime->GetFunctionByName("main")};
 		if(!main) {
 			return gsdk::SCRIPT_ERROR;
 		}
@@ -419,7 +424,7 @@ namespace vmod::vm
 				if(var.m_object && var.m_object != gsdk::INVALID_HSCRIPT) {
 					switch(var.m_object->type) {
 						case sp_object_type::function:
-						func->PushCell(static_cast<cell_t>(var.m_object->function->GetFunctionID()));
+						func->PushCell(static_cast<cell_t>(vs_cast(var.m_object)->function->GetFunctionID()));
 						break;
 						default:
 						return false;
@@ -465,14 +470,14 @@ namespace vmod::vm
 	{
 		std::size_t num_args_siz{static_cast<size_t>(num_args)};
 		for(std::size_t i{0}; i < num_args_siz; ++i) {
-			if(!push(args[i], object->function)) {
+			if(!push(args[i], vs_cast(object)->function)) {
 				object->function->Cancel();
 				return gsdk::SCRIPT_ERROR;
 			}
 		}
 
 		cell_t ret_cell{0};
-		if(object->function->Execute(ret ? &ret_cell : nullptr) != SP_ERROR_NONE) {
+		if(vs_cast(object)->function->Execute(ret ? &ret_cell : nullptr) != SP_ERROR_NONE) {
 			return gsdk::SCRIPT_ERROR;
 		}
 

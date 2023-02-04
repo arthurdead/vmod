@@ -57,7 +57,7 @@ namespace vmod
 		inline gsdk::CVarDLLIdentifier_t cvar_dll_id() const noexcept
 		{ return cvar_dll_id_; }
 
-		inline gsdk::IScriptVM *vm() noexcept
+		inline IScriptVM *vm() noexcept
 		{ return vm_; }
 
 		inline const std::filesystem::path &game_dir() const noexcept
@@ -181,7 +181,7 @@ namespace vmod
 
 		std::string_view scripts_extension;
 
-		gsdk::IScriptVM *vm_{nullptr};
+		IScriptVM *vm_{nullptr};
 
 		gsdk::HSCRIPT return_flags_table{gsdk::INVALID_HSCRIPT};
 
