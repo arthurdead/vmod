@@ -198,6 +198,8 @@ if custom_vm
 else
 	if game == 'portal2'
 		squirrel_ver = 'squirrel_223'
+	elif game == 'tf'
+		squirrel_ver = 'squirrel_320'
 	else
 		squirrel_ver = 'squirrel_304'
 	endif
@@ -424,7 +426,7 @@ vtable_dumper = executable('vtable_dumper',
 	gnu_symbol_visibility: 'inlineshidden',
 	implicit_include_directories: true,
 	name_prefix: '',
-	dependencies: dependencies + [dependency('llvm')],
+	dependencies: dependencies + [dependency('llvm', method:'config-tool')],
 	install: install,
 	install_dir: vmod_bin,
 	install_rpath: engine_bin,

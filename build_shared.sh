@@ -1,7 +1,5 @@
 #!/usr/bin/env sh
 
-script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
-
 gcc=false
 
 if [[ $gcc == true ]]; then
@@ -20,7 +18,7 @@ export CC_LD=lld
 export LD=/usr/bin/ld.lld
 fi
 
-export CPP=/usr/bin/cpp
+export LLVM_CONFIG='/usr/bin/llvm-config32'
 
 clear
 
@@ -40,7 +38,7 @@ if [[ ! -f 'subprojects/libyaml.wrap' ]]; then
 fi
 
 if [[ ! -d $builddir ]]; then
-	meson setup --backend=ninja --cross-file $script_dir'/x86-linux-gnu' -Dengine_dir="$engine_dir" -Dgame=$game $builddir
+	meson setup --backend=ninja --cross-file ./'x86-linux-gnu' -Dengine_dir="$engine_dir" -Dgame=$game $builddir
 	if [[ $? != 0 ]]; then
 		exit 1
 	fi

@@ -1,8 +1,36 @@
 diff --git a/squirrel/sqbaselib.cpp b/squirrel/sqbaselib.cpp
-index ae54d39..fed42d9 100644
+index a1aa586..86c689f 100644
 --- a/squirrel/sqbaselib.cpp
 +++ b/squirrel/sqbaselib.cpp
-@@ -1854,6 +1854,7 @@ const SQRegFunction SQSharedState::_string_default_delegate_funcz[]={
+@@ -745,6 +745,18 @@ static SQInteger container_rawget(HSQUIRRELVM v)
+     return SQ_SUCCEEDED(sq_rawget(v,-2))?1:SQ_ERROR;
+ }
+ 
++static SQInteger table_setdelegate(HSQUIRRELVM v)
++{
++    if(SQ_FAILED(sq_setdelegate(v,-2)))
++        return SQ_ERROR;
++    sq_push(v,-1); // -1 because sq_setdelegate pops 1
++    return 1;
++}
++
++static SQInteger table_getdelegate(HSQUIRRELVM v)
++{
++    return SQ_SUCCEEDED(sq_getdelegate(v,-1))?1:SQ_ERROR;
++}
+ 
+ static SQInteger table_filter(HSQUIRRELVM v)
+ {
+@@ -954,6 +966,8 @@ const SQRegFunction SQSharedState::_table_default_delegate_funcz[]={
+     {_SC("weakref"),obj_delegate_weakref,1, NULL },
+     {_SC("tostring"),default_delegate_tostring,1, _SC(".")},
+     {_SC("clear"),obj_clear,1, _SC(".")},
++    {_SC("setdelegate"),table_setdelegate,2, _SC(".t|o")},
++    {_SC("getdelegate"),table_getdelegate,1, _SC(".")},
+     {_SC("map"),table_map,2, _SC("tc")},
+     {_SC("filter"),table_filter,2, _SC("tc")},
+     {_SC("reduce"),table_reduce, -2, _SC("tc")},
+@@ -1838,6 +1852,7 @@ const SQRegFunction SQSharedState::_string_default_delegate_funcz[]={
      {_SC("hash"),string_hash, 1, _SC("s")},
      {_SC("slice"),string_slice,-1, _SC("s n  n")},
      {_SC("indexof"),string_indexof,-2, _SC("s s n")},
@@ -11,27 +39,27 @@ index ae54d39..fed42d9 100644
      {_SC("tolower"),string_tolower,-1, _SC("s n n")},
      {_SC("toupper"),string_toupper,-1, _SC("s n n")},
 diff --git a/squirrel/sqcompiler.cpp b/squirrel/sqcompiler.cpp
-index 0fa1065..c1353b3 100644
+index 8241671..f60a913 100644
 --- a/squirrel/sqcompiler.cpp
 +++ b/squirrel/sqcompiler.cpp
-@@ -598,12 +598,16 @@ public:
+@@ -515,12 +515,16 @@ public:
                  if (op == _SC('='))
                      switch (expression_context)
                      {
-+                    #ifndef SQ_ALLOW_IF_ASSIGNMENT
-                         case SQE_IF:
-                             Error(_SC("'=' inside 'if' is forbidden"));
-                             break;
-+                    #endif
-+                    #ifndef SQ_ALLOW_LOOP_ASSIGNMENT
-                         case SQE_LOOP_CONDITION:
-                             Error(_SC("'=' inside loop condition is forbidden"));
-                             break;
-+                    #endif
-                         case SQE_SWITCH:
-                             Error(_SC("'=' inside switch is forbidden"));
-                             break;
-@@ -1394,8 +1398,10 @@ public:
++                #ifndef SQ_ALLOW_IF_ASSIGNMENT
+                     case SQE_IF:
+                         Error(_SC("'=' inside 'if' is forbidden"));
+                         break;
++                #endif
++                #ifndef SQ_ALLOW_LOOP_ASSIGNMENT
+                     case SQE_LOOP_CONDITION:
+                         Error(_SC("'=' inside loop condition is forbidden"));
+                         break;
++                #endif
+                     case SQE_SWITCH:
+                         Error(_SC("'=' inside switch is forbidden"));
+                         break;
+@@ -1334,8 +1338,10 @@ public:
      void CheckDuplicateLocalIdentifier(const SQObject &name, const SQChar *desc, bool ignore_global_consts)
      {
          bool assignable = false;
@@ -39,6 +67,6 @@ index 0fa1065..c1353b3 100644
          if (_fs->GetLocalVariable(name, assignable) >= 0)
              Error(_SC("%s name '%s' conflicts with existing local variable"), desc, _string(name)->_val);
 +    #endif
-         if (_stringval(name) == _stringval(_fs->_name))
+         if (_string(name) == _string(_fs->_name))
              Error(_SC("%s name '%s' conflicts with function name"), desc, _stringval(name));
  

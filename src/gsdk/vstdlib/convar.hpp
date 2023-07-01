@@ -9,28 +9,6 @@
 
 namespace gsdk
 {
-	template <typename T>
-	class CUtlVector;
-	class CUtlString;
-	class ConVar;
-	class ConCommandBase;
-	class IConsoleDisplayFunc;
-	class ICvarQuery;
-	using CVarDLLIdentifier_t = int;
-	class IConVar;
-	using FnChangeCallback_t = void(*)(IConVar *, const char *, float);
-	class ConCommand;
-	class CCommand;
-	using FnCommandCallbackVoid_t = void(*)();
-	using FnCommandCallback_t = void(*)(const CCommand &);
-	class ICommandCallback;
-	class ICommandCompletionCallback;
-
-	constexpr int COMMAND_COMPLETION_MAXITEMS{64};
-	constexpr int COMMAND_COMPLETION_ITEM_LENGTH{64};
-
-	using FnCommandCompletionCallback = int(*)(const char *, char[COMMAND_COMPLETION_MAXITEMS][COMMAND_COMPLETION_ITEM_LENGTH]);
-
 #ifdef __clang__
 	#pragma clang diagnostic push
 	#pragma clang diagnostic ignored "-Wshift-sign-overflow"
@@ -86,6 +64,41 @@ namespace gsdk
 	#pragma clang diagnostic pop
 #endif
 
+	using fcvar_t = decltype(FCVAR_NONE);
+}
+
+constexpr auto operator|(int rhs, gsdk::fcvar_t lhs) noexcept
+{ return static_cast<gsdk::fcvar_t>(static_cast<int>(rhs) | static_cast<int>(lhs)); }
+
+constexpr gsdk::fcvar_t &operator|=(gsdk::fcvar_t &rhs, int lhs) noexcept
+{ rhs = static_cast<gsdk::fcvar_t>(static_cast<int>(rhs) | static_cast<int>(lhs)); return rhs; }
+constexpr gsdk::fcvar_t &operator&=(gsdk::fcvar_t &rhs, int lhs) noexcept
+{ rhs = static_cast<gsdk::fcvar_t>(static_cast<int>(rhs) & static_cast<int>(lhs)); return rhs; }
+
+namespace gsdk
+{
+	template <typename T>
+	class CUtlVector;
+	class CUtlString;
+	class ConVar;
+	class ConCommandBase;
+	class IConsoleDisplayFunc;
+	class ICvarQuery;
+	using CVarDLLIdentifier_t = int;
+	class IConVar;
+	using FnChangeCallback_t = void(*)(IConVar *, const char *, float);
+	class ConCommand;
+	class CCommand;
+	using FnCommandCallbackVoid_t = void(*)();
+	using FnCommandCallback_t = void(*)(const CCommand &);
+	class ICommandCallback;
+	class ICommandCompletionCallback;
+
+	constexpr int COMMAND_COMPLETION_MAXITEMS{64};
+	constexpr int COMMAND_COMPLETION_ITEM_LENGTH{64};
+
+	using FnCommandCompletionCallback = int(*)(const char *, char[COMMAND_COMPLETION_MAXITEMS][COMMAND_COMPLETION_ITEM_LENGTH]);
+
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 	class ICVarIterator
@@ -129,7 +142,7 @@ namespace gsdk
 		bool m_bRegistered{false};
 		const char *m_pszName{nullptr};
 		const char *m_pszHelpString{nullptr};
-		int m_nFlags{FCVAR_UNREGISTERED};
+		fcvar_t m_nFlags{FCVAR_UNREGISTERED};
 
 	private:
 		ConCommandBase(const ConCommandBase &) = delete;

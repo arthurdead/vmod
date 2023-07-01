@@ -61,7 +61,8 @@ namespace vmod::vm
 	char squirrel::print_buff[gsdk::MAXPRINTMSG];
 
 #ifdef __VMOD_USING_QUIRREL
-	std::underlying_type_t<SQLangFeature> squirrel::default_lang_feat{LF_STRICT_BOOL};
+	std::underlying_type_t<SQLangFeature> squirrel::default_lang_feat{LF_STRICT_BOOL|LF_FORBID_GLOBAL_CONST_REWRITE};
+	std::underlying_type_t<SQLangFeature> squirrel::strict_lang_feat{LF_STRICT_BOOL|LF_FORBID_GLOBAL_CONST_REWRITE};
 #endif
 
 	static inline HSQOBJECT *vs_cast(gsdk::HSCRIPT obj) noexcept
@@ -930,7 +931,7 @@ namespace vmod::vm
 	{
 	#ifdef __VMOD_USING_QUIRREL
 		//TODO!!!! fix errors with LF_NO_PLUS_CONCAT
-		_ss(vm)->defaultLangFeatures = (LF_STRICT_BOOL|LF_EXPLICIT_ROOT_LOOKUP|LF_NO_FUNC_DECL_SUGAR|LF_NO_CLASS_DECL_SUGAR|/*LF_NO_PLUS_CONCAT|*/LF_EXPLICIT_THIS);
+		_ss(vm)->defaultLangFeatures = squirrel::strict_lang_feat;
 	#endif
 		auto &&ret{sq_compilebuffer(vm, std::forward<Args>(args)...)};
 	#ifdef __VMOD_USING_QUIRREL
@@ -1015,6 +1016,10 @@ namespace vmod::vm
 			sq_notifyallexceptions(impl, SQTrue);
 		}
 
+	#ifdef __VMOD_USING_QUIRREL
+		sq_setcompilationoption(impl, CompilationOptions::CO_CLOSURE_HOISTING_OPT, true);
+	#endif
+
 		{
 			sq_pushroottable(impl);
 
@@ -1077,8 +1082,10 @@ namespace vmod::vm
 
 	#ifdef __VMOD_USING_QUIRREL
 		modules.reset(new SqModules{impl});
-		modules->registerBaseLibs();
+		modules->registerMathLib();
+		modules->registerStringLib();
 		modules->registerSystemLib();
+		modules->registerIoStreamLib();
 		modules->registerIoLib();
 		modules->registerDateTimeLib();
 	#endif

@@ -293,7 +293,7 @@ namespace vmod
 
 	bool main::dump_scripts() const noexcept
 	{
-		return vmod_auto_dump_internal_scripts.get<bool>() || true;
+		return vmod_auto_dump_internal_scripts.get<bool>();
 	}
 
 	static gsdk::HSCRIPT(gsdk::IScriptVM::*CompileScript_original)(const char *, const char *) {nullptr};
@@ -306,11 +306,19 @@ namespace vmod
 		if(main.dump_scripts()) {
 			std::filesystem::path dump_path{main.root_dir()};
 			dump_path /= "dumps/compiled_scripts"sv;
+
 			if(name && name[0] != '\0') {
 				dump_path /= "named"sv;
+
+				std::error_code ec;
+				std::filesystem::create_directories(dump_path, ec);
+
 				dump_path /= name;
 			} else {
 				dump_path /= "unnamed"sv;
+
+				std::error_code ec;
+				std::filesystem::create_directories(dump_path, ec);
 
 				std::size_t hash{std::hash<std::string_view>{}(script)};
 
@@ -348,6 +356,9 @@ namespace vmod
 		if(main.dump_scripts()) {
 			std::filesystem::path dump_path{main.root_dir()};
 			dump_path /= "dumps/compiled_scripts/unnamed"sv;
+
+			std::error_code ec;
+			std::filesystem::create_directories(dump_path, ec);
 
 			std::size_t hash{std::hash<std::string_view>{}(script)};
 
@@ -1174,12 +1185,12 @@ namespace vmod
 			}
 		#endif
 
-		#ifndef __VMOD_USING_CUSTOM_VM
 			auto sq_getversion_it{vscript_global_qual.find("sq_getversion"s)};
 			if(sq_getversion_it == vscript_global_qual.end()) {
 				warning("vmod: missing 'sq_getversion' symbol\n"sv);
 			}
 
+		#ifndef __VMOD_USING_CUSTOM_VM
 			auto sq_setparamscheck_it{vscript_global_qual.find("sq_setparamscheck"s)};
 			if(sq_setparamscheck_it == vscript_global_qual.end()) {
 				warning("vmod: missing 'sq_setparamscheck' symbol\n"sv);
@@ -1320,18 +1331,14 @@ namespace vmod
 			#endif
 		#endif
 
-		#ifndef __VMOD_USING_CUSTOM_VM
 			if(sq_getversion_it != vscript_global_qual.end()) {
 				game_sq_ver = sq_getversion_it->second->func<decltype(::sq_getversion)>()();
 			}
 
+		#ifndef __VMOD_USING_CUSTOM_VM
 			if(sq_setparamscheck_it != vscript_global_qual.end()) {
 				sq_setparamscheck = sq_setparamscheck_it->second->func<decltype(sq_setparamscheck)>();
 			}
-		#else
-			#ifndef __VMOD_USING_QUIRREL
-			game_sq_ver = ::sq_getversion();
-			#endif
 		#endif
 
 		#ifndef __VMOD_SQUIRREL_NEED_INIT_SCRIPT
@@ -1610,8 +1617,8 @@ namespace vmod
 		}
 
 		{
-		#ifndef __VMOD_USING_QUIRREL
-			#if SQUIRREL_VERSION_NUMBER >= 303
+		#ifndef __VMOD_USING_CUSTOM_VM
+			#if !defined __VMOD_USING_QUIRREL && (defined SQUIRREL_VERSION_NUMBER && SQUIRREL_VERSION_NUMBER >= 303)
 			curr_sq_ver = ::sq_getversion();
 			#endif
 
@@ -2006,6 +2013,10 @@ namespace vmod
 				if(curr_sq_ver != -1) {
 					info("vmod:    sq_getversion: %i\n"sv, curr_sq_ver);
 				}
+			#else
+				info("vmod:    SQUIRREL_VERSION: %s\n"sv, SQUIRREL_VERSION);
+				info("vmod:    SQUIRREL_VERSION_NUMBER: (%i, %i, %i)\n"sv, SQUIRREL_VERSION_NUMBER_MAJOR, SQUIRREL_VERSION_NUMBER_MINOR, SQUIRREL_VERSION_NUMBER_PATCH);
+			#endif
 				info("vmod:   game:\n"sv);
 				if(game_sq_version.valid()) {
 					std::string_view _version{game_sq_version.get<std::string_view>()};
@@ -2017,10 +2028,6 @@ namespace vmod
 				if(game_sq_ver != -1) {
 					info("vmod:    sq_getversion: %i\n"sv, game_sq_ver);
 				}
-			#else
-				info("vmod:    SQUIRREL_VERSION: %s\n"sv, SQUIRREL_VERSION);
-				info("vmod:    SQUIRREL_VERSION_NUMBER: (%i, %i, %i)\n"sv, SQUIRREL_VERSION_NUMBER_MAJOR, SQUIRREL_VERSION_NUMBER_MINOR, SQUIRREL_VERSION_NUMBER_PATCH);
-			#endif
 			}
 		);
 
@@ -2036,11 +2043,18 @@ namespace vmod
 				build_internal_docs();
 
 				std::filesystem::path internal_docs{root_dir_/"docs"sv/"internal"sv};
+
+				std::error_code ec;
+				std::filesystem::create_directories(internal_docs, ec);
+
 				bindings::docs::write(internal_docs, internal_vscript_class_bindings, false);
 				bindings::docs::write(internal_docs, internal_vscript_func_bindings, false);
 				bindings::docs::write(internal_docs, internal_vscript_values);
 
 				std::filesystem::path game_docs{root_dir_/"docs"sv/"game"sv};
+
+				std::filesystem::create_directories(game_docs, ec);
+
 				bindings::docs::write(game_docs, game_vscript_class_bindings, false);
 				bindings::docs::write(game_docs, game_vscript_func_bindings, false);
 				bindings::docs::write(game_docs, game_vscript_values);
@@ -2092,6 +2106,9 @@ namespace vmod
 				}
 
 				std::filesystem::path vmod_docs{root_dir_/"docs"sv/"vmod"sv};
+
+				std::filesystem::create_directories(vmod_docs, ec);
+
 				write_docs(vmod_docs);
 			}
 		);
@@ -2101,6 +2118,9 @@ namespace vmod
 		vmod_dump_internal_scripts.initialize("vmod_dump_internal_scripts"sv,
 			[this](const gsdk::CCommand &) noexcept -> void {
 				std::filesystem::path dump_dir{root_dir_/"dumps"sv/"internal_scripts"sv};
+
+				std::error_code ec;
+				std::filesystem::create_directories(dump_dir, ec);
 
 			#ifndef __VMOD_SQUIRREL_NEED_INIT_SCRIPT
 				if(g_Script_init)
@@ -2126,6 +2146,9 @@ namespace vmod
 		vmod_dump_netprops.initialize("vmod_dump_netprops"sv,
 			[this](const gsdk::CCommand &) noexcept -> void {
 				std::filesystem::path dump_dir{root_dir_/"dumps"sv/"netprops"sv};
+
+				std::error_code ec;
+				std::filesystem::create_directories(dump_dir, ec);
 
 				for(const auto &it : sv_sendtables) {
 					std::string file;
@@ -2159,6 +2182,9 @@ namespace vmod
 				} else {
 					dump_dir /= "datamaps"sv;
 				}
+
+				std::error_code ec;
+				std::filesystem::create_directories(dump_dir, ec);
 
 				for(const auto &it : sv_datamaps) {
 					std::string file;
@@ -2344,6 +2370,9 @@ namespace vmod
 			[this](const gsdk::CCommand &) noexcept -> void {
 				std::filesystem::path dump_dir{root_dir_/"dumps"sv/"classes"sv};
 
+				std::error_code ec;
+				std::filesystem::create_directories(dump_dir, ec);
+
 				std::string file;
 
 				bindings::docs::gen_date(file);
@@ -2374,6 +2403,9 @@ namespace vmod
 				const auto &sv_symbols{server_lib.symbols()};
 
 				std::filesystem::path dump_dir{root_dir_/"dumps"sv/"vtables"sv};
+
+				std::error_code ec;
+				std::filesystem::create_directories(dump_dir, ec);
 
 				for(const auto &it : sv_classes) {
 					auto sv_sym_it{sv_symbols.find(it.first)};
@@ -2458,6 +2490,9 @@ namespace vmod
 				const auto &sv_symbols{server_lib.symbols()};
 
 				std::filesystem::path dump_dir{root_dir_/"dumps"sv/"funcs"sv};
+
+				std::error_code ec;
+				std::filesystem::create_directories(dump_dir, ec);
 
 				for(const auto &it : sv_classes) {
 					auto sv_sym_it{sv_symbols.find(it.first)};

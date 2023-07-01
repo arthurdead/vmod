@@ -62,7 +62,11 @@ if is_quirrel
 		files(
 			'squirrel/sqdirect.cpp',
 			'squirrel/sqstringlib.cpp',
-			'squirrel/sqoptimizer.cpp'
+			'squirrel/sqoptimizer.cpp',
+			'squirrel/sqast.cpp',
+			'squirrel/sqastparser.cpp',
+			'squirrel/sqastcodegen.cpp',
+			'squirrel/optimizations/closureHoisting.cpp'
 		)
 	]
 

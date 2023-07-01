@@ -1,0 +1,9 @@
+[wrap-git]
+directory = squirrel_320
+url = https://github.com/albertodemichelis/squirrel.git
+revision = master
+depth = 1
+patch_directory = squirrel
+
+[provide]
+dependency_names = squirrel-3.2.0

@@ -9,10 +9,20 @@
 #include "../vm_shared.hpp"
 
 #ifdef __VMOD_USING_QUIRREL
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-field-initializers"
+#pragma clang diagnostic ignored "-Wdocumentation"
+#else
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
 #include <sqmodules.h>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#else
 #pragma GCC diagnostic pop
+#endif
 #endif
 
 #ifndef __VMOD_USING_CUSTOM_VM
@@ -112,6 +122,7 @@ namespace vmod::vm
 
 	#ifdef __VMOD_USING_QUIRREL
 		static std::underlying_type_t<SQLangFeature> default_lang_feat;
+		static std::underlying_type_t<SQLangFeature> strict_lang_feat;
 	#endif
 
 		HSQOBJECT vector_class;

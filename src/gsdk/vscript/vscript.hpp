@@ -17,7 +17,14 @@
 
 #include "../../hacking.hpp"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wundef"
+#endif
 #include <squirrel.h>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 //TODO!! how to detect
 #if !defined SQUIRREL_VERSION_NUMBER
@@ -52,6 +59,8 @@ SQUIRREL_API SQInteger sq_getversion();
 #pragma clang diagnostic ignored "-Wdeprecated-copy-with-user-provided-copy"
 #pragma clang diagnostic ignored "-Wdocumentation"
 #pragma clang diagnostic ignored "-Wreorder-ctor"
+#pragma clang diagnostic ignored "-Wstring-conversion"
+#pragma clang diagnostic ignored "-Wundef"
 #else
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsuggest-override"
