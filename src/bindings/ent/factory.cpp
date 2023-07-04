@@ -30,6 +30,7 @@ namespace vmod::bindings::ent
 		.desc("[entity](classname, size)"sv);
 		factory_impl::desc.func(&factory_impl::script_create_datamap, "script_create_datamap"sv, "create_datatable"sv)
 		.desc("(name, array<dataprop_description>|props)"sv);
+		factory_impl::desc.dtor();
 
 		factory_impl::desc.base(desc);
 
@@ -77,7 +78,7 @@ namespace vmod::bindings::ent
 
 		names.emplace_back(name);
 
-		callback = vm->ReferenceObject(callback_);
+		callback = callback_;
 
 		entityfactorydict->InstallFactory(this, name.data());
 

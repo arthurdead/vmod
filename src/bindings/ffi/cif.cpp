@@ -19,6 +19,8 @@ namespace vmod::bindings::ffi
 		desc.func(&caller::script_set_mfp, "script_set_mfp"sv, "set_mfp"sv)
 		.desc("(mfp|target)"sv);
 
+		desc.dtor();
+
 		if(!plugin::owned_instance::register_class(&desc)) {
 			error("vmod: failed to register ffi cif class\n"sv);
 			return false;

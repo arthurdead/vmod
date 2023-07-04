@@ -93,6 +93,9 @@ namespace vmod
 				inline auto func() const noexcept -> function_pointer_t<T>
 				{ return reinterpret_cast<function_pointer_t<T>>(func_); }
 
+				inline std::uint64_t value() const noexcept
+				{ return value_; }
+
 				template <typename T>
 				inline auto mfp() const noexcept -> function_pointer_t<T>
 				{
@@ -280,6 +283,7 @@ namespace vmod
 				std::uint64_t size_{0};
 				#endif
 				union {
+					std::uint64_t value_;
 					unsigned char *addr_;
 					generic_func_t func_;
 					generic_internal_mfp_t mfp_{nullptr};
@@ -537,3 +541,22 @@ namespace vmod
 		symbol_cache &operator=(symbol_cache &&) = delete;
 	};
 }
+
+#ifndef __VMOD_COMPILING_SYMBOL_TOOL
+namespace std
+{
+	template <>
+	struct hash<vmod::symbol_cache::const_iterator>
+	{
+		inline size_t operator()(vmod::symbol_cache::const_iterator it) const noexcept
+		{ return hash<std::string>{}(it->first); }
+	};
+
+	template <>
+	struct hash<vmod::symbol_cache::qualification_info::const_iterator>
+	{
+		inline size_t operator()(vmod::symbol_cache::qualification_info::const_iterator it) const noexcept
+		{ return hash<std::uint64_t>{}(it->second->value()); }
+	};
+}
+#endif

@@ -9,7 +9,7 @@
 
 namespace vmod::bindings::ffi
 {
-	class detour final : public vmod::ffi::cif, public plugin::owned_instance
+	class detour final : public vmod::ffi::cif, public plugin::callable
 	{
 		friend class singleton;
 		friend void write_docs(const std::filesystem::path &) noexcept;
@@ -22,7 +22,7 @@ namespace vmod::bindings::ffi
 
 		~detour() noexcept override;
 
-		bool initialize(mfp_or_func_t old_target_, gsdk::HSCRIPT callback, ffi_abi abi) noexcept;
+		bool initialize(mfp_or_func_t old_target_, ffi_abi abi) noexcept;
 
 		void enable() noexcept;
 
@@ -42,19 +42,39 @@ namespace vmod::bindings::ffi
 		static bool bindings() noexcept;
 		static void unbindings() noexcept;
 
+		class callback_instance final : public plugin::callback_instance
+		{
+			friend class singleton;
+			friend class detour;
+			friend void write_docs(const std::filesystem::path &) noexcept;
+
+		public:
+			callback_instance(callable *caller_, gsdk::HSCRIPT callback_, bool post_) noexcept = delete;
+
+			callback_instance(detour *owner_, gsdk::HSCRIPT callback_, bool post_) noexcept;
+
+			~callback_instance() noexcept override;
+
+		private:
+			static vscript::class_desc<callback_instance> desc;
+
+		public:
+			inline bool initialize() noexcept
+			{ return register_instance(&desc, this); }
+
+		private:
+			gsdk::ScriptVariant_t script_call(const vscript::variant *args, std::size_t num_args, ...) noexcept;
+
+			detour *owner;
+		};
+
 	private:
-		static vscript::class_desc<detour> desc;
-
-		gsdk::ScriptVariant_t script_call(const vscript::variant *args, std::size_t num_args, ...) noexcept;
-
-		inline void script_enable() noexcept
-		{ enable(); }
-		inline void script_disable() noexcept
-		{ disable(); }
-
-		bool initialize_shared(gsdk::HSCRIPT callback, ffi_abi abi) noexcept;
-
 		static void closure_binding(ffi_cif *cif, void *ret, void *args[], void *userptr) noexcept;
+
+		void on_sleep() noexcept override;
+		void on_wake() noexcept override;
+
+		void backup_bytes() noexcept;
 
 		struct scope_enable final {
 			inline scope_enable(detour &det_) noexcept
@@ -67,15 +87,14 @@ namespace vmod::bindings::ffi
 			detour &det;
 		};
 
-		void backup_bytes() noexcept;
-
 		ffi_closure *closure{nullptr};
 		generic_func_t closure_func;
-
-		gsdk::HSCRIPT script_target{gsdk::INVALID_HSCRIPT};
 
 		mfp_or_func_t old_target;
 
 		unsigned char old_bytes[1 + sizeof(std::uintptr_t)];
+
+		static std::unordered_map<generic_func_t, std::unique_ptr<detour>> static_detours;
+		static std::unordered_map<generic_internal_mfp_t, std::unique_ptr<detour>> member_detours;
 	};
 }

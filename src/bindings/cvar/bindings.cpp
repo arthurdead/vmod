@@ -12,6 +12,10 @@ namespace vmod::bindings::cvar
 			return false;
 		}
 
+		if(!concommand_base::bindings()) {
+			return false;
+		}
+
 		if(!singleton::instance().bindings()) {
 			return false;
 		}
@@ -31,6 +35,8 @@ namespace vmod::bindings::cvar
 	void unbindings() noexcept
 	{
 		convar_base::unbindings();
+
+		concommand_base::unbindings();
 
 		singleton::instance().unbindings();
 	}
@@ -60,6 +66,18 @@ namespace vmod::bindings::cvar
 		file += "\n\n"sv;
 
 		docs::write(&convar::desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		docs::ident(file, 1);
+		file += "using concommand_callback = void(array<string> args);\n\n"sv;
+
+		docs::write(&concommand_base::desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		docs::write(&concommand_ref::desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		docs::write(&concommand::desc, true, 1, file, false);
 		file += "\n\n"sv;
 
 		docs::write(&singleton::desc, false, 1, file, false);

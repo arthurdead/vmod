@@ -24,13 +24,13 @@ namespace vmod::bindings::ffi
 		.desc("[cif](abi|, types|ret, array<types>|args)"sv);
 
 		desc.func(&singleton::script_create_member_cif, "script_create_member_cif"sv, "cif_member"sv)
-		.desc("[cif](abi|, types|ret, array<types>|args)"sv);
+		.desc("[cif](types|ret, array<types>|args)"sv);
 
 		desc.func(&singleton::script_create_detour_static, "script_create_detour_static"sv, "detour_static"sv)
-		.desc("[detour](fp|target, function|callback, abi|, types|ret, array<types>|args)"sv);
+		.desc("[detour](fp|target, function|callback, abi|, types|ret, array<types>|args, post)"sv);
 
 		desc.func(&singleton::script_create_detour_member, "script_create_detour_member"sv, "detour_member"sv)
-		.desc("[detour](mfp|target, function|callback, abi|, types|ret, array<types>|args)"sv);
+		.desc("[detour](mfp|target, function|callback, types|ret, array<types>|args, post)"sv);
 
 		if(!singleton_base::bindings(&desc)) {
 			return false;
@@ -302,7 +302,8 @@ namespace vmod::bindings::ffi
 		return cif->instance;
 	}
 
-	gsdk::HSCRIPT singleton::script_create_member_cif(ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept
+	//TODO!!! should you be able to change the abi?
+	gsdk::HSCRIPT singleton::script_create_member_cif(ffi_type *ret, gsdk::HSCRIPT args) noexcept
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
@@ -319,7 +320,7 @@ namespace vmod::bindings::ffi
 		args_types.insert(args_types.begin(), &ffi_type_pointer);
 
 		caller *cif{new caller{ret, std::move(args_types)}};
-		if(!cif->initialize(abi)) {
+		if(!cif->initialize(FFI_SYSV)) {
 			delete cif;
 			return gsdk::INVALID_HSCRIPT;
 		}
@@ -327,29 +328,33 @@ namespace vmod::bindings::ffi
 		return cif->instance;
 	}
 
-	detour *singleton::script_create_detour_shared(ffi_type *ret, gsdk::HSCRIPT args, bool member) noexcept
+	bool singleton::script_create_detour_shared(mfp_or_func_t old_target, gsdk::HSCRIPT callback, ffi_type *ret, gsdk::HSCRIPT args, std::vector<ffi_type *> &args_types) noexcept
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
+		if(!old_target) {
+			vm->RaiseException("vmod: invalid function");
+			return false;
+		}
+
+		if(!callback || callback == gsdk::INVALID_HSCRIPT) {
+			vm->RaiseException("vmod: invalid callback");
+			return false;
+		}
+
 		if(!ret) {
 			vm->RaiseException("vmod: invalid ret");
-			return nullptr;
+			return false;
 		}
 
 		if(!args || args == gsdk::INVALID_HSCRIPT) {
 			vm->RaiseException("vmod: invalid args");
-			return nullptr;
+			return false;
 		}
 
 		if(!vm->IsArray(args)) {
 			vm->RaiseException("vmod: args is not a array");
-			return nullptr;
-		}
-
-		std::vector<ffi_type *> args_types;
-
-		if(member) {
-			args_types.emplace_back(&ffi_type_pointer);
+			return false;
 		}
 
 		int num_args{vm->GetArrayCount(args)};
@@ -360,67 +365,101 @@ namespace vmod::bindings::ffi
 			ffi_type *arg_type{value.get<ffi_type *>()};
 			if(!arg_type) {
 				vm->RaiseException("vmod: arg %i is invalid", i);
-				return nullptr;
+				return false;
 			}
 
 			args_types.emplace_back(arg_type);
 		}
 
-		detour *det{new detour{ret, std::move(args_types)}};
-		return det;
+		return true;
 	}
 
-	gsdk::HSCRIPT singleton::script_create_detour_member(mfp_or_func_t old_target, gsdk::HSCRIPT callback, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept
+	//TODO!!! should you be able to change the abi?
+	gsdk::HSCRIPT singleton::script_create_detour_member(mfp_or_func_t old_target, gsdk::HSCRIPT callback, ffi_type *ret, gsdk::HSCRIPT args, bool post) noexcept
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
-		if(!old_target) {
-			vm->RaiseException("vmod: invalid function");
+		std::vector<ffi_type *> args_types;
+
+		args_types.emplace_back(&ffi_type_pointer);
+
+		if(!script_create_detour_shared(old_target, callback, ret, args, args_types)) {
 			return gsdk::INVALID_HSCRIPT;
 		}
 
+		auto &members{detour::member_detours};
+		using members_t = std::remove_reference_t<decltype(members)>;
+
+		detour *det{nullptr};
+
+		auto it{members.find(old_target.mfp)};
+		if(it == members.end()) {
+			det = new detour{ret, std::move(args_types)};
+			if(!det->initialize(old_target, FFI_SYSV)) {
+				delete det;
+				return gsdk::INVALID_HSCRIPT;
+			}
+
+			members.emplace(members_t::value_type{old_target.mfp, det});
+		} else {
+			det = it->second.get();
+		}
+
+		callback = vm->ReferenceObject(callback);
 		if(!callback || callback == gsdk::INVALID_HSCRIPT) {
-			vm->RaiseException("vmod: invalid callback");
+			vm->RaiseException("vmod: failed to get callback reference");
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		detour *det{script_create_detour_shared(ret, args, true)};
-		if(!det) {
+		detour::callback_instance *clbk_instance{new detour::callback_instance{det, callback, post}};
+		if(!clbk_instance->initialize()) {
+			delete clbk_instance;
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		if(!det->initialize(old_target, callback, abi)) {
-			delete det;
-			return gsdk::INVALID_HSCRIPT;
-		}
-
-		return det->instance;
+		return clbk_instance->instance;
 	}
 
-	gsdk::HSCRIPT singleton::script_create_detour_static(mfp_or_func_t old_target, gsdk::HSCRIPT callback, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept
+	gsdk::HSCRIPT singleton::script_create_detour_static(mfp_or_func_t old_target, gsdk::HSCRIPT callback, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args, bool post) noexcept
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
-		if(!old_target) {
-			vm->RaiseException("vmod: invalid function");
+		std::vector<ffi_type *> args_types;
+
+		if(!script_create_detour_shared(old_target, callback, ret, args, args_types)) {
 			return gsdk::INVALID_HSCRIPT;
 		}
 
+		auto &statics{detour::static_detours};
+		using statics_t = std::remove_reference_t<decltype(statics)>;
+
+		detour *det{nullptr};
+
+		auto it{statics.find(old_target.func)};
+		if(it == statics.end()) {
+			det = new detour{ret, std::move(args_types)};
+			if(!det->initialize(old_target, abi)) {
+				delete det;
+				return gsdk::INVALID_HSCRIPT;
+			}
+
+			statics.emplace(statics_t::value_type{old_target.func, det});
+		} else {
+			det = it->second.get();
+		}
+
+		callback = vm->ReferenceObject(callback);
 		if(!callback || callback == gsdk::INVALID_HSCRIPT) {
-			vm->RaiseException("vmod: invalid callback");
+			vm->RaiseException("vmod: failed to get callback reference");
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		detour *det{script_create_detour_shared(ret, args, false)};
-		if(!det) {
-			return gsdk::INVALID_HSCRIPT;
+		detour::callback_instance *clbk_instance{new detour::callback_instance{det, callback, post}};
+		if(!clbk_instance->initialize()) {
+			delete clbk_instance;
+			return nullptr;
 		}
 
-		if(!det->initialize(old_target, callback, abi)) {
-			delete det;
-			return gsdk::INVALID_HSCRIPT;
-		}
-
-		return det->instance;
+		return clbk_instance->instance;
 	}
 }

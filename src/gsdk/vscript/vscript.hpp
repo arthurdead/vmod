@@ -122,8 +122,13 @@ namespace gsdk
 		SL_SQUIRREL,
 		SL_LUA,
 		SL_PYTHON,
-	#if defined __VMOD_USING_CUSTOM_VM && defined __VMOD_ENABLE_SOURCEPAWN
+	#if defined __VMOD_USING_CUSTOM_VM
+		#ifdef __VMOD_ENABLE_SOURCEPAWN
 		SL_SOURCEPAWN,
+		#endif
+		#ifdef __VMOD_ENABLE_V8
+		SL_V8,
+		#endif
 	#endif
 		SL_DEFAULT = SL_SQUIRREL,
 	};
@@ -182,6 +187,8 @@ namespace gsdk
 	using HIDENTITY = int;
 
 	inline HSCRIPT INVALID_HSCRIPT{reinterpret_cast<HSCRIPT>(-1)};
+
+	constexpr HIDENTITY INVALID_IDENTITY{-1};
 
 	class CVariantDefaultAllocator;
 

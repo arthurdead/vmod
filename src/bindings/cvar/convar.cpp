@@ -40,6 +40,8 @@ namespace vmod::bindings::cvar
 		desc.func(&convar_base::script_get_bool, "script_get_bool"sv, "bool"sv);
 
 		convar::desc.base(desc);
+		convar::desc.dtor();
+
 		convar_ref::desc.base(desc);
 
 		if(!vm->RegisterClass(&desc)) {

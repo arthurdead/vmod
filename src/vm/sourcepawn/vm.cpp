@@ -73,7 +73,7 @@ namespace vmod::vm
 
 	bool sourcepawn::ConnectDebugger()
 	{
-		return true;
+		return false;
 	}
 
 	void sourcepawn::DisconnectDebugger()

@@ -44,7 +44,7 @@ namespace vmod::bindings::ent
 			.desc("[factory_ref](name)"sv);
 
 			desc.func(&singleton::script_create_factory, "script_create_factory"sv, "create_factory"sv)
-			.desc("[factory_impl](name, factory_callback, size)"sv);
+			.desc("[factory_impl](name, factory_callback|callback, size)"sv);
 		}
 
 		if(!singleton_base::bindings(&desc)) {
@@ -81,6 +81,12 @@ namespace vmod::bindings::ent
 		gsdk::IEntityFactory *factory{entityfactorydict->FindFactory(facname.data())};
 		if(factory) {
 			vm->RaiseException("vmod: name already in use: '%s'", facname.data());
+			return gsdk::INVALID_HSCRIPT;
+		}
+
+		callback = vm->ReferenceObject(callback);
+		if(!callback || callback == gsdk::INVALID_HSCRIPT) {
+			vm->RaiseException("vmod: failed to get callback reference");
 			return gsdk::INVALID_HSCRIPT;
 		}
 

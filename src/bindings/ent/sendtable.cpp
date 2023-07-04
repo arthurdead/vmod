@@ -22,7 +22,7 @@ namespace vmod::bindings::ent
 		}
 
 		desc.func(&sendprop::script_hook_proxy, "script_hook_proxy"sv, "hook_proxy"sv)
-		.desc("[callback_instance](function|callback, post, per_client)"sv);
+		.desc("[callback_instance](sendproxy_callback|callback, post, per_client)"sv);
 
 		desc.func(&sendprop::script_type, "script_type"sv, "type"sv)
 		.desc("[mem::types::type]"sv);
@@ -51,9 +51,14 @@ namespace vmod::bindings::ent
 		remove_closure();
 	}
 
-	void sendprop::on_empty() noexcept
+	void sendprop::on_sleep() noexcept
 	{
 		remove_closure();
+	}
+
+	void sendprop::on_wake() noexcept
+	{
+		initialize_closure();
 	}
 
 	bool sendprop::initialize_closure() noexcept
@@ -128,19 +133,25 @@ namespace vmod::bindings::ent
 
 		if(!callback || callback == gsdk::INVALID_HSCRIPT) {
 			vm->RaiseException("vmod: invalid callback");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
+		}
+
+		callback = vm->ReferenceObject(callback);
+		if(!callback || callback == gsdk::INVALID_HSCRIPT) {
+			vm->RaiseException("vmod: failed to get callback reference");
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		plugin::callback_instance *clbk_instance{new plugin::callback_instance{this, callback, post}};
 		if(!clbk_instance->initialize()) {
 			delete clbk_instance;
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		if(!initialize_closure()) {
 			delete clbk_instance;
 			vm->RaiseException("vmod: failed to initialize closure");
-			return nullptr;
+			return gsdk::INVALID_HSCRIPT;
 		}
 
 		return clbk_instance->instance;
@@ -165,6 +176,10 @@ namespace vmod::bindings::ent
 						}
 
 						return &ffi_type_uint;
+					} else if(gsdk::SendProxy_EHandleToInt && proxy == gsdk::SendProxy_EHandleToInt) {
+						return &ffi_type_ehandle;
+					} else if(gsdk::SendProxy_Color32ToInt && proxy == gsdk::SendProxy_Color32ToInt) {
+						return &ffi_type_color32;
 					} else {
 						{
 							if(prop->m_nBits == 32) {

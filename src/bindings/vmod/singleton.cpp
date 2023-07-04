@@ -198,6 +198,21 @@ namespace vmod
 		bindings::docs::write(&plugin::owned_instance::desc, true, 1, file, false);
 		file += "\n\n"sv;
 
+		bindings::docs::ident(file, 1);
+		file += "enum class callback_return_flags\n"sv;
+		bindings::docs::ident(file, 1);
+		file += "{\n"sv;
+		bindings::docs::ident(file, 2);
+		file += "ignored\n"sv;
+		bindings::docs::ident(file, 2);
+		file += "error\n"sv;
+		bindings::docs::ident(file, 2);
+		file += "halt\n"sv;
+		bindings::docs::ident(file, 2);
+		file += "handled\n"sv;
+		bindings::docs::ident(file, 1);
+		file += "};\n\n"sv;
+
 		bindings::docs::write(&plugin::callback_instance::desc, true, 1, file, false);
 		file += "\n\n"sv;
 

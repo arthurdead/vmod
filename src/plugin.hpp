@@ -36,10 +36,7 @@ namespace vmod
 		};
 
 		load_status load() noexcept;
-		inline load_status reload() noexcept {
-			unload();
-			return load();
-		}
+		load_status reload() noexcept;
 		void unload() noexcept;
 
 		inline gsdk::HSCRIPT instance() noexcept
@@ -51,6 +48,9 @@ namespace vmod
 		{ return running && (script && script != gsdk::INVALID_HSCRIPT); }
 		inline bool operator!() const noexcept
 		{ return !running || (!script || script == gsdk::INVALID_HSCRIPT); }
+
+		static inline plugin *assumed_currently_running() noexcept
+		{ return assumed_currently_running_; }
 
 		class function
 		{
@@ -149,9 +149,10 @@ namespace vmod
 				return *this;
 			}
 
-		private:
+		public:
 			static vscript::class_desc<owned_instance> desc;
 
+		private:
 			void plugin_unloaded() noexcept;
 
 			void set_plugin() noexcept;
@@ -167,7 +168,7 @@ namespace vmod
 
 		class callable;
 
-		class callback_instance final : public owned_instance
+		class callback_instance : public owned_instance
 		{
 			friend class callable;
 			friend class plugin;
@@ -180,19 +181,37 @@ namespace vmod
 		public:
 			callback_instance(callable *caller_, gsdk::HSCRIPT callback_, bool post_) noexcept;
 
-		private:
+		public:
 			static vscript::class_desc<callback_instance> desc;
 
 		public:
 			inline bool initialize() noexcept
 			{ return register_instance(&desc, this); }
 
+		protected:
+			virtual inline void script_toggle(std::optional<bool> value) noexcept
+			{
+				if(!value) {
+					enabled = !enabled;
+				} else {
+					enabled = *value;
+				}
+			}
+			virtual inline void script_enable() noexcept
+			{ enabled = true; }
+			virtual inline void script_disable() noexcept
+			{ enabled = false; }
+
 		private:
+			inline bool script_enabled() noexcept
+			{ return enabled; }
+
 			void callable_destroyed() noexcept;
 
 			gsdk::HSCRIPT callback;
 			bool post;
 			callable *caller;
+			bool enabled;
 
 		private:
 			callback_instance() = delete;
@@ -201,6 +220,8 @@ namespace vmod
 			callback_instance(callback_instance &&) noexcept = delete;
 			callback_instance &operator=(callback_instance &&) = delete;
 		};
+
+		//#define __VMOD_PASS_EXTRA_INFO_TO_CALLABLES
 
 		class callable
 		{
@@ -228,22 +249,28 @@ namespace vmod
 			{ return (callbacks_pre.empty() && callbacks_post.empty()); }
 
 			inline bool call_pre(const gsdk::ScriptVariant_t *args, std::size_t num_args) noexcept
-			{ return call(callbacks_pre, args, num_args); }
+			{ return call(callbacks_pre, args, num_args, false); }
 			inline bool call_post(const gsdk::ScriptVariant_t *args, std::size_t num_args) noexcept
-			{ return call(callbacks_post, args, num_args); }
+			{ return call(callbacks_post, args, num_args, true); }
 
 		protected:
-			virtual void on_empty() noexcept;
+			virtual void on_wake() noexcept;
+			virtual void on_sleep() noexcept;
 
 		private:
 			using callbacks_t = std::unordered_map<gsdk::HSCRIPT, callback_instance *>;
 
-			bool call(callbacks_t &callbacks, const gsdk::ScriptVariant_t *args, std::size_t num_args) noexcept;
+			bool call(callbacks_t &callbacks, const gsdk::ScriptVariant_t *args, std::size_t num_args, bool post) noexcept;
 
 			callbacks_t callbacks_pre;
 			callbacks_t callbacks_post;
 
 			bool clearing_callbacks{false};
+
+		#ifdef __VMOD_PASS_EXTRA_INFO_TO_CALLABLES
+			gsdk::ScriptVariant_t *argsblock{nullptr};
+			std::size_t argsblock_size{0};
+		#endif
 
 		private:
 			callable(const callable &) = delete;
@@ -261,16 +288,16 @@ namespace vmod
 
 			inline scope_assume_current(plugin *pl_) noexcept
 			{
-				old_running = assumed_currently_running;
+				old_running = assumed_currently_running_;
 				if(pl_) {
-					assumed_currently_running = pl_;
+					assumed_currently_running_ = pl_;
 				}
 			}
 			inline ~scope_assume_current() noexcept
-			{ assumed_currently_running = old_running; }
+			{ assumed_currently_running_ = old_running; }
 		};
 
-		static plugin *assumed_currently_running;
+		static plugin *assumed_currently_running_;
 
 		gsdk::HSCRIPT script_lookup_function(std::string_view func_name) noexcept;
 		gsdk::ScriptVariant_t script_lookup_value(std::string_view val_name) noexcept;

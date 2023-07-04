@@ -14,7 +14,9 @@ namespace vmod
 			flags |= gsdk::FCVAR_GAMEDLL;
 		}
 
-		gsdk::ConCommand::Create(name.data(), nullptr, flags);
+		name_str = name;
+
+		gsdk::ConCommand::Create(name_str.c_str(), nullptr, flags);
 
 		func = std::move(func_);
 
@@ -69,15 +71,17 @@ namespace vmod
 			static_assert(false_t<T>::value);
 		}
 
+		name_str = name;
+
 	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
-		gsdk::ConVar::Create(name.data(), m_pszDefaultValue, flags, nullptr, false, 0.0f, false, 0.0f, nullptr);
+		gsdk::ConVar::Create(name_str.c_str(), m_pszDefaultValue, flags, nullptr, false, 0.0f, false, 0.0f, nullptr);
 	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-		gsdk::ConVar::Create(name.data(), nullptr, flags);
+		gsdk::ConVar::Create(name_str.c_str(), nullptr, flags);
 	#else
 		#error
 	#endif
 
-		const char *cmdline_value{cvar->GetCommandLineValue(name.data())};
+		const char *cmdline_value{cvar->GetCommandLineValue(name_str.c_str())};
 		if(cmdline_value) {
 			set(cmdline_value);
 		} else {

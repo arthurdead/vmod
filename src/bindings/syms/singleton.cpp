@@ -45,12 +45,14 @@ namespace vmod::bindings::syms
 	{
 		using namespace std::literals::string_view_literals;
 
+		gsdk::IScriptVM *vm{main::instance().vm()};
+
 		desc.func(&qualification_it::script_name, "script_name"sv, "signature"sv);
 
 		desc.func(&qualification_it::script_lookup, "script_lookup"sv, "lookup"sv)
 		.desc("[name](sig)"sv);
 
-		if(!plugin::owned_instance::register_class(&desc)) {
+		if(!vm->RegisterClass(&desc)) {
 			error("vmod: failed to register syms qualification class\n"sv);
 			return false;
 		}
@@ -66,6 +68,8 @@ namespace vmod::bindings::syms
 	bool singleton::name_it::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
+
+		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		desc.func(&name_it::script_name, "script_name"sv, "name"sv);
 
@@ -84,7 +88,7 @@ namespace vmod::bindings::syms
 		desc.func(&name_it::script_lookup, "script_lookup"sv, "lookup"sv)
 		.desc("[name](sig)"sv);
 
-		if(!plugin::owned_instance::register_class(&desc)) {
+		if(!vm->RegisterClass(&desc)) {
 			error("vmod: failed to register syms name class\n"sv);
 			return false;
 		}
@@ -97,47 +101,39 @@ namespace vmod::bindings::syms
 		
 	}
 
-	gsdk::HSCRIPT singleton::script_lookup_shared(symbol_cache::const_iterator it) noexcept
+	gsdk::HSCRIPT singleton::script_lookup_qual(qual_cache_t &qual_cache, symbol_cache::const_iterator qual_it) noexcept
 	{
-		qualification_it *script_it{new qualification_it{it}};
-		if(!script_it->initialize()) {
-			delete script_it;
-			return gsdk::INVALID_HSCRIPT;
-		}
+		auto it{qual_cache.find(qual_it)};
+		if(it == qual_cache.end()) {
+			qualification_it *script_it{new qualification_it{qual_it}};
+			if(!script_it->initialize()) {
+				delete script_it;
+				return gsdk::INVALID_HSCRIPT;
+			}
 
-		return script_it->instance;
+			return script_it->instance;
+		} else {
+			return it->second->instance;
+		}
 	}
 
-	gsdk::HSCRIPT singleton::script_lookup_shared(symbol_cache::qualification_info::const_iterator it) noexcept
+	gsdk::HSCRIPT singleton::script_lookup_name(name_cache_t &name_cache, symbol_cache::qualification_info::const_iterator it_name) noexcept
 	{
-		name_it *script_it{new name_it{it}};
-		if(!script_it->initialize()) {
-			delete script_it;
-			return gsdk::INVALID_HSCRIPT;
-		}
+		auto it{name_cache.find(it_name)};
+		if(it == name_cache.end()) {
+			name_it *script_it{new name_it{it_name}};
+			if(!script_it->initialize()) {
+				delete script_it;
+				return gsdk::INVALID_HSCRIPT;
+			}
 
-		return script_it->instance;
+			return script_it->instance;
+		} else {
+			return it->second->instance;
+		}
 	}
 
-	gsdk::HSCRIPT singleton::qualification_it::script_lookup(std::string_view symname) const noexcept
-	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
-
-		if(symname.empty()) {
-			vm->RaiseException("vmod: invalid name: '%s'", symname.data());
-			return gsdk::INVALID_HSCRIPT;
-		}
-
-		std::string symname_tmp{symname};
-		auto tmp_it{it->second->find(symname_tmp)};
-		if(tmp_it == it->second->end()) {
-			return gsdk::INVALID_HSCRIPT;
-		}
-
-		return script_lookup_shared(tmp_it);
-	}
-
-	gsdk::HSCRIPT singleton::name_it::script_lookup(std::string_view symname) const noexcept
+	gsdk::HSCRIPT singleton::qualification_it::script_lookup(std::string_view symname) noexcept
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
@@ -152,10 +148,28 @@ namespace vmod::bindings::syms
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		return script_lookup_shared(tmp_it);
+		return script_lookup_name(qualification_it::name_cache, tmp_it);
 	}
 
-	gsdk::HSCRIPT singleton::script_lookup(std::string_view symname) const noexcept
+	gsdk::HSCRIPT singleton::name_it::script_lookup(std::string_view symname) noexcept
+	{
+		gsdk::IScriptVM *vm{main::instance().vm()};
+
+		if(symname.empty()) {
+			vm->RaiseException("vmod: invalid name: '%s'", symname.data());
+			return gsdk::INVALID_HSCRIPT;
+		}
+
+		std::string symname_tmp{symname};
+		auto tmp_it{it->second->find(symname_tmp)};
+		if(tmp_it == it->second->end()) {
+			return gsdk::INVALID_HSCRIPT;
+		}
+
+		return script_lookup_name(name_it::name_cache, tmp_it);
+	}
+
+	gsdk::HSCRIPT singleton::script_lookup(std::string_view symname) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -174,10 +188,10 @@ namespace vmod::bindings::syms
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		return script_lookup_shared(it);
+		return script_lookup_qual(glob_qual_cache, it);
 	}
 
-	gsdk::HSCRIPT singleton::script_lookup_global(std::string_view symname) const noexcept
+	gsdk::HSCRIPT singleton::script_lookup_global(std::string_view symname) noexcept
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
@@ -194,7 +208,7 @@ namespace vmod::bindings::syms
 			return gsdk::INVALID_HSCRIPT;
 		}
 
-		return script_lookup_shared(it);
+		return script_lookup_name(glob_name_cache, it);
 	}
 
 	bool singleton::initialize() noexcept

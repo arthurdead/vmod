@@ -10,6 +10,10 @@
 /subprojects/tpp/
 /subprojects/sourcepawn/
 /subprojects/amtl/
+/subprojects/v8/
 /*.sublime-workspace
 /*.sublime-project
 /compile_flags.txt
+/src/vm/v8/
+/subprojects/v8.wrap
+/subprojects/packagefiles/v8/

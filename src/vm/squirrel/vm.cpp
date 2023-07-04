@@ -60,11 +60,6 @@ namespace vmod::vm
 	char squirrel::err_buff[gsdk::MAXPRINTMSG];
 	char squirrel::print_buff[gsdk::MAXPRINTMSG];
 
-#ifdef __VMOD_USING_QUIRREL
-	std::underlying_type_t<SQLangFeature> squirrel::default_lang_feat{LF_STRICT_BOOL|LF_FORBID_GLOBAL_CONST_REWRITE};
-	std::underlying_type_t<SQLangFeature> squirrel::strict_lang_feat{LF_STRICT_BOOL|LF_FORBID_GLOBAL_CONST_REWRITE};
-#endif
-
 	static inline HSQOBJECT *vs_cast(gsdk::HSCRIPT obj) noexcept
 	{ return __builtin_bit_cast(HSQOBJECT *, obj); }
 	static inline gsdk::HSCRIPT vs_cast(HSQOBJECT *obj) noexcept
@@ -929,14 +924,7 @@ namespace vmod::vm
 	template <typename ...Args>
 	static inline auto sq_compilebuffer_strict(HSQUIRRELVM vm, Args &&...args) noexcept -> decltype(sq_compilebuffer(vm, std::forward<Args>(args)...))
 	{
-	#ifdef __VMOD_USING_QUIRREL
-		//TODO!!!! fix errors with LF_NO_PLUS_CONCAT
-		_ss(vm)->defaultLangFeatures = squirrel::strict_lang_feat;
-	#endif
 		auto &&ret{sq_compilebuffer(vm, std::forward<Args>(args)...)};
-	#ifdef __VMOD_USING_QUIRREL
-		_ss(vm)->defaultLangFeatures = squirrel::default_lang_feat;
-	#endif
 		return ret;
 	}
 
@@ -990,10 +978,6 @@ namespace vmod::vm
 			return false;
 		}
 
-	#ifdef __VMOD_USING_QUIRREL
-		_ss(impl)->defaultLangFeatures = default_lang_feat;
-	#endif
-
 		sq_setforeignptr(impl, this);
 
 	#ifndef __clang__
@@ -1017,7 +1001,8 @@ namespace vmod::vm
 		}
 
 	#ifdef __VMOD_USING_QUIRREL
-		sq_setcompilationoption(impl, CompilationOptions::CO_CLOSURE_HOISTING_OPT, true);
+		sq_forbidglobalconstrewrite(impl, SQTrue);
+		sq_setcompilationoption(impl, CompilationOptions::CO_CLOSURE_HOISTING_OPT, SQTrue);
 	#endif
 
 		{

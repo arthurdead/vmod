@@ -579,3 +579,34 @@ namespace vmod
 }
 
 #include "hacking.tpp"
+
+namespace std
+{
+	template <typename R, typename C, typename ...Args>
+	struct hash<vmod::mfp_internal_t<R, C, Args...>>
+	{
+		inline size_t operator()(vmod::mfp_internal_t<R, C, Args...> ptr) const noexcept
+		{ return hash<uint64_t>{}(ptr.value); }
+	};
+
+	template <typename R, typename C, typename ...Args>
+	struct hash<vmod::mfp_internal_va_t<R, C, Args...>>
+	{
+		inline size_t operator()(vmod::mfp_internal_va_t<R, C, Args...> ptr) const noexcept
+		{ return hash<uint64_t>{}(ptr.value); }
+	};
+
+	template <>
+	struct hash<vmod::generic_mfp_t>
+	{
+		inline size_t operator()(vmod::generic_mfp_t ptr) const noexcept
+		{ return hash<vmod::generic_internal_mfp_t>{}(vmod::generic_internal_mfp_t{ptr}); }
+	};
+
+	template <>
+	struct hash<vmod::generic_mfp_va_t>
+	{
+		inline size_t operator()(vmod::generic_mfp_va_t ptr) const noexcept
+		{ return hash<vmod::generic_internal_mfp_va_t>{}(vmod::generic_internal_mfp_va_t{ptr}); }
+	};
+}

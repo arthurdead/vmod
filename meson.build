@@ -167,16 +167,21 @@ libyaml = subproject('libyaml',
 	required: true
 )
 
-tpp = subproject('tpp',
-	default_options: thirdparty_default_options_c,
-	required: true
-)
+enable_preprocessor = false
+
+if enable_preprocessor
+	tpp = subproject('tpp',
+		default_options: thirdparty_default_options_c,
+		required: true
+	)
+endif
 
 custom_vm = true
 
 if custom_vm
 	use_quirrel = true
 	enable_sourcepawn = false
+	enable_v8 = false
 
 	if use_quirrel
 		squirrel_ver = 'quirrel'
@@ -191,6 +196,13 @@ if custom_vm
 
 	if enable_sourcepawn
 		sourcepawn = subproject('sourcepawn',
+			default_options: thirdparty_default_options_cpp,
+			required: false
+		)
+	endif
+
+	if enable_v8
+		v8 = subproject('v8',
 			default_options: thirdparty_default_options_cpp,
 			required: false
 		)
@@ -233,10 +245,13 @@ vmod_dependencies = [
 		sources: true
 	),
 	libyaml.get_variable('yaml_dep'),
-	tpp.get_variable('tpp_dep'),
 	squirrel.get_variable('squirrel_dep'),
 	squirrel.get_variable('squirrel_internal_dep')
 ]
+
+if enable_preprocessor
+	vmod_dependencies += [tpp.get_variable('tpp_dep')]
+endif
 
 squirrel_vmod_base_script_src = files('src/squirrel/vmod_base.nut')
 
@@ -252,6 +267,10 @@ if xxd_exe.found()
 endif
 
 vm_cpp_args = []
+
+if enable_preprocessor
+	vm_cpp_args += ['-D__VMOD_USING_PREPROCESSOR']
+endif
 
 if custom_vm
 	vm_cpp_args += ['-D__VMOD_USING_CUSTOM_VM']
@@ -289,6 +308,14 @@ if custom_vm
 
 		vmod_dependencies += [
 			sourcepawn.get_variable('sourcepawn_dep')
+		]
+	endif
+
+	if enable_v8
+		vm_cpp_args += ['-D__VMOD_ENABLE_V8']
+
+		vmod_dependencies += [
+			v8.get_variable('v8_dep')
 		]
 	endif
 endif
@@ -345,7 +372,6 @@ sources = [
 	files(
 		'src/main.cpp',
 		'src/filesystem.cpp',
-		'src/preprocessor.cpp',
 		'src/plugin.cpp',
 		'src/convar.cpp',
 		'src/gsdk_library.cpp',
@@ -358,6 +384,7 @@ sources = [
 		'src/bindings/cvar/bindings.cpp',
 		'src/bindings/cvar/singleton.cpp',
 		'src/bindings/cvar/convar.cpp',
+		'src/bindings/cvar/concommand.cpp',
 		'src/bindings/mem/bindings.cpp',
 		'src/bindings/mem/singleton.cpp',
 		'src/bindings/mem/container.cpp',
@@ -388,9 +415,14 @@ sources = [
 		'src/gsdk/server/datamap.cpp',
 		'src/gsdk/vscript/vscript.cpp',
 		'src/gsdk/vstdlib/convar.cpp',
-		'src/gsdk/engine/vsp.cpp'
+		'src/gsdk/engine/vsp.cpp',
+		'src/gsdk/engine/dt_send.cpp'
 	),
 ]
+
+if enable_preprocessor
+	sources += [files('src/preprocessor.cpp')]
+endif
 
 if custom_vm
 	sources += [
@@ -400,7 +432,11 @@ if custom_vm
 	]
 
 	if enable_sourcepawn
-		sources += [files('src/vm/squirrel/vm.cpp')]
+		sources += [files('src/vm/sourcepawn/vm.cpp')]
+	endif
+
+	if enable_v8
+		sources += [files('src/vm/v8/vm.cpp')]
 	endif
 endif
 

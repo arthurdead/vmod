@@ -8,7 +8,7 @@
 
 namespace vmod
 {
-	class ConCommand final : private gsdk::ConCommand
+	class ConCommand final : public gsdk::ConCommand
 	{
 	public:
 		ConCommand() noexcept = default;
@@ -55,6 +55,8 @@ namespace vmod
 		void Init() override;
 
 		std::function<void(const gsdk::CCommand &)> func;
+
+		std::string name_str;
 	};
 
 	class ConVar final : public gsdk::ConVar
@@ -103,6 +105,8 @@ namespace vmod
 		void Init() override;
 
 		std::string def_value_str;
+
+		std::string name_str;
 	};
 }
 

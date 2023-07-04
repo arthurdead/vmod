@@ -228,9 +228,19 @@ namespace vmod::ffi
 		return true;
 	}
 
-	void cif::call(void(*func)()) noexcept
+	void cif::call(void(*func)(), void *ret, void **args) noexcept
 	{
-		ffi_call(&cif_impl, func, static_cast<void *>(ret_storage.get()), args_ptrs.data());
+		ffi_call(&cif_impl, func, ret, args);
+	}
+
+	void cif::call(void(*func)(), void *ret) noexcept
+	{
+		ffi_call(&cif_impl, func, ret, args_ptrs.data());
+	}
+
+	void cif::call(void(*func)(), void **args) noexcept
+	{
+		ffi_call(&cif_impl, func, static_cast<void *>(ret_storage.get()), args);
 	}
 
 	bool closure::initialize_impl(ffi_abi abi, void **func, binding_func binding, void *userptr) noexcept

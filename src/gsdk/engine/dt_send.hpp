@@ -15,6 +15,14 @@ namespace gsdk
 	class SendTable;
 	class CSendTablePrecalc;
 
+	extern SendVarProxyFn SendProxy_StringT_To_String;
+	extern SendVarProxyFn SendProxy_Color32ToInt;
+	extern SendVarProxyFn SendProxy_EHandleToInt;
+	extern SendVarProxyFn SendProxy_IntAddOne;
+	extern SendVarProxyFn SendProxy_ShortAddOne;
+	extern SendVarProxyFn SendProxy_OnlyToTeam;
+	extern SendVarProxyFn SendProxy_PredictableIdToInt;
+
 	class CNonModifiedPointerProxy
 	{
 	public:

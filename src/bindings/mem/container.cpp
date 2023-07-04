@@ -11,11 +11,15 @@ namespace vmod::bindings::mem
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		if(!func || func == gsdk::INVALID_HSCRIPT) {
-			vm->RaiseException("vmod: invalid function");
+			vm->RaiseException("vmod: invalid callback");
 			return;
 		}
 
 		free_callback = vm->ReferenceObject(func);
+		if(!free_callback || free_callback == gsdk::INVALID_HSCRIPT) {
+			vm->RaiseException("vmod: failed to get callback reference");
+			return;
+		}
 	}
 
 	unsigned char *container::script_release() noexcept
@@ -31,7 +35,7 @@ namespace vmod::bindings::mem
 		using namespace std::literals::string_view_literals;
 
 		desc.func(&container::script_set_free_callback, "script_set_free_callback"sv, "hook_free"sv)
-		.desc("(function|callback)"sv);
+		.desc("(free_callback|callback)"sv);
 
 		desc.func(&container::script_release, "script_release"sv, "release"sv)
 		.desc("[ptr]"sv);
@@ -40,6 +44,8 @@ namespace vmod::bindings::mem
 		.desc("[ptr]"sv);
 
 		desc.func(&container::script_size, "script_size"sv, "size"sv);
+
+		desc.dtor();
 
 		if(!plugin::owned_instance::register_class(&desc)) {
 			error("vmod: failed to register mem container script class\n"sv);

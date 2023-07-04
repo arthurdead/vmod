@@ -3,17 +3,20 @@
 
 namespace vmod::bindings::ffi
 {
-	vscript::class_desc<detour> detour::desc{"ffi::detour"};
+	vscript::class_desc<detour::callback_instance> detour::callback_instance::desc{"ffi::detour"};
+
+	std::unordered_map<generic_func_t, std::unique_ptr<detour>> detour::static_detours;
+	std::unordered_map<generic_internal_mfp_t, std::unique_ptr<detour>> detour::member_detours;
 
 	bool detour::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
-		desc.func(&detour::script_call, "script_call"sv, "call"sv);
-		desc.func(&detour::script_enable, "script_enable"sv, "enable"sv);
-		desc.func(&detour::script_disable, "script_disable"sv, "disable"sv);
+		callback_instance::desc.base(plugin::callback_instance::desc);
+		callback_instance::desc.func(&callback_instance::script_call, "script_call"sv, "call"sv);
+		callback_instance::desc.dtor();
 
-		if(!plugin::owned_instance::register_class(&desc)) {
+		if(!plugin::owned_instance::register_class(&callback_instance::desc)) {
 			error("vmod: failed to register ffi detour class\n"sv);
 			return false;
 		}
@@ -26,14 +29,15 @@ namespace vmod::bindings::ffi
 		
 	}
 
+	detour::callback_instance::callback_instance(detour *owner_, gsdk::HSCRIPT callback_, bool post_) noexcept
+		: plugin::callback_instance{owner_, callback_, post_}, owner{owner_}
+	{
+	}
+
+	detour::callback_instance::~callback_instance() noexcept {}
+
 	detour::~detour() noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
-
-		if(script_target && script_target != gsdk::INVALID_HSCRIPT) {
-			vm->ReleaseFunction(script_target);
-		}
-
 		if(old_target) {
 			disable();
 		}
@@ -43,29 +47,29 @@ namespace vmod::bindings::ffi
 		}
 	}
 
-	gsdk::ScriptVariant_t detour::script_call(const vscript::variant *args, std::size_t num_args, ...) noexcept
+	gsdk::ScriptVariant_t detour::callback_instance::script_call(const vscript::variant *args, std::size_t num_args, ...) noexcept
 	{
-		std::size_t required_args{args_types.size()};
+		std::size_t required_args{owner->args_types.size()};
 		if(!args || num_args != required_args) {
 			main::instance().vm()->RaiseException("vmod: wrong number of parameters expected %zu got %zu", num_args, required_args);
 			return vscript::null();
 		}
 
 		for(std::size_t i{0}; i < num_args; ++i) {
-			ffi_type *arg_type{args_types[i]};
+			ffi_type *arg_type{owner->args_types[i]};
 			const vscript::variant &arg_var{args[i]};
-			auto &arg_ptr{args_storage[i]};
+			auto &arg_ptr{owner->args_storage[i]};
 
 			vmod::ffi::script_var_to_ptr(arg_var, static_cast<void *>(arg_ptr.get()), arg_type);
 		}
 
 		{
-			scope_enable sce{*this};
-			call(reinterpret_cast<void(*)()>(old_target.mfp.addr));
+			scope_enable sce{*owner};
+			owner->vmod::ffi::cif::call(reinterpret_cast<void(*)()>(owner->old_target.mfp.addr));
 		}
 
 		gsdk::ScriptVariant_t ret;
-		vmod::ffi::ptr_to_script_var(static_cast<void *>(ret_storage.get()), ret_type, ret);
+		vmod::ffi::ptr_to_script_var(static_cast<void *>(owner->ret_storage.get()), owner->ret_type, ret);
 		return ret;
 	}
 
@@ -75,8 +79,6 @@ namespace vmod::bindings::ffi
 
 		detour *det{static_cast<detour *>(userptr)};
 
-		sargs.emplace_back(det->instance);
-
 		for(std::size_t i{0}; i < closure_cif->nargs; ++i) {
 			ffi_type *arg_type{closure_cif->arg_types[i]};
 			vscript::variant &arg_var{sargs.emplace_back()};
@@ -84,23 +86,35 @@ namespace vmod::bindings::ffi
 			vmod::ffi::ptr_to_script_var(args[i], arg_type, arg_var);
 		}
 
+		vscript::variant *ret_var{nullptr};
+
+		if(det->ret_type != &ffi_type_void) {
+			ret_var = &sargs.emplace_back();
+		}
+
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
-		gsdk::HSCRIPT scope{det->owner_scope()};
-
-		vscript::variant ret_var;
-		if(vm->ExecuteFunction(det->script_target, sargs.data(), static_cast<int>(sargs.size()), ((det->ret_type == &ffi_type_void) ? nullptr : &ret_var), scope, true) == gsdk::SCRIPT_ERROR) {
-			return;
+		if(det->call_pre(sargs.data(), sargs.size())) {
+			{
+				scope_enable sce{*det};
+				det->vmod::ffi::cif::call(reinterpret_cast<void(*)()>(det->old_target.mfp.addr), ret, args);
+			}
 		}
 
 		if(det->ret_type != &ffi_type_void) {
-			vmod::ffi::script_var_to_ptr(ret_var, ret, det->ret_type);
+			vmod::ffi::script_var_to_ptr(*ret_var, ret, det->ret_type);
 		}
+
+		det->call_post(sargs.data(), sargs.size());
 	}
 
-	bool detour::initialize_shared(gsdk::HSCRIPT callback, ffi_abi abi) noexcept
+	bool detour::initialize(mfp_or_func_t old_target_, ffi_abi abi) noexcept
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
+
+		old_target = old_target_;
+
+		backup_bytes();
 
 		closure = static_cast<ffi_closure *>(ffi_closure_alloc(sizeof(ffi_closure), reinterpret_cast<void **>(&closure_func)));
 		if(!closure) {
@@ -125,26 +139,17 @@ namespace vmod::bindings::ffi
 		#pragma GCC diagnostic pop
 	#endif
 
-		if(!register_instance(&desc, this)) {
-			return false;
-		}
-
-		script_target = vm->ReferenceObject(callback);
-
 		return true;
 	}
 
-	bool detour::initialize(mfp_or_func_t old_target_, gsdk::HSCRIPT callback, ffi_abi abi) noexcept
+	void detour::on_sleep() noexcept
 	{
-		if(!initialize_shared(callback, abi)) {
-			return false;
-		}
+		disable();
+	}
 
-		old_target = old_target_;
-
-		backup_bytes();
-
-		return true;
+	void detour::on_wake() noexcept
+	{
+		enable();
 	}
 
 	void detour::enable() noexcept

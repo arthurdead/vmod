@@ -344,9 +344,9 @@ namespace gsdk
 
 		inline CCommand() noexcept
 		{
-			std::memset(m_pArgSBuffer, 0, sizeof(m_pArgSBuffer));
-			std::memset(m_pArgvBuffer, 0, sizeof(m_pArgvBuffer));
-			std::memset(m_ppArgv, 0, sizeof(m_ppArgv));
+			m_pArgSBuffer[0] = '\0';
+			m_pArgvBuffer[0] = '\0';
+			m_ppArgv[0] = nullptr;
 		}
 
 		int m_nArgc{0};

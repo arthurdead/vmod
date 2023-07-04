@@ -34,8 +34,11 @@ namespace vmod::bindings::syms
 
 		virtual ~singleton() noexcept;
 
-		//TODO!!! remove plugin::owned_instance
-		class qualification_it final : public plugin::owned_instance
+		class name_it;
+
+		using name_cache_t = std::unordered_map<symbol_cache::qualification_info::const_iterator, std::unique_ptr<name_it>>;
+
+		class qualification_it final : public instance_base
 		{
 			friend class singleton;
 			friend void write_docs(const std::filesystem::path &) noexcept;
@@ -57,12 +60,14 @@ namespace vmod::bindings::syms
 			inline bool initialize() noexcept
 			{ return register_instance(&desc, this); }
 
-			gsdk::HSCRIPT script_lookup(std::string_view symname) const noexcept;
+			gsdk::HSCRIPT script_lookup(std::string_view symname) noexcept;
 
 			inline std::string_view script_name() const noexcept
 			{ return it->first; }
 
 			symbol_cache::const_iterator it;
+
+			name_cache_t name_cache;
 
 		private:
 			qualification_it(const qualification_it &) = delete;
@@ -71,8 +76,9 @@ namespace vmod::bindings::syms
 			qualification_it &operator=(qualification_it &&) = delete;
 		};
 
-		//TODO!!! remove plugin::owned_instance
-		class name_it final : public plugin::owned_instance
+		using qual_cache_t = std::unordered_map<symbol_cache::const_iterator, std::unique_ptr<qualification_it>>;
+
+		class name_it final : public instance_base
 		{
 			friend class singleton;
 			friend void write_docs(const std::filesystem::path &) noexcept;
@@ -94,7 +100,7 @@ namespace vmod::bindings::syms
 			inline bool initialize() noexcept
 			{ return register_instance(&desc, this); }
 
-			gsdk::HSCRIPT script_lookup(std::string_view symname) const noexcept;
+			gsdk::HSCRIPT script_lookup(std::string_view symname) noexcept;
 
 			inline std::string_view script_name() const noexcept
 			{ return it->first; }
@@ -111,6 +117,8 @@ namespace vmod::bindings::syms
 
 			symbol_cache::qualification_info::const_iterator it;
 
+			name_cache_t name_cache;
+
 		private:
 			name_it(const name_it &) = delete;
 			name_it &operator=(const name_it &) = delete;
@@ -125,11 +133,14 @@ namespace vmod::bindings::syms
 		bool initialize() noexcept;
 
 	private:
-		static gsdk::HSCRIPT script_lookup_shared(symbol_cache::const_iterator it) noexcept;
-		static gsdk::HSCRIPT script_lookup_shared(symbol_cache::qualification_info::const_iterator it) noexcept;
+		qual_cache_t glob_qual_cache;
+		name_cache_t glob_name_cache;
 
-		gsdk::HSCRIPT script_lookup(std::string_view symname) const noexcept;
-		gsdk::HSCRIPT script_lookup_global(std::string_view symname) const noexcept;
+		static gsdk::HSCRIPT script_lookup_qual(qual_cache_t &cache, symbol_cache::const_iterator it) noexcept;
+		static gsdk::HSCRIPT script_lookup_name(name_cache_t &cache, symbol_cache::qualification_info::const_iterator it) noexcept;
+
+		gsdk::HSCRIPT script_lookup(std::string_view symname) noexcept;
+		gsdk::HSCRIPT script_lookup_global(std::string_view symname) noexcept;
 
 		virtual const symbol_cache &cache() const noexcept = 0;
 

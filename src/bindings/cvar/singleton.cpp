@@ -3,6 +3,7 @@
 #include "../../gsdk.hpp"
 #include "../../convar.hpp"
 #include "convar.hpp"
+#include "concommand.hpp"
 #include <memory>
 
 namespace vmod::bindings::cvar
@@ -25,8 +26,14 @@ namespace vmod::bindings::cvar
 		desc.func(&singleton::script_create_cvar, "script_create_cvar"sv, "create_var"sv)
 		.desc("[convar_impl](name, value)"sv);
 
+		desc.func(&singleton::script_create_concmd, "script_create_concmd"sv, "create_cmd"sv)
+		.desc("[concommand_impl](name, concommand_callback|callback)"sv);
+
 		desc.func(&singleton::script_find_cvar, "script_find_cvar"sv, "find_var"sv)
 		.desc("[convar_ref](name)"sv);
+
+		desc.func(&singleton::script_find_concmd, "script_find_concmd"sv, "find_cmd"sv)
+		.desc("[concommand_ref](name)"sv);
 
 		if(!singleton_base::bindings(&desc)) {
 			return false;
@@ -201,6 +208,57 @@ namespace vmod::bindings::cvar
 		return svar->instance;
 	}
 
+	gsdk::HSCRIPT singleton::script_create_concmd(std::string_view varname, gsdk::HSCRIPT callback) noexcept
+	{
+		gsdk::IScriptVM *vm{main::instance().vm()};
+
+		if(varname.empty()) {
+			vm->RaiseException("vmod: invalid name: '%s'", varname.data());
+			return gsdk::INVALID_HSCRIPT;
+		}
+
+		if(vmod::cvar->FindCommandBase(varname.data()) != nullptr) {
+			vm->RaiseException("vmod: name already in use: '%s'", varname.data());
+			return gsdk::INVALID_HSCRIPT;
+		}
+
+		if(!callback || callback == gsdk::INVALID_HSCRIPT) {
+			vm->RaiseException("vmod: invalid callback");
+			return gsdk::INVALID_HSCRIPT;
+		}
+
+		callback = vm->ReferenceObject(callback);
+		if(!callback || callback == gsdk::INVALID_HSCRIPT) {
+			vm->RaiseException("vmod: failed to get callback reference");
+			return gsdk::INVALID_HSCRIPT;
+		}
+
+		ConCommand *var{new ConCommand};
+
+		concommand *svar{new concommand{var, callback}};
+		if(!svar->initialize()) {
+			delete svar;
+			return gsdk::INVALID_HSCRIPT;
+		}
+
+		plugin *pl{plugin::assumed_currently_running()};
+		gsdk::HSCRIPT scope{pl ? pl->private_scope() : nullptr};
+
+		var->initialize(varname, [vm,callback,scope](const gsdk::CCommand &cmdargs) noexcept -> void {
+			gsdk::HSCRIPT arr{vm->CreateArray()};
+
+			for(int i{0}; i < cmdargs.m_nArgc; ++i) {
+				vscript::variant tmp{cmdargs.m_ppArgv[i]};
+				vm->ArrayAddToTail(arr, std::move(tmp));
+			}
+
+			vscript::variant scriptargs{arr};
+			vm->ExecuteFunction(callback, &scriptargs, 1, nullptr, scope, true);
+		});
+
+		return svar->instance;
+	}
+
 	gsdk::HSCRIPT singleton::script_find_cvar(std::string &&varname) noexcept
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
@@ -223,6 +281,33 @@ namespace vmod::bindings::cvar
 			}
 
 			it = convars.emplace(std::move(varname), std::move(svar)).first;
+		}
+
+		return it->second->instance;
+	}
+
+	gsdk::HSCRIPT singleton::script_find_concmd(std::string &&varname) noexcept
+	{
+		gsdk::IScriptVM *vm{main::instance().vm()};
+
+		if(varname.empty()) {
+			vm->RaiseException("vmod: invalid name: '%s'", varname.c_str());
+			return gsdk::INVALID_HSCRIPT;
+		}
+
+		auto it{concommands.find(varname)};
+		if(it == concommands.end()) {
+			gsdk::ConCommand *var{vmod::cvar->FindCommand(varname.data())};
+			if(!var) {
+				return gsdk::INVALID_HSCRIPT;
+			}
+
+			std::unique_ptr<concommand_ref> svar{new concommand_ref{var}};
+			if(!svar->initialize()) {
+				return gsdk::INVALID_HSCRIPT;
+			}
+
+			it = concommands.emplace(std::move(varname), std::move(svar)).first;
 		}
 
 		return it->second->instance;

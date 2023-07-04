@@ -68,7 +68,7 @@ namespace vmod::bindings::ffi
 		docs::ident(file, 1);
 		file += "};\n\n"sv;
 
-		docs::write(&detour::desc, true, 1, file, false);
+		docs::write(&detour::callback_instance::desc, true, 1, file, false);
 		file += "\n\n"sv;
 
 		docs::write(&caller::desc, true, 1, file, false);

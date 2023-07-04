@@ -52,7 +52,11 @@ namespace vmod::ffi
 		{ return &cif_impl; }
 
 	protected:
-		void call(void(*func)()) noexcept;
+		inline void call(void(*func)()) noexcept
+		{ call(func, static_cast<void *>(ret_storage.get()), args_ptrs.data()); }
+		void call(void(*func)(), void *ret) noexcept;
+		void call(void(*func)(), void *ret, void **args) noexcept;
+		void call(void(*func)(), void **args) noexcept;
 
 		ffi_cif cif_impl;
 

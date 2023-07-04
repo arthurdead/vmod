@@ -9,7 +9,9 @@
 #include "gsdk.hpp"
 #include "convar.hpp"
 #include "vscript/vscript.hpp"
+#ifdef __VMOD_USING_PREPROCESSOR
 #include "preprocessor.hpp"
+#endif
 #include "bindings/singleton.hpp"
 #include "bindings/strtables/string_table.hpp"
 #include "gsdk/engine/dt_send.hpp"
@@ -67,8 +69,10 @@ namespace vmod
 		inline const std::filesystem::path &plugins_dir() const noexcept
 		{ return plugins_dir_; }
 
+	#ifdef __VMOD_USING_PREPROCESSOR
 		inline squirrel_preprocessor &preprocessor() noexcept
 		{ return pp; }
+	#endif
 
 	#ifndef GSDK_NO_SYMBOLS
 		inline gsdk::HSCRIPT symbols_table() noexcept
@@ -89,7 +93,9 @@ namespace vmod
 		static void CreateNetworkStringTables_detour_callback(gsdk::IServerGameDLL *dll);
 		static void RemoveAllTables_detour_callback(gsdk::IServerNetworkStringTableContainer *cont);
 
+	#ifdef __VMOD_USING_PREPROCESSOR
 		friend class squirrel_preprocessor;
+	#endif
 
 		bool load_late() noexcept;
 		bool load() noexcept;
@@ -204,7 +210,9 @@ namespace vmod
 		gsdk::HSCRIPT typeof_func{gsdk::INVALID_HSCRIPT};
 		gsdk::HSCRIPT funcisg_func{gsdk::INVALID_HSCRIPT};
 
+	#ifdef __VMOD_USING_PREPROCESSOR
 		squirrel_preprocessor pp;
+	#endif
 
 		std::vector<std::filesystem::path> added_paths;
 

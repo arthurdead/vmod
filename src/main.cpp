@@ -14,6 +14,10 @@
 	#ifdef __VMOD_ENABLE_SOURCEPAWN
 		#include "vm/sourcepawn/vm.hpp"
 	#endif
+
+	#ifdef __VMOD_ENABLE_V8
+		#include "vm/v8/vm.hpp"
+	#endif
 #endif
 
 #include "plugin.hpp"
@@ -157,9 +161,7 @@ namespace vmod
 	static vscript::variant game_sq_versionnumber;
 	static vscript::variant game_sq_version;
 	static SQInteger game_sq_ver{-1};
-#ifdef __VMOD_USING_QUIRREL
-	static SQInteger curr_sq_ver[3]{-1,-1,-1};
-#else
+#ifndef __VMOD_USING_QUIRREL
 	static SQInteger curr_sq_ver{-1};
 #endif
 
@@ -1146,11 +1148,19 @@ namespace vmod
 				scripts_extension = ".py"sv;
 				base_scripts_dir /= "python"sv;
 			} break;
-		#if defined __VMOD_USING_CUSTOM_VM && defined __VMOD_ENABLE_SOURCEPAWN
+		#if defined __VMOD_USING_CUSTOM_VM
+			#ifdef __VMOD_ENABLE_SOURCEPAWN
 			case gsdk::SL_SOURCEPAWN: {
 				scripts_extension = ".sp"sv;
 				base_scripts_dir /= "sourcepawn"sv;
 			} break;
+			#endif
+			#ifdef __VMOD_ENABLE_V8
+			case gsdk::SL_V8: {
+				scripts_extension = ".js"sv;
+				base_scripts_dir /= "javascript"sv;
+			} break;
+			#endif
 		#endif
 		#ifndef __clang__
 			default: break;
@@ -1548,6 +1558,22 @@ namespace vmod
 				}
 			}
 
+		#define __VMOD_GET_SV_SENDPROXY_FUNC(name) \
+			auto name##_it{sv_global_qual.find(#name"(SendProp const*, void const*, void const*, DVariant*, int, int)"s)}; \
+			if(name##_it == sv_global_qual.end()) { \
+				warning("vmod: missing '%s' symbol\n"sv, #name); \
+			} else { \
+				gsdk::name = name##_it->second->func<gsdk::SendVarProxyFn>(); \
+			}
+
+			__VMOD_GET_SV_SENDPROXY_FUNC(SendProxy_StringT_To_String)
+			__VMOD_GET_SV_SENDPROXY_FUNC(SendProxy_Color32ToInt)
+			__VMOD_GET_SV_SENDPROXY_FUNC(SendProxy_EHandleToInt)
+			__VMOD_GET_SV_SENDPROXY_FUNC(SendProxy_IntAddOne)
+			__VMOD_GET_SV_SENDPROXY_FUNC(SendProxy_ShortAddOne)
+			__VMOD_GET_SV_SENDPROXY_FUNC(SendProxy_OnlyToTeam)
+			__VMOD_GET_SV_SENDPROXY_FUNC(SendProxy_PredictableIdToInt)
+
 			auto g_Script_spawn_helper_it{sv_global_qual.find("g_Script_spawn_helper"s)};
 			if(g_Script_spawn_helper_it == sv_global_qual.end()) {
 				warning("vmod: missing 'g_Script_spawn_helper' symbol\n");
@@ -1606,9 +1632,11 @@ namespace vmod
 
 		cvar_dll_id_ = cvar->AllocateDLLIdentifier();
 
+	#ifdef __VMOD_USING_PREPROCESSOR
 		if(!pp.initialize()) {
 			return false;
 		}
+	#endif
 
 		vm_ = reinterpret_cast<IScriptVM *>(vsmgr->CreateVM(script_language));
 		if(!vm_) {
@@ -1617,11 +1645,11 @@ namespace vmod
 		}
 
 		{
-		#ifndef __VMOD_USING_CUSTOM_VM
-			#if !defined __VMOD_USING_QUIRREL && (defined SQUIRREL_VERSION_NUMBER && SQUIRREL_VERSION_NUMBER >= 303)
+		#if !defined __VMOD_USING_QUIRREL && (defined SQUIRREL_VERSION_NUMBER && SQUIRREL_VERSION_NUMBER >= 303)
 			curr_sq_ver = ::sq_getversion();
-			#endif
+		#endif
 
+		#ifndef __VMOD_USING_CUSTOM_VM
 			if(curr_sq_ver != -1) {
 				if(curr_sq_ver != SQUIRREL_VERSION_NUMBER) {
 					warning("vmod: mismatched squirrel header '%i' vs '%i'\n"sv, curr_sq_ver, SQUIRREL_VERSION_NUMBER);
@@ -1638,7 +1666,7 @@ namespace vmod
 				warning("vmod: failed to get _versionnumber_ value\n"sv);
 			} else {
 				SQInteger _versionnumber_{game_sq_versionnumber.get<SQInteger>()};
-				if(_versionnumber_ != curr_sq_ver && curr_sq_ver != -1) {
+				if(curr_sq_ver != -1 && _versionnumber_ != curr_sq_ver) {
 					warning("vmod: mismatched squirrel versions '%i' vs '%i'\n"sv, _versionnumber_, curr_sq_ver);
 				}
 			}
@@ -3027,7 +3055,9 @@ namespace vmod
 	{
 		vmod_unload_plugins();
 
+	#ifdef __VMOD_USING_PREPROCESSOR
 		pp.shutdown();
+	#endif
 
 		if(vm_) {
 			if(to_string_func && to_string_func != gsdk::INVALID_HSCRIPT) {

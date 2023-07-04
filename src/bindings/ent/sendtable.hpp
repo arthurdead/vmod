@@ -35,7 +35,8 @@ namespace vmod::bindings::ent
 
 		sendprop(gsdk::SendProp *prop_) noexcept;
 
-		void on_empty() noexcept override;
+		void on_sleep() noexcept override;
+		void on_wake() noexcept override;
 
 		bool initialize_closure() noexcept;
 

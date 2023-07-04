@@ -68,6 +68,9 @@ namespace vmod::bindings::mem
 		docs::ident(file, 1);
 		file += "}\n\n"sv;
 
+		docs::ident(file, 1);
+		file += "using free_callback = void(container mem);\n\n"sv;
+
 		docs::write(&container::desc, true, 1, file, false);
 		file += "\n\n"sv;
 

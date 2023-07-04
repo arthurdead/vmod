@@ -120,11 +120,6 @@ namespace vmod::vm
 
 		gsdk::HSCRIPT CompileScript_strict(const char *, const char * = nullptr) noexcept;
 
-	#ifdef __VMOD_USING_QUIRREL
-		static std::underlying_type_t<SQLangFeature> default_lang_feat;
-		static std::underlying_type_t<SQLangFeature> strict_lang_feat;
-	#endif
-
 		HSQOBJECT vector_class;
 		HSQOBJECT qangle_class;
 

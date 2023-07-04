@@ -33,11 +33,11 @@ namespace vmod::bindings::ffi
 
 		static bool script_create_cif_shared(std::vector<ffi_type *> &args_types, gsdk::HSCRIPT args) noexcept;
 		static gsdk::HSCRIPT script_create_static_cif(ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept;
-		static gsdk::HSCRIPT script_create_member_cif(ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept;
+		static gsdk::HSCRIPT script_create_member_cif(ffi_type *ret, gsdk::HSCRIPT args) noexcept;
 
-		static detour *script_create_detour_shared(ffi_type *ret, gsdk::HSCRIPT args, bool member) noexcept;
-		static gsdk::HSCRIPT script_create_detour_member(mfp_or_func_t old_target, gsdk::HSCRIPT callback, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept;
-		static gsdk::HSCRIPT script_create_detour_static(mfp_or_func_t old_target, gsdk::HSCRIPT callback, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args) noexcept;
+		static bool script_create_detour_shared(mfp_or_func_t old_target, gsdk::HSCRIPT callback, ffi_type *ret, gsdk::HSCRIPT args, std::vector<ffi_type *> &args_types) noexcept;
+		static gsdk::HSCRIPT script_create_detour_member(mfp_or_func_t old_target, gsdk::HSCRIPT callback, ffi_type *ret, gsdk::HSCRIPT args, bool post) noexcept;
+		static gsdk::HSCRIPT script_create_detour_static(mfp_or_func_t old_target, gsdk::HSCRIPT callback, ffi_abi abi, ffi_type *ret, gsdk::HSCRIPT args, bool post) noexcept;
 
 		gsdk::HSCRIPT types_table{gsdk::INVALID_HSCRIPT};
 		gsdk::HSCRIPT abi_table{gsdk::INVALID_HSCRIPT};

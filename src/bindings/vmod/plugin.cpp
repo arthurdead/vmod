@@ -109,6 +109,12 @@ namespace vmod
 			return false;
 		}
 
+		callback_instance::desc.func(&callback_instance::script_toggle, "script_toggle"sv, "toggle"sv);
+		callback_instance::desc.func(&callback_instance::script_enable, "script_enable"sv, "enable"sv);
+		callback_instance::desc.func(&callback_instance::script_disable, "script_disable"sv, "disable"sv);
+		callback_instance::desc.func(&callback_instance::script_enabled, "script_enabled"sv, "enabled"sv);
+		callback_instance::desc.dtor();
+
 		if(!vm->RegisterClass(&callback_instance::desc)) {
 			error("vmod: failed to register plugin callback instance script class\n"sv);
 			return false;
