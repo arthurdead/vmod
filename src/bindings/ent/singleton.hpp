@@ -41,6 +41,7 @@ namespace vmod::bindings::ent
 		static vscript::singleton_class_desc<singleton> desc;
 
 		static gsdk::HSCRIPT script_from_ptr(gsdk::CBaseEntity *ptr) noexcept;
+		static void *script_to_ptr(gsdk::HSCRIPT obj) noexcept;
 
 		gsdk::HSCRIPT script_lookup_sendprop(std::string_view path) noexcept;
 		gsdk::HSCRIPT script_lookup_sendtable(std::string_view path) noexcept;

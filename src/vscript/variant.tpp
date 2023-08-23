@@ -1073,6 +1073,88 @@ namespace vmod::vscript
 	}
 
 	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<gsdk::Vector *>() noexcept
+	{ return gsdk::FIELD_VECTOR; }
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<gsdk::Vector>() noexcept
+	{ return gsdk::FIELD_VECTOR; }
+	inline void initialize_impl(gsdk::ScriptVariant_t &var, const gsdk::Vector &value) noexcept
+	{
+		var.m_vector = new gsdk::Vector{value};
+		var.m_flags |= gsdk::SV_FREE;
+	}
+	inline void initialize_impl(gsdk::ScriptVariant_t &var, gsdk::Vector *value) noexcept
+	{
+		if(value) {
+			initialize_impl(var, *value);
+		} else {
+			var.m_type = gsdk::FIELD_VOID;
+			var.m_object = gsdk::INVALID_HSCRIPT;
+		}
+	}
+	template <>
+	inline gsdk::Vector *to_value_impl<gsdk::Vector *>(const gsdk::ScriptVariant_t &var) noexcept
+	{
+		switch(var.m_type) {
+			case gsdk::FIELD_VECTOR:
+			return var.m_vector;
+			default:
+			return nullptr;
+		}
+	}
+	template <>
+	inline gsdk::Vector to_value_impl<gsdk::Vector>(const gsdk::ScriptVariant_t &var) noexcept
+	{
+		auto ptr{to_value_impl<gsdk::Vector *>(var)};
+		if(ptr) {
+			return *ptr;
+		}
+
+		return gsdk::Vector{};
+	}
+
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<gsdk::QAngle *>() noexcept
+	{ return gsdk::FIELD_QANGLE; }
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<gsdk::QAngle>() noexcept
+	{ return gsdk::FIELD_QANGLE; }
+	inline void initialize_impl(gsdk::ScriptVariant_t &var, const gsdk::QAngle &value) noexcept
+	{
+		var.m_qangle = new gsdk::QAngle{value};
+		var.m_flags |= gsdk::SV_FREE;
+	}
+	inline void initialize_impl(gsdk::ScriptVariant_t &var, gsdk::QAngle *value) noexcept
+	{
+		if(value) {
+			initialize_impl(var, *value);
+		} else {
+			var.m_type = gsdk::FIELD_VOID;
+			var.m_object = gsdk::INVALID_HSCRIPT;
+		}
+	}
+	template <>
+	inline gsdk::QAngle *to_value_impl<gsdk::QAngle *>(const gsdk::ScriptVariant_t &var) noexcept
+	{
+		switch(var.m_type) {
+			case gsdk::FIELD_QANGLE:
+			return var.m_qangle;
+			default:
+			return nullptr;
+		}
+	}
+	template <>
+	inline gsdk::QAngle to_value_impl<gsdk::QAngle>(const gsdk::ScriptVariant_t &var) noexcept
+	{
+		auto ptr{to_value_impl<gsdk::QAngle *>(var)};
+		if(ptr) {
+			return *ptr;
+		}
+
+		return gsdk::QAngle{};
+	}
+
+	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<gsdk::ScriptVariant_t>() noexcept
 	{ return gsdk::FIELD_VARIANT; }
 	template <>

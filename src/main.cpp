@@ -293,9 +293,15 @@ namespace vmod
 		(pthis->*DestroyVM_original)(vm);
 	}
 
+	#define __VMOD_FORCE_DUMP_ALL
+
 	bool main::dump_scripts() const noexcept
 	{
+	#ifdef __VMOD_FORCE_DUMP_ALL
+		return true;
+	#else
 		return vmod_auto_dump_internal_scripts.get<bool>();
+	#endif
 	}
 
 	static gsdk::HSCRIPT(gsdk::IScriptVM::*CompileScript_original)(const char *, const char *) {nullptr};
@@ -311,11 +317,10 @@ namespace vmod
 
 			if(name && name[0] != '\0') {
 				dump_path /= "named"sv;
+				dump_path /= name;
 
 				std::error_code ec;
-				std::filesystem::create_directories(dump_path, ec);
-
-				dump_path /= name;
+				std::filesystem::create_directories(dump_path.parent_path(), ec);
 			} else {
 				dump_path /= "unnamed"sv;
 
@@ -527,11 +532,12 @@ namespace vmod
 		std::string temp_typemask{typemask};
 
 		if(current_binding) {
-			if(current_binding->m_flags & gsdk::SF_VA_FUNC) {
-				nparamscheck = -nparamscheck;
-			} else if(current_binding->m_flags & gsdk::SF_OPT_FUNC) {
-				nparamscheck = -(nparamscheck-1);
+			if(current_binding->m_flags & gsdk::SF_FUNC_LAST_OPT) {
 				temp_typemask += "|o"sv;
+				--nparamscheck;
+			}
+			if(current_binding->va_like()) {
+				nparamscheck = -nparamscheck;
 			}
 		}
 
@@ -649,15 +655,21 @@ namespace vmod
 
 		if(!main::instance().vm()) {
 			auto &vec{internal_vscript_class_bindings};
-			auto it{std::find(vec.begin(), vec.end(), desc)};
-			if(it == vec.end()) {
-				vec.emplace_back(desc);
+			auto desc_it{desc};
+			while(desc_it) {
+				if(std::find(vec.begin(), vec.end(), desc_it) == vec.end()) {
+					vec.emplace_back(desc_it);
+				}
+				desc_it = desc_it->m_pBaseDesc;
 			}
 		} else if(!vscript_server_init_called) {
 			auto &vec{game_vscript_class_bindings};
-			auto it{std::find(vec.begin(), vec.end(), desc)};
-			if(it == vec.end()) {
-				vec.emplace_back(desc);
+			auto desc_it{desc};
+			while(desc_it) {
+				if(std::find(vec.begin(), vec.end(), desc_it) == vec.end()) {
+					vec.emplace_back(desc_it);
+				}
+				desc_it = desc_it->m_pBaseDesc;
 			}
 		}
 
@@ -691,15 +703,21 @@ namespace vmod
 
 		if(!main::instance().vm()) {
 			auto &vec{internal_vscript_class_bindings};
-			auto it{std::find(vec.begin(), vec.end(), desc)};
-			if(it == vec.end()) {
-				vec.emplace_back(desc);
+			auto desc_it{desc};
+			while(desc_it) {
+				if(std::find(vec.begin(), vec.end(), desc_it) == vec.end()) {
+					vec.emplace_back(desc_it);
+				}
+				desc_it = desc_it->m_pBaseDesc;
 			}
 		} else if(!vscript_server_init_called) {
 			auto &vec{game_vscript_class_bindings};
-			auto it{std::find(vec.begin(), vec.end(), desc)};
-			if(it == vec.end()) {
-				vec.emplace_back(desc);
+			auto desc_it{desc};
+			while(desc_it) {
+				if(std::find(vec.begin(), vec.end(), desc_it) == vec.end()) {
+					vec.emplace_back(desc_it);
+				}
+				desc_it = desc_it->m_pBaseDesc;
 			}
 		}
 
@@ -1528,6 +1546,15 @@ namespace vmod
 
 					std::string dataname{map->dataClassName};
 					sv_datamaps.emplace(std::move(dataname), map);
+
+					auto base{map->baseMap};
+					while(base) {
+						dataname = base->dataClassName;
+						if(sv_datamaps.find(dataname) == sv_datamaps.end()) {
+							sv_datamaps.emplace(std::move(dataname), base);
+						}
+						base = base->baseMap;
+					}
 				}
 			}
 
@@ -1551,7 +1578,13 @@ namespace vmod
 				} else {
 					auto szAddCode_it{RunVScripts_it->second->find("szAddCode"s)};
 					if(szAddCode_it != RunVScripts_it->second->end()) {
+					#if GSDK_ENGINE == GSDK_ENGINE_TF2
 						szAddCode = szAddCode_it->second->addr<const unsigned char *>();
+					#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
+						szAddCode = *szAddCode_it->second->addr<const unsigned char **>();
+					#else
+						#error
+					#endif
 					} else {
 						warning("vmod: missing 'CLogicScript::RunVScripts()::szAddCode' symbol\n"sv);
 					}
@@ -1571,7 +1604,6 @@ namespace vmod
 			__VMOD_GET_SV_SENDPROXY_FUNC(SendProxy_EHandleToInt)
 			__VMOD_GET_SV_SENDPROXY_FUNC(SendProxy_IntAddOne)
 			__VMOD_GET_SV_SENDPROXY_FUNC(SendProxy_ShortAddOne)
-			__VMOD_GET_SV_SENDPROXY_FUNC(SendProxy_OnlyToTeam)
 			__VMOD_GET_SV_SENDPROXY_FUNC(SendProxy_PredictableIdToInt)
 
 			auto g_Script_spawn_helper_it{sv_global_qual.find("g_Script_spawn_helper"s)};
@@ -1629,6 +1661,19 @@ namespace vmod
 
 		plugins_dir_ = root_dir_;
 		plugins_dir_ /= "plugins"sv;
+
+		{
+			gsdk::ICVarIterator *varit{cvar->FactoryInternalIterator()};
+			for(varit->SetFirst(); varit->IsValid(); varit->Next()) {
+				gsdk::ConCommandBase *cmd{varit->Get()};
+
+				cmd->RemoveFlags(gsdk::FCVAR_DEVELOPMENTONLY|gsdk::FCVAR_HIDDEN);
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+				cmd->AddFlags(gsdk::FCVAR_RELEASE);
+			#endif
+			}
+			delete varit;
+		}
 
 		cvar_dll_id_ = cvar->AllocateDLLIdentifier();
 
@@ -2379,7 +2424,7 @@ namespace vmod
 		};
 
 		vmod_dump_datamaps.initialize("vmod_dump_datamaps"sv,
-			[dump_datamaps_impl](const gsdk::CCommand &) -> void {
+			[dump_datamaps_impl](const gsdk::CCommand &) noexcept -> void {
 				dump_datamaps_impl(false);
 			}
 		);
@@ -2387,7 +2432,7 @@ namespace vmod
 		vmod_auto_dump_keyvalues.initialize("vmod_auto_dump_keyvalues"sv, false);
 
 		vmod_dump_keyvalues.initialize("vmod_dump_keyvalues"sv,
-			[dump_datamaps_impl](const gsdk::CCommand &) -> void {
+			[dump_datamaps_impl](const gsdk::CCommand &) noexcept -> void {
 				dump_datamaps_impl(true);
 			}
 		);
@@ -2954,6 +2999,18 @@ namespace vmod
 
 		sv_engine->InsertServerCommand("exec vmod/load_late.cfg\n");
 		sv_engine->ServerExecute();
+
+	#ifdef __VMOD_FORCE_DUMP_ALL
+		vmod_auto_dump_internal_scripts = true;
+		vmod_auto_dump_squirrel_ver = true;
+		vmod_auto_dump_netprops = true;
+		vmod_auto_dump_datamaps = true;
+		vmod_auto_dump_keyvalues = true;
+		vmod_auto_dump_entity_classes = true;
+		vmod_auto_dump_entity_vtables = true;
+		vmod_auto_dump_entity_funcs = true;
+		vmod_auto_gen_docs = true;
+	#endif
 
 		if(vmod_auto_dump_squirrel_ver.get<bool>()) {
 			vmod_dump_squirrel_ver();

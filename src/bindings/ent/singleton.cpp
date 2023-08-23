@@ -38,6 +38,8 @@ namespace vmod::bindings::ent
 
 		desc.func(&singleton::script_from_ptr, "script_from_ptr"sv, "from_ptr"sv)
 		.desc("[entity](ptr|)"sv);
+		desc.func(&singleton::script_to_ptr, "script_to_ptr"sv, "to_ptr"sv)
+		.desc("[ptr](entity|)"sv);
 
 		if(entityfactorydict) {
 			desc.func(&singleton::script_find_factory, "script_find_factory"sv, "find_factory"sv)
@@ -141,6 +143,18 @@ namespace vmod::bindings::ent
 		}
 
 		return ptr->GetScriptInstance();
+	}
+
+	void *singleton::script_to_ptr(gsdk::HSCRIPT obj) noexcept
+	{
+		gsdk::IScriptVM *vm{main::instance().vm()};
+
+		if(!obj || obj == gsdk::INVALID_HSCRIPT) {
+			vm->RaiseException("vmod: invalid instance");
+			return nullptr;
+		}
+
+		return gsdk::CBaseEntity::from_instance(obj);
 	}
 
 	gsdk::HSCRIPT singleton::script_lookup_sendprop(std::string_view path) noexcept

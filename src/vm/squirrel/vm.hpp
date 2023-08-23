@@ -143,7 +143,7 @@ namespace vmod::vm
 		static SQInteger instance_release_generic(SQUserPointer userptr, SQInteger size);
 		static SQInteger instance_release_external(SQUserPointer userptr, SQInteger size);
 
-		SQInteger func_call(const gsdk::ScriptFunctionBinding_t *info, void *obj, const std::vector<gsdk::ScriptVariant_t> &args) noexcept;
+		SQInteger func_call_impl(const gsdk::ScriptFunctionBinding_t *info, void *obj, const std::vector<gsdk::ScriptVariant_t> &args) noexcept;
 
 		bool push(const gsdk::ScriptVariant_t &var) noexcept;
 		bool get(HSQOBJECT obj, gsdk::ScriptVariant_t &var) noexcept;

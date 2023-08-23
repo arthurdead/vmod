@@ -84,7 +84,11 @@ namespace vmod::bindings::ffi
 		call(reinterpret_cast<void(*)()>(target.mfp.addr));
 
 		vscript::variant ret_var;
-		vmod::ffi::ptr_to_script_var(static_cast<void *>(ret_storage.get()), ret_type, ret_var);
+		if(ret_type != &ffi_type_void) {
+			vmod::ffi::ptr_to_script_var(static_cast<void *>(ret_storage.get()), ret_type, ret_var);
+		} else {
+			ret_var = nullptr;
+		}
 		return ret_var;
 	}
 

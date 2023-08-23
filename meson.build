@@ -179,14 +179,14 @@ endif
 custom_vm = true
 
 if custom_vm
-	use_quirrel = true
+	use_quirrel = false
 	enable_sourcepawn = false
 	enable_v8 = false
 
 	if use_quirrel
 		squirrel_ver = 'quirrel'
 	else
-		squirrel_ver = 'squirrel'
+		squirrel_ver = 'squirrel_320'
 	endif
 
 	squirrel = subproject(squirrel_ver,

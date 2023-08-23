@@ -286,21 +286,28 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
-		for(auto it : obj.symbols()) {
-			auto name_mangled{it.getName()};
+		auto it{obj.symbol_begin()};
+		auto end{obj.symbol_end()};
+		while(it != end) {
+			auto it_sym{static_cast<const llvm::object::SymbolRef &>(*it)};
+
+			auto name_mangled{it_sym.getName()};
 			if(!name_mangled || name_mangled->empty()) {
+				++it;
 				continue;
 			}
 
 			using Type_t = llvm::object::SymbolRef::Type;
 
-			auto type{it.getType()};
+			auto type{it_sym.getType()};
 			if(!type || (*type != Type_t::ST_Data && *type != Type_t::ST_Debug)) {
+				++it;
 				continue;
 			}
 
-			auto value{it.getValue()};
+			auto value{it_sym.getValue()};
 			if(!value || *value == 0) {
+				++it;
 				continue;
 			}
 
@@ -327,14 +334,15 @@ namespace vmod
 
 			std::size_t size{0};
 
-			if(it != obj.symbol_end()) {
-				auto idx{obj.getSymbolIndex(it.getRawDataRefImpl())};
-				auto next{obj.getSymbolByIndex(static_cast<unsigned int>(idx)+1)};
-				if(next != obj.symbol_end()) {
-					auto next_value{next->getValue()};
-					if(next_value && *next_value != 0 && *next_value > *value) {
-						size = static_cast<std::size_t>(*next_value - *value);
-					}
+			auto next{it};
+			++next;
+			if(next != end) {
+				auto next_sym{static_cast<const llvm::object::SymbolRef &>(*next)};
+				auto next_value{next_sym.getValue()};
+				if(next_value && *next_value != 0 && *next_value > *value) {
+					size = static_cast<std::size_t>(*next_value - *value);
+					it = next;
+					++it;
 				}
 			}
 
@@ -343,6 +351,8 @@ namespace vmod
 			qualifications_t::iterator tmp_qual_it;
 			qualification_info::names_t::iterator tmp_name_it;
 			handle_component(name_mangled_str, component, tmp_qual_it, tmp_name_it, std::move(basic_sym), base, false);
+
+			++it;
 		}
 
 		return true;
@@ -776,7 +786,7 @@ namespace vmod
 			unsigned char *begin{base};
 			unsigned char *end{base + (memory_size - num_bytes)};
 
-			const unsigned char *bytes_begin{reinterpret_cast<const unsigned char *>(bytes.data())};
+			const unsigned char *bytes_begin{bytes.data()};
 
 			if(!bytes.has_null()) {
 				for(unsigned char *it{begin}; it != end; ++it) {

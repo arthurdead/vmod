@@ -26,7 +26,7 @@ namespace vmod::vscript
 		if constexpr(num_args > 0) {
 			using LA = std::tuple_element_t<num_args-1, std::tuple<Args...>>;
 			if constexpr(is_optional<LA>::value) {
-				m_flags |= gsdk::SF_OPT_FUNC;
+				m_flags |= gsdk::SF_FUNC_LAST_OPT;
 			}
 		}
 
@@ -238,6 +238,7 @@ namespace vmod::vscript
 
 		const gsdk::ScriptVariant_t *args_va{args + num_required_args};
 
+	#ifndef __VMOD_USING_CUSTOM_VM
 		std::size_t num_va{0};
 		for(int i{num_required_args}; i < num_args-1; ++i) {
 			if(args[i].m_type == gsdk::FIELD_HSCRIPT &&
@@ -247,6 +248,9 @@ namespace vmod::vscript
 
 			++num_va;
 		}
+	#else
+		std::size_t num_va{static_cast<std::size_t>(num_args) - num_required_args};
+	#endif
 
 		if(num_required_args > 0) {
 			if(!args || num_args < static_cast<int>(num_required_args)) {
@@ -304,6 +308,7 @@ namespace vmod::vscript
 
 		const gsdk::ScriptVariant_t *args_va{args + num_required_args};
 
+	#ifndef __VMOD_USING_CUSTOM_VM
 		std::size_t num_va{0};
 		for(int i{num_required_args}; i < num_args-1; ++i) {
 			if(args[i].m_type == gsdk::FIELD_HSCRIPT &&
@@ -313,6 +318,9 @@ namespace vmod::vscript
 
 			++num_va;
 		}
+	#else
+		std::size_t num_va{static_cast<std::size_t>(num_args) - num_required_args};
+	#endif
 
 		if(num_required_args > 0) {
 			if(!args || num_args < static_cast<int>(num_required_args)) {

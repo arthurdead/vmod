@@ -37,8 +37,8 @@ else
 	cpp_internal_args = ['-DSQ_VAR_TRACE_ENABLED=0']
 endif
 
-is_quirrel = true
-complete_squirrel = is_quirrel
+is_quirrel = false
+complete_squirrel = true
 
 sources = [
 	files(
@@ -117,24 +117,28 @@ if complete_squirrel and is_quirrel
 	]
 endif
 
+lib_incdirs = [include_directories('include')]
+
+if is_quirrel
+	lib_incdirs += [include_directories('internal')]
+endif
+
 squirrel_lib = static_library('squirrel',
 	sources,
 	cpp_args: cpp_args + cpp_internal_args,
 	gnu_symbol_visibility: 'inlineshidden',
-	include_directories:
-		include_directories(
-			'include',
-			'internal'
-		)
+	include_directories: lib_incdirs
 )
+
+dep_incdirs = [include_directories('include')]
+
+if is_quirrel
+	dep_incdirs += [include_directories('sqmodules')]
+endif
 
 squirrel_dep = declare_dependency(
 	link_with: squirrel_lib,
-	include_directories:
-		include_directories(
-			'include',
-			'sqmodules'
-		)
+	include_directories: dep_incdirs
 )
 
 squirrel_internal_dep = declare_dependency(

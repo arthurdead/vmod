@@ -61,6 +61,14 @@ namespace vmod::bindings::ffi
 		file += "};\n\n"sv;
 
 		docs::ident(file, 1);
+		file += "enum class this_types\n"sv;
+		docs::ident(file, 1);
+		file += "{\n"sv;
+		docs::write(file, 2, singleton::instance().this_types_table, docs::write_enum_how::name);
+		docs::ident(file, 1);
+		file += "};\n\n"sv;
+
+		docs::ident(file, 1);
 		file += "enum class abi\n"sv;
 		docs::ident(file, 1);
 		file += "{\n"sv;

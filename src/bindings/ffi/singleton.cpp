@@ -24,13 +24,13 @@ namespace vmod::bindings::ffi
 		.desc("[cif](abi|, types|ret, array<types>|args)"sv);
 
 		desc.func(&singleton::script_create_member_cif, "script_create_member_cif"sv, "cif_member"sv)
-		.desc("[cif](types|ret, array<types>|args)"sv);
+		.desc("[cif](types|ret, this_types|this, array<types>|args)"sv);
 
 		desc.func(&singleton::script_create_detour_static, "script_create_detour_static"sv, "detour_static"sv)
 		.desc("[detour](fp|target, function|callback, abi|, types|ret, array<types>|args, post)"sv);
 
 		desc.func(&singleton::script_create_detour_member, "script_create_detour_member"sv, "detour_member"sv)
-		.desc("[detour](mfp|target, function|callback, types|ret, array<types>|args, post)"sv);
+		.desc("[detour](mfp|target, function|callback, types|ret, this_types|this, array<types>|args, post)"sv);
 
 		if(!singleton_base::bindings(&desc)) {
 			return false;
@@ -172,10 +172,58 @@ namespace vmod::bindings::ffi
 				error("vmod: failed to set ffi tstr type value\n"sv);
 				return false;
 			}
+
+			if(!vm->SetValue(types_table, "vec", vscript::variant{&ffi_type_vector})) {
+				error("vmod: failed to set ffi vec type value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(types_table, "ang", vscript::variant{&ffi_type_qangle})) {
+				error("vmod: failed to set ffi ang type value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(types_table, "clr32", vscript::variant{&ffi_type_color32})) {
+				error("vmod: failed to set ffi clr32 type value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(types_table, "ehandle", vscript::variant{&ffi_type_ehandle})) {
+				error("vmod: failed to set ffi ehandle type value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(types_table, "ent_ptr", vscript::variant{&ffi_type_ent_ptr})) {
+				error("vmod: failed to set ffi ent_ptr type value\n"sv);
+				return false;
+			}
 		}
 
 		if(!vm->SetValue(scope, "types", types_table)) {
 			error("vmod: failed to set ffi types table value\n"sv);
+			return false;
+		}
+
+		this_types_table = vm->CreateTable();
+		if(!this_types_table || this_types_table == gsdk::INVALID_HSCRIPT) {
+			error("vmod: failed to create ffi this types table\n"sv);
+			return false;
+		}
+
+		{
+			if(!vm->SetValue(this_types_table, "ptr", vscript::variant{&ffi_type_pointer})) {
+				error("vmod: failed to set ffi ptr type value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(this_types_table, "ent_ptr", vscript::variant{&ffi_type_ent_ptr})) {
+				error("vmod: failed to set ffi ent_ptr type value\n"sv);
+				return false;
+			}
+		}
+
+		if(!vm->SetValue(scope, "this_types", this_types_table)) {
+			error("vmod: failed to set ffi this types table value\n"sv);
 			return false;
 		}
 
@@ -231,6 +279,10 @@ namespace vmod::bindings::ffi
 
 		if(types_table && types_table != gsdk::INVALID_HSCRIPT) {
 			vm->ReleaseTable(types_table);
+		}
+
+		if(this_types_table && this_types_table != gsdk::INVALID_HSCRIPT) {
+			vm->ReleaseTable(this_types_table);
 		}
 
 		if(vm->ValueExists(scope, "types")) {
@@ -303,7 +355,7 @@ namespace vmod::bindings::ffi
 	}
 
 	//TODO!!! should you be able to change the abi?
-	gsdk::HSCRIPT singleton::script_create_member_cif(ffi_type *ret, gsdk::HSCRIPT args) noexcept
+	gsdk::HSCRIPT singleton::script_create_member_cif(ffi_type *ret, ffi_type *this_type, gsdk::HSCRIPT args) noexcept
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
@@ -313,11 +365,12 @@ namespace vmod::bindings::ffi
 		}
 
 		std::vector<ffi_type *> args_types;
+
+		args_types.emplace_back(this_type);
+
 		if(!script_create_cif_shared(args_types, args)) {
 			return gsdk::INVALID_HSCRIPT;
 		}
-
-		args_types.insert(args_types.begin(), &ffi_type_pointer);
 
 		caller *cif{new caller{ret, std::move(args_types)}};
 		if(!cif->initialize(FFI_SYSV)) {
@@ -375,13 +428,18 @@ namespace vmod::bindings::ffi
 	}
 
 	//TODO!!! should you be able to change the abi?
-	gsdk::HSCRIPT singleton::script_create_detour_member(mfp_or_func_t old_target, gsdk::HSCRIPT callback, ffi_type *ret, gsdk::HSCRIPT args, bool post) noexcept
+	gsdk::HSCRIPT singleton::script_create_detour_member(mfp_or_func_t old_target, gsdk::HSCRIPT callback, ffi_type *ret, ffi_type *this_type, gsdk::HSCRIPT args, bool post) noexcept
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		std::vector<ffi_type *> args_types;
 
-		args_types.emplace_back(&ffi_type_pointer);
+		if(!this_type) {
+			vm->RaiseException("vmod: invalid this type");
+			return gsdk::INVALID_HSCRIPT;
+		}
+
+		args_types.emplace_back(this_type);
 
 		if(!script_create_detour_shared(old_target, callback, ret, args, args_types)) {
 			return gsdk::INVALID_HSCRIPT;

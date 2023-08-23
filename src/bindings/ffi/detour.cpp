@@ -47,7 +47,7 @@ namespace vmod::bindings::ffi
 		}
 	}
 
-	gsdk::ScriptVariant_t detour::callback_instance::script_call(const vscript::variant *args, std::size_t num_args, ...) noexcept
+	vscript::variant detour::callback_instance::script_call(const vscript::variant *args, std::size_t num_args, ...) noexcept
 	{
 		std::size_t required_args{owner->args_types.size()};
 		if(!args || num_args != required_args) {
@@ -68,8 +68,12 @@ namespace vmod::bindings::ffi
 			owner->vmod::ffi::cif::call(reinterpret_cast<void(*)()>(owner->old_target.mfp.addr));
 		}
 
-		gsdk::ScriptVariant_t ret;
-		vmod::ffi::ptr_to_script_var(static_cast<void *>(owner->ret_storage.get()), owner->ret_type, ret);
+		vscript::variant ret;
+		if(owner->ret_type != &ffi_type_void) {
+			vmod::ffi::ptr_to_script_var(static_cast<void *>(owner->ret_storage.get()), owner->ret_type, ret);
+		} else {
+			ret = nullptr;
+		}
 		return ret;
 	}
 

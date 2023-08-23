@@ -51,13 +51,6 @@
 	}
 };
 
-/*
-UNDONE FOR PORTAL2 BRANCH:
-We're not suing the auto-connecting of outputs, always calling ConnectOuput explicitly in our scripts.
-The regexp object doesn't save/load properly and causes a crash when used to match after a save/load.
-Instead of fixing this, we're disabling the feature. If this class of problem comes up more we might
-revisit, otherwise we'll leave if off and broken.
-
 ::__OutputsPattern <- ::regexp("^On.*Output$");
 
 ::ConnectOutputs <- function( table )
@@ -72,7 +65,6 @@ revisit, otherwise we'll leave if off and broken.
 		}
 	}
 };
-*/
 
 ::IncludeScript <- function( name, scope = null )
 {

@@ -21,18 +21,22 @@ static ffi_type *ffi_type_tstr_object_elements[1]{
 	&ffi_type_cstr
 };
 
-ffi_type ffi_type_vector{
-	sizeof(gsdk::Vector),
-	alignof(gsdk::Vector),
-	FFI_TYPE_STRUCT,
-	ffi_type_vector_elements
-};
-ffi_type ffi_type_qangle{
-	sizeof(gsdk::QAngle),
-	alignof(gsdk::QAngle),
-	FFI_TYPE_STRUCT,
-	ffi_type_qangle_elements
-};
+#define __VMOD_IMPLEMENT_FFI_TYPE_WITH_PTR(name, type) \
+	ffi_type ffi_type_##name{ \
+		sizeof(type), \
+		alignof(type), \
+		FFI_TYPE_STRUCT, \
+		ffi_type_##name##_elements \
+	}; \
+	ffi_type ffi_type_##name##_ptr{ \
+		sizeof(type *), \
+		alignof(type *), \
+		FFI_TYPE_POINTER, \
+		nullptr \
+	};
+
+__VMOD_IMPLEMENT_FFI_TYPE_WITH_PTR(vector, gsdk::Vector)
+__VMOD_IMPLEMENT_FFI_TYPE_WITH_PTR(qangle, gsdk::QAngle)
 ffi_type ffi_type_color32{
 	sizeof(Color),
 	alignof(Color),
@@ -62,6 +66,12 @@ ffi_type ffi_type_object_tstr{
 	alignof(gsdk::detail::string_t::object::string_t),
 	FFI_TYPE_STRUCT,
 	ffi_type_tstr_object_elements
+};
+ffi_type ffi_type_ent_ptr{
+	sizeof(gsdk::CBaseEntity *),
+	alignof(gsdk::CBaseEntity *),
+	FFI_TYPE_POINTER,
+	nullptr
 };
 
 namespace vmod::ffi
@@ -105,11 +115,25 @@ namespace vmod::ffi
 			case FFI_TYPE_SINT64:
 			*static_cast<long long *>(ptr) = var.get<long long>();
 			break;
-			case FFI_TYPE_POINTER:
-			*static_cast<void **>(ptr) = var.get<void *>();
-			break;
+			case FFI_TYPE_POINTER: {
+				if(type == &ffi_type_ent_ptr) {
+					*static_cast<gsdk::CBaseEntity **>(ptr) = var.get<gsdk::CBaseEntity *>();
+				} else if(type == &ffi_type_vector_ptr) {
+					**static_cast<gsdk::Vector **>(ptr) = var.get<gsdk::Vector>();
+				} else if(type == &ffi_type_qangle_ptr) {
+					**static_cast<gsdk::QAngle **>(ptr) = var.get<gsdk::QAngle>();
+				} else {
+					*static_cast<void **>(ptr) = var.get<void *>();
+				}
+			} break;
 			case FFI_TYPE_STRUCT: {
-				debugtrap();
+				if(type == &ffi_type_vector) {
+					*static_cast<gsdk::Vector *>(ptr) = var.get<gsdk::Vector>();
+				} else if(type == &ffi_type_qangle) {
+					*static_cast<gsdk::QAngle *>(ptr) = var.get<gsdk::QAngle>();
+				} else {
+					debugtrap();
+				}
 			} break;
 			default: {
 				debugtrap();
@@ -120,8 +144,30 @@ namespace vmod::ffi
 	void ptr_to_script_var(void *ptr, ffi_type *type, gsdk::ScriptVariant_t &var) noexcept
 	{
 		std::memset(var.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
-		std::memcpy(var.m_data, ptr, type->size);
-		var.m_type = static_cast<short>(to_field_type(type));
+
+		if(type == &ffi_type_ent_ptr) {
+			var.m_object = (*static_cast<gsdk::CBaseEntity **>(ptr))->GetScriptInstance();
+			var.m_type = gsdk::FIELD_HSCRIPT;
+		} else if(type == &ffi_type_vector_ptr) {
+			var.m_vector = new gsdk::Vector{**static_cast<gsdk::Vector **>(ptr)};
+			var.m_type = gsdk::FIELD_VECTOR;
+			var.m_flags |= gsdk::SV_FREE;
+		} else if(type == &ffi_type_qangle_ptr) {
+			var.m_qangle = new gsdk::QAngle{**static_cast<gsdk::QAngle **>(ptr)};
+			var.m_type = gsdk::FIELD_QANGLE;
+			var.m_flags |= gsdk::SV_FREE;
+		} else if(type == &ffi_type_vector) {
+			var.m_vector = new gsdk::Vector{*static_cast<gsdk::Vector *>(ptr)};
+			var.m_type = gsdk::FIELD_VECTOR;
+			var.m_flags |= gsdk::SV_FREE;
+		} else if(type == &ffi_type_qangle) {
+			var.m_qangle = new gsdk::QAngle{*static_cast<gsdk::QAngle *>(ptr)};
+			var.m_type = gsdk::FIELD_QANGLE;
+			var.m_flags |= gsdk::SV_FREE;
+		} else {
+			std::memcpy(var.m_data, ptr, type->size);
+			var.m_type = static_cast<short>(to_field_type(type));
+		}
 	}
 
 	int to_field_type(ffi_type *type)
@@ -157,17 +203,32 @@ namespace vmod::ffi
 		#else
 			#error
 		#endif
-			case FFI_TYPE_POINTER:
-		#if __SIZEOF_POINTER__ == __SIZEOF_INT__
-			return gsdk::FIELD_UINT32;
-		#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
-			return gsdk::FIELD_UINT64;
-		#else
-			#error
-		#endif
+			case FFI_TYPE_POINTER: {
+				if(type == &ffi_type_ent_ptr) {
+					return gsdk::FIELD_HSCRIPT;
+				} else if(type == &ffi_type_vector_ptr) {
+					return gsdk::FIELD_VECTOR;
+				} else if(type == &ffi_type_qangle_ptr) {
+					return gsdk::FIELD_QANGLE;
+				}
+
+			#if __SIZEOF_POINTER__ == __SIZEOF_INT__
+				return gsdk::FIELD_UINT32;
+			#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
+				return gsdk::FIELD_UINT64;
+			#else
+				#error
+			#endif
+			}
 			case FFI_TYPE_STRUCT: {
-				debugtrap();
-				return gsdk::FIELD_TYPEUNKNOWN;
+				if(type == &ffi_type_vector) {
+					return gsdk::FIELD_VECTOR;
+				} else if(type == &ffi_type_qangle) {
+					return gsdk::FIELD_QANGLE;
+				} else {
+					debugtrap();
+					return gsdk::FIELD_TYPEUNKNOWN;
+				}
 			}
 			default: {
 				debugtrap();

@@ -19,13 +19,18 @@
 #pragma GCC diagnostic pop
 #endif
 
-extern ffi_type ffi_type_vector;
-extern ffi_type ffi_type_qangle;
+#define __VMOD_DECLARE_FFI_TYPE_WITH_PTR(name) \
+	extern ffi_type ffi_type_##name; \
+	extern ffi_type ffi_type_##name##_ptr;
+
+__VMOD_DECLARE_FFI_TYPE_WITH_PTR(vector)
+__VMOD_DECLARE_FFI_TYPE_WITH_PTR(qangle)
 extern ffi_type ffi_type_color32;
 extern ffi_type ffi_type_ehandle;
 extern ffi_type ffi_type_bool;
 extern ffi_type ffi_type_cstr;
 extern ffi_type ffi_type_object_tstr;
+extern ffi_type ffi_type_ent_ptr;
 #define ffi_type_plain_tstr ffi_type_cstr
 #define ffi_type_weak_tstr ffi_type_sint
 

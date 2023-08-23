@@ -357,8 +357,8 @@ namespace vmod
 
 	plugin::owned_instance::~owned_instance() noexcept
 	{
-		if(owner_ && !owner_->clearing_instances) {
-			std::vector<owned_instance *> &instances{owner_->owned_instances};
+		if(owner_plugin && !owner_plugin->clearing_instances) {
+			std::vector<owned_instance *> &instances{owner_plugin->owned_instances};
 
 			auto it{std::find(instances.begin(), instances.end(), this)};
 			if(it != instances.end()) {
@@ -428,10 +428,10 @@ namespace vmod
 
 	void plugin::owned_instance::set_plugin() noexcept
 	{
-		owner_ = assumed_currently_running_;
+		owner_plugin = assumed_currently_running_;
 
-		if(owner_) {
-			owner_->owned_instances.emplace_back(this);
+		if(owner_plugin) {
+			owner_plugin->owned_instances.emplace_back(this);
 		}
 	}
 
@@ -597,9 +597,13 @@ namespace vmod
 	void plugin::game_frame(bool simulating) noexcept
 	{
 		if(inotify_fd != -1) {
-			inotify_event event{};
-			ssize_t evbytes{read(inotify_fd, &event, sizeof(inotify_event)+NAME_MAX+1)};
-			if((evbytes > 0) && (static_cast<size_t>(evbytes) >= sizeof(inotify_event)) && (event.mask & IN_MODIFY)) {
+			unsigned char event_bytes[sizeof(inotify_event)+NAME_MAX+1]{};
+			ssize_t evbytes{read(inotify_fd, event_bytes, sizeof(event_bytes))};
+			#pragma GCC diagnostic push
+			#pragma GCC diagnostic ignored "-Wcast-align"
+			auto event{reinterpret_cast<inotify_event *>(event_bytes)};
+			#pragma GCC diagnostic pop
+			if((evbytes > 0) && (static_cast<size_t>(evbytes) >= sizeof(inotify_event)) && (event->mask & IN_MODIFY)) {
 				if(reload() != load_status::success) {
 					return;
 				}

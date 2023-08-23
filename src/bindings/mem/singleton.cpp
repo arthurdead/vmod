@@ -192,6 +192,31 @@ namespace vmod::bindings::mem
 				error("vmod: failed to register mem tstr type\n"sv);
 				return false;
 			}
+
+			if(!register_type(&ffi_type_vector, "vec"sv)) {
+				error("vmod: failed to register mem vec type\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_qangle, "ang"sv)) {
+				error("vmod: failed to register mem ang type\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_color32, "clr32"sv)) {
+				error("vmod: failed to register mem clr32 type\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_ehandle, "ehandle"sv)) {
+				error("vmod: failed to register mem ehandle type\n"sv);
+				return false;
+			}
+
+			if(!register_type(&ffi_type_ent_ptr, "ent_ptr"sv)) {
+				error("vmod: failed to register mem ent_ptr type\n"sv);
+				return false;
+			}
 		}
 
 		if(!vm->SetValue(scope, "types", types_table)) {

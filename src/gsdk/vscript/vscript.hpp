@@ -381,7 +381,7 @@ namespace gsdk
 	enum : int
 	{
 		SF_VA_FUNC =          (1 << 1),
-		SF_OPT_FUNC =         (1 << 2),
+		SF_FUNC_LAST_OPT =    (1 << 2),
 		SF_FREE_SCRIPT_NAME = (1 << 3),
 		SF_FREE_NAME =        (1 << 4),
 		SF_FREE_DESCRIPTION = (1 << 5)
@@ -447,6 +447,9 @@ namespace gsdk
 		ScriptBindingFunc_t m_pfnBinding{nullptr};
 		CScriptFunctionBindingStorageType m_pFunction;
 		unsigned int m_flags{SF_NOFLAGS};
+
+		inline bool va_like() const noexcept
+		{ return ((m_flags & gsdk::SF_VA_FUNC) || (m_flags & gsdk::SF_FUNC_LAST_OPT)); }
 
 	private:
 		ScriptFunctionBinding_t(const ScriptFunctionBinding_t &) = delete;

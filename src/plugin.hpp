@@ -134,9 +134,9 @@ namespace vmod
 			static bool register_class(gsdk::ScriptClassDesc_t *target_desc) noexcept;
 
 			inline plugin *owner() noexcept
-			{ return owner_; }
+			{ return owner_plugin; }
 			inline gsdk::HSCRIPT owner_scope() noexcept
-			{ return owner_ ? owner_->private_scope_ : nullptr; }
+			{ return owner_plugin ? owner_plugin->private_scope_ : nullptr; }
 
 			inline owned_instance(owned_instance &&other) noexcept
 			{ operator=(std::move(other)); }
@@ -144,8 +144,8 @@ namespace vmod
 			{
 				instance = other.instance;
 				other.instance = gsdk::INVALID_HSCRIPT;
-				owner_ = other.owner_;
-				other.owner_ = nullptr;
+				owner_plugin = other.owner_plugin;
+				other.owner_plugin = nullptr;
 				return *this;
 			}
 
@@ -159,7 +159,7 @@ namespace vmod
 
 			void script_delete() noexcept;
 
-			plugin *owner_{nullptr};
+			plugin *owner_plugin{nullptr};
 
 		private:
 			owned_instance(const owned_instance &) = delete;

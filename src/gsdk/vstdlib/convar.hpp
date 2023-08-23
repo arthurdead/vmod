@@ -104,7 +104,7 @@ namespace gsdk
 	class ICVarIterator
 	{
 	public:
-	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V1)
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V1) || GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual ~ICVarIterator() = 0;
 	#endif
 		virtual void SetFirst() = 0;
@@ -116,6 +116,8 @@ namespace gsdk
 
 	constexpr int INVALID_CVAR_DLL_IDENTIFIER{-1};
 
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wsubobject-linkage"
 	class ConCommandBase
 	{
 	public:
@@ -150,6 +152,7 @@ namespace gsdk
 		ConCommandBase(ConCommandBase &&) = delete;
 		ConCommandBase &operator=(ConCommandBase &&) = delete;
 	};
+	#pragma GCC diagnostic push
 
 #ifdef __clang__
 	#pragma clang diagnostic push

@@ -42,6 +42,9 @@ int main(int argc, char *argv[], [[maybe_unused]] char *[])
 		return EXIT_FAILURE;
 	}
 
+	std::error_code ec;
+	std::filesystem::create_directories(dir, ec);
+
 	for(const auto &it : syms) {
 		auto class_info{dynamic_cast<vmod::symbol_cache::class_info *>(it.second.get())};
 		if(!class_info) {

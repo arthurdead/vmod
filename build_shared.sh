@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-gcc=false
+gcc=true
 
 if [[ $gcc == true ]]; then
 export CC=/usr/bin/gcc

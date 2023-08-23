@@ -63,7 +63,7 @@ namespace vmod::bindings::ffi
 			{ return register_instance(&desc, this); }
 
 		private:
-			gsdk::ScriptVariant_t script_call(const vscript::variant *args, std::size_t num_args, ...) noexcept;
+			vscript::variant script_call(const vscript::variant *args, std::size_t num_args, ...) noexcept;
 
 			detour *owner;
 		};
