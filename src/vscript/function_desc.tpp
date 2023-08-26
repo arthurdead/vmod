@@ -19,16 +19,9 @@ namespace vmod::vscript
 		m_desc.m_ReturnType = gsdk::IScriptVM::fixup_var_field(type_to_field<std::decay_t<R>>());
 		(m_desc.m_Parameters.emplace_back(gsdk::IScriptVM::fixup_var_field(type_to_field<std::decay_t<Args>>())), ...);
 	#else
-		m_desc.m_ReturnType = type_to_field<std::decay_t<R>>();
-		(m_desc.m_Parameters.emplace_back(type_to_field<std::decay_t<Args>>()), ...);
+		m_desc.m_ReturnType = type_to_field_and_flags<std::decay_t<R>>();
+		(m_desc.m_Parameters.emplace_back(type_to_field_and_flags<std::decay_t<Args>>()), ...);
 	#endif
-
-		if constexpr(num_args > 0) {
-			using LA = std::tuple_element_t<num_args-1, std::tuple<Args...>>;
-			if constexpr(is_optional<LA>::value) {
-				m_flags |= gsdk::SF_FUNC_LAST_OPT;
-			}
-		}
 
 		if(va) {
 			m_flags |= gsdk::SF_VA_FUNC;

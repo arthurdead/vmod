@@ -188,6 +188,23 @@ namespace vmod::vscript
 		}
 	}
 
+#ifdef __VMOD_USING_CUSTOM_VM
+	template <typename T>
+	constexpr inline gsdk::ScriptDataTypeAndFlags_t type_to_field_and_flags() noexcept
+	{
+		using decayed_t = std::decay_t<T>;
+
+		gsdk::ScriptDataTypeAndFlags_t param;
+		param.type = type_to_field<T>();
+
+		if constexpr(is_optional<decayed_t>::value) {
+			param.flags |= gsdk::FIELD_FLAG_OPTIONAL;
+		}
+
+		return param;
+	}
+#endif
+
 	template <typename T>
 	inline void to_variant(gsdk::ScriptVariant_t &var, T &&value) noexcept
 	{

@@ -2295,7 +2295,7 @@ namespace vmod::vm
 
 		std::size_t num_required_params{info->m_desc.m_Parameters.size()};
 		std::size_t num_params{static_cast<std::size_t>(top-2)};
-		if(info->va_like()) {
+		if(info->va_or_last_optional()) {
 			if(num_params < num_required_params) {
 				return sqstd_throwerrorf(vm, _SC("wrong number of parameters expected at least %zu got %i"), num_required_params, top);
 			}
@@ -2357,7 +2357,7 @@ namespace vmod::vm
 
 		std::size_t num_required_params{funcinfo->m_desc.m_Parameters.size()};
 		std::size_t num_params{static_cast<std::size_t>(top-3)};
-		if(funcinfo->va_like()) {
+		if(funcinfo->va_or_last_optional()) {
 			if(num_params < num_required_params) {
 				return sqstd_throwerrorf(vm, _SC("wrong number of parameters expected at least %zu got %i"), num_required_params, top);
 			}
@@ -2471,6 +2471,75 @@ namespace vmod::vm
 		return 0;
 	}
 
+	bool squirrel::typemask_for_type(std::string &typemask, gsdk::ScriptDataType_t type) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		switch(type) {
+			case gsdk::FIELD_VOID:
+			typemask += 'o';
+			break;
+			case gsdk::FIELD_TIME:
+			typemask += 'f';
+			break;
+			case gsdk::FIELD_FLOAT64:
+			case gsdk::FIELD_FLOAT:
+			typemask += 'n';
+			break;
+			case gsdk::FIELD_STRING:
+			case gsdk::FIELD_MODELNAME:
+			case gsdk::FIELD_SOUNDNAME:
+			case gsdk::FIELD_CSTRING:
+			typemask += 's';
+			break;
+			case gsdk::FIELD_CHARACTER:
+			typemask += 's';
+			break;
+			case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
+			typemask += "i|o"sv;
+			break;
+			case gsdk::FIELD_MODELINDEX:
+			case gsdk::FIELD_MATERIALINDEX:
+			case gsdk::FIELD_TICK:
+			typemask += 'i';
+			break;
+		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			case gsdk::FIELD_INTEGER64:
+		#endif
+			case gsdk::FIELD_SHORT:
+			case gsdk::FIELD_UINT64:
+			case gsdk::FIELD_UINT32:
+			case gsdk::FIELD_INTEGER:
+			typemask += 'n';
+			break;
+			case gsdk::FIELD_CLASSPTR:
+			case gsdk::FIELD_FUNCTION:
+			typemask += 'i';
+			break;
+			case gsdk::FIELD_BOOLEAN:
+			typemask += 'b';
+			break;
+			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
+			case gsdk::FIELD_HSCRIPT:
+			typemask += '.';
+			break;
+			case gsdk::FIELD_QANGLE:
+			case gsdk::FIELD_POSITION_VECTOR:
+			case gsdk::FIELD_VECTOR:
+			typemask += 'x';
+			break;
+			case gsdk::FIELD_VARIANT:
+			typemask += "t|a|x|n|s|b|o|c"sv;
+			break;
+			case gsdk::FIELD_TYPEUNKNOWN:
+			default: {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	bool squirrel::register_func(const gsdk::ScriptClassDesc_t *classinfo, const gsdk::ScriptFunctionBinding_t *info, std::string_view name_str) noexcept
 	{
 		using namespace std::literals::string_literals;
@@ -2497,86 +2566,39 @@ namespace vmod::vm
 
 		std::string typemask{is_static ? "t"s : "x"s};
 
-		for(gsdk::ScriptDataType_t param : info->m_desc.m_Parameters) {
-			switch(param) {
-				case gsdk::FIELD_VOID:
-				typemask += 'o';
-				break;
-				case gsdk::FIELD_TIME:
-				typemask += 'f';
-				break;
-				case gsdk::FIELD_FLOAT64:
-				case gsdk::FIELD_FLOAT:
-				typemask += 'n';
-				break;
-				case gsdk::FIELD_STRING:
-				case gsdk::FIELD_MODELNAME:
-				case gsdk::FIELD_SOUNDNAME:
-				case gsdk::FIELD_CSTRING:
-				typemask += 's';
-				break;
-				case gsdk::FIELD_CHARACTER:
-				typemask += 's';
-				break;
-				case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
-				typemask += "i|o"sv;
-				break;
-				case gsdk::FIELD_MODELINDEX:
-				case gsdk::FIELD_MATERIALINDEX:
-				case gsdk::FIELD_TICK:
-				typemask += 'i';
-				break;
-			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
-				case gsdk::FIELD_INTEGER64:
-			#endif
-				case gsdk::FIELD_SHORT:
-				case gsdk::FIELD_UINT64:
-				case gsdk::FIELD_UINT32:
-				case gsdk::FIELD_INTEGER:
-				typemask += 'n';
-				break;
-				case gsdk::FIELD_CLASSPTR:
-				case gsdk::FIELD_FUNCTION:
-				typemask += 'i';
-				break;
-				case gsdk::FIELD_BOOLEAN:
-				typemask += 'b';
-				break;
-				case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
-				case gsdk::FIELD_HSCRIPT:
-				typemask += '.';
-				break;
-				case gsdk::FIELD_QANGLE:
-				case gsdk::FIELD_POSITION_VECTOR:
-				case gsdk::FIELD_VECTOR:
-				typemask += 'x';
-				break;
-				case gsdk::FIELD_VARIANT:
-				typemask += "t|a|x|n|s|b|o|c"sv;
-				break;
-				case gsdk::FIELD_TYPEUNKNOWN:
-				default: {
-					error("vmod vm: unknown param type in '%s'\n"sv, name_str.data());
-					sq_pop(impl, 2);
-					return false;
-				}
+		for(auto param : info->m_desc.m_Parameters) {
+			if(!typemask_for_type(typemask, param.main_type())) {
+				error("vmod vm: unknown param type in '%s'\n"sv, name_str.data());
+				sq_pop(impl, 2);
+				return false;
+			}
+
+			if(param.extra_types != 0) {
+				error("vmod vm: '%s': tuple arguments arent supported yet\n"sv, name_str.data());
+				sq_pop(impl, 2);
+				return false;
+			}
+
+			if(param.is_optional() && !param.can_be_null()) {
+				typemask += "|o"sv;
 			}
 		}
 
 		SQInteger nparamscheck{1+static_cast<SQInteger>(info->m_desc.m_Parameters.size())};
-		if(info->m_flags & gsdk::SF_FUNC_LAST_OPT) {
-			switch(*(info->m_desc.m_Parameters.end()-1)) {
-				case gsdk::FIELD_VOID:
-				case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
-				case gsdk::FIELD_VARIANT:
-				break;
-				default:
-				typemask += "|o"sv;
-				break;
+		bool has_optionals{false};
+		if(!info->m_desc.m_Parameters.empty()) {
+			auto param_start{info->m_desc.m_Parameters.begin()};
+			auto param_it{info->m_desc.m_Parameters.end()-1};
+			while(param_it != param_start) {
+				if(!param_it->can_be_optional()) {
+					break;
+				}
+				--nparamscheck;
+				has_optionals = true;
+				--param_it;
 			}
-			--nparamscheck;
 		}
-		if(info->va_like()) {
+		if((info->m_flags & gsdk::SF_VA_FUNC) || has_optionals) {
 			nparamscheck = -nparamscheck;
 		}
 
@@ -2584,6 +2606,14 @@ namespace vmod::vm
 			error("vmod vm: failed to set '%s' typemask '%s'\n"sv, name_str.data(), typemask.c_str());
 			sq_pop(impl, 2);
 			return false;
+		}
+
+		if(info->m_desc.m_ReturnType == gsdk::FIELD_TYPEUNKNOWN) {
+			if(classinfo) {
+				error("vmod vm: '%s::%s' has unknown return\n"sv, classinfo->m_pszScriptName, name_str.data());
+			} else {
+				error("vmod vm: '%s' has unknown return\n"sv, name_str.data());
+			}
 		}
 
 		if(debug_vm && got_reg_func_desc) {

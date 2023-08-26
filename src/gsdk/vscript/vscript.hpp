@@ -160,6 +160,80 @@ namespace gsdk
 
 	using ScriptDataType_t = int;
 
+#ifdef __VMOD_USING_CUSTOM_VM
+	enum ScriptParamFlags_t : unsigned char
+	{
+		FIELD_FLAG_NONE     = 0,
+		FIELD_FLAG_OPTIONAL = (1 << 6),
+		FIELD_FLAG_FIRST = FIELD_FLAG_OPTIONAL,
+	};
+
+	static_assert(static_cast<int>(FIELD_FLAG_FIRST) >= static_cast<int>(EXFIELD_TYPECOUNT));
+
+	struct alignas(ScriptDataType_t) ScriptDataTypeAndFlags_t final
+	{
+		constexpr ScriptDataTypeAndFlags_t() noexcept = default;
+
+		constexpr ScriptDataTypeAndFlags_t(const ScriptDataTypeAndFlags_t &) noexcept = default;
+		constexpr ScriptDataTypeAndFlags_t &operator=(const ScriptDataTypeAndFlags_t &) noexcept = default;
+
+		constexpr ScriptDataTypeAndFlags_t(ScriptDataTypeAndFlags_t &&) noexcept = default;
+		constexpr ScriptDataTypeAndFlags_t &operator=(ScriptDataTypeAndFlags_t &&) noexcept = default;
+
+		constexpr inline ScriptDataTypeAndFlags_t(ScriptDataType_t type_) noexcept
+			: type{static_cast<unsigned char>(type_)}
+		{
+		}
+
+		unsigned char type{FIELD_TYPEUNKNOWN};
+		unsigned char flags{FIELD_FLAG_NONE};
+		unsigned char extra_types{0};
+		unsigned char pad1{0};
+
+		constexpr inline operator ScriptDataType_t() const noexcept
+		{ return static_cast<ScriptDataType_t>(type); }
+
+		explicit constexpr inline operator ScriptParamFlags_t() const noexcept
+		{ return static_cast<ScriptParamFlags_t>(flags); }
+
+		constexpr inline ScriptDataType_t main_type() const noexcept
+		{ return static_cast<ScriptDataType_t>(type); }
+
+		constexpr inline bool is_optional() const noexcept
+		{ return (flags & FIELD_FLAG_OPTIONAL); }
+
+		constexpr bool can_be_null() const noexcept
+		{
+			switch(static_cast<ScriptDataType_t>(type)) {
+				case gsdk::FIELD_VOID:
+				case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
+				case gsdk::FIELD_VARIANT:
+				return true;
+				default:
+				return false;
+			}
+		}
+
+		constexpr bool can_be_optional() const noexcept
+		{
+			if(is_optional()) {
+				return true;
+			}
+
+			switch(static_cast<ScriptDataType_t>(type)) {
+				case gsdk::FIELD_VOID:
+				case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
+				return true;
+				default:
+				return false;
+			}
+		}
+	};
+
+	static_assert(sizeof(ScriptDataTypeAndFlags_t) == sizeof(ScriptDataType_t));
+	static_assert(alignof(ScriptDataTypeAndFlags_t) == alignof(ScriptDataType_t));
+#endif
+
 	enum SVFlags_t : short
 	{
 		SV_NOFLAGS = 0,
@@ -381,10 +455,9 @@ namespace gsdk
 	enum : int
 	{
 		SF_VA_FUNC =          (1 << 1),
-		SF_FUNC_LAST_OPT =    (1 << 2),
-		SF_FREE_SCRIPT_NAME = (1 << 3),
-		SF_FREE_NAME =        (1 << 4),
-		SF_FREE_DESCRIPTION = (1 << 5)
+		SF_FREE_SCRIPT_NAME = (1 << 2),
+		SF_FREE_NAME =        (1 << 3),
+		SF_FREE_DESCRIPTION = (1 << 4)
 	};
 
 	static_assert(gsdk::SF_NUM_FLAGS == 1);
@@ -416,7 +489,11 @@ namespace gsdk
 		const char *m_pszFunction{nullptr};
 		const char *m_pszDescription{nullptr};
 		ScriptDataType_t m_ReturnType{FIELD_TYPEUNKNOWN};
+	#ifdef __VMOD_USING_CUSTOM_VM
+		CUtlVector<ScriptDataTypeAndFlags_t> m_Parameters;
+	#else
 		CUtlVector<ScriptDataType_t> m_Parameters;
+	#endif
 
 	private:
 		ScriptFuncDescriptor_t(const ScriptFuncDescriptor_t &) = delete;
@@ -448,8 +525,18 @@ namespace gsdk
 		CScriptFunctionBindingStorageType m_pFunction;
 		unsigned int m_flags{SF_NOFLAGS};
 
-		inline bool va_like() const noexcept
-		{ return ((m_flags & gsdk::SF_VA_FUNC) || (m_flags & gsdk::SF_FUNC_LAST_OPT)); }
+		bool va_or_last_optional() const noexcept
+		{
+			if(m_flags & gsdk::SF_VA_FUNC) {
+				return true;
+			}
+
+			if(!m_desc.m_Parameters.empty() && (m_desc.m_Parameters.end()-1)->can_be_optional()) {
+				return true;
+			}
+
+			return false;
+		}
 
 	private:
 		ScriptFunctionBinding_t(const ScriptFunctionBinding_t &) = delete;

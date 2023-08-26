@@ -90,7 +90,7 @@ namespace vmod::bindings::ent
 
 		if(entityfactorydict) {
 			docs::ident(file, 1);
-			file += "using factory_callback = entity(factory_impl factory, int size, char[] classname);\n\n"sv;
+			file += "using factory_callback = entity(factory_impl factory, int size, string classname);\n\n"sv;
 
 			docs::write(&factory_base::desc, true, 1, file, false);
 			file += "\n\n"sv;

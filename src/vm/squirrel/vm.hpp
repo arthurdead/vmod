@@ -149,6 +149,8 @@ namespace vmod::vm
 		bool get(HSQOBJECT obj, gsdk::ScriptVariant_t &var) noexcept;
 		bool get(SQInteger idx, gsdk::ScriptVariant_t &var) noexcept;
 
+		static bool typemask_for_type(std::string &typemask, gsdk::ScriptDataType_t type) noexcept;
+
 		bool register_func(const gsdk::ScriptClassDesc_t *classinfo, const gsdk::ScriptFunctionBinding_t *info, std::string_view name_str) noexcept;
 
 		bool register_class(const gsdk::ScriptClassDesc_t *info, std::string &&classname_str, HSQOBJECT **obj) noexcept;

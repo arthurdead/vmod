@@ -65,6 +65,7 @@ namespace gsdk
 		FIELD_UINT32,
 		FIELD_UTLSTRINGTOKEN,
 		FIELD_QANGLE,
+		EXFIELD_TYPECOUNT
 	};
 
 	static_assert(sizeof(fieldtype_t) == sizeof(int));
