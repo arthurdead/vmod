@@ -19,6 +19,9 @@ namespace vmod::bindings::ffi
 		desc.func(&caller::script_set_mfp, "script_set_mfp"sv, "set_mfp"sv)
 		.desc("(mfp|target)"sv);
 
+		desc.func(&caller::script_set_vidx, "script_set_vidx"sv, "set_vidx"sv)
+		.desc("(vidx)"sv);
+
 		desc.dtor();
 
 		if(!plugin::owned_instance::register_class(&desc)) {
@@ -43,7 +46,8 @@ namespace vmod::bindings::ffi
 			return;
 		}
 
-		target.func = func;
+		target_ptr.func = func;
+		virt = false;
 	}
 
 	void caller::script_set_mfp(generic_mfp_t func) noexcept
@@ -55,22 +59,45 @@ namespace vmod::bindings::ffi
 			return;
 		}
 
-		target.mfp = func;
+		target_ptr.mfp = func;
+		virt = false;
+	}
+
+	void caller::script_set_vidx(std::size_t func) noexcept
+	{
+		gsdk::IScriptVM *vm{main::instance().vm()};
+
+		if(func == static_cast<std::size_t>(-1)) {
+			vm->RaiseException("vmod: invalid function");
+			return;
+		}
+
+		target_idx = func;
+		virt = true;
 	}
 
 	vscript::variant caller::script_call(const vscript::variant *args, std::size_t num_args, ...) noexcept
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
-		if(!target.mfp) {
-			vm->RaiseException("vmod: invalid function");
-			return vscript::null();
+		if(!virt) {
+			if(!target_ptr.mfp) {
+				vm->RaiseException("vmod: invalid function");
+				return vscript::null();
+			}
 		}
 
 		std::size_t required_args{args_types.size()};
 		if(!args || num_args != required_args) {
 			vm->RaiseException("vmod: wrong number of parameters expected %zu got %zu", num_args, required_args);
 			return vscript::null();
+		}
+
+		if(virt) {
+			if(num_args == 0) {
+				vm->RaiseException("vmod: missing this param");
+				return vscript::null();
+			}
 		}
 
 		for(std::size_t i{0}; i < num_args; ++i) {
@@ -81,7 +108,22 @@ namespace vmod::bindings::ffi
 			vmod::ffi::script_var_to_ptr(var, static_cast<void *>(ptr.get()), type);
 		}
 
-		call(reinterpret_cast<void(*)()>(target.mfp.addr));
+		mfp_or_func_t func;
+
+		if(!virt) {
+			func = target_ptr;
+		} else {
+			auto obj{args_storage[0].get()};
+			if(!obj) {
+				vm->RaiseException("vmod: nullptr this param");
+				return vscript::null();
+			}
+
+			auto vtabl{vtable_from_object(obj)};
+			func = vtabl[target_idx];
+		}
+
+		call(reinterpret_cast<void(*)()>(func.mfp.addr));
 
 		vscript::variant ret_var;
 		if(ret_type != &ffi_type_void) {

@@ -5,6 +5,8 @@
 #include "vscript/vscript.hpp"
 #include "gsdk/engine/vsp.hpp"
 #include "gsdk/tier0/dbg.hpp"
+#include "gsdk/tier1/utlvector.hpp"
+#include "gsdk/tier1/utlstring.hpp"
 #include <cstring>
 #include <dlfcn.h>
 
@@ -15,8 +17,8 @@
 		#include "vm/sourcepawn/vm.hpp"
 	#endif
 
-	#ifdef __VMOD_ENABLE_V8
-		#include "vm/v8/vm.hpp"
+	#ifdef __VMOD_ENABLE_JS
+		#include "vm/javascript/vm.hpp"
 	#endif
 #endif
 
@@ -975,6 +977,25 @@ namespace vmod
 
 	static std::filesystem::path bin_folder;
 
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+	static gsdk::FnCommandCallback_t old_path_command{nullptr};
+	static void new_path_command(const gsdk::CCommand &args) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		old_path_command(args);
+
+		gsdk::CUtlVector<gsdk::CUtlString> vpks{};
+		filesystem->GetVPKFileNames(vpks);
+
+		print("---------------\n"sv);
+		print("File Path:\n"sv);
+		for(const auto &str : vpks) {
+			print("\"%s\"\n"sv, str.c_str());
+		}
+	}
+#endif
+
 	bool main::load() noexcept
 	{
 		using namespace std::literals::string_literals;
@@ -1173,8 +1194,8 @@ namespace vmod
 				base_scripts_dir /= "sourcepawn"sv;
 			} break;
 			#endif
-			#ifdef __VMOD_ENABLE_V8
-			case gsdk::SL_V8: {
+			#ifdef __VMOD_ENABLE_JS
+			case gsdk::SL_JAVASCRIPT: {
 				scripts_extension = ".js"sv;
 				base_scripts_dir /= "javascript"sv;
 			} break;
@@ -2623,10 +2644,48 @@ namespace vmod
 			filesystem->AddSearchPath(assets_dir.c_str(), "GAME");
 			filesystem->AddSearchPath(assets_dir.c_str(), "mod");
 
-			std::filesystem::path vscript_override_dir{root_dir_};
-			vscript_override_dir /= "script_overrides"sv;
+			assets_dir = root_dir_;
+			assets_dir /= "script_overrides"sv;
 
-			filesystem->AddSearchPath(vscript_override_dir.c_str(), "GAME");
+			filesystem->AddSearchPath(assets_dir.c_str(), "GAME");
+
+		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+			if(sv_engine->IsDedicatedServer()) {
+				assets_dir = root_dir_.parent_path();
+
+				auto add_vpks{
+					[](const std::filesystem::path &dir) noexcept -> void {
+						std::error_code ec;
+						for(const auto &file : std::filesystem::directory_iterator{dir, ec}) {
+							if(!file.is_regular_file()) {
+								continue;
+							}
+
+							const auto &path{file.path()};
+							if(path.extension() != ".vpk"sv) {
+								continue;
+							}
+
+							filesystem->AddVPKFile(path.c_str());
+						}
+					}
+				};
+
+				add_vpks(assets_dir);
+
+				assets_dir /= "workshop"sv;
+
+				add_vpks(assets_dir);
+			}
+		#endif
+
+		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			auto cmd{cvar->FindCommand("path")};
+			if(cmd) {
+				old_path_command = cmd->m_fnCommandCallback;
+				cmd->m_fnCommandCallback = new_path_command;
+			}
+		#endif
 		}
 
 		sv_engine->InsertServerCommand("exec vmod/load.cfg\n");

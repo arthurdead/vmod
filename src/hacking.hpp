@@ -261,6 +261,39 @@ namespace vmod
 		{
 		}
 
+		constexpr inline mfp_or_func_t(generic_func_t ptr) noexcept
+			: func{ptr}
+		{
+		}
+
+		constexpr inline mfp_or_func_t(generic_plain_mfp_t ptr) noexcept
+			: plain{ptr}
+		{
+		}
+
+		constexpr inline mfp_or_func_t(generic_internal_mfp_t ptr) noexcept
+			: mfp{ptr}
+		{
+		}
+
+		constexpr inline mfp_or_func_t &operator=(generic_func_t ptr) noexcept
+		{
+			func = ptr;
+			return *this;
+		}
+
+		constexpr inline mfp_or_func_t &operator=(generic_plain_mfp_t ptr) noexcept
+		{
+			plain = ptr;
+			return *this;
+		}
+
+		constexpr inline mfp_or_func_t &operator=(generic_internal_mfp_t ptr) noexcept
+		{
+			mfp = ptr;
+			return *this;
+		}
+
 		generic_func_t func;
 		generic_plain_mfp_t plain;
 		generic_internal_mfp_t mfp{};

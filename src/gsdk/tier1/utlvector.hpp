@@ -24,6 +24,8 @@ namespace gsdk
 			return *this;
 		}
 
+		~CUtlVector() noexcept;
+
 		template <typename ...Args>
 		T &emplace_back(Args &&...args) noexcept;
 

@@ -106,48 +106,43 @@ extern "C" __attribute__((__visibility__("default"))) gsdk::IMemAlloc *g_pMemAll
 
 namespace gsdk
 {
-	inline __attribute__((__always_inline__)) char *realloc_string(char *ptr, std::size_t size) noexcept
+	template <typename T>
+	inline __attribute__((__always_inline__)) T *realloc(T *ptr, std::size_t size) noexcept
 	{
 	#ifndef GSDK_NO_ALLOC_OVERRIDE
-		return static_cast<char *>(g_pMemAlloc->Realloc(ptr, size));
+		return static_cast<T *>(g_pMemAlloc->Realloc(ptr, size));
 	#else
-		return static_cast<char *>(std::realloc(ptr, size));
+		return static_cast<T *>(std::realloc(ptr, size));
 	#endif
 	}
 
-	inline __attribute__((__always_inline__)) char *reallocatable_string(std::size_t size) noexcept
+	template <typename T>
+	inline __attribute__((__always_inline__)) T *alloc_arr(std::size_t size) noexcept
 	{
 	#ifndef GSDK_NO_ALLOC_OVERRIDE
-		return static_cast<char *>(g_pMemAlloc->Alloc(size));
+		return static_cast<T *>(g_pMemAlloc->Alloc(size));
 	#else
-		return static_cast<char *>(std::malloc(size));
+		return new T[size];
 	#endif
 	}
 
-	inline __attribute__((__always_inline__)) void free_reallocatable_string(char *ptr) noexcept
+	template <typename T>
+	inline __attribute__((__always_inline__)) T *aligned_alloc(std::size_t align, std::size_t size) noexcept
 	{
 	#ifndef GSDK_NO_ALLOC_OVERRIDE
-		g_pMemAlloc->Free(ptr);
+		return static_cast<T *>(g_pMemAlloc->Alloc(size));
 	#else
-		std::free(ptr);
+		return static_cast<T *>(std::aligned_alloc(align, size));
 	#endif
 	}
 
-	inline __attribute__((__always_inline__)) char *alloc_string(std::size_t size) noexcept
+	template <typename T>
+	inline __attribute__((__always_inline__)) T *alloc(std::size_t size) noexcept
 	{
 	#ifndef GSDK_NO_ALLOC_OVERRIDE
-		return static_cast<char *>(g_pMemAlloc->Alloc(size));
+		return static_cast<T *>(g_pMemAlloc->Alloc(sizeof(T)));
 	#else
-		return new char[size];
-	#endif
-	}
-
-	inline __attribute__((__always_inline__)) void free_string(char *ptr) noexcept
-	{
-	#ifndef GSDK_NO_ALLOC_OVERRIDE
-		g_pMemAlloc->Free(ptr);
-	#else
-		delete[] ptr;
+		return static_cast<T *>(std::malloc(size));
 	#endif
 	}
 
@@ -158,6 +153,20 @@ namespace gsdk
 		return static_cast<T *>(g_pMemAlloc->Alloc(sizeof(T)));
 	#else
 		return new T;
+	#endif
+	}
+
+	template <typename T>
+	inline __attribute__((__always_inline__)) void free_arr(T *ptr) noexcept
+	{
+	#ifndef GSDK_NO_ALLOC_OVERRIDE
+		g_pMemAlloc->Free(ptr);
+	#else
+		if constexpr(std::is_void_v<std::decay_t<T>>) {
+			std::free(ptr);
+		} else {
+			delete[] ptr;
+		}
 	#endif
 	}
 

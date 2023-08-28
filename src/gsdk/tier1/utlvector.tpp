@@ -22,4 +22,12 @@ namespace gsdk
 		new (&element) T{std::forward<Args>(args)...};
 		return element;
 	}
+
+	template <typename T>
+	CUtlVector<T>::~CUtlVector() noexcept
+	{
+		for(std::size_t i{0}; i < static_cast<std::size_t>(m_Size); ++i) {
+			m_Memory[i].~T();
+		}
+	}
 }

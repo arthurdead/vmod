@@ -181,6 +181,7 @@ custom_vm = true
 if custom_vm
 	use_quirrel = false
 	enable_sourcepawn = false
+	enable_javascript = false
 	enable_v8 = false
 
 	if use_quirrel
@@ -311,12 +312,18 @@ if custom_vm
 		]
 	endif
 
-	if enable_v8
-		vm_cpp_args += ['-D__VMOD_ENABLE_V8']
+	if enable_javascript
+		vm_cpp_args += ['-D__VMOD_ENABLE_JS']
 
-		vmod_dependencies += [
-			v8.get_variable('v8_dep')
-		]
+		if enable_v8
+			vmod_dependencies += [
+				v8.get_variable('v8_dep')
+			]
+		else
+			vmod_dependencies += [
+				dependency('duktape')
+			]
+		endif
 	endif
 endif
 
@@ -435,8 +442,8 @@ if custom_vm
 		sources += [files('src/vm/sourcepawn/vm.cpp')]
 	endif
 
-	if enable_v8
-		sources += [files('src/vm/v8/vm.cpp')]
+	if enable_javascript
+		sources += [files('src/vm/javascript/vm.cpp')]
 	endif
 endif
 

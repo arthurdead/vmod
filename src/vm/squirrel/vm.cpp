@@ -2054,7 +2054,7 @@ namespace vmod::vm
 				if(SQ_SUCCEEDED(sq_getstringandsize(impl, idx, &value, &len))) {
 					var.m_type = gsdk::FIELD_CSTRING;
 					std::size_t len_siz{static_cast<std::size_t>(len)};
-					var.m_cstr = gsdk::alloc_string(len_siz+1);
+					var.m_cstr = gsdk::alloc_arr<char>(len_siz+1);
 					std::strncpy(var.m_cstr, value, len_siz);
 					var.m_cstr[len_siz] = '\0';
 					var.m_flags |= gsdk::SV_FREE;
@@ -2164,7 +2164,7 @@ namespace vmod::vm
 				if(str) {
 					var.m_type = gsdk::FIELD_CSTRING;
 					std::size_t len{std::strlen(str)};
-					var.m_cstr = gsdk::alloc_string(len+1);
+					var.m_cstr = gsdk::alloc_arr<char>(len+1);
 					std::strncpy(var.m_cstr, str, len);
 					var.m_cstr[len] = '\0';
 					var.m_flags |= gsdk::SV_FREE;

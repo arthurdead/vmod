@@ -62,14 +62,14 @@ namespace gsdk
 				//delete m_utlstringtoken;
 				break;
 				case FIELD_CSTRING:
-				free_string(m_cstr);
+				gsdk::free_arr<char>(m_cstr);
 				break;
 				case FIELD_HSCRIPT_NEW_INSTANCE:
 				case FIELD_HSCRIPT:
 				g_pScriptVM->ReleaseObject(m_object);
 				break;
 				default:
-				gsdk::free(static_cast<void *>(m_data));
+				gsdk::free<void>(static_cast<void *>(m_data));
 				break;
 			}
 

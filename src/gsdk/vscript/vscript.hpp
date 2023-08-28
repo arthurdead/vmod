@@ -126,8 +126,8 @@ namespace gsdk
 		#ifdef __VMOD_ENABLE_SOURCEPAWN
 		SL_SOURCEPAWN,
 		#endif
-		#ifdef __VMOD_ENABLE_V8
-		SL_V8,
+		#ifdef __VMOD_ENABLE_JS
+		SL_JAVASCRIPT,
 		#endif
 	#endif
 		SL_DEFAULT = SL_SQUIRREL,

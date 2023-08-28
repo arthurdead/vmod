@@ -3,6 +3,8 @@
 #include "cif.hpp"
 #include "detour.hpp"
 
+//TODO!!!! rethink how detours are created
+
 namespace vmod::bindings::ffi
 {
 	vscript::singleton_class_desc<singleton> singleton::desc{"ffi"};

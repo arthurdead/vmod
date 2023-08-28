@@ -1,5 +1,4 @@
-#include <memory>
-#include <cstdlib>
+#include "../tier0/memalloc.hpp"
 
 namespace gsdk
 {
@@ -9,13 +8,13 @@ namespace gsdk
 		m_nAllocationCount = static_cast<int>(num);
 
 		if(num == 0) {
-			std::free(m_pMemory);
+			free<void>(m_pMemory);
 			m_pMemory = nullptr;
 		} else {
 			if(!m_pMemory) {
-				m_pMemory = static_cast<T *>(std::aligned_alloc(alignof(T), sizeof(T) * num));
+				m_pMemory = static_cast<T *>(aligned_alloc<void>(alignof(T), sizeof(T) * num));
 			} else {
-				m_pMemory = static_cast<T *>(std::realloc(static_cast<void *>(m_pMemory), sizeof(T) * num));
+				m_pMemory = static_cast<T *>(realloc<void>(static_cast<void *>(m_pMemory), sizeof(T) * num));
 			}
 		}
 	}
@@ -23,13 +22,8 @@ namespace gsdk
 	template <typename T, typename I>
 	CUtlMemory<T, I>::~CUtlMemory() noexcept
 	{
-		std::size_t num{static_cast<std::size_t>(m_nAllocationCount)};
-		if(num > 0) {
-			for(std::size_t i{0}; i < num; ++i) {
-				m_pMemory[i].~T();
-			}
-
-			std::free(m_pMemory);
+		if(m_pMemory) {
+			free<void>(m_pMemory);
 		}
 	}
 }

@@ -27,7 +27,7 @@ namespace vmod::bindings::ffi
 		static vscript::class_desc<caller> desc;
 
 		inline caller(ffi_type *ret, std::vector<ffi_type *> &&args) noexcept
-			: vmod::ffi::cif{ret, std::move(args)}
+			: vmod::ffi::cif{ret, std::move(args)}, target_ptr{nullptr}, virt{false}
 		{
 		}
 
@@ -37,8 +37,13 @@ namespace vmod::bindings::ffi
 
 		void script_set_func(generic_func_t func_) noexcept;
 		void script_set_mfp(generic_mfp_t func_) noexcept;
+		void script_set_vidx(std::size_t func_) noexcept;
 
-		mfp_or_func_t target;
+		union {
+			mfp_or_func_t target_ptr;
+			std::size_t target_idx;
+		};
+		bool virt;
 
 	private:
 		caller() = delete;

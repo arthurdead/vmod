@@ -93,7 +93,7 @@ namespace vmod::vscript
 	{
 		if(!value.empty()) {
 			std::size_t len{value.length()};
-			var.m_cstr = gsdk::alloc_string(len+1);
+			var.m_cstr = gsdk::alloc_arr<char>(len+1);
 			std::strncpy(var.m_cstr, value.c_str(), len);
 			var.m_cstr[len] = '\0';
 			var.m_flags |= gsdk::SV_FREE;
@@ -106,7 +106,7 @@ namespace vmod::vscript
 	{
 		if(!value.empty()) {
 			std::size_t len{value.native().length()};
-			var.m_cstr = gsdk::alloc_string(len+1);
+			var.m_cstr = gsdk::alloc_arr<char>(len+1);
 			std::strncpy(var.m_cstr, value.c_str(), len);
 			var.m_cstr[len] = '\0';
 			var.m_flags |= gsdk::SV_FREE;

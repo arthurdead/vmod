@@ -181,7 +181,9 @@ namespace gsdk
 	#endif
 		virtual void SetupPreloadData() = 0;
 		virtual void DiscardPreloadData() = 0;
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		virtual void LoadCompiledKeyValues(KeyValuesPreloadType_t, const char *) = 0;
+	#endif
 		virtual KeyValues *LoadKeyValues(KeyValuesPreloadType_t, const char *, const char * = nullptr) = 0;
 		virtual bool LoadKeyValues(KeyValues &, KeyValuesPreloadType_t, const char *, const char * = nullptr) = 0;
 	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
@@ -223,7 +225,7 @@ namespace gsdk
 		virtual void NotifyFileUnloaded(const char *, const char *) = 0;
 		virtual bool GetCaseCorrectFullPath_Ptr(const char *, char *, int) = 0;
 	#endif
-	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual bool IsLaunchedFromXboxHDD() = 0;
 		virtual bool IsInstalledToXboxHDDCache() = 0;
 		virtual bool IsDVDHosted() = 0;
@@ -233,6 +235,7 @@ namespace gsdk
 		virtual FSDirtyDiskReportFunc_t GetDirtyDiskReportFunc() = 0;
 		virtual void AddVPKFile(const char *, SearchPathAdd_t = PATH_ADD_TO_TAIL) = 0;
 		virtual void RemoveVPKFile(const char * ) = 0;
+		virtual void MoveOrAddVPKFile(const char *, SearchPathAdd_t = PATH_ADD_TO_TAIL);
 		virtual void GetVPKFileNames(CUtlVector<CUtlString> &) = 0;
 		virtual void RemoveAllMapSearchPaths() = 0;
 		virtual void SyncDvdDevCache() = 0;
