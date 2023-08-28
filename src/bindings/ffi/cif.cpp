@@ -13,6 +13,8 @@ namespace vmod::bindings::ffi
 	{
 		using namespace std::literals::string_view_literals;
 
+		desc_base.base(plugin::owned_instance::desc);
+
 		desc_base.func(&caller::script_call, "script_call"sv, "call"sv);
 
 		desc_base.dtor();
