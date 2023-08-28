@@ -41,8 +41,10 @@ namespace vmod::bindings::fs
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
-		if(vm->ValueExists(scope, "game_dir")) {
-			vm->ClearValue(scope, "game_dir");
+		if(scope && scope != gsdk::INVALID_HSCRIPT) {
+			if(vm->ValueExists(scope, "game_dir")) {
+				vm->ClearValue(scope, "game_dir");
+			}
 		}
 
 		singleton_base::unbindings();

@@ -24,14 +24,16 @@ namespace vmod::bindings::ffi
 		~caller() noexcept override;
 
 	private:
-		static vscript::class_desc<caller> desc;
+		static vscript::class_desc<caller> desc_base;
+		static vscript::class_desc<caller> desc_static;
+		static vscript::class_desc<caller> desc_member;
 
 		inline caller(ffi_type *ret, std::vector<ffi_type *> &&args) noexcept
 			: vmod::ffi::cif{ret, std::move(args)}, target_ptr{nullptr}, virt{false}
 		{
 		}
 
-		bool initialize(ffi_abi abi) noexcept;
+		bool initialize(ffi_abi abi, bool member) noexcept;
 
 		vscript::variant script_call(const vscript::variant *args, std::size_t num_args, ...) noexcept;
 

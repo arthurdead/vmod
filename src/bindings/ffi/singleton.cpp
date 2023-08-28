@@ -23,10 +23,10 @@ namespace vmod::bindings::ffi
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
 		desc.func(&singleton::script_create_static_cif, "script_create_static_cif"sv, "cif_static"sv)
-		.desc("[cif](abi|, types|ret, array<types>|args)"sv);
+		.desc("[cif_static](abi|, types|ret, array<types>|args)"sv);
 
 		desc.func(&singleton::script_create_member_cif, "script_create_member_cif"sv, "cif_member"sv)
-		.desc("[cif](types|ret, this_types|this, array<types>|args)"sv);
+		.desc("[cif_member](types|ret, this_types|this, array<types>|args)"sv);
 
 		desc.func(&singleton::script_create_detour_static, "script_create_detour_static"sv, "detour_static"sv)
 		.desc("[detour](fp|target, function|callback, abi|, types|ret, array<types>|args, post)"sv);
@@ -348,7 +348,7 @@ namespace vmod::bindings::ffi
 		}
 
 		caller *cif{new caller{ret, std::move(args_types)}};
-		if(!cif->initialize(abi)) {
+		if(!cif->initialize(abi, false)) {
 			delete cif;
 			return gsdk::INVALID_HSCRIPT;
 		}
@@ -375,7 +375,7 @@ namespace vmod::bindings::ffi
 		}
 
 		caller *cif{new caller{ret, std::move(args_types)}};
-		if(!cif->initialize(FFI_SYSV)) {
+		if(!cif->initialize(FFI_SYSV, true)) {
 			delete cif;
 			return gsdk::INVALID_HSCRIPT;
 		}

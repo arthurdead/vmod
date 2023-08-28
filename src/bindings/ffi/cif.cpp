@@ -3,7 +3,9 @@
 
 namespace vmod::bindings::ffi
 {
-	vscript::class_desc<caller> caller::desc{"ffi::cif"};
+	vscript::class_desc<caller> caller::desc_base{"ffi::cif"};
+	vscript::class_desc<caller> caller::desc_static{"ffi::cif_static"};
+	vscript::class_desc<caller> caller::desc_member{"ffi::cif_member"};
 
 	caller::~caller() noexcept {}
 
@@ -11,21 +13,34 @@ namespace vmod::bindings::ffi
 	{
 		using namespace std::literals::string_view_literals;
 
-		desc.func(&caller::script_call, "script_call"sv, "call"sv);
+		desc_base.func(&caller::script_call, "script_call"sv, "call"sv);
 
-		desc.func(&caller::script_set_func, "script_set_func"sv, "set_func"sv)
+		desc_base.dtor();
+
+		desc_static.base(desc_base);
+
+		desc_static.func(&caller::script_set_func, "script_set_func"sv, "set_func"sv)
 		.desc("(fp|target)"sv);
 
-		desc.func(&caller::script_set_mfp, "script_set_mfp"sv, "set_mfp"sv)
+		desc_static.dtor();
+
+		desc_member.base(desc_base);
+
+		desc_member.func(&caller::script_set_mfp, "script_set_mfp"sv, "set_mfp"sv)
 		.desc("(mfp|target)"sv);
 
-		desc.func(&caller::script_set_vidx, "script_set_vidx"sv, "set_vidx"sv)
+		desc_member.func(&caller::script_set_vidx, "script_set_vidx"sv, "set_vidx"sv)
 		.desc("(vidx)"sv);
 
-		desc.dtor();
+		desc_member.dtor();
 
-		if(!plugin::owned_instance::register_class(&desc)) {
+		if(!plugin::owned_instance::register_class(&desc_static)) {
 			error("vmod: failed to register ffi cif class\n"sv);
+			return false;
+		}
+
+		if(!plugin::owned_instance::register_class(&desc_member)) {
+			error("vmod: failed to register ffi cif member class\n"sv);
 			return false;
 		}
 
@@ -134,7 +149,7 @@ namespace vmod::bindings::ffi
 		return ret_var;
 	}
 
-	bool caller::initialize(ffi_abi abi) noexcept
+	bool caller::initialize(ffi_abi abi, bool member) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -145,7 +160,8 @@ namespace vmod::bindings::ffi
 			return false;
 		}
 
-		if(!register_instance(&desc, this)) {
+		auto target_desc{member ? &static_cast<gsdk::ScriptClassDesc_t &>(desc_member) : &static_cast<gsdk::ScriptClassDesc_t &>(desc_static)};
+		if(!register_instance(target_desc, this)) {
 			return false;
 		}
 
