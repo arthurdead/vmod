@@ -2281,12 +2281,21 @@ namespace vmod
 				std::filesystem::create_directories(dump_dir, ec);
 
 				for(const auto &it : sv_datamaps) {
+					if(it.second->dataNumFields == 1 && it.second->dataDesc[0] == gsdk::typedescription_t::empty) {
+						continue;
+					}
+
 					std::string file;
 
 					bindings::docs::gen_date(file);
 
-					std::function<void(gsdk::datamap_t &, std::string_view, std::size_t)> write_table{
-						[&file,&write_table,only_keyvalues](gsdk::datamap_t &targettable, std::string_view tablename, std::size_t depth) noexcept -> void {
+					std::function<bool(gsdk::datamap_t &, std::string_view, std::size_t)> write_table{
+						[&file,&write_table,only_keyvalues](gsdk::datamap_t &targettable, std::string_view tablename, std::size_t depth) noexcept -> bool {
+							std::size_t num_props{static_cast<std::size_t>(targettable.dataNumFields)};
+							if(num_props == 1 && targettable.dataDesc[0] == gsdk::typedescription_t::empty) {
+								return false;
+							}
+
 							bindings::docs::ident(file, depth);
 							file += "class "sv;
 							file += tablename;
@@ -2300,13 +2309,10 @@ namespace vmod
 							bindings::docs::ident(file, depth);
 							file += "{\n"sv;
 
-							std::size_t num_props{static_cast<std::size_t>(targettable.dataNumFields)};
+							bool wrote_anything{false};
+
 							for(std::size_t i{0}; i < num_props; ++i) {
 								gsdk::typedescription_t &prop{targettable.dataDesc[i]};
-
-								if(num_props == 1 && i == 0 && prop == gsdk::typedescription_t::empty) {
-									break;
-								}
 
 								std::function<void(gsdk::typedescription_t &, std::string_view, std::size_t)> write_prop{
 									[&file,&write_table](gsdk::typedescription_t &targetprop, std::string_view propname, std::size_t funcdepth) noexcept -> void {
@@ -2405,6 +2411,7 @@ namespace vmod
 									prop.flags & gsdk::FTYPEDESC_OUTPUT) {
 									if(only_keyvalues) {
 										write_prop(prop, prop.externalName ? prop.externalName : "<<unknown>>"sv, depth+1);
+										wrote_anything = true;
 									}
 								} else if(prop.flags & gsdk::FTYPEDESC_FUNCTIONTABLE) {
 									if(!only_keyvalues) {
@@ -2416,6 +2423,7 @@ namespace vmod
 											funcname = "<<unknown>>"s;
 										}
 										write_prop(prop, funcname, depth+1);
+										wrote_anything = true;
 									}
 								} else if(prop.flags & gsdk::FTYPEDESC_KEY) {
 									if(only_keyvalues) {
@@ -2423,17 +2431,23 @@ namespace vmod
 									} else {
 										write_prop(prop, prop.fieldName ? prop.fieldName : "<<unknown>>"sv, depth+1);
 									}
+									wrote_anything = true;
 								} else if(!only_keyvalues) {
 									write_prop(prop, prop.fieldName ? prop.fieldName : "<<unknown>>"sv, depth+1);
+									wrote_anything = true;
 								}
 							}
 
 							bindings::docs::ident(file, depth);
 							file += "};\n"sv;
+
+							return wrote_anything;
 						}
 					};
 
-					write_table(*it.second, it.second->dataClassName ? it.second->dataClassName : "<<unknown>>"sv, 0);
+					if(!write_table(*it.second, it.second->dataClassName ? it.second->dataClassName : "<<unknown>>"sv, 0)) {
+						continue;
+					}
 
 					std::filesystem::path dump_path{dump_dir};
 					dump_path /= it.first;
