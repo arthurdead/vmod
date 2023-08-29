@@ -1594,15 +1594,6 @@ namespace vmod
 					gsdk::ScriptClassDesc_t *tmp_desc{it.second->func<gsdk::ScriptClassDesc_t *(*)(generic_object_t *)>()(nullptr)};
 					std::string descname{tmp_desc->m_pszClassname};
 					sv_script_class_descs.emplace(std::move(descname), tmp_desc);
-
-					tmp_desc = tmp_desc->m_pBaseDesc;
-					while(tmp_desc) {
-						descname = tmp_desc->m_pszClassname;
-						if(sv_script_class_descs.find(descname) == sv_script_class_descs.end()) {
-							sv_script_class_descs.emplace(std::move(descname), tmp_desc);
-						}
-						tmp_desc = tmp_desc->m_pBaseDesc;
-					}
 				}
 			}
 		#endif

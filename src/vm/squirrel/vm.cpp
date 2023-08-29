@@ -2529,7 +2529,7 @@ namespace vmod::vm
 			typemask += 'x';
 			break;
 			case gsdk::FIELD_VARIANT:
-			typemask += "t|a|x|n|s|b|o|c"sv;
+			typemask += '.';
 			break;
 			case gsdk::FIELD_TYPEUNKNOWN:
 			default: {

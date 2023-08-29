@@ -530,23 +530,6 @@ namespace vmod::bindings::docs
 		return detail::type_name(type, static_cast<std::size_t>(-1), vscript, gsdk::FTYPEDESC_NOFLAGS);
 	}
 
-#ifdef __VMOD_USING_CUSTOM_VM
-	static void vscript_type_name(gsdk::ScriptDataTypeAndFlags_t param, std::string &str) noexcept
-#else
-	static void vscript_type_name(gsdk::ScriptDataType_t param, std::string &str) noexcept
-#endif
-	{
-		using namespace std::literals::string_view_literals;
-
-	#ifdef __VMOD_USING_CUSTOM_VM
-		std::string_view base{type_name(param, true)};
-		str += base;
-	#else
-		std::string_view base{type_name(param, true)};
-		str += base;
-	#endif
-	}
-
 	std::string_view get_class_desc_name(const gsdk::ScriptClassDesc_t *desc) noexcept
 	{
 		if(desc->m_pNextDesc == reinterpret_cast<const gsdk::ScriptClassDesc_t *>(uninitialized_memory)) {
@@ -620,39 +603,50 @@ namespace vmod::bindings::docs
 		if(num_args > 0) {
 			auto do_param{
 				[&info,&params_str,&func_desc](std::size_t j) noexcept -> void {
+				#ifdef __VMOD_USING_CUSTOM_VM
+					bool opt{func_desc.m_Parameters[j].can_be_optional()};
+				#else
+					bool opt{false};
+				#endif
 					auto param_it{info.params.find(j)};
 					if(param_it != info.params.end()) {
+						if(opt) {
+							params_str += "optional<"sv;
+						}
 						if(!param_it->second.type.empty()) {
 							params_str += param_it->second.type;
 						} else {
-							vscript_type_name(func_desc.m_Parameters[j], params_str);
+							params_str += type_name(func_desc.m_Parameters[j], true);
+						}
+						if(opt) {
+							params_str += '>';
 						}
 						if(!param_it->second.name.empty()) {
 							params_str += ' ';
 							params_str += param_it->second.name;
 						}
 					} else {
-						vscript_type_name(func_desc.m_Parameters[j], params_str);
+						if(opt) {
+							params_str += "optional<"sv;
+						}
+						params_str += type_name(func_desc.m_Parameters[j], true);
+						if(opt) {
+							params_str += '>';
+						}
 					}
 				}
 			};
 
 			if(num_args > 1) {
 				std::size_t optionals_start{num_args};
-				for(std::size_t j{num_args-1}; j > 0; --j) {
-					if(!func_desc.m_Parameters[j].can_be_optional()) {
-						optionals_start = j;
+				for(ssize_t j{static_cast<ssize_t>(num_args-1)}; j >= 0; --j) {
+					if(!func_desc.m_Parameters[static_cast<std::size_t>(j)].can_be_optional()) {
+						optionals_start = static_cast<std::size_t>(j);
 						break;
 					}
 				}
 
-				if(optionals_start == (num_args-1)) {
-					for(std::size_t j{0}; j < num_args-1; ++j) {
-						do_param(j);
-						params_str += ", "sv;
-					}
-					do_param(num_args-1);
-				} else if(optionals_start == num_args) {
+				if(optionals_start == num_args) {
 					params_str += '[';
 					for(std::size_t j{0}; j < num_args-1; ++j) {
 						do_param(j);
@@ -660,13 +654,23 @@ namespace vmod::bindings::docs
 					}
 					do_param(num_args-1);
 					params_str += ']';
-				} else {
-					for(std::size_t j{0}; j < optionals_start; ++j) {
+				} else if(optionals_start == (num_args-1)) {
+					for(std::size_t j{0}; j < num_args-1; ++j) {
 						do_param(j);
 						params_str += ", "sv;
 					}
+					do_param(num_args-1);
+				} else {
+					if(optionals_start > 0) {
+						for(std::size_t j{0}; j < optionals_start-1; ++j) {
+							do_param(j);
+							params_str += ", "sv;
+						}
 
-					do_param(optionals_start);
+						do_param(optionals_start-1);
+					} else {
+						do_param(0);
+					}
 					params_str += "[, "sv;
 
 					for(std::size_t j{optionals_start+1}; j < num_args-1; ++j) {

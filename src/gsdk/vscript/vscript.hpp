@@ -208,6 +208,8 @@ namespace gsdk
 				case gsdk::FIELD_VOID:
 				case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
 				case gsdk::FIELD_VARIANT:
+				case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
+				case gsdk::FIELD_HSCRIPT:
 				return true;
 				default:
 				return false;
