@@ -159,6 +159,10 @@ namespace vmod::bindings::ent
 
 	ffi_type *sendprop::guess_type(const gsdk::SendProp *prop, gsdk::SendVarProxyFn proxy, const gsdk::SendTable *table) noexcept
 	{
+		if(prop->m_Flags & gsdk::SPROP_EXCLUDE) {
+			return nullptr;
+		}
+
 		switch(prop->m_Type) {
 			case gsdk::DPT_Int: {
 				if(prop->m_Flags & gsdk::SPROP_UNSIGNED) {
@@ -175,12 +179,17 @@ namespace vmod::bindings::ent
 							return &ffi_type_color32;
 						}
 
-						return &ffi_type_uint;
+						return &ffi_type_uint32;
 					} else if(gsdk::SendProxy_EHandleToInt && proxy == gsdk::SendProxy_EHandleToInt) {
 						return &ffi_type_ehandle;
 					} else if(gsdk::SendProxy_Color32ToInt && proxy == gsdk::SendProxy_Color32ToInt) {
 						return &ffi_type_color32;
 					} else {
+						auto target_proxy{proxy};
+						if(gsdk::SendProxy_UtlVectorElement && proxy == gsdk::SendProxy_UtlVectorElement) {
+							target_proxy = static_cast<const gsdk::CSendPropExtra_UtlVector *>(prop->m_pExtraData)->m_ProxyFn;
+						}
+
 						{
 							if(prop->m_nBits == 32) {
 								struct dummy_t {
@@ -188,7 +197,7 @@ namespace vmod::bindings::ent
 								} dummy;
 
 								gsdk::DVariant out{};
-								proxy(prop, static_cast<const void *>(&dummy), static_cast<const void *>(&dummy.val), &out, 0, static_cast<int>(gsdk::INVALID_EHANDLE_INDEX));
+								target_proxy(prop, static_cast<const void *>(&dummy), static_cast<const void *>(&dummy.val), &out, 0, static_cast<int>(gsdk::INVALID_EHANDLE_INDEX));
 								if(out.m_Int == 65536) {
 									return &ffi_type_color32;
 								}
@@ -202,7 +211,7 @@ namespace vmod::bindings::ent
 								} dummy;
 
 								gsdk::DVariant out{};
-								proxy(prop, static_cast<const void *>(&dummy), static_cast<const void *>(&dummy.val), &out, 0, static_cast<int>(gsdk::INVALID_EHANDLE_INDEX));
+								target_proxy(prop, static_cast<const void *>(&dummy), static_cast<const void *>(&dummy.val), &out, 0, static_cast<int>(gsdk::INVALID_EHANDLE_INDEX));
 								if(out.m_Int == gsdk::INVALID_NETWORKED_EHANDLE_VALUE) {
 									return &ffi_type_ehandle;
 								}
@@ -217,7 +226,7 @@ namespace vmod::bindings::ent
 					} else if(proxy == std_proxies->m_Int16ToInt32) {
 						return &ffi_type_sshort;
 					} else if(proxy == std_proxies->m_Int32ToInt32) {
-						return &ffi_type_sint;
+						return &ffi_type_sint32;
 					} else {
 						{
 							struct dummy_t {
@@ -252,10 +261,17 @@ namespace vmod::bindings::ent
 			case gsdk::DPT_String: {
 				return &ffi_type_cstr;
 			}
-			case gsdk::DPT_Array:
-			return nullptr;
-			case gsdk::DPT_DataTable:
-			return nullptr;
+			case gsdk::DPT_Array: {
+				auto before{prop-1};
+				return guess_type(before, before->m_ProxyFn, table);
+			}
+			case gsdk::DPT_DataTable: {
+				if(prop->m_pArrayProp) {
+					return guess_type(prop->m_pArrayProp, prop->m_pArrayProp->m_ProxyFn, table);
+				}
+
+				return nullptr;
+			}
 			default:
 			return nullptr;
 		}

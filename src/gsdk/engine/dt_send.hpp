@@ -20,8 +20,8 @@ namespace gsdk
 	extern SendVarProxyFn SendProxy_EHandleToInt;
 	extern SendVarProxyFn SendProxy_IntAddOne;
 	extern SendVarProxyFn SendProxy_ShortAddOne;
-	extern SendVarProxyFn SendProxy_OnlyToTeam;
 	extern SendVarProxyFn SendProxy_PredictableIdToInt;
+	extern SendVarProxyFn SendProxy_UtlVectorElement;
 
 	class CNonModifiedPointerProxy
 	{
@@ -83,7 +83,7 @@ namespace gsdk
 	class SendProp
 	{
 	public:
-		virtual ~SendProp() = 0;
+		virtual ~SendProp() = default;
 
 		RecvProp *m_pMatchingRecvProp;
 
@@ -119,12 +119,34 @@ namespace gsdk
 
 		const void *m_pExtraData;
 
+	public:
+		SendProp() = default;
+
 	private:
-		SendProp() = delete;
 		SendProp(const SendProp &) = delete;
 		SendProp &operator=(const SendProp &) = delete;
 		SendProp(SendProp &&) = delete;
 		SendProp &operator=(SendProp &&) = delete;
+	};
+
+	using EnsureCapacityFn = void(void *, int, int);
+
+	class CSendPropExtra_UtlVector
+	{
+	public:
+		SendTableProxyFn m_DataTableProxyFn;
+		SendVarProxyFn m_ProxyFn;
+		EnsureCapacityFn m_EnsureCapacityFn;
+		int m_ElementStride;
+		int m_Offset;
+		int m_nMaxElements;
+
+	private:
+		CSendPropExtra_UtlVector() = delete;
+		CSendPropExtra_UtlVector(const CSendPropExtra_UtlVector &) = delete;
+		CSendPropExtra_UtlVector &operator=(const CSendPropExtra_UtlVector &) = delete;
+		CSendPropExtra_UtlVector(CSendPropExtra_UtlVector &&) = delete;
+		CSendPropExtra_UtlVector &operator=(CSendPropExtra_UtlVector &&) = delete;
 	};
 
 	class SendTable

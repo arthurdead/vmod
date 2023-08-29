@@ -21,12 +21,12 @@ namespace vmod::bindings::ent
 
 		~sendprop() noexcept override;
 
+		static ffi_type *guess_type(const gsdk::SendProp *prop, gsdk::SendVarProxyFn proxy, const gsdk::SendTable *table) noexcept;
+
 	private:
 		static ffi::cif proxy_cif;
 
 		static vscript::class_desc<sendprop> desc;
-
-		static ffi_type *guess_type(const gsdk::SendProp *prop, gsdk::SendVarProxyFn proxy, const gsdk::SendTable *table) noexcept;
 
 		static void closure_binding(ffi_cif *closure_cif, void *ret, void *args[], void *userptr) noexcept;
 

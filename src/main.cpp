@@ -40,6 +40,7 @@
 #include "bindings/docs.hpp"
 #include "bindings/strtables/singleton.hpp"
 #include "bindings/ent/bindings.hpp"
+#include "bindings/ent/sendtable.hpp"
 
 namespace vmod
 {
@@ -89,10 +90,9 @@ namespace vmod
 {
 	std::unordered_map<std::string, entity_class_info> sv_ent_class_info;
 
-	static std::unordered_map<std::string, gsdk::ScriptClassDesc_t *> sv_script_class_descs;
-	static std::unordered_map<std::string, gsdk::datamap_t *> sv_datamaps;
-	static std::unordered_map<std::string, gsdk::SendTable *> sv_sendtables;
 	static std::unordered_map<std::string, gsdk::IEntityFactory *> sv_ent_factories;
+	static std::unordered_map<std::string, gsdk::ScriptClassDesc_t *> sv_script_class_descs;
+	static std::unordered_map<gsdk::SendTable *, std::string> sv_ent_sendtables_class;
 
 	static main main_;
 
@@ -1418,6 +1418,14 @@ namespace vmod
 			return false;
 		}
 
+		for(const auto &it : sv_classes) {
+			entity_class_info tmp{};
+			tmp.sv_class = it.second;
+			tmp.sendtable = it.second->m_pTable;
+			sv_ent_sendtables_class.emplace(it.second->m_pTable, it.first);
+			sv_ent_class_info.emplace(it.first, std::move(tmp));
+		}
+
 		{
 			const auto &sv_symbols{server_lib.symbols()};
 			const auto &sv_global_qual{sv_symbols.global()};
@@ -1552,7 +1560,7 @@ namespace vmod
 				return false;
 			}
 
-			for(const auto &it : sv_classes) {
+			for(auto &it : sv_ent_class_info) {
 				auto sv_sym_it{sv_symbols.find(it.first)};
 				if(sv_sym_it == sv_symbols.end()) {
 					error("vmod: missing '%s' symbols\n"sv, it.first.c_str());
@@ -1565,16 +1573,17 @@ namespace vmod
 					GetDataDescMap_t GetDataDescMap{GetDataDescMap_it->second->mfp<GetDataDescMap_t>()};
 					gsdk::datamap_t *map{(reinterpret_cast<gsdk::CBaseEntity *>(uninitialized_memory)->*GetDataDescMap)()};
 
-					std::string dataname{map->dataClassName};
-					sv_datamaps.emplace(std::move(dataname), map);
+					it.second.datamap = map;
 
-					auto base{map->baseMap};
-					while(base) {
-						dataname = base->dataClassName;
-						if(sv_datamaps.find(dataname) == sv_datamaps.end()) {
-							sv_datamaps.emplace(std::move(dataname), base);
+					map = map->baseMap;
+					while(map) {
+						std::string dataname{map->dataClassName};
+						auto base_it{sv_ent_class_info.find(dataname)};
+						if(base_it == sv_ent_class_info.end()) {
+							base_it = sv_ent_class_info.emplace(std::move(dataname), entity_class_info{}).first;
 						}
-						base = base->baseMap;
+						base_it->second.datamap = map;
+						map = map->baseMap;
 					}
 				}
 			}
@@ -1585,6 +1594,15 @@ namespace vmod
 					gsdk::ScriptClassDesc_t *tmp_desc{it.second->func<gsdk::ScriptClassDesc_t *(*)(generic_object_t *)>()(nullptr)};
 					std::string descname{tmp_desc->m_pszClassname};
 					sv_script_class_descs.emplace(std::move(descname), tmp_desc);
+
+					tmp_desc = tmp_desc->m_pBaseDesc;
+					while(tmp_desc) {
+						descname = tmp_desc->m_pszClassname;
+						if(sv_script_class_descs.find(descname) == sv_script_class_descs.end()) {
+							sv_script_class_descs.emplace(std::move(descname), tmp_desc);
+						}
+						tmp_desc = tmp_desc->m_pBaseDesc;
+					}
 				}
 			}
 		#endif
@@ -1626,6 +1644,7 @@ namespace vmod
 			__VMOD_GET_SV_SENDPROXY_FUNC(SendProxy_IntAddOne)
 			__VMOD_GET_SV_SENDPROXY_FUNC(SendProxy_ShortAddOne)
 			__VMOD_GET_SV_SENDPROXY_FUNC(SendProxy_PredictableIdToInt)
+			__VMOD_GET_SV_SENDPROXY_FUNC(SendProxy_UtlVectorElement)
 
 			auto g_Script_spawn_helper_it{sv_global_qual.find("g_Script_spawn_helper"s)};
 			if(g_Script_spawn_helper_it == sv_global_qual.end()) {
@@ -1675,6 +1694,13 @@ namespace vmod
 			tmp_desc = tmp_desc->m_pNextDesc;
 		}
 	#endif
+
+		for(auto &it : sv_ent_class_info) {
+			auto script_it{sv_script_class_descs.find(it.first)};
+			if(script_it != sv_script_class_descs.end()) {
+				it.second.script_desc = script_it->second;
+			}
+		}
 
 		if(!detours_prevm()) {
 			return false;
@@ -1751,29 +1777,6 @@ namespace vmod
 		if(entityfactorydict) {
 			for(const auto &it : entityfactorydict->m_Factories) {
 				sv_ent_factories.emplace(it.first, it.second);
-			}
-		}
-
-		for(const auto &it : sv_classes) {
-			auto info_it{sv_ent_class_info.find(it.first)};
-			if(info_it == sv_ent_class_info.end()) {
-				info_it = sv_ent_class_info.emplace(it.first, entity_class_info{}).first;
-			}
-
-			info_it->second.sv_class = it.second;
-			info_it->second.sendtable = it.second->m_pTable;
-
-			std::string tablename{it.second->m_pTable->m_pNetTableName};
-			sv_sendtables.emplace(std::move(tablename), it.second->m_pTable);
-
-			auto script_desc_it{sv_script_class_descs.find(it.first)};
-			if(script_desc_it != sv_script_class_descs.end()) {
-				info_it->second.script_desc = script_desc_it->second;
-			}
-
-			auto datamap_it{sv_datamaps.find(it.first)};
-			if(datamap_it != sv_datamaps.end()) {
-				info_it->second.datamap = datamap_it->second;
 			}
 		}
 
@@ -2244,16 +2247,191 @@ namespace vmod
 				std::error_code ec;
 				std::filesystem::create_directories(dump_dir, ec);
 
-				for(const auto &it : sv_sendtables) {
+				for(const auto &it : sv_ent_class_info) {
+					auto table{it.second.sendtable};
+					if(!table) {
+						continue;
+					}
+
 					std::string file;
 
 					bindings::docs::gen_date(file);
 
-					std::size_t num_props{static_cast<std::size_t>(it.second->m_nProps)};
-					for(std::size_t i{0}; i < num_props; ++i) {
-						gsdk::SendProp &prop{it.second->m_pProps[i]};
-						file += prop.m_pVarName;
-						file += '\n';
+					std::function<bool(gsdk::SendTable *, std::string_view, std::size_t, bool)> write_table{
+						[&file,&write_table](gsdk::SendTable *targettable, std::string_view cls, std::size_t depth, bool do_base) noexcept -> bool {
+							std::size_t num_props{static_cast<std::size_t>(targettable->m_nProps)};
+							if(num_props == 0) {
+								return false;
+							}
+
+							bool first_base{
+								targettable->m_pProps[0].m_Type == gsdk::DPT_DataTable &&
+								std::strcmp(targettable->m_pProps[0].m_pVarName, "baseclass") == 0
+							};
+
+							if(first_base && num_props == 1) {
+								return false;
+							}
+
+							bindings::docs::ident(file, depth);
+
+							file += "class "sv;
+							file += cls;
+
+							if(first_base) {
+								auto basetable{targettable->m_pProps[0].m_pDataTable};
+
+								file += " : "sv;
+
+								if(do_base) {
+									auto base_it{sv_ent_sendtables_class.find(basetable)};
+									if(base_it != sv_ent_sendtables_class.end()) {
+										file += base_it->second;
+									} else {
+										file += basetable->m_pNetTableName;
+										file += " (unknown class)"sv;
+									}
+								} else {
+									file += basetable->m_pNetTableName;
+									file += " (unknown class)"sv;
+								}
+							}
+
+							file += '\n';
+							bindings::docs::ident(file, depth);
+							file += "{\n"sv;
+
+							bool wrote_anything{false};
+
+							for(std::size_t i{first_base ? 1u : 0u}; i < num_props; ++i) {
+								gsdk::SendProp &prop{targettable->m_pProps[i]};
+
+								if(prop.m_Flags & gsdk::SPROP_EXCLUDE) {
+									continue;
+								}
+
+								bool is_utlvec{false};
+
+								if(prop.m_Type == gsdk::DPT_DataTable && !prop.m_pArrayProp) {
+									auto proptable{prop.m_pDataTable};
+
+									if(proptable->m_nProps > 1) {
+										std::string expected_name{"_ST_"s};
+										expected_name += prop.m_pVarName;
+										expected_name += '_';
+										expected_name += std::to_string(proptable->m_nProps-1);
+
+										if(std::strcmp(proptable->m_pNetTableName, expected_name.c_str()) == 0) {
+											if(std::strcmp(proptable->m_pProps[0].m_pVarName, "lengthproxy") == 0) {
+												is_utlvec = true;
+											}
+										}
+									}
+
+									if(!is_utlvec) {
+										write_table(proptable, proptable->m_pNetTableName, depth+1, false);
+									} else {
+										if(prop.m_pDataTable->m_pProps[1].m_Type == gsdk::DPT_DataTable && !prop.m_pDataTable->m_pProps[1].m_pArrayProp) {
+											proptable = proptable->m_pProps[1].m_pDataTable;
+											write_table(proptable, proptable->m_pNetTableName, depth+1, false);
+										}
+									}
+								} else if(prop.m_Type == gsdk::DPT_Array) {
+									file.erase(file.end()-2, file.end());
+									file += '[';
+									file += std::to_string(prop.m_nElements);
+									file += "];\n"sv;
+									continue;
+								}
+
+								bindings::docs::ident(file, depth+1);
+
+								auto write_prop_type{
+									[&file,&targettable](gsdk::SendProp *targetprop) noexcept -> void {
+										if(targetprop->m_Type == gsdk::DPT_DataTable && !targetprop->m_pArrayProp) {
+											file += targetprop->m_pDataTable->m_pNetTableName;
+											file += ' ';
+										} else {
+											auto type{bindings::ent::sendprop::guess_type(targetprop, targetprop->m_ProxyFn, targettable)};
+											if(!type) {
+												file += "<<unknown>> "sv;
+											} else if(type == &ffi_type_color32) {
+												file += "color32 "sv;
+											} else if(type == &ffi_type_qangle) {
+												file += "QAngle "sv;
+											} else if(type == &ffi_type_vector) {
+												file += "Vector "sv;
+											} else if(type == &ffi_type_cstr) {
+												file += "char *"sv;
+											} else if(type == &ffi_type_bool) {
+												file += "bool "sv;
+											} else if(type == &ffi_type_ehandle) {
+												file += "EHANDLE "sv;
+											} else {
+												switch(type->type) {
+													case FFI_TYPE_INT: file += "int "sv; break;
+													case FFI_TYPE_FLOAT: file += "float "sv; break;
+													case FFI_TYPE_DOUBLE: file += "double "sv; break;
+													case FFI_TYPE_LONGDOUBLE: file += "long double "sv; break;
+													case FFI_TYPE_UINT8: file += "unsigned char "sv; break;
+													case FFI_TYPE_SINT8: file += "char "sv; break;
+													case FFI_TYPE_UINT16: file += "unsigned short "sv; break;
+													case FFI_TYPE_SINT16: file += "short "sv; break;
+													case FFI_TYPE_UINT32: file += "unsigned int "sv; break;
+													case FFI_TYPE_SINT32: file += "int "sv; break;
+													case FFI_TYPE_UINT64: file += "unsigned long long "sv; break;
+													case FFI_TYPE_SINT64: file += "long long "sv; break;
+													default: file += "<<unknown>> "sv; break;
+												}
+											}
+										}
+									}
+								};
+
+								std::string prop_name{prop.m_pVarName};
+
+								if(is_utlvec) {
+									file += "CUtlVector<"sv;
+									write_prop_type(&prop.m_pDataTable->m_pProps[1]);
+									if(file.back() == ' ') {
+										file.pop_back();
+									}
+									file += "> "sv;
+								} else {
+									bool element{prop_name.ends_with(']')};
+									if(element) {
+										file += '(';
+									}
+									write_prop_type(&prop);
+									if(element) {
+										if(file.back() == ' ') {
+											file.pop_back();
+										}
+										file += ")&"sv;
+									}
+								}
+
+								file += std::move(prop_name);
+								if(prop.m_Type == gsdk::DPT_DataTable && prop.m_pArrayProp) {
+									file += '[';
+									file += std::to_string(prop.m_pDataTable->m_nProps);
+									file += "];\n"sv;
+								} else {
+									file += ";\n"sv;
+								}
+
+								wrote_anything = true;
+							}
+
+							bindings::docs::ident(file, depth);
+							file += "};\n"sv;
+
+							return wrote_anything;
+						}
+					};
+
+					if(!write_table(table, it.first, 0, true)) {
+						continue;
 					}
 
 					std::filesystem::path dump_path{dump_dir};
@@ -2280,8 +2458,10 @@ namespace vmod
 				std::error_code ec;
 				std::filesystem::create_directories(dump_dir, ec);
 
-				for(const auto &it : sv_datamaps) {
-					if(it.second->dataNumFields == 1 && it.second->dataDesc[0] == gsdk::typedescription_t::empty) {
+				for(const auto &it : sv_ent_class_info) {
+					auto map{it.second.datamap};
+
+					if(!map || (map->dataNumFields == 1 && map->dataDesc[0] == gsdk::typedescription_t::empty)) {
 						continue;
 					}
 
@@ -2445,7 +2625,7 @@ namespace vmod
 						}
 					};
 
-					if(!write_table(*it.second, it.second->dataClassName ? it.second->dataClassName : "<<unknown>>"sv, 0)) {
+					if(!write_table(*map, map->dataClassName ? map->dataClassName : "<<unknown>>"sv, 0)) {
 						continue;
 					}
 
@@ -2534,13 +2714,15 @@ namespace vmod
 
 					std::size_t start{0};
 
-					auto data_it{sv_datamaps.find(it.first)};
-					if(data_it != sv_datamaps.end()) {
-						if(data_it->second->baseMap) {
-							std::string basename{data_it->second->baseMap->dataClassName};
+					auto data_it{sv_ent_class_info.find(it.first)};
+					if(data_it != sv_ent_class_info.end()) {
+						auto map{data_it->second.datamap};
+						if(map && map->baseMap) {
+							std::string basename{map->baseMap->dataClassName};
 
 							file += " : "sv;
 							file += basename;
+							file += " (assumed based on datamap)"sv;
 
 							auto base_sym_it{sv_symbols.find(basename)};
 							if(base_sym_it != sv_symbols.end()) {
@@ -2550,6 +2732,10 @@ namespace vmod
 								start = base_vtable_info.size();
 							}
 						}
+					}
+
+					if(start >= vtable_info.size()) {
+						continue;
 					}
 
 					file += "\n{\n"sv;
@@ -2618,13 +2804,15 @@ namespace vmod
 					file += "class "sv;
 					file += it.first;
 
-					auto data_it{sv_datamaps.find(it.first)};
-					if(data_it != sv_datamaps.end()) {
-						if(data_it->second->baseMap) {
-							std::string basename{data_it->second->baseMap->dataClassName};
+					auto data_it{sv_ent_class_info.find(it.first)};
+					if(data_it != sv_ent_class_info.end()) {
+						auto map{data_it->second.datamap};
+						if(map && map->baseMap) {
+							std::string basename{map->baseMap->dataClassName};
 
 							file += " : "sv;
 							file += std::move(basename);
+							file += " (assumed based on datamap)"sv;
 						}
 					}
 
