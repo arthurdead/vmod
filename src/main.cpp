@@ -1242,9 +1242,8 @@ namespace vmod
 		} else {
 			launcher_lib_name = "launcher.so"sv;
 		}
-
 		if(!launcher_lib.load(bin_folder/launcher_lib_name)) {
-			std::cout << "\033[0;31m"sv << "vmod: failed to open launcher library: '"sv << launcher_lib.error_string() << "'\n"sv << "\033[0m"sv;
+			error("vmod: failed to open launcher library: '%s'\n"sv, launcher_lib.error_string().c_str());
 			return false;
 		}
 
@@ -3131,6 +3130,44 @@ namespace vmod
 			}
 		);
 
+		vmod_workshop_untrack.initialize("vmod_workshop_untrack"sv,
+			[this](const gsdk::CCommand &args) noexcept -> void {
+				if(args.m_nArgc != 2) {
+					error("vmod: usage: vmod_workshop_untrack <id>\n");
+					return;
+				}
+
+				if(!ugc()) {
+					error("vmod: workshop not available\n"sv);
+					return;
+				}
+
+				if(!workshop_initalized) {
+					error("vmod: workshop not initialized\n"sv);
+					return;
+				}
+
+				if(workshop_items.empty()) {
+					error("vmod: no workshop items\n"sv);
+					return;
+				}
+
+				auto id{static_cast<PublishedFileId_t>(std::strtoul(args.m_ppArgv[1], nullptr, 10))};
+				if(id == k_PublishedFileIdInvalid) {
+					error("vmod: invalid id\n"sv);
+					return;
+				}
+
+				auto it{workshop_items.find(id)};
+				if(it == workshop_items.end()) {
+					error("vmod: not tracked\n"sv);
+					return;
+				}
+
+				workshop_items.erase(it);
+			}
+		);
+
 		vmod_workshop_status.initialize("vmod_workshop_status"sv,
 			[this](const gsdk::CCommand &args) noexcept -> void {
 				if(!ugc()) {
@@ -3148,87 +3185,163 @@ namespace vmod
 					return;
 				}
 
+				enum class filter
+				{
+					none,
+					downloading,
+					mounted,
+				};
+
+				filter filter{filter::none};
+				bool verbose{false};
+
+				size_t filter_arg{0};
+				size_t level_arg{0};
+
+				switch(args.m_nArgc) {
+				case 1: break;
+				case 2: { 
+					level_arg = 1;
+					if(std::strcmp(args.m_ppArgv[1], "verbose") == 0) {
+						verbose = true;
+					} else if(std::strcmp(args.m_ppArgv[1], "simple") == 0) {
+						verbose = false;
+					} else {
+						error("vmod: invalid level\n"sv);
+						return;
+					}
+				} break;
+				case 3: {
+					filter_arg = 1;
+					level_arg = 2;
+				} break;
+				default:
+				error("vmod: usage vmod_workshop_status <level^filter> [<level>]\n"sv);
+				return;
+				}
+
+				if(filter_arg != 0) {
+					error("vmod: filter not implemented yet\n"sv);
+					return;
+				}
+
+				if(level_arg != 0) {
+					if(std::strcmp(args.m_ppArgv[level_arg], "verbose") == 0) {
+						verbose = true;
+					} else if(std::strcmp(args.m_ppArgv[level_arg], "simple") == 0) {
+						verbose = false;
+					} else {
+						error("vmod: invalid level\n"sv);
+						return;
+					}
+				}
+
 				for(const auto &it : workshop_items) {
-					info("%u\n"sv, it.first);
+					EItemState steam_state{static_cast<EItemState>(ugc()->GetItemState(it.first))};
 
-					info("  steam state:\n"sv, it.first);
-					EItemState state{static_cast<EItemState>(ugc()->GetItemState(it.first))};
-					if(state & k_EItemStateSubscribed) {
-						info("    subscribed\n"sv);
-					}
-					if(state & k_EItemStateLegacyItem) {
-						info("    legacy\n"sv);
-					}
-					if(state & k_EItemStateInstalled) {
-						info("    installed\n"sv);
-					}
-					if(state & k_EItemStateNeedsUpdate) {
-						info("    needs update\n"sv);
-					}
-					if(state & k_EItemStateDownloading) {
-						info("    downloading\n"sv);
-					}
-					if(state & k_EItemStateDownloadPending) {
-						info("    download pending\n"sv);
-					}
+					if(!verbose) {
+						std::string_view state_str;
+						if(it.second->state & workshop_item_t::state::mounted) {
+							state_str = "installed"sv;
+						} else if(it.second->state & workshop_item_t::state::downloaded) {
+							state_str = "downloaded"sv;
+						} else if(it.second->state & workshop_item_t::state::download_active) {
+							state_str = "downloading"sv;
+						} else {
+							state_str = "unknown"sv;
+						}
+						info("%u - '"sv, it.first);
+						if(!it.second->title.empty()) {
+							info("%s"sv, it.second->title.c_str());
+						}
+						info("' ["sv);
+						info("%s"sv, state_str.data());
+						info("]\n"sv);
+					} else {
+						info("%u\n"sv, it.first);
 
-					info("  vmod state:\n"sv);
-					if(it.second->state & workshop_item_t::state::details_queried) {
-						info("    details queried\n"sv);
-					}
-					if(it.second->state & workshop_item_t::state::metadata_queried) {
-						info("    metadata queried\n"sv);
-					}
-					if(it.second->state & workshop_item_t::state::details_query_active) {
-						info("    detail query active\n"sv);
-					}
-					if(it.second->state & workshop_item_t::state::downloaded) {
-						info("    downloaded\n"sv);
-					}
-					if(it.second->state & workshop_item_t::state::download_active) {
-						info("    download active\n"sv);
-					}
-					if(it.second->state & workshop_item_t::state::installed) {
-						info("    installed\n"sv);
-					}
-					if(it.second->state & workshop_item_t::state::mounted) {
-						info("    mounted\n"sv);
-					}
+						info("  steam state:\n"sv, it.first);
+						if(steam_state & k_EItemStateSubscribed) {
+							info("    subscribed\n"sv);
+						}
+						if(steam_state & k_EItemStateLegacyItem) {
+							info("    legacy\n"sv);
+						}
+						if(steam_state & k_EItemStateInstalled) {
+							info("    installed\n"sv);
+						}
+						if(steam_state & k_EItemStateNeedsUpdate) {
+							info("    needs update\n"sv);
+						}
+						if(steam_state & k_EItemStateDownloading) {
+							info("    downloading\n"sv);
+						}
+						if(steam_state & k_EItemStateDownloadPending) {
+							info("    download pending\n"sv);
+						}
 
-					info("  details:\n"sv, it.first);
-					info("    appid = %zu\n"sv, it.second->app);
-					info("    title = "sv);
-					if(!it.second->title.empty()) {
-						info("%s\n"sv, it.second->title.c_str());
-					} else {
-						info("\n"sv);
-					}
-					info("    cloud path = "sv);
-					if(!it.second->cloud_path.empty()) {
-						info("%s\n"sv, it.second->cloud_path.c_str());
-					} else {
-						info("\n"sv);
-					}
-					info("    cloud filesize = %zu\n"sv, it.second->cloud_filesize);
-					info("    disk path = "sv);
-					if(!it.second->disk_path.empty()) {
-						info("%s\n"sv, it.second->disk_path.c_str());
-					} else {
-						info("\n"sv);
-					}
-					info("    mount path = "sv);
-					if(!it.second->mount_path.empty()) {
-						info("%s\n"sv, it.second->mount_path.c_str());
-					} else {
-						info("\n"sv);
-					}
-					info("    mounttype = %u\n"sv, it.second->mounttype);
-					info("    disk filesize = %zu\n"sv, it.second->disk_filesize);
-					info("    metadata = "sv);
-					if(!it.second->metadata.empty()) {
-						info("%s\n"sv, it.second->metadata.c_str());
-					} else {
-						info("\n"sv);
+						info("  vmod state:\n"sv);
+						if(it.second->state & workshop_item_t::state::details_queried) {
+							info("    details queried\n"sv);
+						}
+						if(it.second->state & workshop_item_t::state::metadata_queried) {
+							info("    metadata queried\n"sv);
+						}
+						if(it.second->state & workshop_item_t::state::details_query_active) {
+							info("    detail query active\n"sv);
+						}
+						if(it.second->state & workshop_item_t::state::downloaded) {
+							info("    downloaded\n"sv);
+						}
+						if(it.second->state & workshop_item_t::state::download_active) {
+							info("    download active\n"sv);
+						}
+						if(it.second->state & workshop_item_t::state::installed) {
+							info("    installed\n"sv);
+						}
+						if(it.second->state & workshop_item_t::state::mounted) {
+							info("    mounted\n"sv);
+						}
+						if(it.second->state & workshop_item_t::state::initialized) {
+							info("    initialized\n"sv);
+						}
+
+						info("  details:\n"sv, it.first);
+						info("    appid = %zu\n"sv, it.second->app);
+						info("    itemtype = %u\n"sv, it.second->itemtype);
+						info("    title = "sv);
+						if(!it.second->title.empty()) {
+							info("%s\n"sv, it.second->title.c_str());
+						} else {
+							info("\n"sv);
+						}
+						info("    cloud path = "sv);
+						if(!it.second->cloud_path.empty()) {
+							info("%s\n"sv, it.second->cloud_path.c_str());
+						} else {
+							info("\n"sv);
+						}
+						info("    cloud filesize = %zu\n"sv, it.second->cloud_filesize);
+						info("    disk path = "sv);
+						if(!it.second->disk_path.empty()) {
+							info("%s\n"sv, it.second->disk_path.c_str());
+						} else {
+							info("\n"sv);
+						}
+						info("    mount path = "sv);
+						if(!it.second->mount_path.empty()) {
+							info("%s\n"sv, it.second->mount_path.c_str());
+						} else {
+							info("\n"sv);
+						}
+						info("    mounttype = %u\n"sv, it.second->mounttype);
+						info("    disk filesize = %zu\n"sv, it.second->disk_filesize);
+						info("    metadata = "sv);
+						if(!it.second->metadata.empty()) {
+							info("%s\n"sv, it.second->metadata.c_str());
+						} else {
+							info("\n"sv);
+						}
 					}
 				}
 			}
@@ -3254,6 +3367,22 @@ namespace vmod
 				for(auto &it : workshop_items) {
 					it.second->refresh();
 				}
+			}
+		);
+
+		vmod_workshop_clear.initialize("vmod_workshop_clear"sv,
+			[this](const gsdk::CCommand &args) noexcept -> void {
+				if(!ugc()) {
+					error("vmod: workshop not available\n"sv);
+					return;
+				}
+
+				if(!workshop_initalized) {
+					error("vmod: workshop not initialized\n"sv);
+					return;
+				}
+
+				workshop_items.clear();
 			}
 		);
 
@@ -3871,7 +4000,6 @@ namespace vmod
 	void main::workshop_item_t::init() noexcept
 	{
 		query_details();
-		download();
 	}
 
 	void main::workshop_item_t::query_details() noexcept
@@ -3967,7 +4095,13 @@ namespace vmod
 					}
 
 					app = details.m_nCreatorAppID;
+
 					title = details.m_rgchTitle;
+					size_t pos{0};
+					while((pos = title.find('\n', pos)) != std::string::npos) {
+						title.replace(pos, 1, "\\n"sv);
+					}
+
 					cloud_path = details.m_pchFileName;
 					cloud_filesize = static_cast<std::size_t>(details.m_nFileSize);
 					state |= state::details_queried;
@@ -3992,6 +4126,11 @@ namespace vmod
 		query_details_handle = k_UGCQueryHandleInvalid;
 		if(result->m_handle != k_UGCQueryHandleInvalid) {
 			ugc()->ReleaseQueryUGCRequest(result->m_handle);
+		}
+
+		if(!(state & state::initialized)) {
+			download();
+			state |= state::initialized;
 		}
 
 		if(itemtype != itemtype::collection) {

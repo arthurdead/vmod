@@ -220,13 +220,14 @@ namespace vmod
 			enum class state : unsigned char
 			{
 				unknown =                    0,
-				details_queried =      (1 << 0),
-				metadata_queried =     (1 << 1),
-				details_query_active = (1 << 2),
-				downloaded =           (1 << 3),
-				download_active =      (1 << 4),
-				installed =            (1 << 5),
-				mounted =              (1 << 6)
+				initialized =          (1 << 0),
+				details_queried =      (1 << 1),
+				metadata_queried =     (1 << 2),
+				details_query_active = (1 << 3),
+				downloaded =           (1 << 4),
+				download_active =      (1 << 5),
+				installed =            (1 << 6),
+				mounted =              (1 << 7)
 			};
 			friend constexpr inline bool operator&(state lhs, state rhs) noexcept
 			{ return static_cast<bool>(static_cast<unsigned char>(lhs) & static_cast<unsigned char>(rhs)); }
@@ -279,8 +280,10 @@ namespace vmod
 		std::filesystem::path workshop_dir_;
 		bool workshop_initalized{false};
 		ConCommand vmod_workshop_track;
+		ConCommand vmod_workshop_untrack;
 		ConCommand vmod_workshop_status;
 		ConCommand vmod_workshop_refresh;
+		ConCommand vmod_workshop_clear;
 
 		void workshop_item_downloaded(DownloadItemResult_t *result) noexcept;
 		CCallback<main, DownloadItemResult_t, false> cl_downloaditem_callback;
