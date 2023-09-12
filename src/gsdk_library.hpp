@@ -54,4 +54,40 @@ namespace vmod
 	template <typename T>
 	inline T *gsdk_library::iface(std::string_view name) noexcept
 	{ return static_cast<T *>(find_iface(name)); }
+
+	class library
+	{
+	public:
+		library() noexcept = default;
+
+		virtual bool load(const std::filesystem::path &path) noexcept;
+
+		inline const std::string &error_string() const noexcept
+		{ return err_str; }
+
+		template <typename T>
+		T *addr(std::string_view name) noexcept;
+
+		inline unsigned char *base() noexcept
+		{ return base_addr; }
+
+		void unload() noexcept;
+
+		virtual ~library() noexcept;
+
+	protected:
+		std::string err_str;
+
+		virtual void *find_addr(std::string_view name) noexcept;
+
+	private:
+		void *dl{nullptr};
+		unsigned char *base_addr{nullptr};
+
+	private:
+		library(const library &) = delete;
+		library &operator=(const library &) = delete;
+		library(library &&) = delete;
+		library &operator=(library &&) = delete;
+	};
 }

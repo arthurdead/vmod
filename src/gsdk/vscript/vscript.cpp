@@ -43,7 +43,7 @@ namespace gsdk
 	}
 
 #if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
-	HSCRIPT IScriptVM::CreateArray() noexcept
+	ScriptHandleWrapper_t IScriptVM::CreateArray() noexcept
 	{
 		ScriptVariant_t var;
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
@@ -60,7 +60,9 @@ namespace gsdk
 	#else
 		#error
 	#endif
-		return var.release_object();
+		ScriptHandleWrapper_t tmp{std::move(var)};
+		tmp.type = HANDLETYPE_ARRAY;
+		return tmp;
 	}
 #endif
 
@@ -169,9 +171,11 @@ namespace gsdk
 		}
 	}
 
-	HSCRIPT IScriptVM::CreateArray() noexcept
+	ScriptHandleWrapper_t IScriptVM::CreateArray() noexcept
 	{
-		return INVALID_HSCRIPT;
+		ScriptHandleWrapper_t tmp{};
+		tmp.type = HANDLETYPE_ARRAY;
+		return tmp;
 	}
 
 	int IScriptVM::GetArrayCount(HSCRIPT array) const noexcept
@@ -242,7 +246,7 @@ namespace gsdk
 #endif
 
 #if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
-	HSCRIPT IScriptVM::ReferenceObject(HSCRIPT object) noexcept
+	ScriptHandleWrapper_t IScriptVM::ReferenceObject(HSCRIPT object) noexcept
 	{
 	#ifndef __VMOD_USING_CUSTOM_VM
 		if(!object || object == INVALID_HSCRIPT) {
@@ -250,26 +254,52 @@ namespace gsdk
 		}
 	#endif
 
-		return ReferenceScope(object);
+		HSCRIPT ret{ReferenceScope_impl(object)};
+	#ifndef __VMOD_USING_CUSTOM_VM
+		if(!ret) {
+			ret = INVALID_HSCRIPT;
+		}
+	#endif
+
+		ScriptHandleWrapper_t tmp;
+		tmp.should_free_ = true;
+		tmp.object = ret;
+		tmp.type = HANDLETYPE_UNKNOWN;
+
+		return tmp;
 	}
 #elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
-	HSCRIPT IScriptVM::ReferenceObject(HSCRIPT object) noexcept
+	ScriptHandleWrapper_t IScriptVM::ReferenceObject(HSCRIPT object) noexcept
 	{
 	#ifndef __VMOD_USING_CUSTOM_VM
 		if(!object || object == INVALID_HSCRIPT) {
-			return INVALID_HSCRIPT;
+			return ScriptHandleWrapper_t{};
 		}
 	#endif
 
-		return object;
+		ScriptHandleWrapper_t tmp;
+		tmp.should_free = false;
+		tmp.object = object;
+		tmp.type = HANDLETYPE_UNKNOWN;
+
+		return tmp;
 	}
 #endif
 
-	HSCRIPT IScriptVM::LookupFunction(const char *name, HSCRIPT scope) noexcept
+	ScriptHandleWrapper_t IScriptVM::ReferenceFunction(HSCRIPT object) noexcept
+	{
+		ScriptHandleWrapper_t tmp{ReferenceObject(object)};
+		tmp.type = HANDLETYPE_FUNCTION;
+		return tmp;
+	}
+
+	ScriptHandleWrapper_t IScriptVM::LookupFunction(const char *name, HSCRIPT scope) noexcept
 	{
 	#ifndef __VMOD_USING_CUSTOM_VM
 		if(scope == INVALID_HSCRIPT) {
-			return INVALID_HSCRIPT;
+			ScriptHandleWrapper_t tmp;
+			tmp.type = HANDLETYPE_FUNCTION;
+			return tmp;
 		}
 	#endif
 
@@ -279,10 +309,16 @@ namespace gsdk
 			ret = INVALID_HSCRIPT;
 		}
 	#endif
-		return ret;
+
+		ScriptHandleWrapper_t tmp;
+		tmp.should_free_ = true;
+		tmp.object = ret;
+		tmp.type = HANDLETYPE_FUNCTION;
+
+		return tmp;
 	}
 
-	HSCRIPT IScriptVM::RegisterInstance(ScriptClassDesc_t *desc, void *value) noexcept
+	ScriptHandleWrapper_t IScriptVM::RegisterInstance(ScriptClassDesc_t *desc, void *value) noexcept
 	{
 		HSCRIPT ret{RegisterInstance_impl(desc, value)};
 	#ifndef __VMOD_USING_CUSTOM_VM
@@ -290,7 +326,13 @@ namespace gsdk
 			ret = INVALID_HSCRIPT;
 		}
 	#endif
-		return ret;
+
+		ScriptHandleWrapper_t tmp;
+		tmp.should_free_ = true;
+		tmp.object = ret;
+		tmp.type = HANDLETYPE_INSTANCE;
+
+		return tmp;
 	}
 
 	ScriptStatus_t IScriptVM::ExecuteFunction(HSCRIPT func, const ScriptVariant_t *args, int num_args, ScriptVariant_t *ret, HSCRIPT scope, bool wait) noexcept
@@ -364,11 +406,13 @@ namespace gsdk
 		return SetValue(scope, name, static_cast<const ScriptVariant_t &>(var));
 	}
 
-	HSCRIPT IScriptVM::CreateTable() noexcept
+	ScriptHandleWrapper_t IScriptVM::CreateTable() noexcept
 	{
 		ScriptVariant_t var;
 		CreateTable_impl(var);
-		return var.release_object();
+		ScriptHandleWrapper_t tmp{std::move(var)};
+		tmp.type = HANDLETYPE_TABLE;
+		return tmp;
 	}
 
 	void IScriptVM::ReleaseTable(HSCRIPT table) noexcept
@@ -381,7 +425,7 @@ namespace gsdk
 		ReleaseObject(array);
 	}
 
-	HSCRIPT IScriptVM::CreateScope(const char *script, HSCRIPT parent) noexcept
+	ScriptHandleWrapper_t IScriptVM::CreateScope(const char *script, HSCRIPT parent) noexcept
 	{
 	#ifndef __VMOD_USING_CUSTOM_VM
 		if(parent == INVALID_HSCRIPT) {
@@ -395,7 +439,13 @@ namespace gsdk
 			ret = INVALID_HSCRIPT;
 		}
 	#endif
-		return ret;
+
+		ScriptHandleWrapper_t tmp;
+		tmp.should_free_ = true;
+		tmp.object = ret;
+		tmp.type = HANDLETYPE_SCOPE;
+
+		return tmp;
 	}
 
 	int IScriptVM::GetArrayValue(HSCRIPT array, int it, ScriptVariant_t *value) noexcept
@@ -499,6 +549,30 @@ namespace gsdk
 	}
 #endif
 
+	ScriptHandleWrapper_t IScriptVM::CompileScript(const char *src, const char *name) noexcept
+	{
+		HSCRIPT ret{CompileScript_impl(src, name)};
+
+		ScriptHandleWrapper_t tmp;
+		tmp.should_free_ = true;
+		tmp.object = ret;
+		tmp.type = HANDLETYPE_SCRIPT;
+
+		return tmp;
+	}
+
+	ScriptHandleWrapper_t IScriptVM::ReferenceScope(gsdk::HSCRIPT obj) noexcept
+	{
+		HSCRIPT ret{ReferenceScope_impl(obj)};
+
+		ScriptHandleWrapper_t tmp;
+		tmp.should_free_ = true;
+		tmp.object = ret;
+		tmp.type = HANDLETYPE_SCOPE;
+
+		return tmp;
+	}
+
 	ScriptFunctionBinding_t::~ScriptFunctionBinding_t() noexcept
 	{
 		if(m_flags & SF_FREE_SCRIPT_NAME) {
@@ -512,5 +586,72 @@ namespace gsdk
 		if(m_flags & SF_FREE_DESCRIPTION) {
 			delete[] const_cast<char *>(m_desc.m_pszDescription);
 		}
+	}
+
+	HSCRIPT ScriptHandleWrapper_t::release() noexcept
+	{
+		HSCRIPT tmp{object};
+		if(!tmp) {
+			tmp = INVALID_HSCRIPT;
+		}
+		should_free_ = false;
+		object = INVALID_HSCRIPT;
+		type = HANDLETYPE_UNKNOWN;
+		return tmp;
+	}
+
+	void ScriptHandleWrapper_t::free() noexcept
+	{
+		if(should_free_ && object && object != INVALID_HSCRIPT) {
+			switch(type) {
+		#ifndef __clang__
+			default:
+		#endif
+			case HANDLETYPE_UNKNOWN:
+			g_pScriptVM->ReleaseObject(object);
+			break;
+			case HANDLETYPE_FUNCTION:
+			g_pScriptVM->ReleaseFunction(object);
+			break;
+			case HANDLETYPE_TABLE:
+			g_pScriptVM->ReleaseTable(object);
+			break;
+			case HANDLETYPE_ARRAY:
+			g_pScriptVM->ReleaseArray(object);
+			break;
+			case HANDLETYPE_SCOPE:
+			g_pScriptVM->ReleaseScope(object);
+			break;
+			case HANDLETYPE_INSTANCE:
+			g_pScriptVM->RemoveInstance(object);
+			break;
+			case HANDLETYPE_SCRIPT:
+			g_pScriptVM->ReleaseScript(object);
+			break;
+			}
+			should_free_ = false;
+			object = INVALID_HSCRIPT;
+			type = HANDLETYPE_UNKNOWN;
+		}
+	}
+
+	ScriptHandleWrapper_t::ScriptHandleWrapper_t(ScriptHandleWrapper_t &&other) noexcept
+		: object{other.object}, should_free_{other.should_free_}, type{other.type}
+	{
+		other.should_free_ = false;
+		other.object = INVALID_HSCRIPT;
+		other.type = HANDLETYPE_UNKNOWN;
+	}
+
+	ScriptHandleWrapper_t &ScriptHandleWrapper_t::operator=(ScriptHandleWrapper_t &&other) noexcept
+	{
+		free();
+		should_free_ = other.should_free_;
+		object = other.object;
+		type = other.type;
+		other.should_free_ = false;
+		other.object = INVALID_HSCRIPT;
+		other.type = HANDLETYPE_UNKNOWN;
+		return *this;
 	}
 }

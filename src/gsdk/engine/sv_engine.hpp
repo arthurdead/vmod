@@ -3,6 +3,20 @@
 #include <string_view>
 #include "../mathlib/vector.hpp"
 #include "../config.hpp"
+#include "../tier1/utlstring.hpp"
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
+#pragma GCC diagnostic ignored "-Wredundant-tags"
+#pragma GCC diagnostic ignored "-Wconditionally-supported"
+#pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#pragma GCC diagnostic ignored "-Wuseless-cast"
+#pragma GCC diagnostic ignored "-Wcast-align"
+#pragma GCC diagnostic ignored "-Wsuggest-override"
+#pragma GCC diagnostic ignored "-Woverloaded-virtual"
+#include <steam/steam_gameserver.h>
+#pragma GCC diagnostic pop
 
 namespace gsdk
 {
@@ -30,7 +44,6 @@ namespace gsdk
 	class CSharedEdictChangeInfo;
 	struct IChangeInfoAccessor;
 	class IAchievementMgr;
-	class CSteamID;
 	class IServer;
 	enum soundlevel_t : int;
 	class ServerClass;
@@ -281,4 +294,8 @@ namespace gsdk
 	#endif
 	};
 	#pragma GCC diagnostic pop
+
+	class CSteam3Server : public CSteamGameServerAPIContext
+	{
+	};
 }

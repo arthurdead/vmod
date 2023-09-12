@@ -1,5 +1,4 @@
 #include "string_table.hpp"
-#include "../../main.hpp"
 
 namespace vmod::bindings::strtables
 {
@@ -11,7 +10,7 @@ namespace vmod::bindings::strtables
 	{
 		using namespace std::literals::string_view_literals;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		desc.func(&string_table::script_find_index, "script_find_index"sv, "find"sv)
 		.desc("(str)"sv);
@@ -39,7 +38,7 @@ namespace vmod::bindings::strtables
 
 	std::size_t string_table::script_find_index(std::string_view name) const noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(name.empty()) {
 			vm->RaiseException("vmod: invalid name: '%s'", name.data());
@@ -56,7 +55,7 @@ namespace vmod::bindings::strtables
 
 	std::size_t string_table::script_num_strings() const noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(!table) {
 			vm->RaiseException("vmod: stringtable is not created yet");
@@ -68,7 +67,7 @@ namespace vmod::bindings::strtables
 
 	std::string_view string_table::script_get_string(std::size_t i) const noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(i == static_cast<std::size_t>(-1) || static_cast<int>(i) >= table->GetNumStrings()) {
 			vm->RaiseException("vmod: invalid index: %zu", i);
@@ -85,7 +84,7 @@ namespace vmod::bindings::strtables
 
 	std::size_t string_table::script_add_string(std::string_view name, ssize_t bytes, const void *data) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(name.empty()) {
 			vm->RaiseException("vmod: invalid string: '%s'", name.data());

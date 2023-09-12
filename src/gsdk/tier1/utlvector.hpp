@@ -73,6 +73,11 @@ namespace gsdk
 		CUtlVector(const CUtlVector &) = delete;
 		CUtlVector &operator=(const CUtlVector &) = delete;
 	};
+
+	template <typename T>
+	class CCopyableUtlVector : public CUtlVector<T>
+	{
+	};
 }
 
 #include "utlvector.tpp"

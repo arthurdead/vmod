@@ -3,6 +3,7 @@
 #include "../tier1/interface.hpp"
 #include "../tier1/appframework.hpp"
 #include "../config.hpp"
+#include "../tier0/dbg.hpp"
 #include <string_view>
 
 namespace gsdk

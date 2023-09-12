@@ -1,5 +1,4 @@
 #include "cif.hpp"
-#include "../../main.hpp"
 
 namespace vmod::bindings::ffi
 {
@@ -56,7 +55,7 @@ namespace vmod::bindings::ffi
 
 	void caller::script_set_func(generic_func_t func) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(!func) {
 			vm->RaiseException("vmod: invalid function");
@@ -69,7 +68,7 @@ namespace vmod::bindings::ffi
 
 	void caller::script_set_mfp(generic_mfp_t func) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(!func) {
 			vm->RaiseException("vmod: invalid function");
@@ -82,7 +81,7 @@ namespace vmod::bindings::ffi
 
 	void caller::script_set_vidx(std::size_t func) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(func == static_cast<std::size_t>(-1)) {
 			vm->RaiseException("vmod: invalid function");
@@ -95,7 +94,7 @@ namespace vmod::bindings::ffi
 
 	vscript::variant caller::script_call(const vscript::variant *args, std::size_t num_args, ...) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(!virt) {
 			if(!target_ptr.mfp) {
@@ -155,7 +154,7 @@ namespace vmod::bindings::ffi
 	{
 		using namespace std::literals::string_view_literals;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(!vmod::ffi::cif::initialize(abi)) {
 			vm->RaiseException("vmod: failed to initialize");

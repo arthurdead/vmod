@@ -59,12 +59,12 @@ namespace vmod::vm
 		bool ForwardConsoleCommand(const gsdk::CCommandContext &, const gsdk::CCommand &) __VMOD_CUSTOM_VM_L4D2_OVERRIDE;
 		bool Frame(float) override;
 		gsdk::ScriptStatus_t Run(const char *, bool = true) override;
-		gsdk::HSCRIPT CompileScript(const char *, const char * = nullptr) override;
+		gsdk::HSCRIPT CompileScript_impl(const char *, const char * = nullptr) override;
 		void ReleaseScript(gsdk::HSCRIPT) override;
 		gsdk::ScriptStatus_t Run(gsdk::HSCRIPT, gsdk::HSCRIPT = nullptr, bool = true) override;
 		gsdk::ScriptStatus_t Run(gsdk::HSCRIPT, bool) override;
 		gsdk::HSCRIPT CreateScope_impl(const char *, gsdk::HSCRIPT = nullptr) override;
-		gsdk::HSCRIPT ReferenceScope(gsdk::HSCRIPT) __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
+		gsdk::HSCRIPT ReferenceScope_impl(gsdk::HSCRIPT) __VMOD_CUSTOM_VM_L4D2_TF2_OVERRIDE;
 		void ReleaseScope(gsdk::HSCRIPT) override;
 		gsdk::HSCRIPT LookupFunction_impl(const char *, gsdk::HSCRIPT = nullptr) override;
 		void ReleaseFunction(gsdk::HSCRIPT) override;
@@ -118,7 +118,7 @@ namespace vmod::vm
 		bool IsArray_nonvirtual(gsdk::HSCRIPT) noexcept;
 		bool IsTable_nonvirtual(gsdk::HSCRIPT) noexcept;
 
-		gsdk::HSCRIPT CompileScript_strict(const char *, const char * = nullptr) noexcept;
+		gsdk::ScriptHandleWrapper_t CompileScript_strict(const char *, const char * = nullptr) noexcept;
 
 		HSQOBJECT vector_class;
 		HSQOBJECT qangle_class;
@@ -143,10 +143,10 @@ namespace vmod::vm
 		static SQInteger instance_release_generic(SQUserPointer userptr, SQInteger size);
 		static SQInteger instance_release_external(SQUserPointer userptr, SQInteger size);
 
-		SQInteger func_call_impl(const gsdk::ScriptFunctionBinding_t *info, void *obj, const std::vector<gsdk::ScriptVariant_t> &args) noexcept;
+		SQInteger func_call_impl(const gsdk::ScriptFunctionBinding_t *info, void *obj, std::vector<gsdk::ScriptVariant_t> &args) noexcept;
 
 		bool push(const gsdk::ScriptVariant_t &var) noexcept;
-		bool get(HSQOBJECT obj, gsdk::ScriptVariant_t &var) noexcept;
+		bool get(HSQOBJECT obj, gsdk::ScriptVariant_t &var, bool scalar=false) noexcept;
 		bool get(SQInteger idx, gsdk::ScriptVariant_t &var) noexcept;
 
 		static bool typemask_for_type(std::string &typemask, gsdk::ScriptDataType_t type) noexcept;

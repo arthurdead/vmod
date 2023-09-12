@@ -164,11 +164,117 @@ namespace gsdk
 	enum ScriptParamFlags_t : unsigned char
 	{
 		FIELD_FLAG_NONE     = 0,
-		FIELD_FLAG_OPTIONAL = (1 << 6),
-		FIELD_FLAG_FIRST = FIELD_FLAG_OPTIONAL,
+		FIELD_FLAG_OPTIONAL = (1 << 0),
+		FIELD_FLAG_LAST = FIELD_FLAG_OPTIONAL,
 	};
 
-	static_assert(static_cast<int>(FIELD_FLAG_FIRST) >= static_cast<int>(EXFIELD_TYPECOUNT));
+	enum class SlimScriptDataType_t : int
+	{
+		FIELD_FLOAT,
+		FIELD_STRING,
+		FIELD_VECTOR,
+		FIELD_QUATERNION,
+		FIELD_INTEGER,
+		FIELD_BOOLEAN,
+		FIELD_SHORT,
+		FIELD_CHARACTER,
+		FIELD_COLOR32,
+		FIELD_CLASSPTR,
+		FIELD_EHANDLE,
+		FIELD_EDICT,
+		FIELD_POSITION_VECTOR,
+		FIELD_FUNCTION,
+		FIELD_VMATRIX,
+		FIELD_MATRIX3X4_WORLDSPACE,
+		FIELD_VECTOR2D,
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		FIELD_INTEGER64,
+	#endif
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
+		FIELD_VECTOR4D,
+	#endif
+		FIELD_CSTRING,
+		FIELD_HSCRIPT,
+		FIELD_VARIANT,
+		FIELD_UINT64,
+		FIELD_FLOAT64,
+		FIELD_UINT32,
+		FIELD_QANGLE,
+		SLIMFIELD_TYPECOUNT,
+		FIELD_TYPEUNKNOWN = SLIMFIELD_TYPECOUNT
+	};
+
+	constexpr SlimScriptDataType_t slim_datatype(ScriptDataType_t type) noexcept
+	{
+		switch(type) {
+		case FIELD_FLOAT: return SlimScriptDataType_t::FIELD_FLOAT;
+		case FIELD_STRING: return SlimScriptDataType_t::FIELD_STRING;
+		case FIELD_VECTOR: return SlimScriptDataType_t::FIELD_VECTOR;
+		case FIELD_QUATERNION: return SlimScriptDataType_t::FIELD_QUATERNION;
+		case FIELD_INTEGER: return SlimScriptDataType_t::FIELD_INTEGER;
+		case FIELD_BOOLEAN: return SlimScriptDataType_t::FIELD_BOOLEAN;
+		case FIELD_SHORT: return SlimScriptDataType_t::FIELD_SHORT;
+		case FIELD_CHARACTER: return SlimScriptDataType_t::FIELD_CHARACTER;
+		case FIELD_COLOR32: return SlimScriptDataType_t::FIELD_COLOR32;
+		case FIELD_CLASSPTR: return SlimScriptDataType_t::FIELD_CLASSPTR;
+		case FIELD_EHANDLE: return SlimScriptDataType_t::FIELD_EHANDLE;
+		case FIELD_EDICT: return SlimScriptDataType_t::FIELD_EDICT;
+		case FIELD_POSITION_VECTOR: return SlimScriptDataType_t::FIELD_POSITION_VECTOR;
+		case FIELD_FUNCTION: return SlimScriptDataType_t::FIELD_FUNCTION;
+		case FIELD_VMATRIX: return SlimScriptDataType_t::FIELD_VMATRIX;
+		case FIELD_MATRIX3X4_WORLDSPACE: return SlimScriptDataType_t::FIELD_MATRIX3X4_WORLDSPACE;
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		case FIELD_INTEGER64: return SlimScriptDataType_t::FIELD_INTEGER64;
+	#endif
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
+		case FIELD_VECTOR4D: return SlimScriptDataType_t::FIELD_VECTOR4D;
+	#endif
+		case FIELD_CSTRING: return SlimScriptDataType_t::FIELD_CSTRING;
+		case FIELD_HSCRIPT: return SlimScriptDataType_t::FIELD_HSCRIPT;
+		case FIELD_VARIANT: return SlimScriptDataType_t::FIELD_VARIANT;
+		case FIELD_UINT64: return SlimScriptDataType_t::FIELD_UINT64;
+		case FIELD_FLOAT64: return SlimScriptDataType_t::FIELD_FLOAT64;
+		case FIELD_UINT32: return SlimScriptDataType_t::FIELD_UINT32;
+		case FIELD_QANGLE: return SlimScriptDataType_t::FIELD_QANGLE;
+		default: return SlimScriptDataType_t::FIELD_TYPEUNKNOWN;
+		}
+	}
+
+	constexpr ScriptDataType_t fat_datatype(SlimScriptDataType_t type) noexcept
+	{
+		switch(type) {
+		case SlimScriptDataType_t::FIELD_FLOAT: return FIELD_FLOAT;
+		case SlimScriptDataType_t::FIELD_STRING: return FIELD_STRING;
+		case SlimScriptDataType_t::FIELD_VECTOR: return FIELD_VECTOR;
+		case SlimScriptDataType_t::FIELD_QUATERNION: return FIELD_QUATERNION;
+		case SlimScriptDataType_t::FIELD_INTEGER: return FIELD_INTEGER;
+		case SlimScriptDataType_t::FIELD_BOOLEAN: return FIELD_BOOLEAN;
+		case SlimScriptDataType_t::FIELD_SHORT: return FIELD_SHORT;
+		case SlimScriptDataType_t::FIELD_CHARACTER: return FIELD_CHARACTER;
+		case SlimScriptDataType_t::FIELD_COLOR32: return FIELD_COLOR32;
+		case SlimScriptDataType_t::FIELD_CLASSPTR: return FIELD_CLASSPTR;
+		case SlimScriptDataType_t::FIELD_EHANDLE: return FIELD_EHANDLE;
+		case SlimScriptDataType_t::FIELD_EDICT: return FIELD_EDICT;
+		case SlimScriptDataType_t::FIELD_POSITION_VECTOR: return FIELD_POSITION_VECTOR;
+		case SlimScriptDataType_t::FIELD_FUNCTION: return FIELD_FUNCTION;
+		case SlimScriptDataType_t::FIELD_VMATRIX: return FIELD_VMATRIX;
+		case SlimScriptDataType_t::FIELD_MATRIX3X4_WORLDSPACE: return FIELD_MATRIX3X4_WORLDSPACE;
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		case SlimScriptDataType_t::FIELD_INTEGER64: return FIELD_INTEGER64;
+	#endif
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
+		case SlimScriptDataType_t::FIELD_VECTOR4D: return FIELD_VECTOR4D;
+	#endif
+		case SlimScriptDataType_t::FIELD_CSTRING: return FIELD_CSTRING;
+		case SlimScriptDataType_t::FIELD_HSCRIPT: return FIELD_HSCRIPT;
+		case SlimScriptDataType_t::FIELD_VARIANT: return FIELD_VARIANT;
+		case SlimScriptDataType_t::FIELD_UINT64: return FIELD_UINT64;
+		case SlimScriptDataType_t::FIELD_FLOAT64: return FIELD_FLOAT64;
+		case SlimScriptDataType_t::FIELD_UINT32: return FIELD_UINT32;
+		case SlimScriptDataType_t::FIELD_QANGLE: return FIELD_QANGLE;
+		default: return FIELD_TYPEUNKNOWN;
+		}
+	}
 
 	struct alignas(ScriptDataType_t) ScriptDataTypeAndFlags_t final
 	{
@@ -180,36 +286,81 @@ namespace gsdk
 		constexpr ScriptDataTypeAndFlags_t(ScriptDataTypeAndFlags_t &&) noexcept = default;
 		constexpr ScriptDataTypeAndFlags_t &operator=(ScriptDataTypeAndFlags_t &&) noexcept = default;
 
-		constexpr inline ScriptDataTypeAndFlags_t(ScriptDataType_t type_) noexcept
-			: type{static_cast<unsigned char>(type_)}
-		{
-		}
+		constexpr inline ScriptDataTypeAndFlags_t(ScriptDataType_t type) noexcept
+		{ set_main_type(type); }
 
-		unsigned char type{FIELD_TYPEUNKNOWN};
-		unsigned char flags{FIELD_FLAG_NONE};
-		unsigned char extra_types{0};
-		unsigned char pad1{0};
+		unsigned int value_{0};
 
-		constexpr inline operator ScriptDataType_t() const noexcept
-		{ return static_cast<ScriptDataType_t>(type); }
+		static constexpr inline unsigned int main_type_bits{6};
+		static constexpr inline unsigned int flags_bits{1};
+		static constexpr inline unsigned int extra_types_bits{25};
 
-		explicit constexpr inline operator ScriptParamFlags_t() const noexcept
-		{ return static_cast<ScriptParamFlags_t>(flags); }
+		static constexpr inline unsigned int flags_start_bit{main_type_bits};
+		static constexpr inline unsigned int extra_types_start_bit{main_type_bits+flags_bits};
+
+		static constexpr inline unsigned int mask_type       {0b00000000000000000000000000111111};
+		static constexpr inline unsigned int mask_flags      {0b00000000000000000000000001000000};
+		static constexpr inline unsigned int mask_extra_types{0b11111111111111111111111110000000};
 
 		constexpr inline ScriptDataType_t main_type() const noexcept
-		{ return static_cast<ScriptDataType_t>(type); }
+		{ return static_cast<ScriptDataType_t>(value_ & mask_type); }
+
+		constexpr inline ScriptParamFlags_t flags() const noexcept
+		{ return static_cast<ScriptParamFlags_t>((value_ & mask_flags) >> flags_start_bit); }
+
+		constexpr inline unsigned int extra_types() const noexcept
+		{ return ((value_ & mask_extra_types) >> extra_types_start_bit); }
+
+		constexpr inline bool has_extra_types() const noexcept
+		{ return (extra_types() != 0); }
+
+		constexpr inline bool has_extra_type(SlimScriptDataType_t type) const noexcept
+		{ return (value_ & (1 << (extra_types_start_bit+static_cast<unsigned int>(type)))); }
+
+		constexpr inline void set_main_type(ScriptDataType_t type) noexcept
+		{ value_ |= (static_cast<unsigned int>(type) & mask_type); }
+
+		constexpr inline void set_extra_type(ScriptDataType_t type) noexcept
+		{ value_ |= (1 << (extra_types_start_bit+static_cast<unsigned int>(slim_datatype(type)))); }
+
+		constexpr inline void add_flags(ScriptParamFlags_t flags) noexcept
+		{ value_ |= ((static_cast<unsigned int>(flags) & (mask_flags >> flags_start_bit)) << flags_start_bit); }
+
+		constexpr inline operator ScriptDataType_t() const noexcept
+		{ return main_type(); }
+
+		explicit constexpr inline operator ScriptParamFlags_t() const noexcept
+		{ return flags(); }
 
 		constexpr inline bool is_optional() const noexcept
-		{ return (flags & FIELD_FLAG_OPTIONAL); }
+		{ return (flags() & FIELD_FLAG_OPTIONAL); }
+
+		constexpr bool can_be_anything() const noexcept
+		{
+			if(has_extra_type(SlimScriptDataType_t::FIELD_VARIANT) ||
+				has_extra_type(SlimScriptDataType_t::FIELD_HSCRIPT)) {
+				return true;
+			}
+
+			switch(main_type()) {
+				case FIELD_VARIANT:
+				case FIELD_HSCRIPT_NEW_INSTANCE:
+				case FIELD_HSCRIPT:
+				return true;
+				default:
+				return false;
+			}
+		}
 
 		constexpr bool can_be_null() const noexcept
 		{
-			switch(static_cast<ScriptDataType_t>(type)) {
-				case gsdk::FIELD_VOID:
-				case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
-				case gsdk::FIELD_VARIANT:
-				case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
-				case gsdk::FIELD_HSCRIPT:
+			if(can_be_anything()) {
+				return true;
+			}
+
+			switch(main_type()) {
+				case FIELD_VOID:
+				case FIELD_POSITIVEINTEGER_OR_NULL:
 				return true;
 				default:
 				return false;
@@ -222,15 +373,20 @@ namespace gsdk
 				return true;
 			}
 
-			switch(static_cast<ScriptDataType_t>(type)) {
-				case gsdk::FIELD_VOID:
-				case gsdk::FIELD_POSITIVEINTEGER_OR_NULL:
+			switch(main_type()) {
+				case FIELD_VOID:
+				case FIELD_POSITIVEINTEGER_OR_NULL:
 				return true;
 				default:
 				return false;
 			}
 		}
 	};
+
+	static_assert(static_cast<unsigned int>(SlimScriptDataType_t::SLIMFIELD_TYPECOUNT) <= ScriptDataTypeAndFlags_t::extra_types_bits);
+
+	static_assert(static_cast<unsigned int>(EXFIELD_TYPECOUNT) <= ScriptDataTypeAndFlags_t::mask_type);
+	static_assert((static_cast<unsigned int>(FIELD_FLAG_LAST) << ScriptDataTypeAndFlags_t::main_type_bits) <= ScriptDataTypeAndFlags_t::mask_flags);
 
 	static_assert(sizeof(ScriptDataTypeAndFlags_t) == sizeof(ScriptDataType_t));
 	static_assert(alignof(ScriptDataTypeAndFlags_t) == alignof(ScriptDataType_t));
@@ -287,7 +443,7 @@ namespace gsdk
 		inline ~CVariantBase() noexcept
 		{ free(); }
 
-		CVariantBase(const CVariantBase &other) noexcept
+		inline CVariantBase(const CVariantBase &other) noexcept
 		{ operator=(other); }
 
 		inline CVariantBase &operator=(const CVariantBase &other) noexcept
@@ -295,7 +451,7 @@ namespace gsdk
 			free();
 			m_type = other.m_type;
 			std::memcpy(m_data, other.m_data, sizeof(m_data));
-			m_flags = other.m_flags & ~SV_FREE;
+			m_flags = (other.m_flags & ~SV_FREE);
 			return *this;
 		}
 
@@ -321,6 +477,9 @@ namespace gsdk
 				m_type != FIELD_VOID
 			);
 		}
+
+		inline bool should_free() const noexcept
+		{ return (m_flags & SV_FREE); }
 
 		union
 		{
@@ -369,6 +528,69 @@ namespace gsdk
 
 	using ScriptVariant_t = CVariantBase<CVariantDefaultAllocator>;
 
+	enum ScriptHandleType_t : unsigned char
+	{
+		HANDLETYPE_UNKNOWN,
+		HANDLETYPE_FUNCTION,
+		HANDLETYPE_TABLE,
+		HANDLETYPE_ARRAY,
+		HANDLETYPE_SCOPE,
+		HANDLETYPE_INSTANCE,
+		HANDLETYPE_SCRIPT
+	};
+
+	struct ScriptHandleWrapper_t
+	{
+		ScriptHandleWrapper_t() noexcept = default;
+
+		inline ScriptHandleWrapper_t(std::nullptr_t) noexcept
+			: ScriptHandleWrapper_t{}
+		{
+		}
+
+		ScriptHandleWrapper_t(const ScriptHandleWrapper_t &) = delete;
+		ScriptHandleWrapper_t &operator=(const ScriptHandleWrapper_t &) = delete;
+
+		ScriptHandleWrapper_t(ScriptHandleWrapper_t &&other) noexcept;
+		ScriptHandleWrapper_t &operator=(ScriptHandleWrapper_t &&other) noexcept;
+
+		ScriptHandleWrapper_t(HSCRIPT) = delete;
+		ScriptHandleWrapper_t &operator=(HSCRIPT) = delete;
+
+		bool operator==(HSCRIPT) = delete;
+		bool operator!=(HSCRIPT) = delete;
+
+		bool operator==(const ScriptHandleWrapper_t &) = delete;
+		bool operator!=(const ScriptHandleWrapper_t &) = delete;
+
+		inline ScriptHandleWrapper_t(ScriptVariant_t &&other) noexcept
+		{
+			should_free_ = other.should_free();
+			object = other.release_object();
+			type = HANDLETYPE_UNKNOWN;
+		}
+		ScriptHandleWrapper_t &operator=(ScriptVariant_t &&) = delete;
+
+		operator HSCRIPT() = delete;
+
+		bool operator!() = delete;
+		operator bool() = delete;
+
+		inline ~ScriptHandleWrapper_t() noexcept
+		{ free(); }
+
+		inline bool should_free() const noexcept
+		{ return should_free_; }
+
+		void free() noexcept;
+
+		HSCRIPT release() noexcept;
+
+		HSCRIPT object{INVALID_HSCRIPT};
+		bool should_free_{false};
+		ScriptHandleType_t type{HANDLETYPE_UNKNOWN};
+	};
+
 #if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 	static_assert(sizeof(ScriptVariant_t) == (sizeof(unsigned long long) + (sizeof(short) * 2)));
 #elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
@@ -404,7 +626,7 @@ namespace gsdk
 	#error
 #endif
 
-	using ScriptBindingFunc_t = bool(*)(ScriptFunctionBindingStorageType_t, void *, const ScriptVariant_t *, int, ScriptVariant_t *);
+	using ScriptBindingFunc_t = bool(*)(ScriptFunctionBindingStorageType_t, void *, ScriptVariant_t *, int, ScriptVariant_t *);
 
 	struct alignas(ScriptFunctionBindingStorageType_t) CScriptFunctionBindingStorageType : public ScriptFunctionBindingStorageType_t
 	{
@@ -637,23 +859,30 @@ namespace gsdk
 	#endif
 		virtual bool Frame(float) = 0;
 		virtual ScriptStatus_t Run(const char *, bool = true) = 0;
-	 	virtual HSCRIPT CompileScript(const char *, const char * = nullptr) = 0;
+	public:
+		virtual HSCRIPT CompileScript_impl(const char *, const char * = nullptr) = 0;
+	public:
+		ScriptHandleWrapper_t CompileScript(const char *src, const char *name = nullptr) noexcept;
 		virtual void ReleaseScript(HSCRIPT) = 0;
 		virtual ScriptStatus_t Run(HSCRIPT, HSCRIPT = nullptr, bool = true) = 0;
 		virtual ScriptStatus_t Run(HSCRIPT, bool) = 0;
 	private:
 		virtual HSCRIPT CreateScope_impl(const char *, HSCRIPT = nullptr) = 0;
 	public:
-		HSCRIPT CreateScope(const char *script, HSCRIPT parent = nullptr) noexcept;
+		ScriptHandleWrapper_t CreateScope(const char *script, HSCRIPT parent = nullptr) noexcept;
 	#if GSDK_ENGINE == GSDK_ENGINE_L4D2 || GSDK_ENGINE == GSDK_ENGINE_TF2
-		virtual HSCRIPT ReferenceScope(HSCRIPT) = 0;
+	private:
+		virtual HSCRIPT ReferenceScope_impl(HSCRIPT) = 0;
+	public:
 	#endif
-		HSCRIPT ReferenceObject(HSCRIPT object) noexcept;
+		ScriptHandleWrapper_t ReferenceScope(HSCRIPT object) noexcept;
+		ScriptHandleWrapper_t ReferenceObject(HSCRIPT object) noexcept;
+		ScriptHandleWrapper_t ReferenceFunction(HSCRIPT object) noexcept;
 		virtual void ReleaseScope(HSCRIPT) = 0;
 	private:
 		virtual HSCRIPT LookupFunction_impl(const char *, HSCRIPT = nullptr) = 0;
 	public:
-		HSCRIPT LookupFunction(const char *name, HSCRIPT scope = nullptr) noexcept;
+		ScriptHandleWrapper_t LookupFunction(const char *name, HSCRIPT scope = nullptr) noexcept;
 		virtual void ReleaseFunction(HSCRIPT) = 0;
 	private:
 		virtual ScriptStatus_t ExecuteFunction_impl(HSCRIPT, const ScriptVariant_t *, int, ScriptVariant_t *, HSCRIPT, bool) = 0;
@@ -664,7 +893,7 @@ namespace gsdk
 	public:
 		virtual HSCRIPT RegisterInstance_impl(ScriptClassDesc_t *, void *) = 0;
 	public:
-		HSCRIPT RegisterInstance(ScriptClassDesc_t *desc, void *value) noexcept;
+		ScriptHandleWrapper_t RegisterInstance(ScriptClassDesc_t *desc, void *value) noexcept;
 		virtual void SetInstanceUniqeId(HSCRIPT, const char *) = 0;
 		bool SetInstanceUniqeId2(HSCRIPT instance, const char *root) noexcept;
 		virtual void RemoveInstance(HSCRIPT) = 0;
@@ -701,7 +930,7 @@ namespace gsdk
 	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		bool IsTable(HSCRIPT table) const noexcept;
 	#endif
-		HSCRIPT CreateTable() noexcept;
+		ScriptHandleWrapper_t CreateTable() noexcept;
 		void ReleaseTable(HSCRIPT table) noexcept;
 		void ReleaseArray(HSCRIPT array) noexcept;
 		virtual int GetNumTableEntries(HSCRIPT) const = 0;
@@ -719,12 +948,12 @@ namespace gsdk
 	#endif
 	public:
 		bool GetValue(HSCRIPT scope, const char *name, ScriptVariant_t *var) noexcept;
-		bool GetValue(HSCRIPT scope, const char *name, HSCRIPT *object) noexcept = delete;
+		bool GetValue(HSCRIPT scope, const char *name, ScriptHandleWrapper_t *object) noexcept = delete;
 		virtual void ReleaseValue(ScriptVariant_t &) = 0;
 		void ReleaseValue(HSCRIPT object) noexcept;
 		void ReleaseObject(HSCRIPT object) noexcept;
 		virtual bool ClearValue(HSCRIPT, const char *) = 0;
-		HSCRIPT CreateArray() noexcept;
+		ScriptHandleWrapper_t CreateArray() noexcept;
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		bool IsArray(HSCRIPT array) const noexcept;
 		int GetArrayCount(HSCRIPT array) const noexcept;
@@ -758,8 +987,10 @@ namespace gsdk
 		__attribute__((__format__(__printf__, 2, 3))) bool RaiseException(const char *fmt, ...) noexcept;
 		__attribute__((__format__(__printf__, 2, 0))) bool RaiseExceptionv(const char *fmt, va_list vargs) noexcept;
 	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	private:
 		virtual HSCRIPT GetRootTable() = 0;
 		virtual HSCRIPT CopyHandle(HSCRIPT) = 0;
+	public:
 		virtual HIDENTITY GetIdentity(HSCRIPT) = 0;
 	#endif
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
@@ -774,8 +1005,10 @@ namespace gsdk
 		virtual HINTERNALVM GetInternalVM() = 0;
 		virtual bool GetScalarValue(HSCRIPT, ScriptVariant_t *) = 0;
 		virtual void ArrayAddToTail(HSCRIPT, const ScriptVariant_t &) = 0;
+	private:
 		virtual HSCRIPT GetRootTable() = 0;
 		virtual HSCRIPT CopyHandle(HSCRIPT) = 0;
+	public:
 		virtual HIDENTITY GetIdentity(HSCRIPT) = 0;
 		virtual void CollectGarbage(const char *, bool) = 0;
 	#endif

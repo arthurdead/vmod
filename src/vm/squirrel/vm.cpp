@@ -121,6 +121,48 @@ namespace vmod::vm
 		return 1;
 	}
 
+	static SQInteger get_func_file(HSQUIRRELVM vm)
+	{
+		using namespace std::literals::string_view_literals;
+
+		SQInteger top{sq_gettop(vm)};
+		if(top != 2) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		HSQOBJECT func;
+		sq_resetobject(&func);
+		if(SQ_FAILED(sq_getstackobj(vm, -1, &func))) {
+			return sq_throwerror(vm, _SC("failed to get func parameter"));
+		}
+
+		const SQChar *file{_SC("")};
+
+		if(sq_isclosure(func)) {
+			SQClosure *closure{func._unVal.pClosure};
+			SQFunctionProto *proto{closure->_function};
+
+			if(sq_isstring(proto->_sourcename)) {
+				file = proto->_sourcename._unVal.pString->_val;
+			}
+		} else if(sq_type(func) == OT_FUNCPROTO) {
+			SQFunctionProto *proto{func._unVal.pFunctionProto};
+
+			if(sq_isstring(proto->_sourcename)) {
+				file = proto->_sourcename._unVal.pString->_val;
+			}
+		} else if(sq_isnativeclosure(func)) {
+			file = _SC("NATIVE");
+		} else {
+			debugtrap();
+			return sq_throwerror(vm, _SC("invalid function parameter"));
+		}
+
+		sq_pushstring(vm, file, -1);
+
+		return 1;
+	}
+
 	static SQInteger get_func_signature(HSQUIRRELVM vm)
 	{
 		using namespace std::literals::string_view_literals;
@@ -132,33 +174,33 @@ namespace vmod::vm
 
 		HSQOBJECT func;
 		sq_resetobject(&func);
-		if(SQ_FAILED(sq_getstackobj(vm, -2, &func))) {
-			return sq_throwerror(vm, _SC("failed to get func parameter"));
+		if(top == 3) {
+			if(SQ_FAILED(sq_getstackobj(vm, -2, &func))) {
+				return sq_throwerror(vm, _SC("failed to get func parameter"));
+			}
+		} else {
+			if(SQ_FAILED(sq_getstackobj(vm, -1, &func))) {
+				return sq_throwerror(vm, _SC("failed to get func parameter"));
+			}
 		}
 
 		const SQChar *name{nullptr};
-		std::size_t num_params{0};
-		std::vector<const SQChar *> params;
+		std::vector<std::pair<const SQChar *, const SQObjectPtr *>> params;
 
 		auto handle_proto{
-			[&name,&num_params,&params](SQFunctionProto *proto) noexcept -> void {
+			[&name,&params](SQFunctionProto *proto) noexcept -> void {
 				if(sq_isstring(proto->_name)) {
 					name = proto->_name._unVal.pString->_val;
 				}
 
-				for(std::size_t i{0}; i < num_params; ++i) {
+				std::size_t num_params{static_cast<std::size_t>(proto->_nparameters)};
+				for(std::size_t i{1}; i < num_params; ++i) {
 					if(sq_isstring(proto->_parameters[i])) {
 						const SQChar *param{proto->_parameters[i]._unVal.pString->_val};
-						params.emplace_back(param);
+						params.emplace_back(decltype(params)::value_type{param, nullptr});
 					} else {
-						params.emplace_back(_SC("<unknown>"));
+						params.emplace_back(decltype(params)::value_type{_SC("param"), nullptr});
 					}
-				}
-
-				num_params = static_cast<std::size_t>(proto->_nparameters);
-
-				if(num_params > params.size()) {
-					params.resize(num_params, _SC("<unknown>"));
 				}
 			}
 		};
@@ -168,6 +210,18 @@ namespace vmod::vm
 			SQFunctionProto *proto{closure->_function};
 
 			handle_proto(proto);
+
+			//TODO!!! l4d2 Ticker_AddToHud shows def params one earlier
+			if(closure->_defaultparams && proto->_ndefaultparams > 0) {
+				for(std::size_t i{0}; i < static_cast<std::size_t>(proto->_ndefaultparams); ++i) {
+					std::size_t idx{static_cast<std::size_t>(proto->_defaultparams[i]-2)};
+					if(idx >= params.size()) {
+						params.resize(idx+1, decltype(params)::value_type{_SC("param"), nullptr});
+					}
+
+					params[idx].second = &closure->_defaultparams[i];
+				}
+			}
 		} else if(sq_type(func) == OT_FUNCPROTO) {
 			SQFunctionProto *proto{func._unVal.pFunctionProto};
 
@@ -175,25 +229,33 @@ namespace vmod::vm
 		} else if(sq_isnativeclosure(func)) {
 			SQNativeClosure *closure{func._unVal.pNativeClosure};
 
-			if(!closure->_typecheck.empty()) {
-				for(SQUnsignedInteger i{0}; i < closure->_typecheck.size(); ++i) {
-					SQObjectType type{static_cast<SQObjectType>(closure->_typecheck[i])};
+			bool va{false};
 
-					const SQChar *str{sq_objtypestr(type)};
-					params.emplace_back(str);
-				}
-			}
-
+			std::size_t num_params{0};
 			if(closure->_nparamscheck != 0) {
 				if(closure->_nparamscheck < 0) {
+					va = true;
 					num_params = static_cast<std::size_t>(-closure->_nparamscheck);
 				} else {
 					num_params = static_cast<std::size_t>(closure->_nparamscheck);
 				}
 			}
 
+			if(!closure->_typecheck.empty()) {
+				for(SQUnsignedInteger i{0}; i < closure->_typecheck.size(); ++i) {
+					SQObjectType type{static_cast<SQObjectType>(closure->_typecheck[i])};
+
+					const SQChar *str{sq_objtypestr(type)};
+					params.emplace_back(decltype(params)::value_type{str, nullptr});
+				}
+			}
+
 			if(num_params > params.size()) {
-				params.resize(num_params, _SC("<unknown>"));
+				params.resize(num_params, decltype(params)::value_type{_SC("param"), nullptr});
+			}
+
+			if(va) {
+				params.emplace_back(decltype(params)::value_type{_SC("..."), nullptr});
 			}
 		} else {
 			return sq_throwerror(vm, _SC("invalid function parameter"));
@@ -220,12 +282,29 @@ namespace vmod::vm
 
 		sig += '(';
 
-		for(const SQChar *param : params) {
-			sig += param;
-			sig += ',';
+		for(auto param : params) {
+			sig += param.first;
+			if(param.second) {
+				sig += " = "sv;
+
+				//TODO!! finish and move this somewhere else
+				switch(param.second->_type) {
+				case OT_NULL: sig += "null"sv; break;
+				case OT_INTEGER: sig += std::to_string(param.second->_unVal.nInteger); break;
+				case OT_FLOAT: sig += std::to_string(param.second->_unVal.fFloat); break;
+				case OT_STRING: {
+					sig += '"';
+					sig += static_cast<const SQChar *>(param.second->_unVal.pString->_val);
+					sig += '"';
+				} break;
+				case OT_BOOL: sig += ((param.second->_unVal.nInteger > 0) ? "true"sv : "false"sv); break;
+				default: sig += "<<unknown>>"sv; break;
+				}
+			}
+			sig += ", "sv;
 		}
 		if(!params.empty()) {
-			sig.pop_back();
+			sig.erase(sig.end()-2, sig.end());
 		}
 
 		sig += ')';
@@ -946,10 +1025,10 @@ namespace vmod::vm
 	#endif
 		va_end(vargs);
 
-		error("%s"sv, err_buff);
-
 		if(actual_vm->err_callback) {
 			(void)actual_vm->err_callback(gsdk::SCRIPT_LEVEL_ERROR, err_buff);
+		} else {
+			error("%s"sv, err_buff);
 		}
 	}
 
@@ -971,14 +1050,14 @@ namespace vmod::vm
 	#endif
 		va_end(vargs);
 
-	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-		ColorSpewMessage(gsdk::SPEW_WARNING, &info_clr, "%s", print_buff);
-	#else
-		info("%s"sv, print_buff);
-	#endif
-
 		if(actual_vm->output_callback) {
 			actual_vm->output_callback(print_buff);
+		} else {
+		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
+			ColorSpewMessage(gsdk::SPEW_WARNING, &info_clr, "%s", print_buff);
+		#else
+			info("%s"sv, print_buff);
+		#endif
 		}
 	}
 
@@ -995,29 +1074,46 @@ namespace vmod::vm
 
 		std::filesystem::path filename{path.filename()};
 
-		if(std::filesystem::exists(path)) {
-			std::size_t len{0};
-			std::unique_ptr<unsigned char[]> script_data{read_file(path, len)};
+		auto compile_data{
+			[vm,data,&filename]() noexcept -> bool {
+				return SQ_SUCCEEDED(sq_compilebuffer_strict(vm, reinterpret_cast<const char *>(data), static_cast<SQInteger>(std::strlen(reinterpret_cast<const char *>(data))), filename.c_str(), USQTrue));
+			}
+		};
 
-			if(SQ_FAILED(sq_compilebuffer_strict(vm, reinterpret_cast<const char *>(script_data.get()), static_cast<SQInteger>(len), filename.c_str(), USQTrue))) {
-				if(data) {
-					error("vmod: failed to compile '%s' from file '%s' re-trying with embedded data\n"sv, filename.c_str(), path.c_str());
-					if(SQ_FAILED(sq_compilebuffer_strict(vm, reinterpret_cast<const char *>(data), static_cast<SQInteger>(std::strlen(reinterpret_cast<const char *>(data))), filename.c_str(), USQTrue))) {
-						error("vmod: failed to compile '%s' from embedded data\n"sv, data);
+		auto compile_file{
+			[vm,&path,&filename,&from_file]() noexcept -> bool {
+				std::size_t len{0};
+				std::unique_ptr<unsigned char[]> script_data{read_file(path, len)};
+
+				if(SQ_SUCCEEDED(sq_compilebuffer_strict(vm, reinterpret_cast<const char *>(script_data.get()), static_cast<SQInteger>(len), filename.c_str(), USQTrue))) {
+					from_file = true;
+					return true;
+				}
+
+				return false;
+			}
+		};
+
+		//#define __VMOD_SQUIRREL_PREFER_EMBEDDED_SCRIPTS
+	#ifdef __VMOD_SQUIRREL_PREFER_EMBEDDED_SCRIPTS
+		if(data) {
+			if(!compile_data()) {
+				error("vmod: failed to compile '%s' from embedded data trying from file '%s'\n"sv, filename.c_str(), path.c_str());
+				if(std::filesystem::exists(path)) {
+					if(!compile_file()) {
+						error("vmod: failed to compile '%s' from file '%s'\n"sv, filename.c_str(), path.c_str());
 						return false;
 					}
 				} else {
-					error("vmod: failed to compile '%s' from file '%s'\n"sv, filename.c_str(), path.c_str());
+					error("vmod: missing '%s' file '%s'\n"sv, filename.c_str(), path.c_str());
 					return false;
 				}
-			} else {
-				from_file = true;
 			}
 		} else {
-			if(data) {
-				warning("vmod: missing '%s' file trying embedded data\n"sv, filename.c_str());
-				if(SQ_FAILED(sq_compilebuffer_strict(vm, reinterpret_cast<const char *>(data), static_cast<SQInteger>(std::strlen(reinterpret_cast<const char *>(data))), filename.c_str(), USQTrue))) {
-					error("vmod: failed to compile '%s' from embedded data\n"sv, filename.c_str());
+			warning("vmod: missing '%s' embedded data trying file '%s'\n"sv, filename.c_str(), path.c_str());
+			if(std::filesystem::exists(path)) {
+				if(!compile_file()) {
+					error("vmod: failed to compile '%s' from file '%s'\n"sv, filename.c_str(), path.c_str());
 					return false;
 				}
 			} else {
@@ -1025,6 +1121,33 @@ namespace vmod::vm
 				return false;
 			}
 		}
+	#else
+		if(std::filesystem::exists(path)) {
+			if(!compile_file()) {
+				error("vmod: failed to compile '%s' from file '%s' trying embedded data\n"sv, filename.c_str(), path.c_str());
+				if(data) {
+					if(!compile_data()) {
+						error("vmod: failed to compile '%s' from embedded data\n"sv, filename.c_str());
+						return false;
+					}
+				} else {
+					error("vmod: missing '%s' embedded data\n"sv, filename.c_str());
+					return false;
+				}
+			}
+		} else {
+			warning("vmod: missing '%s' file '%s' trying embedded data\n"sv, filename.c_str(), path.c_str());
+			if(data) {
+				if(!compile_data()) {
+					error("vmod: failed to compile '%s' from embedded data\n"sv, filename.c_str());
+					return false;
+				}
+			} else {
+				error("vmod: missing '%s' embedded data\n"sv, filename.c_str());
+				return false;
+			}
+		}
+	#endif
 
 		return true;
 	}
@@ -1257,6 +1380,13 @@ namespace vmod::vm
 
 			if(!register_func({
 				"GetFunctionSignature"sv, get_func_signature, -2, "tcs"sv
+			})) {
+				sq_pop(impl, 1);
+				return false;
+			}
+
+			if(!register_func({
+				"GetFunctionSourceFile"sv, get_func_file, 2, "tc"sv
 			})) {
 				sq_pop(impl, 1);
 				return false;
@@ -1604,20 +1734,24 @@ namespace vmod::vm
 		}
 	}
 
-	gsdk::HSCRIPT squirrel::CompileScript_strict(const char *code, const char *name) noexcept
+	gsdk::ScriptHandleWrapper_t squirrel::CompileScript_strict(const char *code, const char *name) noexcept
 	{
 		if(!name || name[0] == '\0') {
 			name = "<<unnamed>>";
 		}
 
 		if(SQ_FAILED(sq_compilebuffer_strict(impl, code, static_cast<SQInteger>(std::strlen(code)), name, USQTrue))) {
-			return gsdk::INVALID_HSCRIPT;
+			return gsdk::ScriptHandleWrapper_t{};
 		}
 
-		return compile_script();
+		gsdk::ScriptHandleWrapper_t tmp;
+		tmp.object = compile_script();
+		tmp.should_free_ = true;
+
+		return tmp;
 	}
 
-	gsdk::HSCRIPT squirrel::CompileScript(const char *code, const char *name)
+	gsdk::HSCRIPT squirrel::CompileScript_impl(const char *code, const char *name)
 	{
 		if(!name || name[0] == '\0') {
 			name = "<<unnamed>>";
@@ -1646,17 +1780,6 @@ namespace vmod::vm
 		sq_pop(impl, 1);
 
 		return vs_cast(script_obj);
-	}
-
-	void squirrel::ReleaseScript(gsdk::HSCRIPT obj)
-	{
-		//TEMP!!! for l4d2
-		if(obj == gsdk::INVALID_HSCRIPT) {
-			return;
-		}
-
-		sq_release(impl, vs_cast(obj));
-		delete vs_cast(obj);
 	}
 
 	gsdk::ScriptStatus_t squirrel::Run(gsdk::HSCRIPT obj, gsdk::HSCRIPT scope, bool wait)
@@ -1761,7 +1884,7 @@ namespace vmod::vm
 		return vs_cast(copy);
 	}
 
-	gsdk::HSCRIPT squirrel::ReferenceScope(gsdk::HSCRIPT obj)
+	gsdk::HSCRIPT squirrel::ReferenceScope_impl(gsdk::HSCRIPT obj)
 	{
 		//TODO!!! l4d2 AI_ResponseParams::ScriptFollowup_t
 		if(!obj || obj == gsdk::INVALID_HSCRIPT) {
@@ -1770,8 +1893,30 @@ namespace vmod::vm
 
 		//TODO!!!! increment __vrefs ?
 
-		gsdk::HSCRIPT copy{CopyHandle(obj)};
+		gsdk::HSCRIPT copy{squirrel::CopyHandle(obj)};
 		return copy;
+	}
+
+	void squirrel::ReleaseScript(gsdk::HSCRIPT obj)
+	{
+		//TEMP!!! for l4d2
+		if(obj == gsdk::INVALID_HSCRIPT) {
+			return;
+		}
+
+		sq_release(impl, vs_cast(obj));
+		delete vs_cast(obj);
+	}
+
+	void squirrel::ReleaseFunction(gsdk::HSCRIPT obj)
+	{
+		//TODO!!! CDirector::PostRunScript gives invalid function find out why
+		if(obj == gsdk::INVALID_HSCRIPT) {
+			return;
+		}
+
+		sq_release(impl, vs_cast(obj));
+		delete vs_cast(obj);
 	}
 
 	void squirrel::ReleaseScope(gsdk::HSCRIPT obj)
@@ -1814,6 +1959,27 @@ namespace vmod::vm
 		sq_pop(impl, 1);
 	}
 
+	void squirrel::ReleaseValue(gsdk::ScriptVariant_t &value)
+	{
+		switch(value.m_type) {
+			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
+			case gsdk::FIELD_HSCRIPT:
+			if(value.m_flags & gsdk::SV_FREE) {
+				sq_release(impl, vs_cast(value.m_object));
+				delete vs_cast(value.m_object);
+
+				value.m_flags = gsdk::SV_NOFLAGS;
+				std::memset(value.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
+				value.m_object = gsdk::INVALID_HSCRIPT;
+				value.m_type = gsdk::FIELD_TYPEUNKNOWN;
+			}
+			break;
+			default:
+			value.free();
+			break;
+		}
+	}
+
 	gsdk::HSCRIPT squirrel::LookupFunction_impl(const char *name, gsdk::HSCRIPT scope)
 	{
 		if(scope) {
@@ -1843,17 +2009,6 @@ namespace vmod::vm
 		sq_pop(impl, 1);
 
 		return vs_cast(copy);
-	}
-
-	void squirrel::ReleaseFunction(gsdk::HSCRIPT obj)
-	{
-		//TODO!!! CDirector::PostRunScript gives invalid function find out why
-		if(obj == gsdk::INVALID_HSCRIPT) {
-			return;
-		}
-
-		sq_release(impl, vs_cast(obj));
-		delete vs_cast(obj);
 	}
 
 	bool squirrel::push(const gsdk::ScriptVariant_t &var) noexcept
@@ -2113,7 +2268,7 @@ namespace vmod::vm
 		}
 	}
 
-	bool squirrel::get(HSQOBJECT obj, gsdk::ScriptVariant_t &var) noexcept
+	bool squirrel::get(HSQOBJECT obj, gsdk::ScriptVariant_t &var, bool scalar) noexcept
 	{
 		std::memset(var.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
 
@@ -2175,38 +2330,42 @@ namespace vmod::vm
 				return true;
 			}
 			case OT_INSTANCE: {
-				sq_pushobject(impl, obj);
+				if(!scalar) {
+					sq_pushobject(impl, obj);
 
-				SQUserPointer typetag{nullptr};
-				if(SQ_SUCCEEDED(sq_gettypetag(impl, -1, &typetag))) {
-					if(typetag == typeid_ptr<gsdk::Vector>()) {
-						SQUserPointer userptr2{nullptr};
-						if(SQ_FAILED(sq_getinstanceup(impl, -1, &userptr2, typeid_ptr<gsdk::Vector>()))) {
-							var.m_type = gsdk::FIELD_VOID;
-							var.m_object = gsdk::INVALID_HSCRIPT;
-							return false;
+					SQUserPointer typetag{nullptr};
+					if(SQ_SUCCEEDED(sq_gettypetag(impl, -1, &typetag))) {
+						if(typetag == typeid_ptr<gsdk::Vector>()) {
+							SQUserPointer userptr2{nullptr};
+							if(SQ_FAILED(sq_getinstanceup(impl, -1, &userptr2, typeid_ptr<gsdk::Vector>()))) {
+								var.m_type = gsdk::FIELD_VOID;
+								var.m_object = gsdk::INVALID_HSCRIPT;
+								return false;
+							}
+
+							var.m_type = gsdk::FIELD_VECTOR;
+							var.m_vector = new gsdk::Vector{*static_cast<gsdk::Vector *>(userptr2)};
+							var.m_flags |= gsdk::SV_FREE;
+							return true;
+						} else if(typetag == typeid_ptr<gsdk::QAngle>()) {
+							SQUserPointer userptr2{nullptr};
+							if(SQ_FAILED(sq_getinstanceup(impl, -1, &userptr2, typeid_ptr<gsdk::QAngle>()))) {
+								var.m_type = gsdk::FIELD_VOID;
+								var.m_object = gsdk::INVALID_HSCRIPT;
+								return false;
+							}
+
+							var.m_type = gsdk::FIELD_QANGLE;
+							var.m_qangle = new gsdk::QAngle{*static_cast<gsdk::QAngle *>(userptr2)};
+							var.m_flags |= gsdk::SV_FREE;
+							return true;
 						}
-
-						var.m_type = gsdk::FIELD_VECTOR;
-						var.m_vector = new gsdk::Vector{*static_cast<gsdk::Vector *>(userptr2)};
-						var.m_flags |= gsdk::SV_FREE;
-						return true;
-					} else if(typetag == typeid_ptr<gsdk::QAngle>()) {
-						SQUserPointer userptr2{nullptr};
-						if(SQ_FAILED(sq_getinstanceup(impl, -1, &userptr2, typeid_ptr<gsdk::QAngle>()))) {
-							var.m_type = gsdk::FIELD_VOID;
-							var.m_object = gsdk::INVALID_HSCRIPT;
-							return false;
-						}
-
-						var.m_type = gsdk::FIELD_QANGLE;
-						var.m_qangle = new gsdk::QAngle{*static_cast<gsdk::QAngle *>(userptr2)};
-						var.m_flags |= gsdk::SV_FREE;
-						return true;
 					}
-				}
 
-				return handle_obj();
+					return handle_obj();
+				} else {
+					return false;
+				}
 			}
 			case OT_NATIVECLOSURE:
 			case OT_CLOSURE: {
@@ -2214,9 +2373,13 @@ namespace vmod::vm
 			}
 			case OT_ARRAY:
 			case OT_TABLE: {
-				sq_pushobject(impl, obj);
+				if(!scalar) {
+					sq_pushobject(impl, obj);
 
-				return handle_obj();
+					return handle_obj();
+				} else {
+					return false;
+				}
 			}
 			default: {
 				var.m_type = gsdk::FIELD_TYPEUNKNOWN;
@@ -2296,6 +2459,18 @@ namespace vmod::vm
 		std::size_t num_required_params{info->m_desc.m_Parameters.size()};
 		std::size_t num_params{static_cast<std::size_t>(top-2)};
 		if(info->va_or_last_optional()) {
+			if(num_required_params > 0) {
+				auto param_start{info->m_desc.m_Parameters.begin()};
+				auto param_it{info->m_desc.m_Parameters.end()-1};
+				while(param_it != param_start) {
+					if(!param_it->can_be_optional()) {
+						break;
+					}
+					--num_required_params;
+					--param_it;
+				}
+			}
+
 			if(num_params < num_required_params) {
 				return sqstd_throwerrorf(vm, _SC("wrong number of parameters expected at least %zu got %i"), num_required_params, top);
 			}
@@ -2358,6 +2533,18 @@ namespace vmod::vm
 		std::size_t num_required_params{funcinfo->m_desc.m_Parameters.size()};
 		std::size_t num_params{static_cast<std::size_t>(top-3)};
 		if(funcinfo->va_or_last_optional()) {
+			if(num_required_params > 0) {
+				auto param_start{funcinfo->m_desc.m_Parameters.begin()};
+				auto param_it{funcinfo->m_desc.m_Parameters.end()-1};
+				while(param_it != param_start) {
+					if(!param_it->can_be_optional()) {
+						break;
+					}
+					--num_required_params;
+					--param_it;
+				}
+			}
+
 			if(num_params < num_required_params) {
 				return sqstd_throwerrorf(vm, _SC("wrong number of parameters expected at least %zu got %i"), num_required_params, top);
 			}
@@ -2382,7 +2569,7 @@ namespace vmod::vm
 		return actual_vm->func_call_impl(funcinfo, obj, args);
 	}
 
-	SQInteger squirrel::func_call_impl(const gsdk::ScriptFunctionBinding_t *info, void *obj, const std::vector<gsdk::ScriptVariant_t> &args) noexcept
+	SQInteger squirrel::func_call_impl(const gsdk::ScriptFunctionBinding_t *info, void *obj, std::vector<gsdk::ScriptVariant_t> &args) noexcept
 	{
 		bool is_ret_void{info->m_desc.m_ReturnType == gsdk::FIELD_VOID};
 
@@ -2482,10 +2669,6 @@ namespace vmod::vm
 			case gsdk::FIELD_TIME:
 			typemask += 'f';
 			break;
-			case gsdk::FIELD_FLOAT64:
-			case gsdk::FIELD_FLOAT:
-			typemask += 'n';
-			break;
 			case gsdk::FIELD_STRING:
 			case gsdk::FIELD_MODELNAME:
 			case gsdk::FIELD_SOUNDNAME:
@@ -2503,6 +2686,10 @@ namespace vmod::vm
 			case gsdk::FIELD_TICK:
 			typemask += 'i';
 			break;
+			case gsdk::FIELD_CLASSPTR:
+			case gsdk::FIELD_FUNCTION:
+			typemask += 'i';
+			break;
 		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 			case gsdk::FIELD_INTEGER64:
 		#endif
@@ -2512,9 +2699,9 @@ namespace vmod::vm
 			case gsdk::FIELD_INTEGER:
 			typemask += 'n';
 			break;
-			case gsdk::FIELD_CLASSPTR:
-			case gsdk::FIELD_FUNCTION:
-			typemask += 'i';
+			case gsdk::FIELD_FLOAT64:
+			case gsdk::FIELD_FLOAT:
+			typemask += 'n';
 			break;
 			case gsdk::FIELD_BOOLEAN:
 			typemask += 'b';
@@ -2523,13 +2710,13 @@ namespace vmod::vm
 			case gsdk::FIELD_HSCRIPT:
 			typemask += '.';
 			break;
+			case gsdk::FIELD_VARIANT:
+			typemask += '.';
+			break;
 			case gsdk::FIELD_QANGLE:
 			case gsdk::FIELD_POSITION_VECTOR:
 			case gsdk::FIELD_VECTOR:
 			typemask += 'x';
-			break;
-			case gsdk::FIELD_VARIANT:
-			typemask += '.';
 			break;
 			case gsdk::FIELD_TYPEUNKNOWN:
 			default: {
@@ -2567,20 +2754,37 @@ namespace vmod::vm
 		std::string typemask{is_static ? "t"s : "x"s};
 
 		for(auto param : info->m_desc.m_Parameters) {
-			if(!typemask_for_type(typemask, param.main_type())) {
-				error("vmod vm: unknown param type in '%s'\n"sv, name_str.data());
-				sq_pop(impl, 2);
-				return false;
-			}
+			if(param.can_be_anything()) {
+				typemask += '.';
+			} else {
+				if(!typemask_for_type(typemask, param.main_type())) {
+					error("vmod vm: unknown param type in '%s'\n"sv, name_str.data());
+					sq_pop(impl, 2);
+					return false;
+				}
 
-			if(param.extra_types != 0) {
-				error("vmod vm: '%s': tuple arguments arent supported yet\n"sv, name_str.data());
-				sq_pop(impl, 2);
-				return false;
-			}
+				if(param.has_extra_types()) {
+					for(int i{0}; i <= static_cast<int>(gsdk::SlimScriptDataType_t::SLIMFIELD_TYPECOUNT); ++i) {
+						auto fat{gsdk::fat_datatype(static_cast<gsdk::SlimScriptDataType_t>(i))};
+						if(fat == param.main_type()) {
+							continue;
+						}
 
-			if(param.is_optional() && !param.can_be_null()) {
-				typemask += "|o"sv;
+						if(param.has_extra_type(static_cast<gsdk::SlimScriptDataType_t>(i))) {
+							typemask += '|';
+							if(!typemask_for_type(typemask, fat)) {
+								debugtrap();
+								error("vmod vm: unknown extra param type in '%s'\n"sv, name_str.data());
+								sq_pop(impl, 2);
+								return false;
+							}
+						}
+					}
+				}
+
+				if(param.is_optional() && !param.can_be_null()) {
+					typemask += "|o"sv;
+				}
 			}
 		}
 
@@ -2630,8 +2834,8 @@ namespace vmod::vm
 					}
 					sig += name_str;
 					sig += '(';
-					for(gsdk::ScriptDataType_t param : info->m_desc.m_Parameters) {
-						sig += bindings::docs::type_name(param, true);
+					for(auto param : info->m_desc.m_Parameters) {
+						sig += bindings::docs::param_type_name(param);
 						sig += ", "sv;
 					}
 					if(!info->m_desc.m_Parameters.empty()) {
@@ -3372,28 +3576,7 @@ namespace vmod::vm
 
 	bool squirrel::GetScalarValue(gsdk::HSCRIPT obj, gsdk::ScriptVariant_t *value)
 	{
-		return get(*vs_cast(obj), *value);
-	}
-
-	void squirrel::ReleaseValue(gsdk::ScriptVariant_t &value)
-	{
-		switch(value.m_type) {
-			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
-			case gsdk::FIELD_HSCRIPT: {
-				if(value.m_flags & gsdk::SV_FREE) {
-					sq_release(impl, vs_cast(value.m_object));
-					delete vs_cast(value.m_object);
-
-					value.m_flags = gsdk::SV_NOFLAGS;
-					std::memset(value.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
-					value.m_object = gsdk::INVALID_HSCRIPT;
-					value.m_type = gsdk::FIELD_TYPEUNKNOWN;
-				}
-			} break;
-			default: {
-				value.free();
-			} break;
-		}
+		return get(*vs_cast(obj), *value, true);
 	}
 
 	bool squirrel::ClearValue(gsdk::HSCRIPT obj, const char *name)

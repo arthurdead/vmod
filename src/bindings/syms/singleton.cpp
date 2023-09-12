@@ -20,7 +20,7 @@ namespace vmod::bindings::syms
 	{
 		using namespace std::literals::string_view_literals;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		desc.func(&singleton::script_lookup, "script_lookup"sv, "lookup"sv)
 		.desc("[qualification](class)"sv);
@@ -45,7 +45,7 @@ namespace vmod::bindings::syms
 	{
 		using namespace std::literals::string_view_literals;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		desc.func(&qualification_it::script_name, "script_name"sv, "signature"sv);
 
@@ -69,7 +69,7 @@ namespace vmod::bindings::syms
 	{
 		using namespace std::literals::string_view_literals;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		desc.func(&name_it::script_name, "script_name"sv, "name"sv);
 
@@ -101,83 +101,83 @@ namespace vmod::bindings::syms
 		
 	}
 
-	gsdk::HSCRIPT singleton::script_lookup_qual(qual_cache_t &qual_cache, symbol_cache::const_iterator qual_it) noexcept
+	vscript::handle_ref singleton::script_lookup_qual(qual_cache_t &qual_cache, symbol_cache::const_iterator qual_it) noexcept
 	{
 		auto it{qual_cache.find(qual_it)};
 		if(it == qual_cache.end()) {
 			qualification_it *script_it{new qualification_it{qual_it}};
 			if(!script_it->initialize()) {
 				delete script_it;
-				return gsdk::INVALID_HSCRIPT;
+				return nullptr;
 			}
 
-			return script_it->instance;
+			return script_it->instance_;
 		} else {
-			return it->second->instance;
+			return it->second->instance_;
 		}
 	}
 
-	gsdk::HSCRIPT singleton::script_lookup_name(name_cache_t &name_cache, symbol_cache::qualification_info::const_iterator it_name) noexcept
+	vscript::handle_ref singleton::script_lookup_name(name_cache_t &name_cache, symbol_cache::qualification_info::const_iterator it_name) noexcept
 	{
 		auto it{name_cache.find(it_name)};
 		if(it == name_cache.end()) {
 			name_it *script_it{new name_it{it_name}};
 			if(!script_it->initialize()) {
 				delete script_it;
-				return gsdk::INVALID_HSCRIPT;
+				return nullptr;
 			}
 
-			return script_it->instance;
+			return script_it->instance_;
 		} else {
-			return it->second->instance;
+			return it->second->instance_;
 		}
 	}
 
-	gsdk::HSCRIPT singleton::qualification_it::script_lookup(std::string_view symname) noexcept
+	vscript::handle_ref singleton::qualification_it::script_lookup(std::string_view symname) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(symname.empty()) {
 			vm->RaiseException("vmod: invalid name: '%s'", symname.data());
-			return gsdk::INVALID_HSCRIPT;
+			return nullptr;
 		}
 
 		std::string symname_tmp{symname};
 		auto tmp_it{it->second->find(symname_tmp)};
 		if(tmp_it == it->second->end()) {
-			return gsdk::INVALID_HSCRIPT;
+			return nullptr;
 		}
 
 		return script_lookup_name(qualification_it::name_cache, tmp_it);
 	}
 
-	gsdk::HSCRIPT singleton::name_it::script_lookup(std::string_view symname) noexcept
+	vscript::handle_ref singleton::name_it::script_lookup(std::string_view symname) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(symname.empty()) {
 			vm->RaiseException("vmod: invalid name: '%s'", symname.data());
-			return gsdk::INVALID_HSCRIPT;
+			return nullptr;
 		}
 
 		std::string symname_tmp{symname};
 		auto tmp_it{it->second->find(symname_tmp)};
 		if(tmp_it == it->second->end()) {
-			return gsdk::INVALID_HSCRIPT;
+			return nullptr;
 		}
 
 		return script_lookup_name(name_it::name_cache, tmp_it);
 	}
 
-	gsdk::HSCRIPT singleton::script_lookup(std::string_view symname) noexcept
+	vscript::handle_ref singleton::script_lookup(std::string_view symname) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(symname.empty()) {
 			vm->RaiseException("vmod: invalid name: '%s'", symname.data());
-			return gsdk::INVALID_HSCRIPT;
+			return nullptr;
 		}
 
 		const symbol_cache &syms{cache()};
@@ -185,19 +185,19 @@ namespace vmod::bindings::syms
 		std::string symname_tmp{symname};
 		auto it{syms.find(symname_tmp)};
 		if(it == syms.end()) {
-			return gsdk::INVALID_HSCRIPT;
+			return nullptr;
 		}
 
 		return script_lookup_qual(glob_qual_cache, it);
 	}
 
-	gsdk::HSCRIPT singleton::script_lookup_global(std::string_view symname) noexcept
+	vscript::handle_ref singleton::script_lookup_global(std::string_view symname) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(symname.empty()) {
 			vm->RaiseException("vmod: invalid name: '%s'", symname.data());
-			return gsdk::INVALID_HSCRIPT;
+			return nullptr;
 		}
 
 		const symbol_cache::qualification_info &syms{cache().global()};
@@ -205,7 +205,7 @@ namespace vmod::bindings::syms
 		std::string symname_tmp{symname};
 		auto it{syms.find(symname_tmp)};
 		if(it == syms.end()) {
-			return gsdk::INVALID_HSCRIPT;
+			return nullptr;
 		}
 
 		return script_lookup_name(glob_name_cache, it);
@@ -215,10 +215,10 @@ namespace vmod::bindings::syms
 	{
 		using namespace std::literals::string_view_literals;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		instance = vm->RegisterInstance(&desc, this);
-		if(!instance || instance == gsdk::INVALID_HSCRIPT) {
+		if(!instance) {
 			error("vmod: failed to register '%s' syms singleton instance\n"sv, name.data());
 			return false;
 		}
@@ -237,13 +237,14 @@ namespace vmod::bindings::syms
 			std::string id_root{obfuscated_name};
 			id_root += "_instance"sv;
 
-			if(!vm->SetInstanceUniqeId2(instance, id_root.data())) {
+			if(!vm->SetInstanceUniqeId2(*instance, id_root.data())) {
 				error("vmod: failed to generate unique id for '%s' syms singleton\n", name.data());
 				return false;
 			}
 		}
 
-		if(!vm->SetValue(main::instance().symbols_table(), name.data(), instance)) {
+		auto symbols_table{main::instance().symbols_table()};
+		if(!vm->SetValue(*symbols_table, name.data(), *instance)) {
 			error("vmod: failed to set syms '%s' table value\n"sv, name.data());
 			return false;
 		}
@@ -253,15 +254,13 @@ namespace vmod::bindings::syms
 
 	singleton::~singleton() noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
-		if(instance && instance != gsdk::INVALID_HSCRIPT) {
-			vm->RemoveInstance(instance);
-		}
+		instance.free();
 
-		gsdk::HSCRIPT symbols_table{main::instance().symbols_table()};
-		if(vm->ValueExists(symbols_table, name.data())) {
-			vm->ClearValue(symbols_table, name.data());
+		auto symbols_table{main::instance().symbols_table()};
+		if(vm->ValueExists(*symbols_table, name.data())) {
+			vm->ClearValue(*symbols_table, name.data());
 		}
 	}
 

@@ -22,7 +22,7 @@
 	#endif
 #endif
 
-#include "plugin.hpp"
+#include "mod.hpp"
 #include "filesystem.hpp"
 #include "gsdk/server/gamerules.hpp"
 #include "gsdk/server/baseentity.hpp"
@@ -89,15 +89,56 @@ namespace vmod
 namespace vmod
 {
 	std::unordered_map<std::string, entity_class_info> sv_ent_class_info;
+	std::unordered_map<std::string, gsdk::ScriptClassDesc_t *> sv_script_class_descs;
 
 	static std::unordered_map<std::string, gsdk::IEntityFactory *> sv_ent_factories;
-	static std::unordered_map<std::string, gsdk::ScriptClassDesc_t *> sv_script_class_descs;
 	static std::unordered_map<gsdk::SendTable *, std::string> sv_ent_sendtables_class;
 
 	static main main_;
 
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+	gsdk::LoggingChannelID_t LOG_vmod{gsdk::INVALID_LOGGING_CHANNEL_ID};
+	gsdk::LoggingChannelID_t LOG_vmod_vm{gsdk::INVALID_LOGGING_CHANNEL_ID};
+	gsdk::LoggingChannelID_t LOG_vmod_vscript{gsdk::INVALID_LOGGING_CHANNEL_ID};
+	gsdk::LoggingChannelID_t LOG_vmod_workshop{gsdk::INVALID_LOGGING_CHANNEL_ID};
+#endif
+
+	main::main() noexcept
+		: singleton_base{"vmod", true},
+			cl_downloaditem_callback{nullptr, nullptr},
+			sv_downloaditem_callback{nullptr, nullptr},
+			cl_iteminstalled_callback{nullptr, nullptr},
+			sv_iteminstalled_callback{nullptr, nullptr},
+			cl_loggedon_callback{nullptr, nullptr},
+			sv_loggedon_callback{nullptr, nullptr},
+			cl_logon_failed_callback{nullptr, nullptr},
+			sv_logon_failed_callback{nullptr, nullptr},
+			cl_logged_off_callback{nullptr, nullptr},
+			sv_logged_off_callback{nullptr, nullptr}
+	{
+		sv_downloaditem_callback.SetGameserverFlag();
+		sv_iteminstalled_callback.SetGameserverFlag();
+
+		sv_loggedon_callback.SetGameserverFlag();
+		sv_logon_failed_callback.SetGameserverFlag();
+		sv_logged_off_callback.SetGameserverFlag();
+	}
+
 	main &main::instance() noexcept
 	{ return main_; }
+
+	ISteamUGC *main::ugc() noexcept
+	{
+		if(sv_engine->IsDedicatedServer()) {
+			auto ptr{SteamGameServerUGC()};
+			if(!ptr) {
+				ptr = SteamUGC();
+			}
+			return ptr;
+		} else {
+			return SteamUGC();
+		}
+	}
 
 	gsdk::INetworkStringTable *m_pDownloadableFileTable;
 	gsdk::INetworkStringTable *m_pModelPrecacheTable;
@@ -204,6 +245,19 @@ namespace vmod
 		return ret;
 	}
 
+	static bool invalid_color(const gsdk::Color &clr) noexcept
+	{
+		if(clr.r == 0 && clr.g == 0 && clr.b == 0) {
+			return true;
+		}
+
+		if(clr.r == 255 && clr.g == 255 && clr.b == 255) {
+			return true;
+		}
+
+		return false;
+	}
+
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 	static gsdk::SpewOutputFunc_t old_spew{nullptr};
 	static gsdk::SpewRetval_t new_spew(gsdk::SpewType_t type, const char *str)
@@ -224,7 +278,7 @@ namespace vmod
 
 		const gsdk::Color *clr{GetSpewOutputColor()};
 
-		if(!clr || (clr->r == 255 && clr->g == 255 && clr->b == 255)) {
+		if(!clr || invalid_color(*clr)) {
 			switch(type) {
 				case gsdk::SPEW_MESSAGE: {
 					if(in_vscript_error) {
@@ -262,6 +316,52 @@ namespace vmod
 		}
 
 		return ret;
+	}
+#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+	static void (gsdk::ILoggingListener::*EngListener_Log_original)(const gsdk::LoggingContext_t *, const char *) {nullptr};
+	static void EngListener_Log_detour_callback(gsdk::ILoggingListener *pthis, const gsdk::LoggingContext_t *ctx, const char *msg) noexcept
+	{
+		gsdk::Color clr{print_clr};
+
+		auto channel{LoggingSystem_GetChannel(ctx->m_ChannelID)};
+
+		switch(ctx->m_Severity) {
+	#ifndef __clang__
+		default:
+	#endif
+		case LS_MESSAGE:
+		clr = ctx->m_Color;
+		if(invalid_color(clr)) {
+			clr = channel->m_SpewColor;
+			if(invalid_color(clr)) {
+				clr = print_clr;
+			}
+		}
+		break;
+		case LS_WARNING:
+		clr = ctx->m_Color;
+		if(invalid_color(clr) || (clr == channel->m_SpewColor)) {
+			clr = warning_clr;
+		}
+		break;
+		case LS_ASSERT:
+		clr = error_clr;
+		break;
+		case LS_ERROR:
+		clr = error_clr;
+		break;
+		case LS_HIGHEST_SEVERITY:
+		clr = error_clr;
+		break;
+		}
+
+		std::printf("\033[38;2;%hhu;%hhu;%hhum", clr.r, clr.g, clr.b);
+		std::fflush(stdout);
+
+		(pthis->*EngListener_Log_original)(ctx, msg);
+
+		std::fputs("\033[0m", stdout);
+		std::fflush(stdout);
 	}
 #endif
 
@@ -571,12 +671,12 @@ namespace vmod
 
 		main.recreate_script_stringtables();
 
-		for(const auto &it : main.plugins) {
+		for(const auto &it : main.mods) {
 			if(!*it.second) {
 				continue;
 			}
 
-			it.second->string_tables_created();
+			it.second->call_func_on_plugins(&plugin::string_tables_created);
 		}
 	}
 
@@ -811,6 +911,11 @@ namespace vmod
 	}
 #endif
 
+	static ISteamRemoteStorage *(*GetISteamRemoteStorage_original)();
+	static detour<decltype(GetISteamRemoteStorage_original)> GetISteamRemoteStorage_detour;
+	static ISteamRemoteStorage *GetISteamRemoteStorage_detour_callback() noexcept
+	{ return SteamRemoteStorage(); }
+
 	bool main::detours_prevm() noexcept
 	{
 		if(RegisterFunction) {
@@ -932,7 +1037,7 @@ namespace vmod
 
 		generic_vtable_t vm_vtable{vtable_from_object(vm_)};
 
-		CompileScript_original = swap_vfunc(vm_vtable, &gsdk::IScriptVM::CompileScript, CompileScript_detour_callback);
+		CompileScript_original = swap_vfunc(vm_vtable, &gsdk::IScriptVM::CompileScript_impl, CompileScript_detour_callback);
 		Run_original = swap_vfunc(vm_vtable, static_cast<decltype(Run_original)>(&gsdk::IScriptVM::Run), Run_detour_callback);
 		SetErrorCallback_original = swap_vfunc(vm_vtable, &gsdk::IScriptVM::SetErrorCallback, SetErrorCallback_detour_callback);
 
@@ -963,21 +1068,17 @@ namespace vmod
 		return true;
 	}
 
-	std::filesystem::path main::build_plugin_path(std::string_view plname) const noexcept
+	std::filesystem::path main::build_mod_path(std::string_view plname) const noexcept
 	{
 		std::filesystem::path path{plname};
 		if(!path.is_absolute()) {
-			path = (plugins_dir_/path);
-		}
-		if(!path.has_extension()) {
-			path.replace_extension(scripts_extension);
+			path = (mods_dir_/path);
 		}
 		return path;
 	}
 
 	static std::filesystem::path bin_folder;
 
-#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 	static gsdk::FnCommandCallback_t old_path_command{nullptr};
 	static void new_path_command(const gsdk::CCommand &args) noexcept
 	{
@@ -994,7 +1095,44 @@ namespace vmod
 			print("\"%s\"\n"sv, str.c_str());
 		}
 	}
-#endif
+
+	void main::add_search_path(const std::filesystem::path &path, std::string_view id, gsdk::SearchPathAdd_t priority) noexcept
+	{
+		if(filesystem) {
+		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+			if(path.native().compare(0, addons_dir_.native().length(), addons_dir_) == 0) {
+				std::filesystem::path new_path{mount_dir_};
+				new_path /= std::to_string(std::hash<std::filesystem::path>{}(path));
+
+				if(std::filesystem::exists(path) && !std::filesystem::exists(new_path)) {
+					std::error_code ec;
+					std::filesystem::create_directory_symlink(path, new_path, ec);
+				}
+
+				filesystem->AddSearchPath(new_path.c_str(), id.empty() ? nullptr : id.data(), priority);
+				return;
+			}
+		#endif
+
+			filesystem->AddSearchPath(path.c_str(), id.empty() ? nullptr : id.data(), priority);
+		}
+	}
+
+	void main::remove_search_path(const std::filesystem::path &path, std::string_view id) noexcept
+	{
+		if(filesystem) {
+			filesystem->RemoveSearchPath(path.c_str(), id.empty() ? nullptr : id.data());
+
+		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+			if(path.native().compare(0, addons_dir_.native().length(), addons_dir_) == 0) {
+				std::filesystem::path new_path{mount_dir_};
+				new_path /= std::to_string(std::hash<std::filesystem::path>{}(path));
+
+				filesystem->RemoveSearchPath(new_path.c_str(), id.empty() ? nullptr : id.data());
+			}
+		#endif
+		}
+	}
 
 	bool main::load() noexcept
 	{
@@ -1025,12 +1163,16 @@ namespace vmod
 			std::filesystem::path lib_path{info.dli_fname};
 
 			std::filesystem::path bin_dir{lib_path.parent_path()};
-			std::filesystem::path vmod_dir{bin_dir.parent_path()};
-			std::filesystem::path addons_dir{vmod_dir.parent_path()};
+			root_dir_ = bin_dir.parent_path();
+			addons_dir_ = root_dir_.parent_path();
+			game_dir_ = addons_dir_.parent_path();
 
-			game_dir_ = addons_dir.parent_path();
+		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+			mount_dir_ = (game_dir_/"vmod_mount"sv);
 
-			root_dir_ = vmod_dir;
+			std::error_code ec;
+			std::filesystem::create_directories(mount_dir_, ec);
+		#endif
 		}
 
 		if(!symbol_cache::initialize()) {
@@ -1047,6 +1189,8 @@ namespace vmod
 		exe_filename = exe_filename.filename();
 		exe_filename.replace_extension();
 
+		srcds_executable = (exe_filename == "srcds_linux"sv);
+
 	#if GSDK_ENGINE == GSDK_ENGINE_PORTAL2
 		if(exe_filename != "portal2_linux"sv) {
 			std::cout << "\033[0;31m"sv << "vmod: unsupported exe filename: '"sv << exe_filename << "'\n"sv << "\033[0m"sv;
@@ -1059,8 +1203,41 @@ namespace vmod
 		}
 	#endif
 
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		std::string_view tier0_lib_name;
+		if(srcds_executable) {
+			tier0_lib_name = "libtier0_srv.so"sv;
+		} else {
+			tier0_lib_name = "libtier0.so"sv;
+		}
+
+		if(!tier0_lib.load(bin_folder/tier0_lib_name)) {
+			std::cout << "\033[0;31m"sv << "vmod: failed to open tier0 library: '"sv << tier0_lib.error_string() << "'\n"sv << "\033[0m"sv;
+			return false;
+		}
+	#endif
+
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
+		old_spew = GetSpewOutputFunc();
+		SpewOutputFunc(new_spew);
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		static constexpr auto def_log_tags{[]() noexcept -> void {
+			LoggingSystem_AddTagToCurrentChannel("VMod");
+		}};
+
+		static constexpr auto vscript_log_tags{[]() noexcept -> void {
+			def_log_tags();
+			LoggingSystem_AddTagToCurrentChannel("VMod VScript");
+		}};
+
+		LOG_vmod = LoggingSystem_RegisterLoggingChannel("VMod", def_log_tags, gsdk::LCF_CONSOLE_ONLY, LS_MESSAGE, gsdk::UNSPECIFIED_LOGGING_COLOR);
+		LOG_vmod_vm = LoggingSystem_RegisterLoggingChannel("VMod VM", vscript_log_tags, gsdk::LCF_CONSOLE_ONLY, LS_MESSAGE, gsdk::UNSPECIFIED_LOGGING_COLOR);
+		LOG_vmod_vscript = LoggingSystem_RegisterLoggingChannel("VMod VScript", vscript_log_tags, gsdk::LCF_CONSOLE_ONLY, LS_MESSAGE, gsdk::UNSPECIFIED_LOGGING_COLOR);
+		LOG_vmod_workshop = LoggingSystem_RegisterLoggingChannel("VMod Workshop", def_log_tags, gsdk::LCF_CONSOLE_ONLY, LS_MESSAGE, gsdk::UNSPECIFIED_LOGGING_COLOR);
+	#endif
+
 		std::string_view launcher_lib_name;
-		if(exe_filename == "srcds_linux"sv) {
+		if(srcds_executable) {
 			launcher_lib_name = "dedicated_srv.so"sv;
 		} else {
 			launcher_lib_name = "launcher.so"sv;
@@ -1071,19 +1248,6 @@ namespace vmod
 			return false;
 		}
 
-	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-		SpewActivate("*", 0);
-		SpewActivate("console", 0);
-		SpewActivate("developer", 0);
-		old_spew = GetSpewOutputFunc();
-		SpewOutputFunc(new_spew);
-	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
-		//TODO!!!
-		//LoggingSystem
-	#else
-		#error
-	#endif
-
 		std::string_view engine_lib_name{"engine.so"sv};
 		if(dedicated) {
 			engine_lib_name = "engine_srv.so"sv;
@@ -1092,6 +1256,14 @@ namespace vmod
 			error("vmod: failed to open engine library: '%s'\n"sv, engine_lib.error_string().c_str());
 			return false;
 		}
+
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		if(s_EngineLoggingListener) {
+			generic_vtable_t log_vtable{vtable_from_object(s_EngineLoggingListener)};
+
+			EngListener_Log_original = swap_vfunc(log_vtable, &gsdk::ILoggingListener::Log, EngListener_Log_detour_callback);
+		}
+	#endif
 
 		{
 			char gamedir[PATH_MAX];
@@ -1102,6 +1274,24 @@ namespace vmod
 
 		root_dir_ = game_dir_;
 		root_dir_ /= "addons/vmod"sv;
+
+		if(sv_engine->IsDedicatedServer()) {
+			sv_loggedon_callback.Register(this, &main::logged_on);
+			sv_logon_failed_callback.Register(this, &main::logon_failed);
+			sv_logged_off_callback.Register(this, &main::logged_off);
+		} else {
+			cl_loggedon_callback.Register(this, &main::logged_on);
+			cl_logon_failed_callback.Register(this, &main::logon_failed);
+			cl_logged_off_callback.Register(this, &main::logged_off);
+		}
+
+		workshop_dir_ = root_dir_;
+		workshop_dir_ /= "workshop"sv;
+
+		{
+			std::error_code ec;
+			std::filesystem::create_directories(workshop_dir_, ec);
+		}
 
 		//TODO!!!
 	#if 0
@@ -1132,8 +1322,20 @@ namespace vmod
 				warning("vmod: missing 'g_SendTables' symbol\n"sv);
 			}
 
+			auto GetISteamRemoteStorage_it{eng_global_qual.find("GetISteamRemoteStorage()"s)};
+			if(GetISteamRemoteStorage_it == eng_global_qual.end()) {
+				warning("vmod: missing 'GetISteamRemoteStorage' symbol\n"sv);
+			}
+
 			if(g_SendTables_it != eng_global_qual.end()) {
 				g_SendTables = g_SendTables_it->second->addr<gsdk::CUtlVector<gsdk::SendTable *> *>();
+			}
+
+			if(GetISteamRemoteStorage_it != eng_global_qual.end()) {
+				GetISteamRemoteStorage_original = GetISteamRemoteStorage_it->second->func<decltype(GetISteamRemoteStorage_original)>();
+
+				GetISteamRemoteStorage_detour.initialize(GetISteamRemoteStorage_original, GetISteamRemoteStorage_detour_callback);
+				GetISteamRemoteStorage_detour.enable();
 			}
 		}
 
@@ -1172,31 +1374,31 @@ namespace vmod
 		switch(script_language) {
 			case gsdk::SL_NONE: break;
 			case gsdk::SL_GAMEMONKEY: {
-				scripts_extension = ".gm"sv;
+				scripts_extension_ = ".gm"sv;
 				base_scripts_dir /= "gamemonkey"sv;
 			} break;
 			case gsdk::SL_SQUIRREL: {
-				scripts_extension = ".nut"sv;
+				scripts_extension_ = ".nut"sv;
 				base_scripts_dir /= "squirrel"sv;
 			} break;
 			case gsdk::SL_LUA: {
-				scripts_extension = ".lua"sv;
+				scripts_extension_ = ".lua"sv;
 				base_scripts_dir /= "lua"sv;
 			} break;
 			case gsdk::SL_PYTHON: {
-				scripts_extension = ".py"sv;
+				scripts_extension_ = ".py"sv;
 				base_scripts_dir /= "python"sv;
 			} break;
 		#if defined __VMOD_USING_CUSTOM_VM
 			#ifdef __VMOD_ENABLE_SOURCEPAWN
 			case gsdk::SL_SOURCEPAWN: {
-				scripts_extension = ".sp"sv;
+				scripts_extension_ = ".sp"sv;
 				base_scripts_dir /= "sourcepawn"sv;
 			} break;
 			#endif
 			#ifdef __VMOD_ENABLE_JS
 			case gsdk::SL_JAVASCRIPT: {
-				scripts_extension = ".js"sv;
+				scripts_extension_ = ".js"sv;
 				base_scripts_dir /= "javascript"sv;
 			} break;
 			#endif
@@ -1697,8 +1899,8 @@ namespace vmod
 			return false;
 		}
 
-		plugins_dir_ = root_dir_;
-		plugins_dir_ /= "plugins"sv;
+		mods_dir_ = root_dir_;
+		mods_dir_ /= "mods"sv;
 
 		{
 			gsdk::ICVarIterator *varit{cvar->FactoryInternalIterator()};
@@ -1788,7 +1990,7 @@ namespace vmod
 
 		std::filesystem::path base_script_path{base_scripts_dir};
 		base_script_path /= "vmod_base"sv;
-		base_script_path.replace_extension(scripts_extension);
+		base_script_path.replace_extension(scripts_extension_);
 
 		bool base_script_from_file{false};
 
@@ -1803,12 +2005,12 @@ namespace vmod
 		}
 
 		base_script_scope = vm_->CreateScope("__vmod_base_script_scope__", nullptr);
-		if(!base_script_scope || base_script_scope == gsdk::INVALID_HSCRIPT) {
+		if(!base_script_scope) {
 			error("vmod: failed to create base script scope\n"sv);
 			return false;
 		}
 
-		if(vm_->Run(base_script, base_script_scope, true) == gsdk::SCRIPT_ERROR) {
+		if(vm_->Run(*base_script, *base_script_scope, true) == gsdk::SCRIPT_ERROR) {
 			if(base_script_from_file) {
 				error("vmod: failed to run base script from file '%s'\n"sv, base_script_path.c_str());
 			} else {
@@ -1820,7 +2022,7 @@ namespace vmod
 	#ifdef __VMOD_SQUIRREL_OVERRIDE_SERVER_INIT_SCRIPT
 		std::filesystem::path server_init_script_path{base_scripts_dir};
 		server_init_script_path /= "vmod_server_init"sv;
-		server_init_script_path.replace_extension(scripts_extension);
+		server_init_script_path.replace_extension(scripts_extension_);
 
 		bool server_init_script_from_file{false};
 
@@ -1836,7 +2038,7 @@ namespace vmod
 	#else
 		if(script_language == gsdk::SL_SQUIRREL) {
 			server_init_script = vm_->CompileScript(reinterpret_cast<const char *>(g_Script_vscript_server), "vscript_server.nut");
-			if(!server_init_script || server_init_script == gsdk::INVALID_HSCRIPT) {
+			if(!server_init_script) {
 				error("vmod: failed to compile server init script\n"sv);
 				return false;
 			}
@@ -1846,7 +2048,7 @@ namespace vmod
 		}
 	#endif
 
-		if(vm_->Run(server_init_script, nullptr, true) == gsdk::SCRIPT_ERROR) {
+		if(vm_->Run(*server_init_script, nullptr, true) == gsdk::SCRIPT_ERROR) {
 			error("vmod: failed to run server init script\n"sv);
 			return false;
 		}
@@ -1894,9 +2096,9 @@ namespace vmod
 
 		auto get_func_from_base_script{
 			[this,base_script_from_file,&base_script_path = std::as_const(base_script_path)]
-			(gsdk::HSCRIPT &func, std::string_view funcname) noexcept -> bool {
-				func = vm_->LookupFunction(funcname.data(), base_script_scope);
-				if(!func || func == gsdk::INVALID_HSCRIPT) {
+			(vscript::handle_wrapper &func, std::string_view funcname) noexcept -> bool {
+				func = vm_->LookupFunction(funcname.data(), *base_script_scope);
+				if(!func) {
 					if(base_script_from_file) {
 						error("vmod: base script '%s' missing '%s' function\n"sv, base_script_path.c_str(), funcname.data());
 					} else {
@@ -1932,134 +2134,118 @@ namespace vmod
 			return false;
 		}
 
-		vmod_reload_plugins.initialize("vmod_reload_plugins"sv,
+		vmod_reload_mods.initialize("vmod_reload_mods"sv,
 			[this](const gsdk::CCommand &) noexcept -> void {
-				auto it{plugins.begin()};
-				while(it != plugins.end()) {
-					if(it->second->reload() == plugin::load_status::disabled) {
-						it = plugins.erase(it);
+				auto it{mods.begin()};
+				while(it != mods.end()) {
+					if(it->second->reload() == mod::load_status::disabled) {
+						it = mods.erase(it);
 						continue;
 					}
 					++it;
 				}
 
-				if(plugins_loaded) {
-					it = plugins.begin();
-					while(it != plugins.end()) {
+				if(mods_loaded) {
+					it = mods.begin();
+					while(it != mods.end()) {
 						if(!*it->second) {
 							continue;
 						}
 
-						it->second->all_plugins_loaded();
+						it->second->call_func_on_plugins(&plugin::all_mods_loaded);
 					}
 				}
 			}
 		);
 
-		vmod_unload_plugins.initialize("vmod_unload_plugins"sv,
+		vmod_unload_mods.initialize("vmod_unload_mods"sv,
 			[this](const gsdk::CCommand &) noexcept -> void {
-				for(const auto &it : plugins) {
+				for(const auto &it : mods) {
 					it.second->unload();
 				}
 
-				plugins.clear();
+				mods.clear();
 
-				if(filesystem) {
-					for(const std::filesystem::path &it : added_paths) {
-						filesystem->RemoveSearchPath(it.c_str(), "GAME");
-						filesystem->RemoveSearchPath(it.c_str(), "mod");
-					}
-				}
-				added_paths.clear();
-
-				plugins_loaded = false;
+				mods_loaded = false;
 			}
 		);
 
-		vmod_unload_plugin.initialize("vmod_unload_plugin"sv,
+		vmod_unload_mod.initialize("vmod_unload_mod"sv,
 			[this](const gsdk::CCommand &args) noexcept -> void {
 				if(args.m_nArgc != 2) {
-					error("vmod: usage: vmod_unload_plugin <path>\n");
+					error("vmod: usage: vmod_unload_mod <path>\n");
 					return;
 				}
 
-				std::filesystem::path path{build_plugin_path(args.m_ppArgv[1])};
-				if(path.extension() != scripts_extension) {
-					error("vmod: invalid extension\n");
-					return;
-				}
+				std::filesystem::path path{build_mod_path(args.m_ppArgv[1])};
 
-				auto it{plugins.find(path)};
-				if(it != plugins.end()) {
-					error("vmod: unloaded plugin '%s'\n", it->first.c_str());
-					plugins.erase(it);
+				auto it{mods.find(path)};
+				if(it != mods.end()) {
+					error("vmod: unloaded mod '%s'\n", it->first.c_str());
+					mods.erase(it);
 				} else {
-					error("vmod: plugin '%s' not found\n", path.c_str());
+					error("vmod: mod '%s' not found\n", path.c_str());
 				}
 			}
 		);
 
-		vmod_load_plugin.initialize("vmod_load_plugin"sv,
+		vmod_load_mod.initialize("vmod_load_mod"sv,
 			[this](const gsdk::CCommand &args) noexcept -> void {
 				if(args.m_nArgc != 2) {
-					error("vmod: usage: vmod_load_plugin <path>\n");
+					error("vmod: usage: vmod_load_mod <path>\n");
 					return;
 				}
 
-				std::filesystem::path path{build_plugin_path(args.m_ppArgv[1])};
-				if(path.extension() != scripts_extension) {
-					error("vmod: invalid extension\n");
-					return;
-				}
+				std::filesystem::path path{build_mod_path(args.m_ppArgv[1])};
 
-				auto it{plugins.find(path)};
-				if(it != plugins.end()) {
+				auto it{mods.find(path)};
+				if(it != mods.end()) {
 					switch(it->second->reload()) {
-						case plugin::load_status::success: {
-							success("vmod: plugin '%s' reloaded\n", it->first.c_str());
-							if(plugins_loaded) {
-								it->second->all_plugins_loaded();
+						case mod::load_status::success: {
+							success("vmod: mod '%s' reloaded\n", it->first.c_str());
+							if(mods_loaded) {
+								it->second->call_func_on_plugins(&plugin::all_mods_loaded);
 							}
 						} break;
-						case plugin::load_status::disabled: {
-							plugins.erase(it);
+						case mod::load_status::disabled: {
+							mods.erase(it);
 						} break;
 						default: break;
 					}
 					return;
 				}
 
-				std::unique_ptr<plugin> pl{new plugin{path}};
-				switch(pl->load()) {
-					case plugin::load_status::success: {
-						success("vmod: plugin '%s' loaded\n", path.c_str());
-						if(plugins_loaded) {
-							pl->all_plugins_loaded();
+				std::unique_ptr<mod> md{new mod{path}};
+				switch(md->load()) {
+					case mod::load_status::success: {
+						success("vmod: mod '%s' loaded\n", path.c_str());
+						if(mods_loaded) {
+							md->call_func_on_plugins(&plugin::all_mods_loaded);
 						}
 					} break;
-					case plugin::load_status::disabled: {
+					case mod::load_status::disabled: {
 						return;
 					}
 					default: break;
 				}
 
-				plugins.emplace(std::move(path), std::move(pl));
+				mods.emplace(std::move(path), std::move(md));
 			}
 		);
 
-		vmod_list_plugins.initialize("vmod_list_plugins"sv,
+		vmod_list_mods.initialize("vmod_list_mods"sv,
 			[this](const gsdk::CCommand &args) noexcept -> void {
 				if(args.m_nArgc != 1) {
-					error("vmod: usage: vmod_list_plugins\n");
+					error("vmod: usage: vmod_list_mods\n");
 					return;
 				}
 
-				if(plugins.empty()) {
-					info("vmod: no plugins loaded\n");
+				if(mods.empty()) {
+					info("vmod: no mods loaded\n");
 					return;
 				}
 
-				for(const auto &it : plugins) {
+				for(const auto &it : mods) {
 					if(*it.second) {
 						success("'%s'\n", it.first.c_str());
 					} else {
@@ -2069,23 +2255,23 @@ namespace vmod
 			}
 		);
 
-		vmod_refresh_plugins.initialize("vmod_refresh_plugins"sv,
+		vmod_refresh_mods.initialize("vmod_refresh_mods"sv,
 			[this](const gsdk::CCommand &) noexcept -> void {
-				vmod_unload_plugins();
+				vmod_unload_mods();
 
-				if(std::filesystem::exists(plugins_dir_)) {
-					load_plugins(plugins_dir_, load_plugins_flags::none);
+				if(std::filesystem::exists(mods_dir_)) {
+					load_mods(mods_dir_);
 				}
 
-				for(const auto &it : plugins) {
+				for(const auto &it : mods) {
 					if(!*it.second) {
 						continue;
 					}
 
-					it.second->all_plugins_loaded();
+					it.second->call_func_on_plugins(&plugin::all_mods_loaded);
 				}
 
-				plugins_loaded = true;
+				mods_loaded = true;
 			}
 		);
 
@@ -2120,6 +2306,7 @@ namespace vmod
 		);
 
 		vmod_auto_gen_docs.initialize("vmod_auto_gen_docs"sv, false);
+		vmod_auto_gen_script_docs.initialize("vmod_auto_gen_script_docs"sv, false);
 
 		vmod_gen_docs.initialize("vmod_gen_docs"sv,
 			[this](const gsdk::CCommand &) noexcept -> void {
@@ -2147,57 +2334,140 @@ namespace vmod
 				bindings::docs::write(game_docs, game_vscript_func_bindings, false);
 				bindings::docs::write(game_docs, game_vscript_values);
 
-				gsdk::ScriptVariant_t const_table;
-				if(vm_->GetValue(nullptr, "Constants", &const_table)) {
-					std::string file;
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2
+				{
+					vscript::variant const_table;
+					if(vm_->GetValue(nullptr, "Constants", &const_table)) {
+						std::string file;
 
-					bindings::docs::gen_date(file);
+						bindings::docs::gen_date(file);
 
-					int num{vm_->GetNumTableEntries(const_table.m_object)};
-					for(int i{0}, it{0}; it != -1 && i < num; ++i) {
-						vscript::variant key;
-						vscript::variant value;
-						it = vm_->GetKeyValue(const_table.m_object, it, &key, &value);
+						int num{vm_->GetNumTableEntries(const_table.m_object)};
+						for(int i{0}, it{0}; it != -1 && i < num; ++i) {
+							vscript::variant key;
+							vscript::variant value;
+							it = vm_->GetKeyValue(const_table.m_object, it, &key, &value);
 
-						std::string_view enum_name{key.get<std::string_view>()};
+							std::string_view enum_name{key.get<std::string_view>()};
 
-						if(enum_name[0] == 'E' || enum_name[0] == 'F') {
-							file += "enum class "sv;
-						} else {
-							file += "namespace "sv;
+							if(enum_name[0] == 'E' || enum_name[0] == 'F') {
+								file += "enum class "sv;
+							} else {
+								file += "namespace "sv;
+							}
+							file += enum_name;
+							file += "\n{\n"sv;
+
+							gsdk::HSCRIPT enum_table{value.get<gsdk::HSCRIPT>()};
+							if(enum_table && enum_table != gsdk::INVALID_HSCRIPT) {
+								bindings::docs::write(file, 1, enum_table, enum_name[0] == 'F' ? bindings::docs::write_enum_how::flags : bindings::docs::write_enum_how::normal);
+							}
+
+							file += '}';
+
+							if(enum_name[0] == 'E' || enum_name[0] == 'F') {
+								file += ';';
+							}
+
+							file += "\n\n"sv;
 						}
-						file += enum_name;
-						file += "\n{\n"sv;
-
-						gsdk::HSCRIPT enum_table{value.get<gsdk::HSCRIPT>()};
-						if(enum_table && enum_table != gsdk::INVALID_HSCRIPT) {
-							bindings::docs::write(file, 1, enum_table, enum_name[0] == 'F' ? bindings::docs::write_enum_how::flags : bindings::docs::write_enum_how::normal);
+						if(num > 0) {
+							file.erase(file.end()-1, file.end());
 						}
 
-						file += '}';
+						std::filesystem::path doc_path{game_docs};
+						doc_path /= "Constants"sv;
+						doc_path.replace_extension(".txt"sv);
 
-						if(enum_name[0] == 'E' || enum_name[0] == 'F') {
-							file += ';';
-						}
-
-						file += "\n\n"sv;
+						write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
 					}
-					if(num > 0) {
-						file.erase(file.end()-1, file.end());
-					}
-
-					std::filesystem::path doc_path{game_docs};
-					doc_path /= "Constants"sv;
-					doc_path.replace_extension(".txt"sv);
-
-					write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
 				}
+			#endif
 
 				std::filesystem::path vmod_docs{root_dir_/"docs"sv/"vmod"sv};
 
 				std::filesystem::create_directories(vmod_docs, ec);
 
 				write_docs(vmod_docs);
+			}
+		);
+
+		vmod_gen_script_docs.initialize("vmod_gen_script_docs"sv,
+			[this](const gsdk::CCommand &) noexcept -> void {
+				if(!can_gen_docs) {
+					error("vmod: cannot gen docs yet\n"sv);
+					return;
+				}
+
+			#ifdef __VMOD_SQUIRREL_OVERRIDE_INIT_SCRIPT
+				std::filesystem::path scripts_docs{root_dir_/"docs"sv/"scripts"sv};
+
+				std::error_code ec;
+				std::filesystem::create_directories(scripts_docs, ec);
+
+				vscript::variant doc_table;
+				if(vm_->GetValue(nullptr, "Documentation", &doc_table)) {
+					vscript::variant func_table;
+					if(vm_->GetValue(doc_table.m_object, "functions", &func_table)) {
+						std::unordered_map<std::string, std::string> scripts_docs_map;
+
+						int num{vm_->GetNumTableEntries(func_table.m_object)};
+						for(int i{0}, it{0}; it != -1 && i < num; ++i) {
+							vscript::variant key;
+							vscript::variant value;
+							it = vm_->GetKeyValue(func_table.m_object, it, &key, &value);
+
+							vscript::handle_wrapper arr{value.get<vscript::handle_wrapper>()};
+							if(vm_->GetArrayCount(*arr) != 3) {
+								continue;
+							}
+
+							vscript::variant script_var;
+							vm_->GetArrayValue(*arr, 2, &script_var);
+							auto script{script_var.get<std::string>()};
+							if(script.empty() || script == "NATIVE"sv) {
+								continue;
+							}
+
+							auto map_it{scripts_docs_map.find(script)};
+							if(map_it == scripts_docs_map.end()) {
+								std::string file;
+								bindings::docs::gen_date(file);
+
+								map_it = scripts_docs_map.emplace(decltype(scripts_docs_map)::value_type{std::move(script), std::move(file)}).first;
+							}
+
+							auto &file{map_it->second};
+
+							vscript::variant desc_var;
+							vm_->GetArrayValue(*arr, 1, &desc_var);
+							auto func_desc{desc_var.get<std::string_view>()};
+
+							vscript::variant sig_var;
+							vm_->GetArrayValue(*arr, 0, &sig_var);
+							auto func_sig{sig_var.get<std::string_view>()};
+
+							if(!func_desc.empty()) {
+								file += "//"sv;
+								file += func_desc;
+								file += '\n';
+							}
+							file += func_sig;
+							file += ";\n\n"sv;
+						}
+
+						for(auto &map_it : scripts_docs_map) {
+							std::filesystem::path doc_path{scripts_docs};
+							doc_path /= map_it.first;
+							doc_path.replace_extension(".txt"sv);
+
+							std::filesystem::create_directories(doc_path.parent_path(), ec);
+
+							write_file(doc_path, reinterpret_cast<const unsigned char *>(map_it.second.c_str()), map_it.second.length());
+						}
+					}
+				}
+			#endif
 			}
 		);
 
@@ -2830,56 +3100,179 @@ namespace vmod
 		);
 	#endif
 
+		vmod_workshop_track.initialize("vmod_workshop_track"sv,
+			[this](const gsdk::CCommand &args) noexcept -> void {
+				if(args.m_nArgc != 2) {
+					error("vmod: usage: vmod_workshop_track <id>\n");
+					return;
+				}
+
+				if(!ugc()) {
+					error("vmod: workshop not available\n"sv);
+					return;
+				}
+
+				if(!workshop_initalized) {
+					error("vmod: workshop not initialized\n"sv);
+					return;
+				}
+
+				auto id{static_cast<PublishedFileId_t>(std::strtoul(args.m_ppArgv[1], nullptr, 10))};
+				if(id == k_PublishedFileIdInvalid) {
+					error("vmod: invalid id\n"sv);
+					return;
+				}
+
+				if(workshop_items.find(id) == workshop_items.end()) {
+					std::unique_ptr<workshop_item_t> ptr{new workshop_item_t{id}};
+					ptr->init();
+					workshop_items.emplace(id, std::move(ptr));
+				}
+			}
+		);
+
+		vmod_workshop_status.initialize("vmod_workshop_status"sv,
+			[this](const gsdk::CCommand &args) noexcept -> void {
+				if(!ugc()) {
+					error("vmod: workshop not available\n"sv);
+					return;
+				}
+
+				if(!workshop_initalized) {
+					error("vmod: workshop not initialized\n"sv);
+					return;
+				}
+
+				if(workshop_items.empty()) {
+					error("vmod: no workshop items\n"sv);
+					return;
+				}
+
+				for(const auto &it : workshop_items) {
+					info("%u\n"sv, it.first);
+
+					info("  steam state:\n"sv, it.first);
+					EItemState state{static_cast<EItemState>(ugc()->GetItemState(it.first))};
+					if(state & k_EItemStateSubscribed) {
+						info("    subscribed\n"sv);
+					}
+					if(state & k_EItemStateLegacyItem) {
+						info("    legacy\n"sv);
+					}
+					if(state & k_EItemStateInstalled) {
+						info("    installed\n"sv);
+					}
+					if(state & k_EItemStateNeedsUpdate) {
+						info("    needs update\n"sv);
+					}
+					if(state & k_EItemStateDownloading) {
+						info("    downloading\n"sv);
+					}
+					if(state & k_EItemStateDownloadPending) {
+						info("    download pending\n"sv);
+					}
+
+					info("  vmod state:\n"sv);
+					if(it.second->state & workshop_item_t::state::details_queried) {
+						info("    details queried\n"sv);
+					}
+					if(it.second->state & workshop_item_t::state::metadata_queried) {
+						info("    metadata queried\n"sv);
+					}
+					if(it.second->state & workshop_item_t::state::details_query_active) {
+						info("    detail query active\n"sv);
+					}
+					if(it.second->state & workshop_item_t::state::downloaded) {
+						info("    downloaded\n"sv);
+					}
+					if(it.second->state & workshop_item_t::state::download_active) {
+						info("    download active\n"sv);
+					}
+					if(it.second->state & workshop_item_t::state::installed) {
+						info("    installed\n"sv);
+					}
+					if(it.second->state & workshop_item_t::state::mounted) {
+						info("    mounted\n"sv);
+					}
+
+					info("  details:\n"sv, it.first);
+					info("    appid = %zu\n"sv, it.second->app);
+					info("    title = "sv);
+					if(!it.second->title.empty()) {
+						info("%s\n"sv, it.second->title.c_str());
+					} else {
+						info("\n"sv);
+					}
+					info("    cloud path = "sv);
+					if(!it.second->cloud_path.empty()) {
+						info("%s\n"sv, it.second->cloud_path.c_str());
+					} else {
+						info("\n"sv);
+					}
+					info("    cloud filesize = %zu\n"sv, it.second->cloud_filesize);
+					info("    disk path = "sv);
+					if(!it.second->disk_path.empty()) {
+						info("%s\n"sv, it.second->disk_path.c_str());
+					} else {
+						info("\n"sv);
+					}
+					info("    mount path = "sv);
+					if(!it.second->mount_path.empty()) {
+						info("%s\n"sv, it.second->mount_path.c_str());
+					} else {
+						info("\n"sv);
+					}
+					info("    mounttype = %u\n"sv, it.second->mounttype);
+					info("    disk filesize = %zu\n"sv, it.second->disk_filesize);
+					info("    metadata = "sv);
+					if(!it.second->metadata.empty()) {
+						info("%s\n"sv, it.second->metadata.c_str());
+					} else {
+						info("\n"sv);
+					}
+				}
+			}
+		);
+
+		vmod_workshop_refresh.initialize("vmod_workshop_refresh"sv,
+			[this](const gsdk::CCommand &args) noexcept -> void {
+				if(!ugc()) {
+					error("vmod: workshop not available\n"sv);
+					return;
+				}
+
+				if(!workshop_initalized) {
+					error("vmod: workshop not initialized\n"sv);
+					return;
+				}
+
+				if(workshop_items.empty()) {
+					error("vmod: no workshop items\n"sv);
+					return;
+				}
+
+				for(auto &it : workshop_items) {
+					it.second->refresh();
+				}
+			}
+		);
+
 		if(filesystem) {
 			std::filesystem::path assets_dir{root_dir_};
 			assets_dir /= "assets"sv;
 
-			filesystem->AddSearchPath(assets_dir.c_str(), "GAME");
-			filesystem->AddSearchPath(assets_dir.c_str(), "mod");
+			add_search_path(assets_dir, "GAME"sv);
+			//add_search_path(assets_dir, "mod"sv);
 
 			assets_dir = root_dir_;
 			assets_dir /= "script_overrides"sv;
 
-			filesystem->AddSearchPath(assets_dir.c_str(), "GAME");
-
-		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
-			if(sv_engine->IsDedicatedServer()) {
-				assets_dir = root_dir_.parent_path();
-
-				auto add_vpks{
-					[](const std::filesystem::path &dir) noexcept -> void {
-						std::error_code ec;
-						for(const auto &file : std::filesystem::directory_iterator{dir, ec}) {
-							if(!file.is_regular_file()) {
-								continue;
-							}
-
-							const auto &path{file.path()};
-							if(path.extension() != ".vpk"sv) {
-								continue;
-							}
-
-							filesystem->AddVPKFile(path.c_str());
-						}
-					}
-				};
-
-				add_vpks(assets_dir);
-
-				assets_dir /= "workshop"sv;
-
-				add_vpks(assets_dir);
-			}
-		#endif
-
-		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
-			auto cmd{cvar->FindCommand("path")};
-			if(cmd) {
-				old_path_command = cmd->m_fnCommandCallback;
-				cmd->m_fnCommandCallback = new_path_command;
-			}
-		#endif
+			add_search_path(assets_dir, "GAME"sv);
 		}
+
+		auto cmd{cvar->FindCommand("path")};
+		old_path_command = cmd->m_fnCommandCallback;
+		cmd->m_fnCommandCallback = new_path_command;
 
 		sv_engine->InsertServerCommand("exec vmod/load.cfg\n");
 		sv_engine->ServerExecute();
@@ -2906,7 +3299,7 @@ namespace vmod
 		return true;
 	}
 
-	void main::load_plugins(const std::filesystem::path &dir, load_plugins_flags flags) noexcept
+	void main::load_mods(const std::filesystem::path &dir) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -2925,59 +3318,16 @@ namespace vmod
 				if(std::filesystem::exists(path/".ignored"sv)) {
 					continue;
 				}
-
-				if(filename == "include"sv) {
-					if(dir_name == "assets"sv) {
-						remark("vmod: include folder inside assets folder: '%s'\n"sv, path.c_str());
-					} else if(dir_name == "docs"sv) {
-						remark("vmod: include folder inside docs folder: '%s'\n"sv, path.c_str());
-					}
-					continue;
-				} else if(filename == "docs"sv) {
-					if(dir_name == "assets"sv) {
-						remark("vmod: docs folder inside assets folder: '%s'\n"sv, path.c_str());
-					} else if(dir_name == "include"sv) {
-						remark("vmod: docs folder inside include folder: '%s'\n"sv, path.c_str());
-					}
-					continue;
-				} else if(filename == "assets"sv) {
-					if(!(flags & load_plugins_flags::src_folder)) {
-						if(filesystem) {
-							filesystem->AddSearchPath(path.c_str(), "GAME");
-							filesystem->AddSearchPath(path.c_str(), "mod");
-						}
-						added_paths.emplace_back(std::move(path));
-					} else {
-						remark("vmod: assets folder inside src folder: '%s'\n"sv, path.c_str());
-					}
-					continue;
-				} else if(filename == "src"sv) {
-					if(!(flags & load_plugins_flags::src_folder)) {
-						load_plugins(path, load_plugins_flags::src_folder|load_plugins_flags::no_recurse);
-					} else {
-						remark("vmod: src folder inside another src folder: '%s'\n"sv, path.c_str());
-					}
-					continue;
-				}
-
-				if(!(flags & load_plugins_flags::no_recurse)) {
-					load_plugins(path, load_plugins_flags::none);
-				}
-				continue;
-			} else if(!file.is_regular_file()) {
+			} else {
 				continue;
 			}
 
-			if(filename.extension() != scripts_extension) {
+			std::unique_ptr<mod> md{new mod{path}};
+			if(md->load() == mod::load_status::disabled) {
 				continue;
 			}
 
-			std::unique_ptr<plugin> pl{new plugin{path}};
-			if(pl->load() == plugin::load_status::disabled) {
-				continue;
-			}
-
-			plugins.emplace(std::move(path), std::move(pl));
+			mods.emplace(std::move(path), std::move(md));
 		}
 	}
 
@@ -2987,19 +3337,21 @@ namespace vmod
 		static std::string type_of_buffer;
 	}
 
-	gsdk::ScriptVariant_t main::call_to_func(gsdk::HSCRIPT func, gsdk::HSCRIPT value) noexcept
+	vscript::variant main::call_to_func(vscript::handle_ref func, vscript::handle_ref value) noexcept
 	{
-		gsdk::ScriptVariant_t ret;
-		vscript::variant arg{value};
+		vscript::variant ret;
+		vscript::variant args[]{
+			value
+		};
 
-		if(main::instance().vm()->ExecuteFunction(func, &arg, 1, &ret, nullptr, true) == gsdk::SCRIPT_ERROR) {
+		if(main::instance().vm()->ExecuteFunction(*func, args, std::size(args), &ret, nullptr, true) == gsdk::SCRIPT_ERROR) {
 			return {};
 		}
 
 		return ret;
 	}
 
-	std::string_view main::to_string(gsdk::HSCRIPT value) const noexcept
+	std::string_view main::to_string(vscript::handle_ref value) const noexcept
 	{
 		gsdk::ScriptVariant_t ret{call_to_func(to_string_func, value)};
 
@@ -3011,7 +3363,7 @@ namespace vmod
 		return detail::to_str_buffer;
 	}
 
-	std::string_view main::type_of(gsdk::HSCRIPT value) const noexcept
+	std::string_view main::type_of(vscript::handle_ref value) const noexcept
 	{
 		gsdk::ScriptVariant_t ret{call_to_func(typeof_func, value)};
 
@@ -3023,7 +3375,7 @@ namespace vmod
 		return detail::type_of_buffer;
 	}
 
-	int main::to_int(gsdk::HSCRIPT value) const noexcept
+	int main::to_int(vscript::handle_ref value) const noexcept
 	{
 		gsdk::ScriptVariant_t ret{call_to_func(to_int_func, value)};
 
@@ -3034,7 +3386,7 @@ namespace vmod
 		return ret.m_int;
 	}
 
-	float main::to_float(gsdk::HSCRIPT value) const noexcept
+	float main::to_float(vscript::handle_ref value) const noexcept
 	{
 		gsdk::ScriptVariant_t ret{call_to_func(to_float_func, value)};
 
@@ -3045,7 +3397,7 @@ namespace vmod
 		return ret.m_float;
 	}
 
-	bool main::to_bool(gsdk::HSCRIPT value) const noexcept
+	bool main::to_bool(vscript::handle_ref value) const noexcept
 	{
 		gsdk::ScriptVariant_t ret{call_to_func(to_bool_func, value)};
 
@@ -3239,6 +3591,417 @@ namespace vmod
 		internal_docs_built = true;
 	}
 
+	constexpr AppId_t app_l4d2_dedi{222860};
+	constexpr AppId_t app_l4d2{550};
+	constexpr AppId_t app_l4d2_sdk{563};
+
+	constexpr AppId_t app_tf2_dedi{232250};
+	constexpr AppId_t app_tf2{440};
+
+	constexpr AppId_t app_gmod_dedi{4020};
+	constexpr AppId_t app_gmod{4000};
+
+	void main::logged_on(SteamServersConnected_t *result) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		if(ugc()) {
+			if(sv_engine->IsDedicatedServer()) {
+			#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+				workshop_initalized = ugc()->BInitWorkshopForGameServer(app_l4d2, workshop_dir_.c_str());
+			#else
+				#error
+			#endif
+			} else {
+				workshop_initalized = true;
+			}
+			if(workshop_initalized) {
+				if(sv_engine->IsDedicatedServer()) {
+					sv_downloaditem_callback.Register(this, &main::workshop_item_downloaded);
+					sv_iteminstalled_callback.Register(this, &main::workshop_item_installed);
+				} else {
+					cl_downloaditem_callback.Register(this, &main::workshop_item_downloaded);
+					cl_iteminstalled_callback.Register(this, &main::workshop_item_installed);
+				}
+
+				sv_engine->InsertServerCommand("exec vmod/workshop.cfg\n");
+				sv_engine->ServerExecute();
+			} else {
+				error("vmod: workshop failed to initialize\n"sv);
+			}
+		} else {
+			error("vmod: workshop not available\n"sv);
+		}
+	}
+
+	void main::logon_failed(SteamServerConnectFailure_t *result) noexcept
+	{
+		logged_off(nullptr);
+	}
+
+	void main::logged_off(SteamServersDisconnected_t *result) noexcept
+	{
+		workshop_initalized = false;
+
+		if(sv_engine->IsDedicatedServer()) {
+			sv_downloaditem_callback.Unregister();
+			sv_iteminstalled_callback.Unregister();
+		} else {
+			cl_downloaditem_callback.Unregister();
+			cl_iteminstalled_callback.Unregister();
+		}
+
+		for(auto &it : workshop_items) {
+			it.second->cancel();
+		}
+	}
+
+	void main::workshop_item_t::on_installed() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		if(!(state & workshop_item_t::state::installed)) {
+			char path[PATH_MAX];
+			unsigned long long filesize{0};
+			unsigned int timestamp{0};
+			if(ugc()->GetItemInstallInfo(id, &filesize, path, sizeof(path), &timestamp)) {
+				disk_path = path;
+				disk_filesize = static_cast<std::size_t>(filesize);
+				disk_timestamp = timestamp;
+
+				mount_path = instance().mount_dir_;
+				mount_path /= std::to_string(std::hash<std::filesystem::path>{}(disk_path));
+
+				bool handled{true};
+
+				switch(app) {
+				case app_l4d2_sdk:
+				case app_l4d2_dedi:
+				case app_l4d2: {
+					mount_path.replace_extension(".vpk"sv);
+					mounttype = mounttype::vpk;
+				} break;
+				case k_uAppIdInvalid:
+				handled = false;
+				break;
+				default:
+				handled = false;
+				error("vmod: unhandled appid '%u' from workshop item '%u'\n"sv, app, id);
+				break;
+				}
+
+				if(handled) {
+					if(std::filesystem::exists(disk_path) && !std::filesystem::exists(mount_path)) {
+						std::error_code ec;
+						std::filesystem::create_symlink(disk_path, mount_path, ec);
+					}
+
+					state |= workshop_item_t::state::installed;
+				}
+			} else {
+				warning("vmod: failed to get workshop item '%u' install info\n"sv, id);
+			}
+		}
+
+		mount();
+	}
+
+	void main::workshop_item_downloaded(DownloadItemResult_t *result) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		auto it{workshop_items.find(result->m_nPublishedFileId)};
+		if(it != workshop_items.end()) {
+			it->second->state &= ~workshop_item_t::state::download_active;
+		}
+
+		if(result->m_eResult != k_EResultOK) {
+			error("vmod: workshop item '%u' failed to download\n"sv, result->m_nPublishedFileId);
+			return;
+		}
+
+		if(!ugc()->GetItemDownloadInfo(result->m_nPublishedFileId, nullptr, nullptr)) {
+			error("vmod: workshop item '%u' failed to download\n"sv, result->m_nPublishedFileId);
+			return;
+		}
+
+		if(it == workshop_items.end()) {
+			warning("vmod: workshop item '%u' was downloaded but is not tracked\n"sv, result->m_nPublishedFileId);
+			return;
+		}
+
+		if(it->second->itemtype == workshop_item_t::itemtype::collection) {
+			return;
+		}
+
+		it->second->state |= workshop_item_t::state::downloaded;
+
+		EItemState steam_state{static_cast<EItemState>(ugc()->GetItemState(result->m_nPublishedFileId))};
+		if(steam_state & k_EItemStateInstalled) {
+			it->second->on_installed();
+		}
+	}
+
+	void main::workshop_item_installed(ItemInstalled_t *result) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		auto it{workshop_items.find(result->m_nPublishedFileId)};
+		if(it == workshop_items.end()) {
+			warning("vmod: workshop item '%u' was installed but is not tracked\n"sv, result->m_nPublishedFileId);
+			return;
+		}
+
+		if(it->second->itemtype == workshop_item_t::itemtype::collection) {
+			return;
+		}
+
+		it->second->on_installed();
+	}
+
+	void main::workshop_item_t::download() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		if(state & state::downloaded) {
+			if(itemtype != itemtype::collection) {
+				EItemState steam_state{static_cast<EItemState>(ugc()->GetItemState(id))};
+				if(steam_state & k_EItemStateInstalled) {
+					on_installed();
+				}
+			}
+			return;
+		}
+
+		if(state & state::download_active) {
+			return;
+		}
+
+		if(itemtype != itemtype::collection) {
+			if(ugc()->DownloadItem(id, false)) {
+				state |= state::download_active;
+			} else {
+				error("vmod: failed to download workshop item '%u'\n"sv, id);
+			}
+		}
+	}
+
+	void main::workshop_item_t::mount() noexcept
+	{
+		if(!(state & workshop_item_t::state::mounted)) {
+			switch(mounttype) {
+			case mounttype::vpk:
+			if(filesystem) {
+				filesystem->AddVPKFile(mount_path.c_str());
+				state |= workshop_item_t::state::mounted;
+			}
+			break;
+			default:
+			break;
+			}
+		}
+	}
+
+	void main::workshop_item_t::unmount() noexcept
+	{
+		if(state & state::mounted) {
+			switch(mounttype) {
+			case mounttype::vpk:
+			if(filesystem) {
+				filesystem->RemoveVPKFile(mount_path.c_str());
+				state &= ~state::mounted;
+			}
+			break;
+			default:
+			break;
+			}
+		}
+	}
+
+	main::workshop_item_t::~workshop_item_t() noexcept
+	{
+		cancel();
+		unmount();
+	}
+
+	void main::workshop_item_t::refresh() noexcept
+	{
+		cancel();
+		unmount();
+
+		state &= ~state::details_queried;
+		state &= ~state::metadata_queried;
+
+		state &= ~state::downloaded;
+		state &= ~state::installed;
+
+		query_details();
+		download();
+	}
+
+	void main::workshop_item_t::upkeep() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		EItemState steam_state{static_cast<EItemState>(ugc()->GetItemState(id))};
+		if(steam_state & k_EItemStateNeedsUpdate) {
+			unmount();
+			state &= ~state::downloaded;
+			state &= ~state::installed;
+			state &= ~state::details_queried;
+			state &= ~state::metadata_queried;
+			info("vmod: workshop item %u recieved update\n"sv, id);
+		}
+
+		query_details();
+		download();
+	}
+
+	void main::workshop_item_t::cancel() noexcept
+	{
+		if(query_details_handle != k_UGCQueryHandleInvalid) {
+			ugc()->ReleaseQueryUGCRequest(query_details_handle);
+			query_details_handle = k_UGCQueryHandleInvalid;
+		}
+		query_details_call.Cancel();
+		state &= ~state::details_query_active;
+		state &= ~state::download_active;
+	}
+
+	void main::workshop_item_t::init() noexcept
+	{
+		query_details();
+		download();
+	}
+
+	void main::workshop_item_t::query_details() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		if(((state & state::details_queried) && (state & state::metadata_queried)) ||
+			(state & state::details_query_active)) {
+			return;
+		}
+
+		if(query_details_handle != k_UGCQueryHandleInvalid) {
+			ugc()->ReleaseQueryUGCRequest(query_details_handle);
+		}
+		query_details_call.Cancel();
+
+		query_details_handle = ugc()->CreateQueryUGCDetailsRequest(&id, 1);
+		if(query_details_handle != k_UGCQueryHandleInvalid) {
+			if(!ugc()->SetReturnMetadata(query_details_handle, true)) {
+				warning("vmod: failed to request details metadata for workshop item '%u'\n"sv, id);
+			}
+
+			if(!ugc()->SetAllowCachedResponse(query_details_handle, 86400)) {
+				warning("vmod: failed to request cached details for workshop item '%u'\n"sv, id);
+			}
+
+			if(!ugc()->SetReturnChildren(query_details_handle, true)) {
+				warning("vmod: failed to request children of workshop item '%u'\n"sv, id);
+			}
+
+			SteamAPICall_t query_send{ugc()->SendQueryUGCRequest(query_details_handle)};
+			if(query_send != k_uAPICallInvalid) {
+				if(sv_engine->IsDedicatedServer()) {
+					query_details_call.SetGameserverFlag();
+				}
+				query_details_call.Set(query_send, this, &workshop_item_t::on_details_queried);
+
+				state |= state::details_query_active;
+			} else {
+				warning("vmod: failed to send query details request for workshop item '%u'\n"sv, id);
+			}
+		} else {
+			warning("vmod: failed to create query details request for workshop item '%u'\n"sv, id);
+		}
+	}
+
+	void main::workshop_item_t::on_details_queried(SteamUGCQueryCompleted_t *result, bool err) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		state &= ~state::details_query_active;
+		query_details_call.Cancel();
+
+		if(!err && result->m_eResult == k_EResultOK) {
+			if(!(state & state::details_queried)) {
+				SteamUGCDetails_t details{};
+				if(ugc()->GetQueryUGCResult(result->m_handle, 0, &details) && (details.m_eResult == k_EResultOK)) {
+					switch(details.m_eFileType) {
+					case k_EWorkshopFileTypeFirst:
+					itemtype = itemtype::file;
+					break;
+					case k_EWorkshopFileTypeCollection: {
+						itemtype = itemtype::collection;
+						std::unique_ptr<PublishedFileId_t[]> children{new PublishedFileId_t[details.m_unNumChildren]};
+						if(ugc()->GetQueryUGCChildren(result->m_handle, 0, children.get(), details.m_unNumChildren)) {
+							auto &items{instance().workshop_items};
+							auto it{items.find(id)};
+							if(it != items.end()) {
+								items.erase(it);
+							}
+							for(std::size_t i{0}; i < details.m_unNumChildren; ++i) {
+								PublishedFileId_t child{children[i]};
+								if(items.find(child) == items.end()) {
+									std::unique_ptr<workshop_item_t> ptr{new workshop_item_t{child}};
+									ptr->init();
+									items.emplace(child, std::move(ptr));
+								}
+							}
+							return;
+						} else {
+							warning("vmod: failed to get workshop collection %u children\n"sv, id);
+						}
+					} break;
+					default: {
+						warning("vmod: workshop item %u is not a file or collection\n"sv, id);
+						auto &items{instance().workshop_items};
+						auto it{items.find(id)};
+						if(it != items.end()) {
+							items.erase(it);
+						}
+						return;
+					}
+					}
+
+					app = details.m_nCreatorAppID;
+					title = details.m_rgchTitle;
+					cloud_path = details.m_pchFileName;
+					cloud_filesize = static_cast<std::size_t>(details.m_nFileSize);
+					state |= state::details_queried;
+				} else {
+					warning("vmod: workshop item %u failed to get details\n"sv, id);
+				}
+			}
+
+			if(!(state & state::metadata_queried)) {
+				char metadata_buff[k_cchDeveloperMetadataMax]{};
+				if(ugc()->GetQueryUGCMetadata(result->m_handle, 0, metadata_buff, sizeof(metadata_buff))) {
+					metadata = metadata_buff;
+					state |= state::metadata_queried;
+				} else {
+					warning("vmod: workshop item %u failed to get metadata\n"sv, id);
+				}
+			}
+		} else {
+			warning("vmod: workshop item %u failed to query details\n"sv, id);
+		}
+
+		query_details_handle = k_UGCQueryHandleInvalid;
+		if(result->m_handle != k_UGCQueryHandleInvalid) {
+			ugc()->ReleaseQueryUGCRequest(result->m_handle);
+		}
+
+		if(itemtype != itemtype::collection) {
+			EItemState steam_state{static_cast<EItemState>(ugc()->GetItemState(id))};
+			if(steam_state & k_EItemStateInstalled) {
+				on_installed();
+			}
+		}
+	}
+
 	bool main::load_late() noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -3262,6 +4025,7 @@ namespace vmod
 		vmod_auto_dump_entity_vtables = true;
 		vmod_auto_dump_entity_funcs = true;
 		vmod_auto_gen_docs = true;
+		vmod_auto_gen_script_docs = true;
 	#endif
 
 		if(vmod_auto_dump_squirrel_ver.get<bool>()) {
@@ -3286,7 +4050,7 @@ namespace vmod
 			vmod_gen_docs();
 		}
 
-		vmod_refresh_plugins();
+		vmod_refresh_mods();
 
 		if(vmod_auto_dump_netprops.get<bool>()) {
 			vmod_dump_netprops();
@@ -3311,12 +4075,12 @@ namespace vmod
 	{
 		is_map_loaded = true;
 
-		for(const auto &it : plugins) {
+		for(const auto &it : mods) {
 			if(!*it.second) {
 				continue;
 			}
 
-			it.second->map_loaded(mapname);
+			it.second->call_func_on_plugins(&plugin::map_loaded, mapname);
 		}
 	}
 
@@ -3324,24 +4088,28 @@ namespace vmod
 	{
 		is_map_active = true;
 
-		for(const auto &it : plugins) {
+		for(const auto &it : mods) {
 			if(!*it.second) {
 				continue;
 			}
 
-			it.second->map_active();
+			it.second->call_func_on_plugins(&plugin::map_active);
+		}
+
+		if(vmod_auto_gen_script_docs.get<bool>()) {
+			vmod_gen_script_docs();
 		}
 	}
 
 	void main::map_unloaded() noexcept
 	{
 		if(is_map_loaded) {
-			for(const auto &it : plugins) {
+			for(const auto &it : mods) {
 				if(!*it.second) {
 					continue;
 				}
 
-				it.second->map_unloaded();
+				it.second->call_func_on_plugins(&plugin::map_unloaded);
 			}
 		}
 
@@ -3355,59 +4123,70 @@ namespace vmod
 		vm_->Frame(sv_globals->frametime);
 	#endif
 
-		for(const auto &it : plugins) {
+		for(const auto &it : mods) {
 			it.second->game_frame(simulating);
 		}
 	}
 
 	void main::unload() noexcept
 	{
-		vmod_unload_plugins();
+		vmod_unload_mods();
 
 	#ifdef __VMOD_USING_PREPROCESSOR
 		pp.shutdown();
 	#endif
 
+		RegisterFunction_detour.disable();
+		RegisterClass_detour.disable();
+		RegisterInstance_detour.disable();
+		SetValue_str_detour.disable();
+		SetValue_var_detour.disable();
+
+	#ifndef __VMOD_USING_CUSTOM_VM
+		RegisterFunctionGuts_detour.disable();
+		sq_setparamscheck_detour.disable();
+	#endif
+
+		VScriptServerInit_detour.disable();
+		VScriptServerTerm_detour.disable();
+		VScriptServerRunScript_detour.disable();
+
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		VScriptServerRunScriptForAllAddons_detour.disable();
+	#endif
+
 		if(vm_) {
-			if(to_string_func && to_string_func != gsdk::INVALID_HSCRIPT) {
-				vm_->ReleaseFunction(to_string_func);
-			}
+			to_string_func.free();
 
-			if(to_int_func && to_int_func != gsdk::INVALID_HSCRIPT) {
-				vm_->ReleaseFunction(to_int_func);
-			}
+			to_int_func.free();
 
-			if(to_float_func && to_float_func != gsdk::INVALID_HSCRIPT) {
-				vm_->ReleaseFunction(to_float_func);
-			}
+			to_float_func.free();
 
-			if(to_bool_func && to_bool_func != gsdk::INVALID_HSCRIPT) {
-				vm_->ReleaseFunction(to_bool_func);
-			}
+			to_bool_func.free();
 
-			if(typeof_func && typeof_func != gsdk::INVALID_HSCRIPT) {
-				vm_->ReleaseFunction(typeof_func);
-			}
+			typeof_func.free();
 
-			if(funcisg_func && funcisg_func != gsdk::INVALID_HSCRIPT) {
-				vm_->ReleaseFunction(funcisg_func);
-			}
+			funcisg_func.free();
 
-			if(base_script && base_script != gsdk::INVALID_HSCRIPT) {
-				vm_->ReleaseScript(base_script);
-			}
+			base_script.free();
 
-			if(base_script_scope && base_script_scope != gsdk::INVALID_HSCRIPT) {
-				vm_->ReleaseScope(base_script_scope);
-			}
+			base_script_scope.free();
 
-			if(server_init_script && server_init_script != gsdk::INVALID_HSCRIPT) {
-				vm_->ReleaseScript(server_init_script);
-			}
+			server_init_script.free();
 
 			unbindings();
 
-			vsmgr->DestroyVM(vm_);
+			generic_vtable_t vm_vtable{vtable_from_object(vm_)};
+
+			swap_vfunc(vm_vtable, &gsdk::IScriptVM::CompileScript_impl, CompileScript_original);
+			swap_vfunc(vm_vtable, static_cast<decltype(Run_original)>(&gsdk::IScriptVM::Run), Run_original);
+			swap_vfunc(vm_vtable, &gsdk::IScriptVM::SetErrorCallback, SetErrorCallback_original);
+
+			swap_vfunc(vm_vtable, &gsdk::IScriptVM::RegisterFunction, RegisterFunction_original);
+			swap_vfunc(vm_vtable, &gsdk::IScriptVM::RegisterClass, RegisterClass_original);
+			swap_vfunc(vm_vtable, &gsdk::IScriptVM::RegisterInstance_impl, RegisterInstance_original);
+			swap_vfunc(vm_vtable, static_cast<decltype(SetValue_var_original)>(&gsdk::IScriptVM::SetValue_impl), SetValue_var_original);
+			swap_vfunc(vm_vtable, static_cast<decltype(SetValue_str_original)>(&gsdk::IScriptVM::SetValue), SetValue_str_original);
 
 			if(g_pScriptVM_ptr && *g_pScriptVM_ptr == vm_) {
 				*g_pScriptVM_ptr = nullptr;
@@ -3416,14 +4195,28 @@ namespace vmod
 			if(gsdk::g_pScriptVM == vm_) {
 				gsdk::g_pScriptVM = nullptr;
 			}
+
+			vsmgr->DestroyVM(vm_);
 		}
 
-		vmod_reload_plugins.unregister();
-		vmod_unload_plugins.unregister();
-		vmod_unload_plugin.unregister();
-		vmod_load_plugin.unregister();
-		vmod_list_plugins.unregister();
-		vmod_refresh_plugins.unregister();
+		if(vsmgr) {
+			generic_vtable_t vsmgr_vtable{vtable_from_object(vsmgr)};
+
+			swap_vfunc(vsmgr_vtable, &gsdk::IScriptManager::CreateVM, CreateVM_original);
+			swap_vfunc(vsmgr_vtable, &gsdk::IScriptManager::DestroyVM, DestroyVM_original);
+		}
+
+	#ifdef __VMOD_USING_CUSTOM_VM
+		ScriptCreateSquirrelVM_detour.disable();
+		ScriptDestroySquirrelVM_detour.disable();
+	#endif
+
+		vmod_reload_mods.unregister();
+		vmod_unload_mods.unregister();
+		vmod_unload_mod.unregister();
+		vmod_load_mod.unregister();
+		vmod_list_mods.unregister();
+		vmod_refresh_mods.unregister();
 
 		vmod_dump_internal_scripts.unregister();
 		vmod_auto_dump_internal_scripts.unregister();
@@ -3457,6 +4250,21 @@ namespace vmod
 		if(cvar_dll_id_ != gsdk::INVALID_CVAR_DLL_IDENTIFIER) {
 			cvar->UnregisterConCommands(cvar_dll_id_);
 		}
+
+		if(gamedll) {
+			generic_vtable_t gamedll_vtable{vtable_from_object(gamedll)};
+
+			swap_vfunc(gamedll_vtable, &gsdk::IServerGameDLL::CreateNetworkStringTables, CreateNetworkStringTables_original);
+		}
+
+		if(sv_stringtables) {
+			generic_vtable_t sv_stringtables_vtable{vtable_from_object(sv_stringtables)};
+
+			swap_vfunc(sv_stringtables_vtable, &gsdk::IServerNetworkStringTableContainer::RemoveAllTables, RemoveAllTables_original);
+		}
+
+		PrintFunc_detour.disable();
+		ErrorFunc_detour.disable();
 
 	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		if(old_spew) {

@@ -2,6 +2,7 @@
 #include "singleton.hpp"
 #include "sendtable.hpp"
 #include "datamap.hpp"
+#include "serverclass.hpp"
 #include "factory.hpp"
 #include "../docs.hpp"
 #include "../../filesystem.hpp"
@@ -90,7 +91,8 @@ namespace vmod::bindings::ent
 
 		if(entityfactorydict) {
 			docs::ident(file, 1);
-			file += "using factory_callback = entity(factory_impl factory, int size, string classname);\n\n"sv;
+			file += "using factory_callback = entity(factory_impl factory, string classname, optional<int> size);\n\n"sv;
+			file += "using factory_size_callback = int(factory_impl factory);\n\n"sv;
 
 			docs::write(&factory_base::desc, true, 1, file, false);
 			file += "\n\n"sv;
@@ -103,13 +105,35 @@ namespace vmod::bindings::ent
 			docs::ident(file, 1);
 			file += "{\n"sv;
 			docs::ident(file, 2);
-			file += "char[] name;\n"sv;
+			file += "string name;\n"sv;
 			docs::ident(file, 2);
 			file += "mem::types::type type;\n"sv;
 			docs::ident(file, 2);
-			file += "optional<char[]> external_name;\n"sv;
+			file += "optional<string> external_name;\n"sv;
 			docs::ident(file, 2);
 			file += "optional<int> num;\n"sv;
+			docs::ident(file, 1);
+			file += "};\n\n"sv;
+
+			docs::ident(file, 1);
+			file += "struct datatable_description\n"sv;
+			docs::ident(file, 1);
+			file += "{\n"sv;
+			docs::ident(file, 2);
+			file += "string name;\n"sv;
+			docs::ident(file, 2);
+			file += "array<dataprop_description> props;\n"sv;
+			docs::ident(file, 1);
+			file += "};\n\n"sv;
+
+			docs::ident(file, 1);
+			file += "struct create_options\n"sv;
+			docs::ident(file, 1);
+			file += "{\n"sv;
+			docs::ident(file, 2);
+			file += "optional<int> additional_size;\n"sv;
+			docs::ident(file, 2);
+			file += "optional<instance> datamap;\n"sv;
 			docs::ident(file, 1);
 			file += "};\n\n"sv;
 
@@ -130,6 +154,9 @@ namespace vmod::bindings::ent
 		file += "\n\n"sv;
 
 		docs::write(&dataprop::desc, true, 1, file, false);
+		file += "\n\n"sv;
+
+		docs::write(&serverclass::desc, true, 1, file, false);
 		file += "\n\n"sv;
 
 		docs::write(&singleton::desc, false, 1, file, false);

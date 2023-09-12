@@ -1,5 +1,4 @@
 #include "convar.hpp"
-#include "../../main.hpp"
 #include "../docs.hpp"
 #include "singleton.hpp"
 
@@ -16,7 +15,7 @@ namespace vmod::bindings::cvar
 	{
 		using namespace std::literals::string_view_literals;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		desc.func(&convar_base::script_set, "script_set"sv, "set"sv)
 		.desc("(value)"sv);
@@ -94,7 +93,7 @@ namespace vmod::bindings::cvar
 			var->ConVar::SetValue(value.m_bool);
 			break;
 			default:
-			main::instance().vm()->RaiseException("vmod: invalid type: '%s'", bindings::docs::type_name(value.m_type, true).data());
+			vscript::vm()->RaiseException("vmod: invalid type: '%s'", bindings::docs::type_name(value.m_type, true).data());
 			break;
 		}
 	}

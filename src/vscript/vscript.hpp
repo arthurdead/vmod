@@ -16,4 +16,6 @@ namespace vmod::vscript
 		extern bool get_scalar(gsdk::HSCRIPT object, gsdk::ScriptVariant_t *var) noexcept;
 		extern __attribute__((__format__(__printf__, 1, 2))) bool raise_exception(const char *fmt, ...) noexcept;
 	}
+
+	extern gsdk::IScriptVM *vm() noexcept;
 }

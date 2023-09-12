@@ -1,5 +1,4 @@
 #include "factory.hpp"
-#include "../../main.hpp"
 
 namespace vmod::bindings::ent
 {
@@ -14,7 +13,7 @@ namespace vmod::bindings::ent
 	{
 		using namespace std::literals::string_view_literals;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		desc.func(&factory_base::script_create, "script_create"sv, "create"sv)
 		.desc("[entity](classname)"sv);
@@ -26,10 +25,9 @@ namespace vmod::bindings::ent
 
 		factory_ref::desc.base(desc);
 
-		factory_impl::desc.func(&factory_impl::script_create_sized, "script_create_sized"sv, "create_sized"sv)
-		.desc("[entity](classname, size)"sv);
-		factory_impl::desc.func(&factory_impl::script_create_datamap, "script_create_datamap"sv, "create_datatable"sv)
-		.desc("(name, array<dataprop_description>|props)"sv);
+		factory_impl::desc.func(&factory_impl::script_create, "script_create"sv, "create"sv)
+		.desc("[entity](classname, create_options|opts)"sv);
+
 		factory_impl::desc.dtor();
 
 		factory_impl::desc.base(desc);
@@ -58,29 +56,32 @@ namespace vmod::bindings::ent
 
 	gsdk::IServerNetworkable *factory_base::script_create(std::string_view classname) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(classname.empty()) {
-			vm->RaiseException("vmod: invalid classname");
+			vm->RaiseException("vmod: empty classname");
 			return nullptr;
 		}
 
 		return factory->Create(classname.data());
 	}
 
-	bool factory_impl::initialize(std::string_view name, gsdk::HSCRIPT callback_) noexcept
+	bool factory_impl::initialize(std::vector<std::string> &&names_, vscript::handle_wrapper &&callback_, vscript::handle_wrapper &&size_callback_) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(!register_instance(&desc, this)) {
 			return false;
 		}
 
-		names.emplace_back(name);
+		names = std::move(names_);
 
-		callback = callback_;
+		callback = std::move(callback_);
+		size_callback = std::move(size_callback_);
 
-		entityfactorydict->InstallFactory(this, name.data());
+		for(const auto &name : names) {
+			entityfactorydict->InstallFactory(this, name.data());
+		}
 
 		return true;
 	}
@@ -106,7 +107,7 @@ namespace vmod::bindings::ent
 
 	gsdk::IServerNetworkable *factory_ref::script_create_sized(std::string_view classname, std::size_t size_) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(classname.empty()) {
 			vm->RaiseException("vmod: invalid classname: '%s'", classname.data());
@@ -150,27 +151,40 @@ namespace vmod::bindings::ent
 		return true;
 	}
 
-	gsdk::IServerNetworkable *factory_impl::script_create_sized(std::string_view classname, std::size_t new_size) noexcept
+	gsdk::IServerNetworkable *factory_impl::script_create(std::string_view classname, std::optional<vscript::handle_wrapper> script_opts) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(classname.empty()) {
 			vm->RaiseException("vmod: invalid classname: '%s'", classname.data());
 			return nullptr;
 		}
 
-		if(new_size == 0 || new_size == static_cast<std::size_t>(-1)) {
-			vm->RaiseException("vmod: invalid size: %zu", new_size);
-			return nullptr;
+		std::optional<create_options> opts;
+
+		std::size_t new_size{0};
+		if(script_opts && *script_opts) {
+			opts.emplace();
+
+			if(!vm->IsTable(*(*script_opts))) {
+				vm->RaiseException("vmod: not a table");
+				return nullptr;
+			}
+
+			vscript::variant additional_size;
+			if(vm->GetValue(*(*script_opts), "additional_size", &additional_size)) {
+				auto val{additional_size.get<std::size_t>()};
+				if(val == static_cast<std::size_t>(-1)) {
+					vm->RaiseException("vmod: invalid additional size");
+					return nullptr;
+				}
+
+				opts->new_size.emplace(factory_impl::GetEntitySize());
+				*opts->new_size += val;
+			}
 		}
 
-		std::size_t size{factory_impl::GetEntitySize()};
-		if(new_size < size) {
-			vm->RaiseException("vmod: new size is less than base size: %zu vs %zu", new_size, size);
-			return nullptr;
-		}
-
-		return create(classname, new_size);
+		return create(classname, std::move(opts));
 	}
 
 	struct entity_custom_props_info_t
@@ -275,21 +289,27 @@ namespace vmod::bindings::ent
 		}
 	}
 
-	gsdk::IServerNetworkable *factory_impl::create(std::string_view classname, std::size_t new_size) noexcept
+	gsdk::IServerNetworkable *factory_impl::create(std::string_view classname, std::optional<create_options> opts) noexcept
 	{
-		if(callback && callback != gsdk::INVALID_HSCRIPT) {
-			gsdk::IScriptVM *vm{main::instance().vm()};
+		if(callback) {
+			gsdk::IScriptVM *vm{vscript::vm()};
 
-			gsdk::HSCRIPT pl_scope{owner_scope()};
+			vscript::handle_ref pl_scope{owner_scope()};
 
 			vscript::variant args[]{
-				instance,
-				new_size,
-				classname
+				instance_,
+				classname,
+				{}
 			};
 
+			if(opts && opts->new_size) {
+				args[2] = *opts->new_size;
+			} else {
+				args[2] = nullptr;
+			}
+
 			vscript::variant ret;
-			if(vm->ExecuteFunction(callback, args, std::size(args), &ret, pl_scope, true) == gsdk::SCRIPT_ERROR) {
+			if(vm->ExecuteFunction(*callback, args, std::size(args), &ret, *pl_scope, true) == gsdk::SCRIPT_ERROR) {
 				return nullptr;
 			}
 
@@ -300,6 +320,7 @@ namespace vmod::bindings::ent
 
 			gsdk::CBaseEntity *ent{net->GetBaseEntity()};
 
+		#if 0
 			gsdk::datamap_t *base_datamap{ent->GetDataDescMap()};
 
 			__cxxabiv1::vtable_prefix *ent_prefix{vtable_prefix_from_object(ent)};
@@ -368,6 +389,7 @@ namespace vmod::bindings::ent
 			} else {
 				props_it->second->append_datamap(*datamap);
 			}
+		#endif
 
 			return net;
 		}
@@ -377,16 +399,22 @@ namespace vmod::bindings::ent
 
 	factory_impl::~factory_impl() noexcept
 	{
+		gsdk::IScriptVM *vm{vscript::vm()};
+
 		for(const std::string &name : names) {
 			std::size_t i{entityfactorydict->m_Factories.find(name)};
 			if(i != entityfactorydict->m_Factories.npos) {
 				entityfactorydict->m_Factories.erase(i);
 			}
 		}
+
+		callback.free();
+
+		size_callback.free();
 	}
 
 	gsdk::IServerNetworkable *factory_impl::Create(const char *classname)
-	{ return create(classname, factory_impl::GetEntitySize()); }
+	{ return create(classname); }
 
 	void factory_impl::Destroy(gsdk::IServerNetworkable *net)
 	{
@@ -397,143 +425,23 @@ namespace vmod::bindings::ent
 
 	size_t factory_impl::GetEntitySize()
 	{
-		std::size_t total_size{base_size};
+		if(size_callback) {
+			gsdk::IScriptVM *vm{vscript::vm()};
 
-		if(datamap) {
-			total_size += datamap->total_size;
-		}
+			vscript::handle_ref pl_scope{owner_scope()};
 
-		return total_size;
-	}
+			vscript::variant args[]{
+				instance_
+			};
 
-	void factory_impl::script_create_datamap(std::string &&name, gsdk::HSCRIPT props_array) noexcept
-	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
-
-		if(!props_array || props_array == gsdk::INVALID_HSCRIPT) {
-			vm->RaiseException("vmod: invalid props");
-			return;
-		}
-
-		if(!vm->IsArray(props_array)) {
-			vm->RaiseException("vmod: props is not a array");
-			return;
-		}
-
-		std::vector<gsdk::typedescription_t> props;
-		std::vector<std::unique_ptr<allocated_datamap::prop_storage>> props_storage;
-
-		std::vector<std::unique_ptr<gsdk::datamap_t>> maps;
-		std::vector<std::unique_ptr<allocated_datamap::map_storage>> maps_storage;
-
-		std::size_t total_size{0};
-
-		std::function<bool(gsdk::HSCRIPT)> read_props{
-			[&read_props,vm,&props,&props_storage,&total_size](gsdk::HSCRIPT var) noexcept -> bool {
-				int array_num{vm->GetArrayCount(var)};
-				for(int i{0}, it{0}; it != -1 && i < array_num; ++i) {
-					vscript::variant value;
-					it = vm->GetArrayValue(var, it, &value);
-
-					gsdk::HSCRIPT prop_table{value.get<gsdk::HSCRIPT>()};
-
-					if(!prop_table || prop_table == gsdk::INVALID_HSCRIPT) {
-						vm->RaiseException("vmod: prop %i is invalid", i);
-						return false;
-					}
-
-					if(!vm->IsTable(prop_table)) {
-						vm->RaiseException("vmod: prop %i is not a table", i);
-						return false;
-					}
-
-					if(!vm->GetValue(prop_table, "name", &value)) {
-						vm->RaiseException("vmod: prop %i is missing a name", i);
-						return false;
-					}
-
-					gsdk::typedescription_t &prop{props.emplace_back()};
-					auto &storage{props_storage.emplace_back(new allocated_datamap::prop_storage)};
-
-					prop.flags = static_cast<short>(gsdk::FTYPEDESC_PRIVATE|gsdk::FTYPEDESC_VIEW_NEVER|gsdk::FTYPEDESC_NOERRORCHECK);
-
-					std::string prop_name{value.get<std::string>()};
-					if(prop_name.empty()) {
-						vm->RaiseException("vmod: prop %i has empty name", i);
-						return false;
-					}
-
-					storage->name = std::move(prop_name);
-					prop.fieldName = storage->name.c_str();
-
-					if(!vm->GetValue(prop_table, "type", &value)) {
-						vm->RaiseException("vmod: prop '%s' is missing its type", prop.fieldName);
-						return false;
-					}
-
-					ffi_type *type{mem::singleton::read_type(value.get<gsdk::HSCRIPT>())};
-					if(!type) {
-						vm->RaiseException("vmod: prop '%s' type is invalid", prop.fieldName);
-						return false;
-					}
-
-					std::size_t num{1};
-
-					if(vm->GetValue(prop_table, "num", &value)) {
-						num = value.get<std::size_t>();
-
-						if(num == 0 || num == static_cast<std::size_t>(-1)) {
-							vm->RaiseException("vmod: prop '%s' has invalid num: %zu", prop.fieldName, num);
-							return false;
-						}
-					}
-
-					prop.fieldType = static_cast<gsdk::fieldtype_t>(ffi::to_field_type(type));
-					prop.fieldSize = static_cast<unsigned short>(num);
-
-					std::size_t propsize{align(type->size * num, type->alignment)};
-
-					prop.fieldSizeInBytes = static_cast<int>(propsize);
-
-					total_size += propsize;
-
-					if(vm->GetValue(prop_table, "external_name", &value)) {
-						std::string external_name{value.get<std::string>()};
-						if(external_name.empty()) {
-							vm->RaiseException("vmod: prop has '%s' invalid external name: '%s'", prop.fieldName, external_name.c_str());
-							return gsdk::INVALID_HSCRIPT;
-						}
-
-						storage->external_name = std::move(external_name);
-						prop.externalName = storage->external_name.c_str();
-
-						prop.flags |= gsdk::FTYPEDESC_KEY;
-					}
-				}
-
-				return true;
+			vscript::variant ret;
+			if(vm->ExecuteFunction(*size_callback, args, std::size(args), &ret, *pl_scope, true) == gsdk::SCRIPT_ERROR) {
+				return 0;
 			}
-		};
 
-		if(!read_props(props_array)) {
-			return;
+			return ret.get<std::size_t>();
 		}
 
-		datamap.reset(new allocated_datamap);
-
-		datamap->maps[0]->baseMap = nullptr;
-
-		datamap->maps_storage[0]->name = std::move(name);
-		datamap->maps[0]->dataClassName = datamap->maps_storage[0]->name.c_str();
-
-		datamap->maps_storage[0]->props = std::move(props);
-		datamap->maps_storage[0]->props_storage = std::move(props_storage);
-
-		datamap->maps[0]->dataNumFields = static_cast<int>(datamap->maps_storage[0]->props.size());
-		datamap->maps[0]->dataDesc = datamap->maps_storage[0]->props.data();
-
-		datamap->total_size = total_size;
-
-		datamap->hash_ = hash_datamap(datamap->map);
+		return 0;
 	}
 }

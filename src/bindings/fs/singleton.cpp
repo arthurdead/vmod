@@ -17,7 +17,7 @@ namespace vmod::bindings::fs
 	{
 		using namespace std::literals::string_view_literals;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		desc.func(&singleton::script_join_paths, "script_join_paths"sv, "join_paths"sv)
 		.desc("[path]"sv);
@@ -29,7 +29,7 @@ namespace vmod::bindings::fs
 			return false;
 		}
 
-		if(!vm->SetValue(scope, "game_dir", vscript::variant{main::instance().game_dir()})) {
+		if(!vm->SetValue(*scope, "game_dir", vscript::variant{main::instance().game_dir()})) {
 			error("vmod: failed to set game dir value\n"sv);
 			return false;
 		}
@@ -39,11 +39,11 @@ namespace vmod::bindings::fs
 
 	void singleton::unbindings() noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
-		if(scope && scope != gsdk::INVALID_HSCRIPT) {
-			if(vm->ValueExists(scope, "game_dir")) {
-				vm->ClearValue(scope, "game_dir");
+		if(scope) {
+			if(vm->ValueExists(*scope, "game_dir")) {
+				vm->ClearValue(*scope, "game_dir");
 			}
 		}
 
@@ -57,9 +57,9 @@ namespace vmod::bindings::fs
 		return 0;
 	}
 
-	gsdk::HSCRIPT singleton::script_glob(const std::filesystem::path &pattern) noexcept
+	vscript::handle_wrapper singleton::script_glob(const std::filesystem::path &pattern) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(pattern.empty()) {
 			vm->RaiseException("vmod: invalid pattern: '%s'", pattern.c_str());
@@ -72,8 +72,8 @@ namespace vmod::bindings::fs
 			return nullptr;
 		}
 
-		gsdk::HSCRIPT arr{vm->CreateArray()};
-		if(!arr || arr == gsdk::INVALID_HSCRIPT) {
+		vscript::handle_wrapper arr{vm->CreateArray()};
+		if(!arr) {
 			vm->RaiseException("vmod: failed to create array");
 			return nullptr;
 		}
@@ -83,7 +83,7 @@ namespace vmod::bindings::fs
 
 			vscript::variant var;
 			var.assign<std::string>(std::move(temp));
-			vm->ArrayAddToTail(arr, std::move(var));
+			vm->ArrayAddToTail(*arr, std::move(var));
 		}
 
 		globfree(&glob);

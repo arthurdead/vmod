@@ -1,5 +1,4 @@
 #include "datamap.hpp"
-#include "../../main.hpp"
 #include "singleton.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -18,7 +17,7 @@ namespace vmod::bindings::ent
 	{
 		using namespace std::literals::string_view_literals;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		desc.func(&dataprop::script_type, "script_type"sv, "type"sv)
 		.desc("[mem::types::type]"sv);
@@ -112,7 +111,7 @@ namespace vmod::bindings::ent
 	{
 		using namespace std::literals::string_view_literals;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(!vm->RegisterClass(&desc)) {
 			error("vmod: failed to register datatable script class\n"sv);

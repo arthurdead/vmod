@@ -1,5 +1,4 @@
 #include "docs.hpp"
-#include "../main.hpp"
 #include <cstddef>
 #include <string>
 #include <string_view>
@@ -530,6 +529,53 @@ namespace vmod::bindings::docs
 		return detail::type_name(type, static_cast<std::size_t>(-1), vscript, gsdk::FTYPEDESC_NOFLAGS);
 	}
 
+#ifdef __VMOD_USING_CUSTOM_VM
+	std::string param_type_name(gsdk::ScriptDataTypeAndFlags_t type, std::string_view alt) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		std::string ret;
+
+		if(type.can_be_optional()) {
+			ret += "optional<"sv;
+		}
+		if(!alt.empty()) {
+			ret += alt;
+		} else {
+			if(type.has_extra_types()) {
+				ret += "variant<"sv;
+			}
+			ret += type_name(type.main_type(), true);
+			if(type.has_extra_types()) {
+				ret += ", "sv;
+				for(int i{0}; i <= static_cast<int>(gsdk::SlimScriptDataType_t::SLIMFIELD_TYPECOUNT); ++i) {
+					auto fat{gsdk::fat_datatype(static_cast<gsdk::SlimScriptDataType_t>(i))};
+					if(type.has_extra_type(static_cast<gsdk::SlimScriptDataType_t>(i))) {
+						ret += type_name(fat, true);
+						ret += ", "sv;
+					}
+				}
+				ret.erase(ret.end()-2, ret.end());
+				ret += '>';
+			}
+		}
+		if(type.can_be_optional()) {
+			ret += '>';
+		}
+
+		return ret;
+	}
+#else
+	std::string_view param_type_name(gsdk::ScriptDataType_t type, std::string_view alt) noexcept
+	{
+		if(!alt.empty()) {
+			return alt;
+		} else {
+			return type_name(type, true);
+		}
+	}
+#endif
+
 	std::string_view get_class_desc_name(const gsdk::ScriptClassDesc_t *desc) noexcept
 	{
 		if(desc->m_pNextDesc == reinterpret_cast<const gsdk::ScriptClassDesc_t *>(uninitialized_memory)) {
@@ -603,36 +649,15 @@ namespace vmod::bindings::docs
 		if(num_args > 0) {
 			auto do_param{
 				[&info,&params_str,&func_desc](std::size_t j) noexcept -> void {
-				#ifdef __VMOD_USING_CUSTOM_VM
-					bool opt{func_desc.m_Parameters[j].can_be_optional()};
-				#else
-					bool opt{false};
-				#endif
 					auto param_it{info.params.find(j)};
 					if(param_it != info.params.end()) {
-						if(opt) {
-							params_str += "optional<"sv;
-						}
-						if(!param_it->second.type.empty()) {
-							params_str += param_it->second.type;
-						} else {
-							params_str += type_name(func_desc.m_Parameters[j], true);
-						}
-						if(opt) {
-							params_str += '>';
-						}
+						params_str += param_type_name(func_desc.m_Parameters[j], param_it->second.type);
 						if(!param_it->second.name.empty()) {
 							params_str += ' ';
 							params_str += param_it->second.name;
 						}
 					} else {
-						if(opt) {
-							params_str += "optional<"sv;
-						}
-						params_str += type_name(func_desc.m_Parameters[j], true);
-						if(opt) {
-							params_str += '>';
-						}
+						params_str += param_type_name(func_desc.m_Parameters[j]);
 					}
 				}
 			};
@@ -897,21 +922,21 @@ namespace vmod::bindings::docs
 		write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
 	}
 
-	void write(std::string &file, std::size_t depth, gsdk::HSCRIPT enum_table, write_enum_how how) noexcept
+	void write(std::string &file, std::size_t depth, vscript::handle_ref enum_table, write_enum_how how) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
 		std::unordered_map<unsigned char, std::string> bit_str_map;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
-		int num2{vm->GetNumTableEntries(enum_table)};
+		int num2{vm->GetNumTableEntries(*enum_table)};
 
 		if(how == write_enum_how::flags) {
 			for(int j{0}, it2{0}; it2 != -1 && j < num2; ++j) {
 				vscript::variant key2;
 				vscript::variant value2;
-				it2 = vm->GetKeyValue(enum_table, it2, &key2, &value2);
+				it2 = vm->GetKeyValue(*enum_table, it2, &key2, &value2);
 
 				if(value2.m_type == gsdk::FIELD_VOID) {
 					continue;
@@ -943,7 +968,7 @@ namespace vmod::bindings::docs
 		for(int j{0}, it2{0}; it2 != -1 && j < num2; ++j) {
 			vscript::variant key2;
 			vscript::variant value2;
-			it2 = vm->GetKeyValue(enum_table, it2, &key2, &value2);
+			it2 = vm->GetKeyValue(*enum_table, it2, &key2, &value2);
 
 			std::string_view value_name{key2.get<std::string_view>()};
 

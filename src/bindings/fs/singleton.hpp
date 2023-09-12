@@ -31,7 +31,7 @@ namespace vmod::bindings::fs
 
 		static int script_globerr(const char *epath, int eerrno) noexcept;
 
-		static gsdk::HSCRIPT script_glob(const std::filesystem::path &pattern) noexcept;
+		static vscript::handle_wrapper script_glob(const std::filesystem::path &pattern) noexcept;
 		static std::filesystem::path script_join_paths(const vscript::variant *args, std::size_t num_args, ...) noexcept;
 	};
 }

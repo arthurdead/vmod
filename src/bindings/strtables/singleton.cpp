@@ -27,7 +27,7 @@ namespace vmod
 						return;
 					}
 
-					if(!vm_->SetValue(stringtable_table, tablename.c_str(), ptr->instance)) {
+					if(!vm_->SetValue(*stringtable_table, tablename.c_str(), *ptr->instance_)) {
 						error("vmod: failed to set '%s' string table value\n"sv);
 						return;
 					}
@@ -64,7 +64,7 @@ namespace vmod
 			return false;
 		}
 
-		if(!vm_->SetValue(stringtable_table, tablename.c_str(), ptr->instance)) {
+		if(!vm_->SetValue(*stringtable_table, tablename.c_str(), *ptr->instance_)) {
 			error("vmod: failed to set '%s' string table value\n"sv, tablename.c_str());
 			return false;
 		}

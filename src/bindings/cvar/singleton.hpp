@@ -11,6 +11,8 @@
 
 namespace vmod::bindings::cvar
 {
+	class convar_ref;
+
 	class singleton final : public singleton_base
 	{
 		friend void write_docs(const std::filesystem::path &) noexcept;
@@ -33,13 +35,13 @@ namespace vmod::bindings::cvar
 	private:
 		static vscript::singleton_class_desc<singleton> desc;
 
-		static gsdk::HSCRIPT script_create_cvar(std::string_view name, std::string_view value) noexcept;
-		static gsdk::HSCRIPT script_create_concmd(std::string_view name, gsdk::HSCRIPT callback) noexcept;
-		gsdk::HSCRIPT script_find_cvar(std::string &&name) noexcept;
+		static vscript::handle_ref script_create_cvar(std::string_view name, std::string_view value) noexcept;
+		static vscript::handle_ref script_create_concmd(std::string_view name, vscript::handle_wrapper callback) noexcept;
+		vscript::handle_ref script_find_cvar(std::string &&name) noexcept;
 
-		gsdk::HSCRIPT script_find_concmd(std::string &&name) noexcept;
+		vscript::handle_ref script_find_concmd(std::string &&name) noexcept;
 
-		gsdk::HSCRIPT flags_table{gsdk::INVALID_HSCRIPT};
+		vscript::handle_wrapper flags_table{};
 
 		std::unordered_map<std::string, std::unique_ptr<convar_ref>> convars;
 		std::unordered_map<std::string, std::unique_ptr<concommand_ref>> concommands;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../vscript/vscript.hpp"
+#include "../vscript/variant.hpp"
 #include <cstddef>
 #include <vector>
 #include <string>
@@ -16,6 +17,12 @@ namespace vmod::bindings::docs
 
 	extern std::string_view type_name(gsdk::ScriptDataType_t type, bool vscript) noexcept;
 	extern std::string_view type_name(gsdk::ScriptDataType_t type, std::size_t size, int flags) noexcept;
+
+#ifdef __VMOD_USING_CUSTOM_VM
+	extern std::string param_type_name(gsdk::ScriptDataTypeAndFlags_t type, std::string_view alt = {}) noexcept;
+#else
+	extern std::string_view param_type_name(gsdk::ScriptDataType_t type, std::string_view alt = {}) noexcept;
+#endif
 
 	extern std::string_view get_class_desc_name(const gsdk::ScriptClassDesc_t *desc) noexcept;
 
@@ -79,5 +86,5 @@ namespace vmod::bindings::docs
 		name,
 		normal
 	};
-	extern void write(std::string &file, std::size_t depth, gsdk::HSCRIPT enum_table, write_enum_how how) noexcept;
+	extern void write(std::string &file, std::size_t depth, vscript::handle_ref enum_table, write_enum_how how) noexcept;
 }

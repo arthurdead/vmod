@@ -17,18 +17,87 @@ namespace vmod
 	gsdk::IServerNetworkStringTableContainer *sv_stringtables{nullptr};
 	std::unordered_map<std::string, gsdk::ServerClass *> sv_classes;
 	gsdk::CStandardSendProxies *std_proxies{nullptr};
+	gsdk::CSteam3Server &(*Steam3Server)() {nullptr};
+#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	gsdk::IWorkshop *workshop{nullptr};
+#endif
 #ifndef GSDK_NO_SYMBOLS
 	bool symbols_available{false};
 #endif
+	bool srcds_executable{false};
 	gsdk::ConVar *developer{nullptr};
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+	gsdk::CLoggingSystem *(*GetGlobalLoggingSystem)() {nullptr};
+	gsdk::CEngineConsoleLoggingListener *s_EngineLoggingListener{nullptr};
+	gsdk::LoggingChannelID_t LOG_General{gsdk::INVALID_LOGGING_CHANNEL_ID};
+	gsdk::LoggingChannelID_t LOG_Assert{gsdk::INVALID_LOGGING_CHANNEL_ID};
+	gsdk::LoggingChannelID_t LOG_Developer{gsdk::INVALID_LOGGING_CHANNEL_ID};
+	gsdk::LoggingChannelID_t LOG_DeveloperConsole{gsdk::INVALID_LOGGING_CHANNEL_ID};
+	gsdk::LoggingChannelID_t LOG_Console{gsdk::INVALID_LOGGING_CHANNEL_ID};
+	gsdk::LoggingChannelID_t LOG_DeveloperVerbose{gsdk::INVALID_LOGGING_CHANNEL_ID};
+	gsdk::LoggingChannelID_t LOG_DownloadManager{gsdk::INVALID_LOGGING_CHANNEL_ID};
+	gsdk::LoggingChannelID_t LOG_SeverLog{gsdk::INVALID_LOGGING_CHANNEL_ID};
+	gsdk::LoggingChannelID_t sv_LOG_VScript{gsdk::INVALID_LOGGING_CHANNEL_ID};
+#endif
+#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+	gsdk::LoggingChannelID_t LOG_Workshop{gsdk::INVALID_LOGGING_CHANNEL_ID};
+#endif
+
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+	bool gsdk_tier0_library::load(const std::filesystem::path &path) noexcept
+	{
+		using namespace std::literals::string_literals;
+		using namespace std::literals::string_view_literals;
+
+		if(!library::load(path)) {
+			return false;
+		}
+
+	#ifndef GSDK_NO_SYMBOLS
+		if(srcds_executable) {
+			std::uint64_t offset{symbol_cache::uncached_find_mangled_func(path, "_Z22GetGlobalLoggingSystemv"sv)};
+			if(offset == 0) {
+				warning("vmod: missing GetGlobalLoggingSystem func\n"sv);
+			} else {
+				#pragma GCC diagnostic push
+				#pragma GCC diagnostic ignored "-Wconditionally-supported"
+				GetGlobalLoggingSystem = reinterpret_cast<decltype(GetGlobalLoggingSystem)>(base() + offset);
+				#pragma GCC diagnostic pop
+			}
+		} else {
+	#endif
+			warning("vmod: missing GetGlobalLoggingSystem func\n"sv);
+	#ifndef GSDK_NO_SYMBOLS
+		}
+	#endif
+
+		LOG_General = LoggingSystem_FindChannel("General");
+		LOG_Assert = LoggingSystem_FindChannel("Assert");
+		LOG_Developer = LoggingSystem_FindChannel("Developer");
+		LOG_DeveloperConsole = LoggingSystem_FindChannel("DeveloperConsole");
+		LOG_Console = LoggingSystem_FindChannel("Console");
+		LOG_DeveloperVerbose = LoggingSystem_FindChannel("DeveloperVerbose");
+
+		return true;
+	}
+#endif
 
 	bool gsdk_launcher_library::load(const std::filesystem::path &path) noexcept
 	{
+		using namespace std::literals::string_literals;
+		using namespace std::literals::string_view_literals;
+
 		if(!gsdk_library::load(path)) {
 			return false;
 		}
 
 		dedicated = iface<gsdk::IDedicatedExports>();
+
+	#ifndef GSDK_NO_SYMBOLS
+		if(CommandLine()->FindParm("-vmod_disable_syms") == 0) {
+			symbols_available = (dedicated != nullptr);
+		}
+	#endif
 
 		return true;
 	}
@@ -77,8 +146,37 @@ namespace vmod
 			warning("vmod: missing 'sv' symbol\n"sv);
 		}
 
+		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		auto loglistener_it{eng_global_qual.find("g_EngineLoggingListener"s)};
+		if(loglistener_it == eng_global_qual.end()) {
+			warning("vmod: missing 's_EngineLoggingListener' symbol\n"sv);
+		}
+		#endif
+
 		if(sv_it != eng_global_qual.end()) {
 			sv = sv_it->second->addr<gsdk::IServer *>();
+		}
+
+		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		if(loglistener_it != eng_global_qual.end()) {
+			s_EngineLoggingListener = loglistener_it->second->addr<decltype(s_EngineLoggingListener)>();
+		}
+		#endif
+	#endif
+
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		LOG_DownloadManager = LoggingSystem_FindChannel("DownloadManager");
+		LOG_SeverLog = LoggingSystem_FindChannel("SeverLog");
+	#endif
+
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		LOG_Workshop = LoggingSystem_FindChannel("Workshop");
+	#endif
+
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		workshop = iface<gsdk::IWorkshop>();
+		if(!workshop) {
+			warning("missing IWorkshop interface version %s\n"sv, gsdk::IWorkshop::interface_name);
 		}
 	#endif
 
@@ -122,11 +220,11 @@ namespace vmod
 			return false;
 		}
 
+		const auto &sv_global_qual{syms.global()};
+
 	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
 		entityfactorydict = reinterpret_cast<gsdk::CEntityFactoryDictionary *>(servertools->GetEntityFactoryDictionary());
 	#else
-		const auto &sv_global_qual{syms.global()};
-
 		auto EntityFactoryDictionary_it{sv_global_qual.find("EntityFactoryDictionary()"s)};
 		if(EntityFactoryDictionary_it == sv_global_qual.end()) {
 			warning("vmod: missing 'EntityFactoryDictionary' symbol\n"sv);
@@ -139,6 +237,15 @@ namespace vmod
 		}
 	#endif
 
+		auto Steam3Server_it{sv_global_qual.find("Steam3Server()"s)};
+		if(Steam3Server_it == sv_global_qual.end()) {
+			warning("vmod: missing 'Steam3Server' symbol\n"sv);
+		}
+
+		if(Steam3Server_it != sv_global_qual.end()) {
+			Steam3Server = Steam3Server_it->second->func<decltype(Steam3Server)>();
+		}
+
 		std_proxies = gamedll->GetStandardSendProxies();
 
 		gsdk::ServerClass *temp_classes{gamedll->GetAllServerClasses()};
@@ -147,6 +254,10 @@ namespace vmod
 			sv_classes.emplace(std::move(name), temp_classes);
 			temp_classes = temp_classes->m_pNext;
 		}
+
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+		sv_LOG_VScript = LoggingSystem_FindChannel("VScript");
+	#endif
 
 		return true;
 	}

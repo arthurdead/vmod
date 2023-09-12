@@ -1,5 +1,6 @@
 #include "../../main.hpp"
 #include "../../plugin.hpp"
+#include "../../mod.hpp"
 #include "../../filesystem.hpp"
 #include "../docs.hpp"
 
@@ -17,6 +18,34 @@ namespace vmod
 
 	bool main::binding_mods() noexcept
 	{
+		using namespace std::literals::string_literals;
+
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+		auto it{sv_script_class_descs.find("CBaseEntity"s)};
+		for(auto &func : it->second->m_FunctionBindings) {
+			if(std::strcmp(func.m_desc.m_pszScriptName, "GetEntityHandle") == 0) {
+				func.m_desc.m_ReturnType = gsdk::FIELD_EHANDLE;
+				break;
+			}
+		}
+
+		it = sv_script_class_descs.find("TerrorNavArea"s);
+		for(auto &func : it->second->m_FunctionBindings) {
+			if(std::strcmp(func.m_desc.m_pszScriptName, "GetCorner") == 0) {
+				func.m_desc.m_ReturnType = gsdk::FIELD_VECTOR;
+				break;
+			}
+		}
+
+		it = sv_script_class_descs.find("CTerrorPlayer"s);
+		for(auto &func : it->second->m_FunctionBindings) {
+			if(std::strcmp(func.m_desc.m_pszScriptName, "GetZombieType") == 0) {
+				func.m_desc.m_ReturnType = gsdk::FIELD_INTEGER;
+				break;
+			}
+		}
+	#endif
+
 		return true;
 	}
 
@@ -24,8 +53,8 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
-		desc.func(&main::script_find_plugin, "script_find_plugin"sv, "find_plugin"sv)
-		.desc("[plugin](path)"sv);
+		desc.func(&main::script_find_mod, "script_find_mod"sv, "find_mod"sv)
+		.desc("[mod](path)"sv);
 
 		desc.func(&main::script_is_map_active, "script_is_map_active"sv, "is_map_active"sv);
 		desc.func(&main::script_is_map_loaded, "script_is_map_loaded"sv, "is_map_loaded"sv);
@@ -49,45 +78,49 @@ namespace vmod
 			return false;
 		}
 
-		if(!vm_->SetValue(scope, "root_dir", root_dir_.c_str())) {
+		if(!vm_->SetValue(*scope, "root_dir", root_dir_.c_str())) {
 			error("vmod: failed to set root_dir value\n"sv);
 			return false;
 		}
 
 		return_flags_table = vm_->CreateTable();
-		if(!return_flags_table || return_flags_table == gsdk::INVALID_HSCRIPT) {
+		if(!return_flags_table) {
 			error("vmod: failed to create return flags table\n"sv);
 			return false;
 		}
 
 		{
-			if(!vm_->SetValue(return_flags_table, "ignored", vscript::variant{plugin::callable::return_flags::ignored})) {
+			if(!vm_->SetValue(*return_flags_table, "ignored", vscript::variant{plugin::callable::return_flags::ignored})) {
 				error("vmod: failed to set return flags continue value\n"sv);
 				return false;
 			}
 
-			if(!vm_->SetValue(return_flags_table, "halt", vscript::variant{plugin::callable::return_flags::halt})) {
+			if(!vm_->SetValue(*return_flags_table, "halt", vscript::variant{plugin::callable::return_flags::halt})) {
 				error("vmod: failed to set return flags halt value\n"sv);
 				return false;
 			}
 
-			if(!vm_->SetValue(return_flags_table, "handled", vscript::variant{plugin::callable::return_flags::handled})) {
+			if(!vm_->SetValue(*return_flags_table, "handled", vscript::variant{plugin::callable::return_flags::handled})) {
 				error("vmod: failed to set return flags handled value\n"sv);
 				return false;
 			}
 
-			if(!vm_->SetValue(return_flags_table, "handled_halt", vscript::variant{plugin::callable::return_flags::handled|plugin::callable::return_flags::halt})) {
+			if(!vm_->SetValue(*return_flags_table, "handled_halt", vscript::variant{plugin::callable::return_flags::handled|plugin::callable::return_flags::halt})) {
 				error("vmod: failed to set return flags handled_halt value\n"sv);
 				return false;
 			}
 		}
 
-		if(!vm_->SetValue(scope, "ret", return_flags_table)) {
+		if(!vm_->SetValue(*scope, "ret", *return_flags_table)) {
 			error("vmod: failed to set return flags table value\n"sv);
 			return false;
 		}
 
 		if(!plugin::bindings()) {
+			return false;
+		}
+
+		if(!mod::bindings()) {
 			return false;
 		}
 
@@ -116,7 +149,7 @@ namespace vmod
 		}
 
 		stringtable_table = vm_->CreateTable();
-		if(!stringtable_table || stringtable_table == gsdk::INVALID_HSCRIPT) {
+		if(!stringtable_table) {
 			error("vmod: failed to create strtables table\n"sv);
 			return false;
 		}
@@ -125,7 +158,7 @@ namespace vmod
 			return false;
 		}
 
-		if(!vm_->SetValue(scope, "strtables", stringtable_table)) {
+		if(!vm_->SetValue(*scope, "strtables", *stringtable_table)) {
 			error("vmod: failed to set strtables table value\n"sv);
 			return false;
 		}
@@ -137,7 +170,7 @@ namespace vmod
 			}
 
 			symbols_table_ = vm_->CreateTable();
-			if(!symbols_table_ || symbols_table_ == gsdk::INVALID_HSCRIPT) {
+			if(!symbols_table_) {
 				error("vmod: failed to create syms table\n"sv);
 				return false;
 			}
@@ -146,7 +179,7 @@ namespace vmod
 				return false;
 			}
 
-			if(!vm_->SetValue(scope, "syms", symbols_table_)) {
+			if(!vm_->SetValue(*scope, "syms", *symbols_table_)) {
 				error("vmod: failed to set syms table value\n"sv);
 				return false;
 			}
@@ -219,6 +252,9 @@ namespace vmod
 		bindings::docs::write(&plugin::desc, true, 1, file, false);
 		file += "\n\n"sv;
 
+		bindings::docs::write(&mod::desc, true, 1, file, false);
+		file += "\n\n"sv;
+
 		bindings::docs::ident(file, 1);
 		file += "namespace fs;\n\n"sv;
 		bindings::fs::write_docs(dir);
@@ -264,24 +300,24 @@ namespace vmod
 	{
 		script_stringtables.clear();
 
-		if(stringtable_table && stringtable_table != gsdk::INVALID_HSCRIPT) {
-			vm_->ReleaseTable(stringtable_table);
-		}
+		stringtable_table.free();
 
-		if(vm_->ValueExists(scope, "strtables")) {
-			vm_->ClearValue(scope, "strtables");
+		if(scope) {
+			if(vm_->ValueExists(*scope, "strtables")) {
+				vm_->ClearValue(*scope, "strtables");
+			}
 		}
 
 		bindings::strtables::unbindings();
 
 	#ifndef GSDK_NO_SYMBOLS
 		if(symbols_available) {
-			if(symbols_table_ && symbols_table_ != gsdk::INVALID_HSCRIPT) {
-				vm_->ReleaseTable(symbols_table_);
-			}
+			symbols_table_.free();
 
-			if(vm_->ValueExists(scope, "syms")) {
-				vm_->ClearValue(scope, "syms");
+			if(scope) {
+				if(vm_->ValueExists(*scope, "syms")) {
+					vm_->ClearValue(*scope, "syms");
+				}
 			}
 		}
 	#endif
@@ -304,41 +340,36 @@ namespace vmod
 
 		plugin::unbindings();
 
-		if(return_flags_table && return_flags_table != gsdk::INVALID_HSCRIPT) {
-			vm_->ReleaseTable(return_flags_table);
-		}
+		mod::unbindings();
 
-		if(vm_->ValueExists(scope, "ret")) {
-			vm_->ClearValue(scope, "ret");
-		}
+		return_flags_table.free();
 
-		if(vm_->ValueExists(scope, "root_dir")) {
-			vm_->ClearValue(scope, "root_dir");
+		if(scope) {
+			if(vm_->ValueExists(*scope, "ret")) {
+				vm_->ClearValue(*scope, "ret");
+			}
+
+			if(vm_->ValueExists(*scope, "root_dir")) {
+				vm_->ClearValue(*scope, "root_dir");
+			}
 		}
 
 		singleton_base::unbindings();
 	}
 
-	gsdk::HSCRIPT main::script_find_plugin(std::string_view plname) noexcept
+	vscript::handle_ref main::script_find_mod(std::string_view mdname) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
-		if(plname.empty()) {
-			vm_->RaiseException("vmod: invalid path: '%s'", plname.data());
+		if(mdname.empty()) {
+			vm_->RaiseException("vmod: invalid path: '%s'", mdname.data());
 			return nullptr;
 		}
 
-		std::filesystem::path path{build_plugin_path(plname)};
-		{
-			std::filesystem::path ext{path.extension()};
-			if(ext != scripts_extension) {
-				vm_->RaiseException("vmod: invalid extension expected '%s' got '%s'", scripts_extension.data(), ext.c_str());
-				return nullptr;
-			}
-		}
+		std::filesystem::path path{build_mod_path(mdname)};
 
-		auto it{plugins.find(path)};
-		if(it != plugins.end()) {
+		auto it{mods.find(path)};
+		if(it != mods.end()) {
 			return it->second->instance();
 		}
 

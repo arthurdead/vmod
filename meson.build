@@ -23,7 +23,8 @@ cpp_args = [
 
 cpp_args += [
 	'-Wno-padded',
-	'-Wno-switch-enum'
+	'-Wno-switch-enum',
+	'-Wno-conversion'
 ]
 
 cpp_args += [
@@ -32,6 +33,7 @@ cpp_args += [
 	'-Wno-error=unused-function',
 	'-Wno-error=unreachable-code',
 	'-Wno-error=unused-macros',
+	'-Wno-error=unused-but-set-variable'
 ]
 
 cpp_args += [
@@ -223,13 +225,24 @@ else
 	)
 endif
 
-xxd_exe = find_program('xxd')
+xxd_exe = find_program('xxd', native: true, required: false)
 if xxd_exe.found()
 	xxd_named = generator(xxd_exe,
 		arguments: ['-n','@EXTRA_ARGS@','-i','@INPUT@','@OUTPUT@'],
 		output: '@PLAINNAME@.h'
 	)
 endif
+
+steamworks = subproject('steamworks',
+	default_options: thirdparty_default_options_cpp,
+	required: false
+)
+
+steam_api = declare_dependency(
+	link_args: [
+		'-lsteam_api'
+	]
+)
 
 dependencies = [
 	dependency('threads'),
@@ -247,7 +260,9 @@ vmod_dependencies = [
 	),
 	libyaml.get_variable('yaml_dep'),
 	squirrel.get_variable('squirrel_dep'),
-	squirrel.get_variable('squirrel_internal_dep')
+	squirrel.get_variable('squirrel_internal_dep'),
+	steamworks.get_variable('steamworks_dep'),
+	steam_api
 ]
 
 if enable_preprocessor
@@ -276,32 +291,28 @@ endif
 if custom_vm
 	vm_cpp_args += ['-D__VMOD_USING_CUSTOM_VM']
 
-	if use_quirrel
-		squirrel_vmod_init_script_src = files('src/vm/squirrel/vmod_init.nut')
+	squirrel_vmod_init_script_src = files('src/vm/squirrel/vmod_init.nut')
 
-		if xxd_exe.found()
-			squirrel_vmod_init_script = declare_dependency(
-				sources: xxd_named.process(
-					squirrel_vmod_init_script_src,
-					extra_args: '__squirrel_vmod_init_script_data'
-				)
+	squirrel_vmod_server_init_script_src = files('src/squirrel/vmod_server_init.nut')
+
+	if xxd_exe.found()
+		squirrel_vmod_init_script = declare_dependency(
+			sources: xxd_named.process(
+				squirrel_vmod_init_script_src,
+				extra_args: '__squirrel_vmod_init_script_data'
 			)
+		)
 
-			vmod_dependencies += [squirrel_vmod_init_script]
-		endif
+		vmod_dependencies += [squirrel_vmod_init_script]
 
-		squirrel_vmod_server_init_script_src = files('src/squirrel/vmod_server_init.nut')
-
-		if xxd_exe.found()
-			squirrel_vmod_server_init_script = declare_dependency(
-				sources: xxd_named.process(
-					squirrel_vmod_server_init_script_src,
-					extra_args: '__squirrel_vmod_server_init_script_data'
-				)
+		squirrel_vmod_server_init_script = declare_dependency(
+			sources: xxd_named.process(
+				squirrel_vmod_server_init_script_src,
+				extra_args: '__squirrel_vmod_server_init_script_data'
 			)
+		)
 
-			vmod_dependencies += [squirrel_vmod_server_init_script]
-		endif
+		vmod_dependencies += [squirrel_vmod_server_init_script]
 	endif
 
 	if enable_sourcepawn
@@ -351,28 +362,6 @@ if engine_dir != ''
 	)
 
 	dependencies += [tier0,vstdlib]
-
-	if not no_symbols and dedicated
-		server = declare_dependency(
-			link_args: [
-				join_paths(game_bin,'server_srv.so')
-			]
-		)
-
-		vscript = declare_dependency(
-			link_args: [
-				join_paths(engine_bin,'vscript_srv.so')
-			]
-		)
-
-		engine = declare_dependency(
-			link_args: [
-				join_paths(engine_bin,'engine_srv.so')
-			]
-		)
-
-		dependencies += [server,vscript,engine]
-	endif
 endif
 
 sources = [
@@ -380,6 +369,7 @@ sources = [
 		'src/main.cpp',
 		'src/filesystem.cpp',
 		'src/plugin.cpp',
+		'src/mod.cpp',
 		'src/convar.cpp',
 		'src/gsdk_library.cpp',
 		'src/gsdk.cpp',
@@ -387,6 +377,7 @@ sources = [
 		'src/vscript/vscript.cpp',
 		'src/vm/vm_shared.cpp',
 		'src/bindings/vmod/plugin.cpp',
+		'src/bindings/vmod/mod.cpp',
 		'src/bindings/vmod/singleton.cpp',
 		'src/bindings/cvar/bindings.cpp',
 		'src/bindings/cvar/singleton.cpp',
@@ -409,6 +400,7 @@ sources = [
 		'src/bindings/ent/bindings.cpp',
 		'src/bindings/ent/singleton.cpp',
 		'src/bindings/ent/sendtable.cpp',
+		'src/bindings/ent/serverclass.cpp',
 		'src/bindings/ent/datamap.cpp',
 		'src/bindings/ent/factory.cpp',
 		'src/bindings/docs.cpp',
@@ -456,7 +448,7 @@ lib = shared_library('vmod',
 	install: install,
 	install_dir: vmod_bin,
 	cpp_args: cpp_args + vm_cpp_args + gsdk_cpp_args,
-	link_args: link_args
+	link_args: link_args + ['-L'+engine_bin]
 )
 
 vtable_dumper = executable('vtable_dumper',
@@ -534,7 +526,7 @@ if install
 		install_dir: addons
 	)
 
-	if custom_vm and use_quirrel
+	if custom_vm
 		install_data(
 			squirrel_vmod_init_script_src,
 			rename: join_paths(vmod_root,'base/squirrel/vmod_init.nut'),

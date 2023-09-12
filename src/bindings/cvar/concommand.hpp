@@ -74,7 +74,7 @@ namespace vmod::bindings::cvar
 
 		concommand(gsdk::ConCommand *cmd_) = delete;
 
-		concommand(gsdk::ConCommand *cmd_, gsdk::HSCRIPT callback_) noexcept;
+		concommand(gsdk::ConCommand *cmd_, vscript::handle_wrapper &&callback_) noexcept;
 
 		~concommand() noexcept override;
 
@@ -85,6 +85,6 @@ namespace vmod::bindings::cvar
 		{ return register_instance(&desc, this); }
 
 	private:
-		gsdk::HSCRIPT callback;
+		vscript::handle_wrapper callback;
 	};
 }

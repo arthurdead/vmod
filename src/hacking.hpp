@@ -483,16 +483,32 @@ namespace vmod
 		return mfp;
 	}
 
+	template <typename R, typename C, typename U, typename ...Args>
+	inline void swap_vfunc(generic_vtable_t vtable, R(U::*old_func)(Args...), R(C::*new_func)(Args...)) noexcept
+	{
+		static_assert(std::is_base_of_v<U, C>);
+		std::size_t index{vfunc_index<R, U, Args...>(old_func)};
+		if(index == static_cast<std::size_t>(-1)) {
+			debugtrap();
+			return;
+		}
+		page_info func_page{vtable + ((index > 0) ? (index-1) : 0), sizeof(generic_plain_mfp_t)};
+		func_page.protect(PROT_READ|PROT_WRITE|PROT_EXEC);
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wcast-function-type"
+		auto mfp{get_internal_mfp<R, C, Args...>(new_func)};
+		vtable[index] = reinterpret_cast<generic_plain_mfp_t>(mfp.addr);
+		#pragma GCC diagnostic pop
+	}
+
 	template <typename T>
 	class detour_base
 	{
 	public:
 		inline detour_base() noexcept
-		{
-			std::memset(old_bytes, 0, sizeof(old_bytes));
-		}
+		{ std::memset(old_bytes, 0, sizeof(old_bytes)); }
 
-		inline ~detour_base() noexcept
+		virtual inline ~detour_base() noexcept
 		{ disable(); }
 
 		void enable() noexcept;
@@ -549,6 +565,7 @@ namespace vmod
 	{
 	public:
 		detour() noexcept = default;
+		~detour() noexcept override = default;
 
 		inline void initialize(function_pointer_t<T> old_func_, function_pointer_t<T> new_func_) noexcept
 		{
@@ -581,6 +598,7 @@ namespace vmod
 	{
 	public:
 		detour() noexcept = default;
+		~detour() noexcept override = default;
 
 		inline void initialize(function_pointer_t<T> old_func_, function_plain_pointer_t<T> new_func_) noexcept
 		{

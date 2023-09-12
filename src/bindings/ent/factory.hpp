@@ -94,25 +94,27 @@ namespace vmod::bindings::ent
 	private:
 		static vscript::class_desc<factory_impl> desc;
 
-		bool initialize(std::string_view name, gsdk::HSCRIPT callback_) noexcept;
+		bool initialize(std::vector<std::string> &&names_, vscript::handle_wrapper &&callback_, vscript::handle_wrapper &&size_callback_) noexcept;
 
-		gsdk::IServerNetworkable *script_create_sized(std::string_view classname, std::size_t new_size) noexcept;
+		gsdk::IServerNetworkable *script_create(std::string_view classname, std::optional<vscript::handle_wrapper> opts) noexcept;
 
-		void script_create_datamap(std::string &&name, gsdk::HSCRIPT props_array) noexcept;
-
-		inline factory_impl(std::size_t base_size_) noexcept
-			: factory_base{this}, base_size{base_size_}
+		inline factory_impl() noexcept
+			: factory_base{this}
 		{
 		}
 
-		gsdk::HSCRIPT callback{gsdk::INVALID_HSCRIPT};
-		std::size_t base_size{0};
+		vscript::handle_wrapper callback{};
+		vscript::handle_wrapper size_callback{};
 		std::vector<std::string> names;
 
-		std::unique_ptr<allocated_datamap> datamap;
-		std::unique_ptr<allocated_server_class> svclass;
+		struct create_options
+		{
+			std::optional<std::size_t> new_size;
+		};
 
-		gsdk::IServerNetworkable *create(std::string_view classname, std::size_t new_size) noexcept;
+		gsdk::IServerNetworkable *create(std::string_view classname, std::optional<create_options> opts) noexcept;
+		inline gsdk::IServerNetworkable *create(std::string_view classname) noexcept
+		{ return create(classname, std::nullopt); }
 
 		gsdk::IServerNetworkable *Create(const char *classname) override;
 		void Destroy(gsdk::IServerNetworkable *net) override;

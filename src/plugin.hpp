@@ -12,18 +12,23 @@
 namespace vmod
 {
 	class main;
+	class mod;
 
 	class plugin final
 	{
 		friend class main;
+		friend class mod;
 
 	public:
 		static bool bindings() noexcept;
 		static void unbindings() noexcept;
 
-		plugin(std::filesystem::path &&path_) noexcept;
-		inline plugin(const std::filesystem::path &path_) noexcept
-			: plugin{std::filesystem::path{path_}}
+		inline plugin(std::filesystem::path &&path__) noexcept
+			: path_{std::move(path__)}
+		{
+		}
+		inline plugin(const std::filesystem::path &path__) noexcept
+			: path_{path__}
 		{
 		}
 		~plugin() noexcept;
@@ -39,15 +44,18 @@ namespace vmod
 		load_status reload() noexcept;
 		void unload() noexcept;
 
-		inline gsdk::HSCRIPT instance() noexcept
+		inline vscript::handle_ref instance() noexcept
 		{ return instance_; }
-		inline gsdk::HSCRIPT private_scope() noexcept
+		inline vscript::handle_ref private_scope() noexcept
 		{ return private_scope_; }
 
+		inline std::filesystem::path path() const noexcept
+		{ return path_; }
+
 		inline operator bool() const noexcept
-		{ return running && (script && script != gsdk::INVALID_HSCRIPT); }
+		{ return (running && script); }
 		inline bool operator!() const noexcept
-		{ return !running || (!script || script == gsdk::INVALID_HSCRIPT); }
+		{ return (!running || !script); }
 
 		static inline plugin *assumed_currently_running() noexcept
 		{ return assumed_currently_running_; }
@@ -60,9 +68,9 @@ namespace vmod
 			~function() noexcept;
 
 			inline operator bool() const noexcept
-			{ return (func && func != gsdk::INVALID_HSCRIPT); }
+			{ return static_cast<bool>(func); }
 			inline bool operator!() const noexcept
-			{ return (!func || func == gsdk::INVALID_HSCRIPT); }
+			{ return !func; }
 
 			template <typename R, typename ...Args>
 			R execute(Args &&...args) noexcept;
@@ -78,10 +86,10 @@ namespace vmod
 			void unload() noexcept;
 
 			inline bool valid() const noexcept
-			{ return ((func && func != gsdk::INVALID_HSCRIPT) && (scope && scope != gsdk::INVALID_HSCRIPT)); }
+			{ return (func && scope); }
 
-			gsdk::HSCRIPT scope{gsdk::INVALID_HSCRIPT};
-			gsdk::HSCRIPT func{gsdk::INVALID_HSCRIPT};
+			vscript::handle_ref scope{};
+			vscript::handle_wrapper func{};
 			plugin *owner{nullptr};
 
 		private:
@@ -135,15 +143,14 @@ namespace vmod
 
 			inline plugin *owner() noexcept
 			{ return owner_plugin; }
-			inline gsdk::HSCRIPT owner_scope() noexcept
-			{ return owner_plugin ? owner_plugin->private_scope_ : nullptr; }
+			inline vscript::handle_ref owner_scope() noexcept
+			{ return owner_plugin->private_scope_; }
 
 			inline owned_instance(owned_instance &&other) noexcept
 			{ operator=(std::move(other)); }
 			inline owned_instance &operator=(owned_instance &&other) noexcept
 			{
-				instance = other.instance;
-				other.instance = gsdk::INVALID_HSCRIPT;
+				instance_ = std::move(other.instance_);
 				owner_plugin = other.owner_plugin;
 				other.owner_plugin = nullptr;
 				return *this;
@@ -179,7 +186,7 @@ namespace vmod
 			~callback_instance() noexcept override;
 
 		public:
-			callback_instance(callable *caller_, gsdk::HSCRIPT callback_, bool post_) noexcept;
+			callback_instance(callable *caller_, vscript::handle_wrapper &&callback_, bool post_) noexcept;
 
 		public:
 			static vscript::class_desc<callback_instance> desc;
@@ -208,7 +215,7 @@ namespace vmod
 
 			void callable_destroyed() noexcept;
 
-			gsdk::HSCRIPT callback;
+			vscript::handle_wrapper callback;
 			bool post;
 			callable *caller;
 			bool enabled;
@@ -258,7 +265,7 @@ namespace vmod
 			virtual void on_sleep() noexcept;
 
 		private:
-			using callbacks_t = std::unordered_map<gsdk::HSCRIPT, callback_instance *>;
+			using callbacks_t = std::unordered_map<vscript::handle_ref, callback_instance *>;
 
 			bool call(callbacks_t &callbacks, const gsdk::ScriptVariant_t *args, std::size_t num_args, bool post) noexcept;
 
@@ -299,29 +306,29 @@ namespace vmod
 
 		static plugin *assumed_currently_running_;
 
-		gsdk::HSCRIPT script_lookup_function(std::string_view func_name) noexcept;
-		gsdk::ScriptVariant_t script_lookup_value(std::string_view val_name) noexcept;
+		vscript::handle_ref script_lookup_function(std::string_view func_name) noexcept;
+		vscript::variant script_lookup_value(std::string_view val_name) noexcept;
 
 		void game_frame(bool simulating) noexcept;
 
 		void watch() noexcept;
 		void unwatch() noexcept;
 
-		std::filesystem::path path;
+		std::filesystem::path path_;
 		std::vector<std::filesystem::path> incs;
 		int inotify_fd{-1};
 		std::vector<int> watch_fds;
 
-		gsdk::HSCRIPT instance_{gsdk::INVALID_HSCRIPT};
-		gsdk::HSCRIPT script{gsdk::INVALID_HSCRIPT};
-		gsdk::HSCRIPT private_scope_{gsdk::INVALID_HSCRIPT};
-		gsdk::HSCRIPT public_scope_{gsdk::INVALID_HSCRIPT};
-		gsdk::HSCRIPT functions_table{gsdk::INVALID_HSCRIPT};
-		gsdk::HSCRIPT values_table{gsdk::INVALID_HSCRIPT};
+		vscript::handle_wrapper instance_{};
+		vscript::handle_wrapper script{};
+		vscript::handle_wrapper private_scope_{};
+		vscript::handle_wrapper public_scope_{};
+		vscript::handle_wrapper functions_table{};
+		vscript::handle_wrapper values_table{};
 
 		bool running{false};
 
-		std::unordered_map<std::string, gsdk::HSCRIPT> function_cache;
+		std::unordered_map<std::string, vscript::handle_wrapper> function_cache;
 
 		std::vector<owned_instance *> owned_instances;
 		bool clearing_instances{false};
@@ -331,7 +338,7 @@ namespace vmod
 		typed_function<void()> map_unloaded;
 		typed_function<void()> plugin_loaded;
 		typed_function<void()> plugin_unloaded;
-		typed_function<void()> all_plugins_loaded;
+		typed_function<void()> all_mods_loaded;
 		typed_function<void()> string_tables_created;
 		typed_function<void(bool)> game_frame_;
 

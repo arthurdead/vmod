@@ -1,5 +1,4 @@
 #include "concommand.hpp"
-#include "../../main.hpp"
 #include "../docs.hpp"
 #include "singleton.hpp"
 
@@ -18,7 +17,7 @@ namespace vmod::bindings::cvar
 	{
 		using namespace std::literals::string_view_literals;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		desc.func(&concommand_base::script_exec, "script_exec"sv, "exec"sv);
 
@@ -51,7 +50,7 @@ namespace vmod::bindings::cvar
 
 	void concommand_base::script_exec(const gsdk::ScriptVariant_t *args, std::size_t num_args, ...) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(num_args >= gsdk::CCommand::COMMAND_MAX_ARGC) {
 			vm->RaiseException("vmod: number or arguments excedeed max %zu vs %i", num_args, gsdk::CCommand::COMMAND_MAX_ARGC);
@@ -70,8 +69,8 @@ namespace vmod::bindings::cvar
 		cmd->Dispatch(cmd_args);
 	}
 
-	concommand::concommand(gsdk::ConCommand *cmd_, gsdk::HSCRIPT callback_) noexcept
-		: concommand_base{cmd_}, callback{callback_}
+	concommand::concommand(gsdk::ConCommand *cmd_, vscript::handle_wrapper &&callback_) noexcept
+		: concommand_base{cmd_}, callback{std::move(callback_)}
 	{
 	}
 
@@ -86,10 +85,6 @@ namespace vmod::bindings::cvar
 
 		delete cmd;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
-
-		if(callback) {
-			vm->ReleaseFunction(callback);
-		}
+		callback.free();
 	}
 }

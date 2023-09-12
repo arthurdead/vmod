@@ -2,6 +2,7 @@
 
 #include <string_view>
 #include "../vscript/vscript.hpp"
+#include "../vscript/variant.hpp"
 
 namespace vmod::bindings
 {
@@ -9,23 +10,21 @@ namespace vmod::bindings
 	{
 	public:
 		instance_base() noexcept = default;
-		virtual ~instance_base() noexcept;
+		virtual inline ~instance_base() noexcept
+		{ instance_.free(); }
 
-		inline instance_base(instance_base &&other) noexcept
-		{ operator=(std::move(other)); }
-		inline instance_base &operator=(instance_base &&other) noexcept
-		{
-			instance = other.instance;
-			other.instance = gsdk::INVALID_HSCRIPT;
-			return *this;
-		}
+		instance_base(instance_base &&other) noexcept = default;
+		instance_base &operator=(instance_base &&other) noexcept = default;
+
+		inline vscript::handle_ref instance() noexcept
+		{ return instance_; }
 
 	protected:
 		virtual bool register_instance(gsdk::ScriptClassDesc_t *target_desc, void *pthis) noexcept;
 		bool register_instance(gsdk::ScriptClassDesc_t *) = delete;
 
 	public:
-		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+		vscript::handle_wrapper instance_{};
 
 	private:
 		instance_base(const instance_base &) = delete;

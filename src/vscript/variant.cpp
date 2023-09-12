@@ -114,4 +114,120 @@ namespace vmod::vscript
 			var.m_ccstr = "";
 		}
 	}
+
+	handle_wrapper::handle_wrapper(handle_wrapper &&other) noexcept
+		: object{other.object}, free_{other.free_}, type_{other.type_}
+	{
+		other.object = gsdk::INVALID_HSCRIPT;
+		other.free_ = false;
+		other.type_ = gsdk::HANDLETYPE_UNKNOWN;
+	}
+
+	handle_wrapper &handle_wrapper::operator=(handle_wrapper &&other) noexcept
+	{
+		free();
+		object = other.object;
+		free_ = other.free_;
+		type_ = other.type_;
+		other.object = gsdk::INVALID_HSCRIPT;
+		other.free_ = false;
+		other.type_ = gsdk::HANDLETYPE_UNKNOWN;
+		return *this;
+	}
+
+	handle_wrapper::handle_wrapper(gsdk::ScriptVariant_t &&var) noexcept
+	{
+		free_ = var.should_free();
+		object = var.release_object();
+		type_ = gsdk::HANDLETYPE_UNKNOWN;
+	}
+
+	handle_wrapper &handle_wrapper::operator=(gsdk::ScriptVariant_t &&var) noexcept
+	{
+		free_ = var.should_free();
+		object = var.release_object();
+		type_ = gsdk::HANDLETYPE_UNKNOWN;
+		return *this;
+	}
+
+	handle_wrapper::handle_wrapper(gsdk::ScriptHandleWrapper_t &&var) noexcept
+	{
+		free_ = var.should_free();
+		type_ = var.type;
+		object = var.release();
+	}
+
+	handle_wrapper &handle_wrapper::operator=(gsdk::ScriptHandleWrapper_t &&var) noexcept
+	{
+		free_ = var.should_free();
+		type_ = var.type;
+		object = var.release();
+		return *this;
+	}
+
+	void handle_wrapper::free() noexcept
+	{
+		if(free_ && object && object != gsdk::INVALID_HSCRIPT) {
+			switch(type_) {
+		#ifndef __clang__
+			default:
+		#endif
+			case gsdk::HANDLETYPE_UNKNOWN:
+			vm()->ReleaseObject(object);
+			break;
+			case gsdk::HANDLETYPE_FUNCTION:
+			vm()->ReleaseFunction(object);
+			break;
+			case gsdk::HANDLETYPE_TABLE:
+			vm()->ReleaseTable(object);
+			break;
+			case gsdk::HANDLETYPE_ARRAY:
+			vm()->ReleaseArray(object);
+			break;
+			case gsdk::HANDLETYPE_SCOPE:
+			vm()->ReleaseScope(object);
+			break;
+			case gsdk::HANDLETYPE_INSTANCE:
+			vm()->RemoveInstance(object);
+			break;
+			case gsdk::HANDLETYPE_SCRIPT:
+			vm()->ReleaseScript(object);
+			break;
+			}
+			type_ = gsdk::HANDLETYPE_UNKNOWN;
+			object = gsdk::INVALID_HSCRIPT;
+			free_ = false;
+		}
+	}
+
+	gsdk::HSCRIPT handle_wrapper::release() noexcept
+	{
+		gsdk::HSCRIPT tmp{object};
+		free_ = false;
+		type_ = gsdk::HANDLETYPE_UNKNOWN;
+		object = gsdk::INVALID_HSCRIPT;
+		return tmp;
+	}
+
+	bool handle_ref::operator==(gsdk::HSCRIPT other) const noexcept
+	{
+		if(!other || other == gsdk::INVALID_HSCRIPT) {
+			return (!object || object == gsdk::INVALID_HSCRIPT);
+		} else if(!object || object == gsdk::INVALID_HSCRIPT) {
+			return false;
+		} else {
+			return (object == other);
+		}
+	}
+	
+	bool handle_ref::operator!=(gsdk::HSCRIPT other) const noexcept
+	{
+		if(!other || other == gsdk::INVALID_HSCRIPT) {
+			return (object && object != gsdk::INVALID_HSCRIPT);
+		} else if(!object || object == gsdk::INVALID_HSCRIPT) {
+			return true;
+		} else {
+			return (object != other);
+		}
+	}
 }

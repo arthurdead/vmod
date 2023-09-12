@@ -1,5 +1,4 @@
 #include "detour.hpp"
-#include "../../main.hpp"
 
 namespace vmod::bindings::ffi
 {
@@ -29,8 +28,8 @@ namespace vmod::bindings::ffi
 		
 	}
 
-	detour::callback_instance::callback_instance(detour *owner_, gsdk::HSCRIPT callback_, bool post_) noexcept
-		: plugin::callback_instance{owner_, callback_, post_}, owner{owner_}
+	detour::callback_instance::callback_instance(detour *owner_, vscript::handle_wrapper &&callback_, bool post_) noexcept
+		: plugin::callback_instance{owner_, std::move(callback_), post_}, owner{owner_}
 	{
 	}
 
@@ -51,7 +50,7 @@ namespace vmod::bindings::ffi
 	{
 		std::size_t required_args{owner->args_types.size()};
 		if(!args || num_args != required_args) {
-			main::instance().vm()->RaiseException("vmod: wrong number of parameters expected %zu got %zu", num_args, required_args);
+			vscript::vm()->RaiseException("vmod: wrong number of parameters expected %zu got %zu", num_args, required_args);
 			return vscript::null();
 		}
 
@@ -96,7 +95,7 @@ namespace vmod::bindings::ffi
 			ret_var = &sargs.emplace_back();
 		}
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(det->call_pre(sargs.data(), sargs.size())) {
 			{
@@ -114,7 +113,7 @@ namespace vmod::bindings::ffi
 
 	bool detour::initialize(mfp_or_func_t old_target_, ffi_abi abi) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		old_target = old_target_;
 

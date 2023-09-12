@@ -1,22 +1,21 @@
 #include "container.hpp"
-#include "../../main.hpp"
 #include "../../gsdk/tier0/memalloc.hpp"
 
 namespace vmod::bindings::mem
 {
 	vscript::class_desc<container> container::desc{"mem::container"};
 
-	void container::script_set_free_callback(gsdk::HSCRIPT func) noexcept
+	void container::script_set_free_callback(vscript::handle_wrapper func) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
-		if(!func || func == gsdk::INVALID_HSCRIPT) {
+		if(!func) {
 			vm->RaiseException("vmod: invalid callback");
 			return;
 		}
 
-		free_callback = vm->ReferenceObject(func);
-		if(!free_callback || free_callback == gsdk::INVALID_HSCRIPT) {
+		free_callback = vm->ReferenceFunction(*func);
+		if(!free_callback) {
 			vm->RaiseException("vmod: failed to get callback reference");
 			return;
 		}
@@ -114,14 +113,16 @@ namespace vmod::bindings::mem
 
 	container::~container() noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(ptr) {
-			if(free_callback && free_callback != gsdk::INVALID_HSCRIPT) {
-				vscript::variant args{instance};
-				vm->ExecuteFunction(free_callback, &args, 1, nullptr, nullptr, true);
+			if(free_callback) {
+				vscript::variant args[]{
+					instance_
+				};
+				vm->ExecuteFunction(*free_callback, args, std::size(args), nullptr, nullptr, true);
 
-				vm->ReleaseFunction(free_callback);
+				free_callback.free();
 			}
 
 			switch(type) {

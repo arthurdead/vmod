@@ -1,5 +1,4 @@
 #include "../../plugin.hpp"
-#include "../../main.hpp"
 
 namespace vmod
 {
@@ -11,7 +10,7 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		desc.func(&plugin::script_lookup_function, "script_lookup_function"sv, "lookup_function"sv)
 		.desc("[function](name)"sv);
@@ -36,21 +35,19 @@ namespace vmod
 		owned_instance::unbindings();
 	}
 
-	gsdk::ScriptVariant_t plugin::script_lookup_value(std::string_view val_name) noexcept
+	vscript::variant plugin::script_lookup_value(std::string_view val_name) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
-		gsdk::ScriptVariant_t var;
-		if(vm->GetValue(private_scope_, val_name.data(), &var)) {
-			vm->SetValue(values_table, val_name.data(), var);
-		} else {
-			vscript::null(var);
+		vscript::variant var;
+		if(vm->GetValue(*private_scope_, val_name.data(), &var)) {
+			vm->SetValue(*values_table, val_name.data(), var);
 		}
 
 		return var;
 	}
 
-	gsdk::HSCRIPT plugin::script_lookup_function(std::string_view func_name) noexcept
+	vscript::handle_ref plugin::script_lookup_function(std::string_view func_name) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -71,33 +68,31 @@ namespace vmod
 			return plugin_loaded.func;
 		} else if(func_name == "plugin_unloaded"sv) {
 			return plugin_unloaded.func;
-		} else if(func_name == "all_plugins_loaded"sv) {
-			return all_plugins_loaded.func;
+		} else if(func_name == "all_mods_loaded"sv) {
+			return all_mods_loaded.func;
 		} else if(func_name == "string_tables_created"sv) {
 			return string_tables_created.func;
 		} else if(func_name == "game_frame"sv) {
 			return game_frame_.func;
 		}
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
-		gsdk::HSCRIPT func{vm->LookupFunction(func_name.data(), private_scope_)};
-		if(!func || func == gsdk::INVALID_HSCRIPT) {
-			return gsdk::INVALID_HSCRIPT;
+		auto func{vm->LookupFunction(func_name.data(), *private_scope_)};
+		if(!func.object || func.object == gsdk::INVALID_HSCRIPT) {
+			return nullptr;
 		}
 
-		vm->SetValue(functions_table, func_name.data(), func);
+		vm->SetValue(*functions_table, func_name.data(), func.object);
 
-		function_cache.emplace(std::move(func_name_str), func);
-
-		return func;
+		return function_cache.emplace(std::move(func_name_str), std::move(func)).first->second;
 	}
 
 	bool plugin::owned_instance::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		desc.func(&owned_instance::script_delete, "script_delete"sv, "free"sv);
 		desc.dtor();

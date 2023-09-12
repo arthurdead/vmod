@@ -1,5 +1,7 @@
 #include "gsdk_library.hpp"
+#include "hacking.hpp"
 #include <dlfcn.h>
+#include <link.h>
 
 namespace vmod
 {
@@ -79,6 +81,54 @@ namespace vmod
 	}
 
 	gsdk_library::~gsdk_library() noexcept
+	{
+		if(dl) {
+			dlclose(dl);
+		}
+	}
+
+	bool library::load(const std::filesystem::path &path) noexcept
+	{
+		using namespace std::literals::string_literals;
+
+		dl = dlopen(path.c_str(),
+		#ifndef __VMOD_COMPILING_VTABLE_DUMPER
+			RTLD_LAZY|RTLD_LOCAL|RTLD_NODELETE|RTLD_NOLOAD
+		#else
+			RTLD_LAZY|RTLD_LOCAL
+		#endif
+		);
+		if(!dl) {
+			const char *err{dlerror()};
+			if(err && err[0] != '\0') {
+				err_str = err;
+			} else {
+				err_str = "unknown error"s;
+			}
+			return false;
+		} else {
+			link_map *lm{static_cast<link_map *>(dl)};
+
+			base_addr = reinterpret_cast<unsigned char *>(lm->l_addr);
+		}
+
+		return true;
+	}
+
+	void *library::find_addr(std::string_view name) noexcept
+	{
+		return dlsym(dl, name.data());
+	}
+
+	void library::unload() noexcept
+	{
+		if(dl) {
+			dlclose(dl);
+			dl = nullptr;
+		}
+	}
+
+	library::~library() noexcept
 	{
 		if(dl) {
 			dlclose(dl);

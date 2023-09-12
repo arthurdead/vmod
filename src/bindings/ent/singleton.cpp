@@ -1,8 +1,8 @@
 #include "singleton.hpp"
-#include "../../main.hpp"
 #include "sendtable.hpp"
 #include "datamap.hpp"
 #include "factory.hpp"
+#include "../../main.hpp"
 #include "../../bindings/mem/singleton.hpp"
 #include "../../hacking.hpp"
 #include <cstddef>
@@ -36,6 +36,9 @@ namespace vmod::bindings::ent
 		desc.func(&singleton::script_lookup_datatable, "script_lookup_datatable"sv, "lookup_datatable"sv)
 		.desc("[datatable](name)"sv);
 
+		desc.func(&singleton::script_lookup_serverclass, "script_lookup_serverclass"sv, "lookup_serverclass"sv)
+		.desc("[serverclass](name)"sv);
+
 		desc.func(&singleton::script_from_ptr, "script_from_ptr"sv, "from_ptr"sv)
 		.desc("[entity](ptr|)"sv);
 		desc.func(&singleton::script_to_ptr, "script_to_ptr"sv, "to_ptr"sv)
@@ -46,8 +49,11 @@ namespace vmod::bindings::ent
 			.desc("[factory_ref](name)"sv);
 
 			desc.func(&singleton::script_create_factory, "script_create_factory"sv, "create_factory"sv)
-			.desc("[factory_impl](name, factory_callback|callback, size)"sv);
+			.desc("[factory_impl](variant<array<string>, string>|names, factory_callback|callback, factory_size_callback|size_callback)"sv);
 		}
+
+		desc.func(&singleton::script_create_datatable, "script_create_datatable"sv, "create_datatable"sv)
+		.desc("[instance](datatable_description|)"sv);
 
 		if(!singleton_base::bindings(&desc)) {
 			return false;
@@ -61,109 +67,304 @@ namespace vmod::bindings::ent
 		singleton_base::unbindings();
 	}
 
-	gsdk::HSCRIPT singleton::script_create_factory(std::string_view facname, gsdk::HSCRIPT callback, std::size_t size) noexcept
+	vscript::handle_ref singleton::script_create_datatable(vscript::handle_wrapper datadesc) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
-		if(facname.empty()) {
-			vm->RaiseException("vmod: invalid name: '%s'", facname.data());
-			return gsdk::INVALID_HSCRIPT;
+		if(!datadesc) {
+			vm->RaiseException("vmod: invalid description");
+			return nullptr;
 		}
 
-		if(size == 0 || size == static_cast<std::size_t>(-1)) {
-			vm->RaiseException("vmod: invalid size: %zu", size);
-			return gsdk::INVALID_HSCRIPT;
+		if(!vm->IsTable(*datadesc)) {
+			vm->RaiseException("vmod: invalid description");
+			return nullptr;
 		}
 
-		if(!callback || callback == gsdk::INVALID_HSCRIPT) {
-			vm->RaiseException("vmod: invalid callback");
-			return gsdk::INVALID_HSCRIPT;
+		vscript::variant props_var;
+		if(!vm->GetValue(*datadesc, "props", &props_var)) {
+			vm->RaiseException("vmod: missing props array");
+			return nullptr;
 		}
 
-		gsdk::IEntityFactory *factory{entityfactorydict->FindFactory(facname.data())};
-		if(factory) {
-			vm->RaiseException("vmod: name already in use: '%s'", facname.data());
-			return gsdk::INVALID_HSCRIPT;
+		vscript::handle_wrapper props_array{props_var.get<vscript::handle_wrapper>()};
+		if(!props_array) {
+			vm->RaiseException("vmod: invalid props");
+			return nullptr;
 		}
 
-		callback = vm->ReferenceObject(callback);
-		if(!callback || callback == gsdk::INVALID_HSCRIPT) {
-			vm->RaiseException("vmod: failed to get callback reference");
-			return gsdk::INVALID_HSCRIPT;
+		if(!vm->IsArray(*props_array)) {
+			vm->RaiseException("vmod: props is not a array");
+			return nullptr;
 		}
 
-		factory_impl *sfac{new factory_impl{size}};
-		if(!sfac->initialize(facname, callback)) {
-			delete sfac;
-			return gsdk::INVALID_HSCRIPT;
+		std::vector<gsdk::typedescription_t> props;
+		std::vector<std::unique_ptr<allocated_datamap::prop_storage>> props_storage;
+
+		std::vector<std::unique_ptr<gsdk::datamap_t>> maps;
+		std::vector<std::unique_ptr<allocated_datamap::map_storage>> maps_storage;
+
+		std::size_t total_size{0};
+
+		std::function<bool(vscript::handle_ref)> read_props{
+			[&read_props,vm,&props,&props_storage,&total_size](vscript::handle_ref var) noexcept -> bool {
+				int array_num{vm->GetArrayCount(*var)};
+				for(int i{0}, it{0}; it != -1 && i < array_num; ++i) {
+					vscript::variant value;
+					it = vm->GetArrayValue(*var, it, &value);
+
+					vscript::handle_wrapper prop_table{value.get<vscript::handle_wrapper>()};
+					if(!prop_table) {
+						vm->RaiseException("vmod: prop %i is invalid", i);
+						return false;
+					}
+
+					if(!vm->IsTable(*prop_table)) {
+						vm->RaiseException("vmod: prop %i is not a table", i);
+						return false;
+					}
+
+					if(!vm->GetValue(*prop_table, "name", &value)) {
+						vm->RaiseException("vmod: prop %i is missing a name", i);
+						return false;
+					}
+
+					gsdk::typedescription_t &prop{props.emplace_back()};
+					auto &storage{props_storage.emplace_back(new allocated_datamap::prop_storage)};
+
+					prop.flags = static_cast<short>(gsdk::FTYPEDESC_PRIVATE|gsdk::FTYPEDESC_VIEW_NEVER|gsdk::FTYPEDESC_NOERRORCHECK);
+
+					std::string prop_name{value.get<std::string>()};
+					if(prop_name.empty()) {
+						vm->RaiseException("vmod: prop %i has empty name", i);
+						return false;
+					}
+
+					storage->name = std::move(prop_name);
+					prop.fieldName = storage->name.c_str();
+
+					if(!vm->GetValue(*prop_table, "type", &value)) {
+						vm->RaiseException("vmod: prop '%s' is missing its type", prop.fieldName);
+						return false;
+					}
+
+					vscript::handle_wrapper value_hndl{value.get<vscript::handle_wrapper>()};
+
+					ffi_type *type{mem::singleton::read_type(value_hndl)};
+					if(!type) {
+						vm->RaiseException("vmod: prop '%s' type is invalid", prop.fieldName);
+						return false;
+					}
+
+					std::size_t num{1};
+
+					if(vm->GetValue(*prop_table, "num", &value)) {
+						num = value.get<std::size_t>();
+
+						if(num == 0 || num == static_cast<std::size_t>(-1)) {
+							vm->RaiseException("vmod: prop '%s' has invalid num: %zu", prop.fieldName, num);
+							return false;
+						}
+					}
+
+					prop.fieldType = static_cast<gsdk::fieldtype_t>(ffi::to_field_type(type));
+					prop.fieldSize = static_cast<unsigned short>(num);
+
+					std::size_t propsize{align(type->size * num, type->alignment)};
+
+					prop.fieldSizeInBytes = static_cast<int>(propsize);
+
+					total_size += propsize;
+
+					if(vm->GetValue(*prop_table, "external_name", &value)) {
+						std::string external_name{value.get<std::string>()};
+						if(external_name.empty()) {
+							vm->RaiseException("vmod: prop has '%s' invalid external name: '%s'", prop.fieldName, external_name.c_str());
+							return gsdk::INVALID_HSCRIPT;
+						}
+
+						storage->external_name = std::move(external_name);
+						prop.externalName = storage->external_name.c_str();
+
+						prop.flags |= gsdk::FTYPEDESC_KEY;
+					}
+				}
+
+				return true;
+			}
+		};
+
+		if(!read_props(props_array)) {
+			vm->RaiseException("vmod: invalid props");
+			return nullptr;
 		}
 
-		return sfac->instance;
+		/*datamap.reset(new allocated_datamap);
+
+		datamap->maps[0]->baseMap = nullptr;
+
+		datamap->maps_storage[0]->name = std::move(name);
+		datamap->maps[0]->dataClassName = datamap->maps_storage[0]->name.c_str();
+
+		datamap->maps_storage[0]->props = std::move(props);
+		datamap->maps_storage[0]->props_storage = std::move(props_storage);
+
+		datamap->maps[0]->dataNumFields = static_cast<int>(datamap->maps_storage[0]->props.size());
+		datamap->maps[0]->dataDesc = datamap->maps_storage[0]->props.data();
+
+		datamap->total_size = total_size;
+
+		datamap->hash_ = hash_datamap(datamap->map);*/
+
+		return nullptr;
 	}
 
-	gsdk::HSCRIPT singleton::script_find_factory(std::string &&facname) noexcept
+	vscript::handle_ref singleton::script_create_factory(std::variant<vscript::handle_wrapper, std::string_view> names_var, vscript::handle_wrapper callback, std::optional<vscript::handle_wrapper> size_callback_opt) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
+
+		std::vector<std::string> names_vec;
+
+		switch(names_var.index()) {
+	#ifndef __clang__
+		default:
+	#endif
+		case 0: {
+			auto &names_arr{std::get<0>(names_var)};
+			if(!names_arr) {
+				vm->RaiseException("vmod: invalid names array");
+				return nullptr;
+			}
+
+			if(!vm->IsArray(*names_arr)) {
+				vm->RaiseException("vmod: names not a array");
+				return nullptr;
+			}
+
+			int num{vm->GetArrayCount(*names_arr)};
+			for(int i{0}, it{0}; i < num; ++i) {
+				vscript::variant var;
+				it = vm->GetArrayValue(*names_arr, it, &var);
+
+				std::string_view name{var.get<std::string_view>()};
+				if(name.empty()) {
+					vm->RaiseException("vmod: empty name at %i", i);
+					return nullptr;
+				}
+
+				names_vec.emplace_back(name);
+			}
+		} break;
+		case 1: {
+			auto name{std::get<1>(names_var)};
+			if(name.empty()) {
+				vm->RaiseException("vmod: empty name");
+				return nullptr;
+			}
+
+			names_vec.emplace_back(name);
+		} break;
+		}
+
+		for(const auto &it : names_vec) {
+			if(entityfactorydict->FindFactory(it.c_str())) {
+				vm->RaiseException("vmod: name already in use: '%s'", it.c_str());
+				return nullptr;
+			}
+		}
+
+		if(!callback) {
+			vm->RaiseException("vmod: invalid callback");
+			return nullptr;
+		}
+
+		callback = vm->ReferenceFunction(*callback);
+		if(!callback) {
+			vm->RaiseException("vmod: failed to get callback reference");
+			return nullptr;
+		}
+
+		vscript::handle_wrapper size_callback{};
+		if(size_callback_opt && *size_callback_opt) {
+			size_callback = vm->ReferenceFunction(*(*size_callback_opt));
+			if(!size_callback) {
+				vm->RaiseException("vmod: failed to get size_callback reference");
+				return nullptr;
+			}
+		}
+
+		factory_impl *sfac{new factory_impl{}};
+		if(!sfac->initialize(std::move(names_vec), std::move(callback), std::move(size_callback))) {
+			delete sfac;
+			return nullptr;
+		}
+
+		return sfac->instance_;
+	}
+
+	vscript::handle_ref singleton::script_find_factory(std::string &&facname) noexcept
+	{
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(facname.empty()) {
-			vm->RaiseException("vmod: invalid name: '%s'", facname.c_str());
-			return gsdk::INVALID_HSCRIPT;
+			vm->RaiseException("vmod: empty name");
+			return nullptr;
 		}
 
 		auto it{factories.find(facname)};
 		if(it == factories.end()) {
 			gsdk::IEntityFactory *factory{entityfactorydict->FindFactory(facname.c_str())};
 			if(!factory) {
-				return gsdk::INVALID_HSCRIPT;
+				return nullptr;
 			}
 
 			factory_impl *impl{dynamic_cast<factory_impl *>(factory)};
 			if(impl) {
-				return impl->instance;
+				return impl->instance_;
 			}
 
 			std::unique_ptr<factory_ref> sfac{new factory_ref{factory}};
 			if(!sfac->initialize()) {
-				return gsdk::INVALID_HSCRIPT;
+				return nullptr;
 			}
 
 			it = factories.emplace(std::move(facname), std::move(sfac)).first;
 		}
 
-		return it->second->instance;
+		return it->second->instance_;
 	}
 
-	gsdk::HSCRIPT singleton::script_from_ptr(gsdk::CBaseEntity *ptr) noexcept
+	vscript::handle_ref singleton::script_from_ptr(gsdk::CBaseEntity *ptr) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(!ptr) {
 			vm->RaiseException("vmod: invalid ptr");
-			return gsdk::INVALID_HSCRIPT;
+			return nullptr;
 		}
 
 		return ptr->GetScriptInstance();
 	}
 
-	void *singleton::script_to_ptr(gsdk::HSCRIPT obj) noexcept
+	void *singleton::script_to_ptr(vscript::handle_wrapper obj) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
-		if(!obj || obj == gsdk::INVALID_HSCRIPT) {
+		if(!obj) {
 			vm->RaiseException("vmod: invalid instance");
 			return nullptr;
 		}
 
-		return gsdk::CBaseEntity::from_instance(obj);
+		return gsdk::CBaseEntity::from_instance(*obj);
 	}
 
-	gsdk::HSCRIPT singleton::script_lookup_sendprop(std::string_view path) noexcept
+	vscript::handle_ref singleton::script_lookup_sendprop(std::string_view path) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(path.empty()) {
-			vm->RaiseException("vmod: invalid path: '%s'", path.data());
-			return gsdk::INVALID_HSCRIPT;
+			vm->RaiseException("vmod: empty path");
+			return nullptr;
 		}
 
 		prop_result res;
@@ -175,29 +376,29 @@ namespace vmod::bindings::ent
 			prop_tree_flags::lazy
 		};
 		if(!walk_prop_tree(path, flags, res)) {
-			return gsdk::INVALID_HSCRIPT;
+			return nullptr;
 		}
 
 		auto it{sendprops.find(res.sendprop)};
 		if(it == sendprops.end()) {
 			std::unique_ptr<sendprop> prop{new sendprop{res.sendprop}};
 			if(!prop->initialize()) {
-				return gsdk::INVALID_HSCRIPT;
+				return nullptr;
 			}
 
 			it = sendprops.emplace(res.sendprop, std::move(prop)).first;
 		}
 
-		return it->second->instance;
+		return it->second->instance_;
 	}
 
-	gsdk::HSCRIPT singleton::script_lookup_sendtable(std::string_view path) noexcept
+	vscript::handle_ref singleton::script_lookup_sendtable(std::string_view path) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(path.empty()) {
-			vm->RaiseException("vmod: invalid path: '%s'", path.data());
-			return gsdk::INVALID_HSCRIPT;
+			vm->RaiseException("vmod: empty path");
+			return nullptr;
 		}
 
 		prop_result res;
@@ -209,29 +410,29 @@ namespace vmod::bindings::ent
 			prop_tree_flags::lazy
 		};
 		if(!walk_prop_tree(path, flags, res)) {
-			return gsdk::INVALID_HSCRIPT;
+			return nullptr;
 		}
 
 		auto it{sendtables.find(res.sendtable)};
 		if(it == sendtables.end()) {
 			std::unique_ptr<sendtable> prop{new sendtable{res.sendtable}};
 			if(!prop->initialize()) {
-				return gsdk::INVALID_HSCRIPT;
+				return nullptr;
 			}
 
 			it = sendtables.emplace(res.sendtable, std::move(prop)).first;
 		}
 
-		return it->second->instance;
+		return it->second->instance_;
 	}
 
-	gsdk::HSCRIPT singleton::script_lookup_dataprop(std::string_view path) noexcept
+	vscript::handle_ref singleton::script_lookup_dataprop(std::string_view path) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(path.empty()) {
-			vm->RaiseException("vmod: invalid path: '%s'", path.data());
-			return gsdk::INVALID_HSCRIPT;
+			vm->RaiseException("vmod: empty path");
+			return nullptr;
 		}
 
 		prop_result res;
@@ -243,29 +444,60 @@ namespace vmod::bindings::ent
 			prop_tree_flags::lazy
 		};
 		if(!walk_prop_tree(path, flags, res)) {
-			return gsdk::INVALID_HSCRIPT;
+			return nullptr;
 		}
 
 		auto it{dataprops.find(res.dataprop)};
 		if(it == dataprops.end()) {
 			std::unique_ptr<dataprop> prop{new dataprop{res.dataprop}};
 			if(!prop->initialize()) {
-				return gsdk::INVALID_HSCRIPT;
+				return nullptr;
 			}
 
 			it = dataprops.emplace(res.dataprop, std::move(prop)).first;
 		}
 
-		return it->second->instance;
+		return it->second->instance_;
 	}
 
-	gsdk::HSCRIPT singleton::script_lookup_datatable(std::string_view path) noexcept
+	vscript::handle_ref singleton::script_lookup_serverclass(std::string_view clsname) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
+
+		if(clsname.empty()) {
+			vm->RaiseException("vmod: empty name");
+			return nullptr;
+		}
+
+		std::string tmp_name{clsname};
+		auto cls_it{sv_ent_class_info.find(tmp_name)};
+		if(cls_it == sv_ent_class_info.end()) {
+			vm->RaiseException("vmod: not found");
+			return nullptr;
+		}
+
+		auto sv_class{cls_it->second.sv_class};
+
+		auto inst_it{serverclasses.find(sv_class)};
+		if(inst_it == serverclasses.end()) {
+			std::unique_ptr<serverclass> ptr{new serverclass{sv_class}};
+			if(!ptr->initialize()) {
+				vm->RaiseException("vmod: failed to register instance");
+				return nullptr;
+			}
+			inst_it = serverclasses.emplace(sv_class, std::move(ptr)).first;
+		}
+
+		return inst_it->second->instance_;
+	}
+
+	vscript::handle_ref singleton::script_lookup_datatable(std::string_view path) noexcept
+	{
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(path.empty()) {
-			vm->RaiseException("vmod: invalid path: '%s'", path.data());
-			return gsdk::INVALID_HSCRIPT;
+			vm->RaiseException("vmod: empty path");
+			return nullptr;
 		}
 
 		prop_result res;
@@ -277,20 +509,20 @@ namespace vmod::bindings::ent
 			prop_tree_flags::lazy
 		};
 		if(!walk_prop_tree(path, flags, res)) {
-			return gsdk::INVALID_HSCRIPT;
+			return nullptr;
 		}
 
 		auto it{datatables.find(res.datatable)};
 		if(it == datatables.end()) {
 			std::unique_ptr<datamap> prop{new datamap{res.datatable}};
 			if(!prop->initialize()) {
-				return gsdk::INVALID_HSCRIPT;
+				return nullptr;
 			}
 
 			it = datatables.emplace(res.datatable, std::move(prop)).first;
 		}
 
-		return it->second->instance;
+		return it->second->instance_;
 	}
 
 	singleton::prop_result &singleton::prop_result::operator+=(const prop_data_result &other) noexcept

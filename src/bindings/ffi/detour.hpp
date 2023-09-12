@@ -49,9 +49,9 @@ namespace vmod::bindings::ffi
 			friend void write_docs(const std::filesystem::path &) noexcept;
 
 		public:
-			callback_instance(callable *caller_, gsdk::HSCRIPT callback_, bool post_) noexcept = delete;
+			callback_instance(callable *caller_, vscript::handle_wrapper &&callback_, bool post_) noexcept = delete;
 
-			callback_instance(detour *owner_, gsdk::HSCRIPT callback_, bool post_) noexcept;
+			callback_instance(detour *owner_, vscript::handle_wrapper &&callback_, bool post_) noexcept;
 
 			~callback_instance() noexcept override;
 

@@ -14,7 +14,9 @@
 #include <memory>
 #include "datamap.hpp"
 #include "sendtable.hpp"
+#include "serverclass.hpp"
 #include "factory.hpp"
+#include <variant>
 
 namespace vmod::bindings::ent
 {
@@ -40,17 +42,21 @@ namespace vmod::bindings::ent
 	private:
 		static vscript::singleton_class_desc<singleton> desc;
 
-		static gsdk::HSCRIPT script_from_ptr(gsdk::CBaseEntity *ptr) noexcept;
-		static void *script_to_ptr(gsdk::HSCRIPT obj) noexcept;
+		static vscript::handle_ref script_from_ptr(gsdk::CBaseEntity *ptr) noexcept;
+		static void *script_to_ptr(vscript::handle_wrapper obj) noexcept;
 
-		gsdk::HSCRIPT script_lookup_sendprop(std::string_view path) noexcept;
-		gsdk::HSCRIPT script_lookup_sendtable(std::string_view path) noexcept;
+		vscript::handle_ref script_lookup_sendprop(std::string_view path) noexcept;
+		vscript::handle_ref script_lookup_sendtable(std::string_view path) noexcept;
 
-		gsdk::HSCRIPT script_lookup_dataprop(std::string_view path) noexcept;
-		gsdk::HSCRIPT script_lookup_datatable(std::string_view path) noexcept;
+		vscript::handle_ref script_lookup_dataprop(std::string_view path) noexcept;
+		vscript::handle_ref script_lookup_datatable(std::string_view path) noexcept;
 
-		gsdk::HSCRIPT script_find_factory(std::string &&name) noexcept;
-		static gsdk::HSCRIPT script_create_factory(std::string_view name, gsdk::HSCRIPT func, std::size_t size) noexcept;
+		vscript::handle_ref script_lookup_serverclass(std::string_view path) noexcept;
+
+		vscript::handle_ref script_find_factory(std::string &&name) noexcept;
+		static vscript::handle_ref script_create_factory(std::variant<vscript::handle_wrapper, std::string_view> names, vscript::handle_wrapper func, std::optional<vscript::handle_wrapper> size_func) noexcept;
+
+		vscript::handle_ref script_create_datatable(vscript::handle_wrapper datadesc) noexcept;
 
 		enum class prop_result_type : unsigned char
 		{
@@ -186,6 +192,8 @@ namespace vmod::bindings::ent
 
 		std::unordered_map<gsdk::typedescription_t *, std::unique_ptr<dataprop>> dataprops;
 		std::unordered_map<gsdk::datamap_t *, std::unique_ptr<datamap>> datatables;
+
+		std::unordered_map<gsdk::ServerClass *, std::unique_ptr<serverclass>> serverclasses;
 
 		void erase(std::uintptr_t value) noexcept;
 

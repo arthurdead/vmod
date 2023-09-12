@@ -4,6 +4,7 @@
 #include <optional>
 #include <utility>
 #include <cstddef>
+#include <variant>
 
 namespace vmod
 {
@@ -20,7 +21,16 @@ namespace vmod
 	template <typename T>
 	struct is_optional<std::optional<T>> : std::true_type
 	{
-		using type = T;
+	};
+
+	template <typename T>
+	struct is_std_variant : std::false_type
+	{
+	};
+
+	template <typename ...T>
+	struct is_std_variant<std::variant<T...>> : std::true_type
+	{
 	};
 
 	namespace detail

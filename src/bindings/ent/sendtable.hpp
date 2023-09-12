@@ -30,7 +30,7 @@ namespace vmod::bindings::ent
 
 		static void closure_binding(ffi_cif *closure_cif, void *ret, void *args[], void *userptr) noexcept;
 
-		inline gsdk::HSCRIPT script_type() noexcept
+		inline vscript::handle_ref script_type() noexcept
 		{ return type->table(); }
 
 		sendprop(gsdk::SendProp *prop_) noexcept;
@@ -45,7 +45,7 @@ namespace vmod::bindings::ent
 		inline bool initialize() noexcept
 		{ return register_instance(&desc, this); }
 
-		gsdk::HSCRIPT script_hook_proxy(gsdk::HSCRIPT func, bool post, bool per_client) noexcept;
+		vscript::handle_ref script_hook_proxy(vscript::handle_wrapper func, bool post, bool per_client) noexcept;
 
 		gsdk::SendProp *prop;
 		gsdk::SendVarProxyFn old_proxy;

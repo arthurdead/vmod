@@ -60,7 +60,7 @@ namespace vmod::bindings::syms
 			inline bool initialize() noexcept
 			{ return register_instance(&desc, this); }
 
-			gsdk::HSCRIPT script_lookup(std::string_view symname) noexcept;
+			vscript::handle_ref script_lookup(std::string_view symname) noexcept;
 
 			inline std::string_view script_name() const noexcept
 			{ return it->first; }
@@ -100,7 +100,7 @@ namespace vmod::bindings::syms
 			inline bool initialize() noexcept
 			{ return register_instance(&desc, this); }
 
-			gsdk::HSCRIPT script_lookup(std::string_view symname) noexcept;
+			vscript::handle_ref script_lookup(std::string_view symname) noexcept;
 
 			inline std::string_view script_name() const noexcept
 			{ return it->first; }
@@ -136,15 +136,15 @@ namespace vmod::bindings::syms
 		qual_cache_t glob_qual_cache;
 		name_cache_t glob_name_cache;
 
-		static gsdk::HSCRIPT script_lookup_qual(qual_cache_t &cache, symbol_cache::const_iterator it) noexcept;
-		static gsdk::HSCRIPT script_lookup_name(name_cache_t &cache, symbol_cache::qualification_info::const_iterator it) noexcept;
+		static vscript::handle_ref script_lookup_qual(qual_cache_t &cache, symbol_cache::const_iterator it) noexcept;
+		static vscript::handle_ref script_lookup_name(name_cache_t &cache, symbol_cache::qualification_info::const_iterator it) noexcept;
 
-		gsdk::HSCRIPT script_lookup(std::string_view symname) noexcept;
-		gsdk::HSCRIPT script_lookup_global(std::string_view symname) noexcept;
+		vscript::handle_ref script_lookup(std::string_view symname) noexcept;
+		vscript::handle_ref script_lookup_global(std::string_view symname) noexcept;
 
 		virtual const symbol_cache &cache() const noexcept = 0;
 
-		gsdk::HSCRIPT instance{gsdk::INVALID_HSCRIPT};
+		vscript::handle_wrapper instance{};
 
 		std::string_view name;
 

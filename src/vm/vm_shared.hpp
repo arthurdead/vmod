@@ -2,6 +2,7 @@
 
 #include "../gsdk/config.hpp"
 #include "../vscript/vscript.hpp"
+#include "../vscript/variant.hpp"
 #include <filesystem>
 #include <string_view>
 
@@ -50,4 +51,16 @@ namespace vmod
 #endif
 
 	extern bool compile_internal_script(gsdk::IScriptVM *vm, std::filesystem::path path, const unsigned char *data, gsdk::HSCRIPT &object, bool &from_file) noexcept;
+
+	inline bool compile_internal_script(gsdk::IScriptVM *vm, std::filesystem::path path, const unsigned char *data, vscript::handle_wrapper &object, bool &from_file) noexcept
+	{
+		gsdk::ScriptHandleWrapper_t tmp{};
+		tmp.type = gsdk::HANDLETYPE_SCRIPT;
+		if(compile_internal_script(vm, path, data, tmp.object, from_file)) {
+			object = std::move(tmp);
+			return true;
+		} else {
+			return false;
+		}
+	}
 }

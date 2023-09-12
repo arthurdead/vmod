@@ -1675,7 +1675,8 @@ namespace vmod
 	}
 
 #if !defined __VMOD_COMPILING_SYMBOL_TOOL && !defined GSDK_NO_SYMBOLS
-	std::uint64_t symbol_cache::uncached_find_mangled_func(const std::filesystem::path &path, std::string_view search) noexcept
+	template <bool F>
+	static std::uint64_t uncached_find_mangled_impl(const std::filesystem::path &path, std::string_view search) noexcept
 	{
 		int fd{open(path.c_str(), O_RDONLY)};
 		if(fd < 0) {
@@ -1731,9 +1732,16 @@ namespace vmod
 					default: continue;
 				}
 
-				switch(GELF_ST_TYPE(sym.st_info)) {
-					case STT_FUNC: break;
-					default: continue;
+				if constexpr(F) {
+					switch(GELF_ST_TYPE(sym.st_info)) {
+						case STT_FUNC: break;
+						default: continue;
+					}
+				} else {
+					switch(GELF_ST_TYPE(sym.st_info)) {
+						case STT_OBJECT: break;
+						default: continue;
+					}
 				}
 
 				switch(GELF_ST_VISIBILITY(sym.st_other)) {
@@ -1763,5 +1771,11 @@ namespace vmod
 
 		return offset;
 	}
+
+	std::uint64_t symbol_cache::uncached_find_mangled_func(const std::filesystem::path &path, std::string_view search) noexcept
+	{ return uncached_find_mangled_impl<true>(path, search); }
+
+	std::uint64_t symbol_cache::uncached_find_mangled_global(const std::filesystem::path &path, std::string_view search) noexcept
+	{ return uncached_find_mangled_impl<false>(path, search); }
 #endif
 }

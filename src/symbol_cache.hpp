@@ -477,6 +477,7 @@ namespace vmod
 
 	#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 		static std::uint64_t uncached_find_mangled_func(const std::filesystem::path &path, std::string_view search) noexcept;
+		static std::uint64_t uncached_find_mangled_global(const std::filesystem::path &path, std::string_view search) noexcept;
 	#endif
 
 	private:

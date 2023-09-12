@@ -40,7 +40,7 @@ namespace vmod::bindings::mem
 		container(std::align_val_t align, std::size_t size_, bool game) noexcept;
 		container(std::size_t num, std::size_t size_, bool game) noexcept;
 
-		void script_set_free_callback(gsdk::HSCRIPT func) noexcept;
+		void script_set_free_callback(vscript::handle_wrapper func) noexcept;
 
 		unsigned char *script_release() noexcept;
 
@@ -54,7 +54,7 @@ namespace vmod::bindings::mem
 		unsigned char *ptr{nullptr};
 		std::size_t size{0};
 		bool aligned{false};
-		gsdk::HSCRIPT free_callback{gsdk::INVALID_HSCRIPT};
+		vscript::handle_wrapper free_callback{};
 
 	private:
 		container() = delete;

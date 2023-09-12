@@ -1,5 +1,4 @@
 #include "sendtable.hpp"
-#include "../../main.hpp"
 
 namespace vmod::bindings::ent
 {
@@ -14,7 +13,7 @@ namespace vmod::bindings::ent
 	{
 		using namespace std::literals::string_view_literals;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(!proxy_cif.initialize(FFI_SYSV)) {
 			error("vmod: failed to initialize send proxy cif\n"sv);
@@ -108,7 +107,7 @@ namespace vmod::bindings::ent
 		gsdk::DVariant *dvar{*static_cast<gsdk::DVariant **>(args[3])};
 
 		vscript::variant vargs[]{
-			prop->instance,
+			prop->instance_,
 			*static_cast<void **>            (args[1]),
 			*static_cast<void **>            (args[2]),
 			&dvar->m_data,
@@ -127,34 +126,34 @@ namespace vmod::bindings::ent
 		prop->call_post(vargs, std::size(vargs));
 	}
 
-	gsdk::HSCRIPT sendprop::script_hook_proxy(gsdk::HSCRIPT callback, bool post, [[maybe_unused]] bool per_client) noexcept
+	vscript::handle_ref sendprop::script_hook_proxy(vscript::handle_wrapper callback, bool post, [[maybe_unused]] bool per_client) noexcept
 	{
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
-		if(!callback || callback == gsdk::INVALID_HSCRIPT) {
+		if(!callback) {
 			vm->RaiseException("vmod: invalid callback");
-			return gsdk::INVALID_HSCRIPT;
+			return nullptr;
 		}
 
-		callback = vm->ReferenceObject(callback);
-		if(!callback || callback == gsdk::INVALID_HSCRIPT) {
+		callback = vm->ReferenceFunction(*callback);
+		if(!callback) {
 			vm->RaiseException("vmod: failed to get callback reference");
-			return gsdk::INVALID_HSCRIPT;
+			return nullptr;
 		}
 
-		plugin::callback_instance *clbk_instance{new plugin::callback_instance{this, callback, post}};
+		plugin::callback_instance *clbk_instance{new plugin::callback_instance{this, std::move(callback), post}};
 		if(!clbk_instance->initialize()) {
 			delete clbk_instance;
-			return gsdk::INVALID_HSCRIPT;
+			return nullptr;
 		}
 
 		if(!initialize_closure()) {
 			delete clbk_instance;
 			vm->RaiseException("vmod: failed to initialize closure");
-			return gsdk::INVALID_HSCRIPT;
+			return nullptr;
 		}
 
-		return clbk_instance->instance;
+		return clbk_instance->instance_;
 	}
 
 	ffi_type *sendprop::guess_type(const gsdk::SendProp *prop, gsdk::SendVarProxyFn proxy, const gsdk::SendTable *table) noexcept
@@ -281,7 +280,7 @@ namespace vmod::bindings::ent
 	{
 		using namespace std::literals::string_view_literals;
 
-		gsdk::IScriptVM *vm{main::instance().vm()};
+		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(!vm->RegisterClass(&desc)) {
 			error("vmod: failed to register sendtable script class\n"sv);

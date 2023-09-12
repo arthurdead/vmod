@@ -253,7 +253,7 @@ if ( ::developer() > 0 )
 				signature = "#";
 			}
 		}
-		::Documentation.functions[name] <- [ signature, description ];
+		::Documentation.functions[name] <- [ signature, description, GetFunctionSourceFile(func) ];
 	};
 
 	::Document <- function( symbolOrTable, itemIfSymbol = null, descriptionIfSymbol = null )
@@ -322,6 +322,8 @@ if ( ::developer() > 0 )
 			::printl( "Signature:   " + signature );
 			if ( documentation[1].len() )
 				::printl( "Description: " + documentation[1] );
+			if ( documentation[2] != null && documentation[2].len() )
+				::printl( "Script: " + documentation[2] );
 			::print( "\n" ); 
 		}
 	}
@@ -329,7 +331,7 @@ if ( ::developer() > 0 )
 else
 {
 	::RetrieveNativeSignature <- function( nativeFunction ) { return "<unnamed>"; };
-	::RegisterFunctionDocumentation <- function( func, name, signature, description ) {};
+	::RegisterFunctionDocumentation <- function( func, name, signature, description, script = "" ) {};
 	::Document <- function( symbolOrTable, itemIfSymbol = null, descriptionIfSymbol = null ) {};
 	::PrintHelp <- function( string = "*", exact = false )
 	{
@@ -844,7 +846,8 @@ else
 
 // support function to assemble help strings for script calls - call once all your stuff is in the VM
 ::_PublishedHelp <- {};
-::AddToScriptHelp <- function( scopeTable )
+//::AddToScriptHelp <- function( scopeTable )
+function AddToScriptHelp( scopeTable )
 {
 	foreach (idx, val in scopeTable )
 	{

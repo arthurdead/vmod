@@ -33,28 +33,41 @@ namespace vmod::vscript
 		}
 	}
 
+	namespace detail
+	{
+		template <std::size_t I, typename T>
+		static std::remove_reference_t<T> to_value(std::size_t num_args, gsdk::ScriptVariant_t *args) noexcept
+		{
+			if(I < num_args) {
+				return vscript::to_value<T>(args[I]);
+			} else {
+				return missing_value<T>();
+			}
+		}
+	}
+
 	template <typename R, typename C, typename ...Args, std::size_t ...I>
-	R function_desc::call_member_impl(R(C::*func)(Args...), C *obj, const gsdk::ScriptVariant_t *args, std::index_sequence<I...>) noexcept
+	R function_desc::call_member_impl(R(C::*func)(Args...), C *obj, std::size_t num_args, gsdk::ScriptVariant_t *args, std::index_sequence<I...>) noexcept
 	{
 		if constexpr(sizeof...(Args) == 0) {
 			return (obj->*func)();
 		} else {
-			return (obj->*func)(to_value<std::decay_t<Args>>(args[I])...);
+			return (obj->*func)(detail::to_value<I, Args>(num_args, args)...);
 		}
 	}
 
 	template <typename R, typename ...Args, std::size_t ...I>
-	R function_desc::call_impl(R(*func)(Args...), const gsdk::ScriptVariant_t *args, std::index_sequence<I...>) noexcept
+	R function_desc::call_impl(R(*func)(Args...), std::size_t num_args, gsdk::ScriptVariant_t *args, std::index_sequence<I...>) noexcept
 	{
 		if constexpr(sizeof...(Args) == 0) {
 			return func();
 		} else {
-			return func(to_value<std::decay_t<Args>>(args[I])...);
+			return func(detail::to_value<I, Args>(num_args, args)...);
 		}
 	}
 
 	template <typename R, typename C, typename ...Args>
-	bool function_desc::binding_member_singleton(gsdk::ScriptFunctionBindingStorageType_t func_storage, void *obj_ptr, const gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret) noexcept
+	bool function_desc::binding_member_singleton(gsdk::ScriptFunctionBindingStorageType_t func_storage, void *obj_ptr, gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret) noexcept
 	{
 		if(!obj_ptr) {
 			if constexpr(class_is_singleton_v<C>) {
@@ -68,10 +81,67 @@ namespace vmod::vscript
 		return binding_member<R, C, Args...>(func_storage, obj_ptr, args, num_args, ret);
 	}
 
-	template <typename R, typename C, typename ...Args>
-	bool function_desc::binding_member(gsdk::ScriptFunctionBindingStorageType_t func_storage, void *obj_ptr, const gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret) noexcept
+	namespace detail
 	{
-		constexpr std::size_t num_required_args{sizeof...(Args)};
+		template <typename T>
+		static constexpr bool can_be_optional() noexcept;
+
+		template <std::size_t i, typename T>
+		static constexpr bool can_variant_be_optional() noexcept
+		{
+			if constexpr(can_be_optional<std::variant_alternative_t<i, T>>()) {
+				return true;
+			} else if constexpr(i < (std::variant_size_v<T>-1)) {
+				return can_variant_be_optional<i+1, T>();
+			} else {
+				return false;
+			}
+		}
+
+		template <typename T>
+		static constexpr bool can_be_optional() noexcept
+		{
+			using decayed_t = std::decay_t<T>;
+
+			if constexpr(is_optional<decayed_t>::value) {
+				return true;
+			} else if constexpr(is_std_variant<decayed_t>::value) {
+				return can_variant_be_optional<0, T>();
+			} else {
+				return false;
+			}
+		}
+
+		template <std::size_t i, typename T>
+		static constexpr void num_required_args_impl(std::size_t &num) noexcept
+		{
+			if constexpr(can_be_optional<std::tuple_element_t<i, T>>()) {
+				--num;
+
+				if constexpr(i > 0) {
+					num_required_args_impl<i-1, T>(num);
+				}
+			}
+		}
+
+		template <std::size_t offset, typename ...Args>
+		static constexpr std::size_t num_required_args() noexcept
+		{
+			constexpr std::size_t actual_num{sizeof...(Args)};
+			static_assert(offset <= actual_num);
+			constexpr std::size_t offseted_num{actual_num - offset};
+			std::size_t target_num{offseted_num};
+			if constexpr(offseted_num > 0) {
+				num_required_args_impl<offseted_num-1, std::tuple<Args...>>(target_num);
+			}
+			return target_num;
+		}
+	}
+
+	template <typename R, typename C, typename ...Args>
+	bool function_desc::binding_member(gsdk::ScriptFunctionBindingStorageType_t func_storage, void *obj_ptr, gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret) noexcept
+	{
+		constexpr std::size_t num_required_args{detail::num_required_args<0, Args...>()};
 
 		C *obj{static_cast<C *>(obj_ptr)};
 
@@ -109,15 +179,15 @@ namespace vmod::vscript
 				return false;
 			}
 
-			call_member<R, C, Args...>(func, obj, args);
+			call_member<R, C, Args...>(func, obj, static_cast<std::size_t>(num_args), args);
 		} else {
 			if(!ret) {
-				call_member<R, C, Args...>(func, obj, args);
+				call_member<R, C, Args...>(func, obj, static_cast<std::size_t>(num_args), args);
 			} else {
 				if constexpr(std::is_base_of_v<gsdk::ScriptVariant_t, std::decay_t<R>>) {
-					*ret = call_member<R, C, Args...>(func, obj, args);
+					*ret = call_member<R, C, Args...>(func, obj, static_cast<std::size_t>(num_args), args);
 				} else {
-					R ret_val{call_member<R, C, Args...>(func, obj, args)};
+					R ret_val{call_member<R, C, Args...>(func, obj, static_cast<std::size_t>(num_args), args)};
 					to_variant<R>(*ret, std::forward<R>(ret_val));
 				}
 			#ifndef __VMOD_USING_CUSTOM_VM
@@ -130,9 +200,9 @@ namespace vmod::vscript
 	}
 
 	template <typename R, typename ...Args>
-	bool function_desc::binding(gsdk::ScriptFunctionBindingStorageType_t func_storage, void *obj_ptr, const gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret) noexcept
+	bool function_desc::binding(gsdk::ScriptFunctionBindingStorageType_t func_storage, void *obj_ptr, gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret) noexcept
 	{
-		constexpr std::size_t num_required_args{sizeof...(Args)};
+		constexpr std::size_t num_required_args{detail::num_required_args<0, Args...>()};
 
 		if(obj_ptr) {
 			detail::raise_exception("vmod: not a member function");
@@ -162,15 +232,15 @@ namespace vmod::vscript
 				return false;
 			}
 
-			call<R, Args...>(func, args);
+			call<R, Args...>(func, static_cast<std::size_t>(num_args), args);
 		} else {
 			if(!ret) {
-				call<R, Args...>(func, args);
+				call<R, Args...>(func, static_cast<std::size_t>(num_args), args);
 			} else {
 				if constexpr(std::is_base_of_v<gsdk::ScriptVariant_t, std::decay_t<R>>) {
-					*ret = call<R, Args...>(func, args);
+					*ret = call<R, Args...>(func, static_cast<std::size_t>(num_args), args);
 				} else {
-					R ret_val{call<R, Args...>(func, args)};
+					R ret_val{call<R, Args...>(func, static_cast<std::size_t>(num_args), args)};
 					to_variant<R>(*ret, std::forward<R>(ret_val));
 				}
 			#ifndef __VMOD_USING_CUSTOM_VM
@@ -183,27 +253,27 @@ namespace vmod::vscript
 	}
 
 	template <typename R, typename C, typename ...Args, std::size_t ...I>
-	R function_desc::call_member_va_impl(R(C::*func)(Args..., ...), C *obj, const gsdk::ScriptVariant_t *args, const gsdk::ScriptVariant_t *args_va, std::size_t num_va, std::index_sequence<I...>) noexcept
+	R function_desc::call_member_va_impl(R(C::*func)(Args..., ...), C *obj, std::size_t num_args, gsdk::ScriptVariant_t *args, gsdk::ScriptVariant_t *args_va, std::size_t num_va, std::index_sequence<I...>) noexcept
 	{
 		if constexpr(sizeof...(Args) == 2) {
 			return (obj->*func)(static_cast<const variant *>(args_va), num_va);
 		} else {
-			return (obj->*func)(to_value<std::decay_t<Args>>(args[I])..., static_cast<const variant *>(args_va), num_va);
+			return (obj->*func)(detail::to_value<I, Args>(num_args, args)..., static_cast<const variant *>(args_va), num_va);
 		}
 	}
 
 	template <typename R, typename ...Args, std::size_t ...I>
-	R function_desc::call_va_impl(R(*func)(Args..., ...), const gsdk::ScriptVariant_t *args, const gsdk::ScriptVariant_t *args_va, std::size_t num_va, std::index_sequence<I...>) noexcept
+	R function_desc::call_va_impl(R(*func)(Args..., ...), std::size_t num_args, gsdk::ScriptVariant_t *args, gsdk::ScriptVariant_t *args_va, std::size_t num_va, std::index_sequence<I...>) noexcept
 	{
 		if constexpr(sizeof...(Args) == 2) {
 			return func(static_cast<const variant *>(args_va), num_va);
 		} else {
-			return func(to_value<std::decay_t<Args>>(args[I])..., static_cast<const variant *>(args_va), num_va);
+			return func(detail::to_value<I, Args>(num_args, args)..., static_cast<const variant *>(args_va), num_va);
 		}
 	}
 
 	template <typename R, typename C, typename ...Args>
-	bool function_desc::binding_member_singleton_va(gsdk::ScriptFunctionBindingStorageType_t func_storage, void *obj_ptr, const gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret) noexcept
+	bool function_desc::binding_member_singleton_va(gsdk::ScriptFunctionBindingStorageType_t func_storage, void *obj_ptr, gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret) noexcept
 	{
 		if(!obj_ptr) {
 			if constexpr(class_is_singleton_v<C>) {
@@ -218,9 +288,9 @@ namespace vmod::vscript
 	}
 
 	template <typename R, typename C, typename ...Args>
-	bool function_desc::binding_member_va(gsdk::ScriptFunctionBindingStorageType_t func_storage, void *obj_ptr, const gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret) noexcept
+	bool function_desc::binding_member_va(gsdk::ScriptFunctionBindingStorageType_t func_storage, void *obj_ptr, gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret) noexcept
 	{
-		constexpr std::size_t num_required_args{sizeof...(Args) - 2};
+		constexpr std::size_t num_required_args{detail::num_required_args<2, Args...>()};
 
 		C *obj{static_cast<C *>(obj_ptr)};
 
@@ -229,7 +299,7 @@ namespace vmod::vscript
 			return false;
 		}
 
-		const gsdk::ScriptVariant_t *args_va{args + num_required_args};
+		gsdk::ScriptVariant_t *args_va{args + num_required_args};
 
 	#ifndef __VMOD_USING_CUSTOM_VM
 		std::size_t num_va{0};
@@ -269,15 +339,15 @@ namespace vmod::vscript
 				return false;
 			}
 
-			call_member_va<R, C, Args...>(func, obj, args, args_va, num_va);
+			call_member_va<R, C, Args...>(func, obj, static_cast<std::size_t>(num_args), args, args_va, num_va);
 		} else {
 			if(!ret) {
-				call_member_va<R, C, Args...>(func, obj, args, args_va, num_va);
+				call_member_va<R, C, Args...>(func, obj, static_cast<std::size_t>(num_args), args, args_va, num_va);
 			} else {
 				if constexpr(std::is_base_of_v<gsdk::ScriptVariant_t, std::decay_t<R>>) {
-					*ret = call_member_va<R, C, Args...>(func, obj, args, args_va, num_va);
+					*ret = call_member_va<R, C, Args...>(func, obj, static_cast<std::size_t>(num_args), args, args_va, num_va);
 				} else {
-					R ret_val{call_member_va<R, C, Args...>(func, obj, args, args_va, num_va)};
+					R ret_val{call_member_va<R, C, Args...>(func, obj, static_cast<std::size_t>(num_args), args, args_va, num_va)};
 					to_variant<R>(*ret, std::forward<R>(ret_val));
 				}
 			#ifndef __VMOD_USING_CUSTOM_VM
@@ -290,16 +360,16 @@ namespace vmod::vscript
 	}
 
 	template <typename R, typename ...Args>
-	bool function_desc::binding_va(gsdk::ScriptFunctionBindingStorageType_t func_storage, void *obj_ptr, const gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret) noexcept
+	bool function_desc::binding_va(gsdk::ScriptFunctionBindingStorageType_t func_storage, void *obj_ptr, gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret) noexcept
 	{
-		constexpr std::size_t num_required_args{sizeof...(Args) - 2};
+		constexpr std::size_t num_required_args{detail::num_required_args<2, Args...>()};
 
 		if(obj_ptr) {
 			detail::raise_exception("vmod: not a member function");
 			return false;
 		}
 
-		const gsdk::ScriptVariant_t *args_va{args + num_required_args};
+		gsdk::ScriptVariant_t *args_va{args + num_required_args};
 
 	#ifndef __VMOD_USING_CUSTOM_VM
 		std::size_t num_va{0};
@@ -333,15 +403,15 @@ namespace vmod::vscript
 				return false;
 			}
 
-			call_va<R, Args...>(func, args, args_va, num_va);
+			call_va<R, Args...>(func, static_cast<std::size_t>(num_args), args, args_va, num_va);
 		} else {
 			if(!ret) {
-				call_va<R, Args...>(func, args, args_va, num_va);
+				call_va<R, Args...>(func, static_cast<std::size_t>(num_args), args, args_va, num_va);
 			} else {
 				if constexpr(std::is_base_of_v<gsdk::ScriptVariant_t, std::decay_t<R>>) {
-					*ret = call_va<R, Args...>(func, args, args_va, num_va);
+					*ret = call_va<R, Args...>(func, static_cast<std::size_t>(num_args), args, args_va, num_va);
 				} else {
-					R ret_val{call_va<R, Args...>(func, args, args_va, num_va)};
+					R ret_val{call_va<R, Args...>(func, static_cast<std::size_t>(num_args), args, args_va, num_va)};
 					to_variant<R>(*ret, std::forward<R>(ret_val));
 				}
 			#ifndef __VMOD_USING_CUSTOM_VM
