@@ -513,7 +513,9 @@ namespace gsdk
 			void *m_ehandle;
 			HSCRIPT m_object;
 			void *m_ptr;
-		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2
+			unsigned char m_data[__BIGGEST_ALIGNMENT__];
+		#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
 			unsigned char m_data[sizeof(unsigned long long)];
 		#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 			unsigned char m_data[sizeof(unsigned int)];
@@ -591,7 +593,11 @@ namespace gsdk
 		ScriptHandleType_t type{HANDLETYPE_UNKNOWN};
 	};
 
-#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	#ifndef __x86_64__
+	static_assert(sizeof(ScriptVariant_t) == (sizeof(unsigned long long) + (sizeof(short) * 2)));
+	#endif
+#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
 	static_assert(sizeof(ScriptVariant_t) == (sizeof(unsigned long long) + (sizeof(short) * 2)));
 #elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 	static_assert(sizeof(ScriptVariant_t) == (sizeof(unsigned int) + (sizeof(short) * 2)));
@@ -606,7 +612,11 @@ namespace gsdk
 			vmod::generic_func_t func;
 			vmod::generic_mfp_t mfp;
 		};
-		char unk1[sizeof(unsigned long long)];
+		char unk1[sizeof(unsigned long long)
+		#ifdef __x86_64__
+		* 2
+		#endif
+		];
 	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		union {
 			vmod::generic_func_t func;
@@ -619,7 +629,11 @@ namespace gsdk
 
 	static_assert(std::is_trivial_v<ScriptFunctionBindingStorageType_t>);
 #if GSDK_ENGINE == GSDK_ENGINE_TF2
-	static_assert(sizeof(ScriptFunctionBindingStorageType_t) == (sizeof(vmod::generic_mfp_t) + sizeof(unsigned long long)));
+	static_assert(sizeof(ScriptFunctionBindingStorageType_t) == (sizeof(vmod::generic_mfp_t) + (sizeof(unsigned long long)
+	#ifdef __x86_64__
+	* 2
+	#endif
+	)));
 #elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 	static_assert(sizeof(ScriptFunctionBindingStorageType_t) == sizeof(vmod::generic_plain_mfp_t));
 #else

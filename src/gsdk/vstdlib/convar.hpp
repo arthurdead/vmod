@@ -116,8 +116,10 @@ namespace gsdk
 
 	constexpr int INVALID_CVAR_DLL_IDENTIFIER{-1};
 
+#ifndef __clang__
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wsubobject-linkage"
+#endif
 	class ConCommandBase
 	{
 	public:
@@ -130,6 +132,8 @@ namespace gsdk
 	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		virtual void RemoveFlags(int flags) final;
 		virtual int GetFlags() const final;
+	#else
+		void RemoveFlags(int flags) noexcept;
 	#endif
 		virtual const char *GetName() const;
 		virtual const char *GetHelpText() const final;
@@ -152,7 +156,9 @@ namespace gsdk
 		ConCommandBase(ConCommandBase &&) = delete;
 		ConCommandBase &operator=(ConCommandBase &&) = delete;
 	};
+#ifndef __clang__
 	#pragma GCC diagnostic push
+#endif
 
 #ifdef __clang__
 	#pragma clang diagnostic push

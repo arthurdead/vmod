@@ -7,19 +7,33 @@
 #include "../tier0/platform.hpp"
 #include <string_view>
 
+#ifndef __clang__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 #pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 #pragma GCC diagnostic ignored "-Wredundant-tags"
 #pragma GCC diagnostic ignored "-Wconditionally-supported"
-#pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
 #pragma GCC diagnostic ignored "-Wuseless-cast"
+#pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
 #pragma GCC diagnostic ignored "-Wcast-align"
 #pragma GCC diagnostic ignored "-Wsuggest-override"
 #pragma GCC diagnostic ignored "-Woverloaded-virtual"
+#else
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wnon-virtual-dtor"
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wsuggest-override"
+#pragma clang diagnostic ignored "-Woverloaded-virtual"
+#endif
 #include <steam/isteamremotestorage.h>
 #include <steam/isteamugc.h>
+#ifndef __clang__
 #pragma GCC diagnostic pop
+#else
+#pragma clang diagnostic pop
+#endif
 
 namespace gsdk
 {

@@ -15,7 +15,7 @@ namespace vmod::bindings::ent
 
 		gsdk::IScriptVM *vm{vscript::vm()};
 
-		if(!proxy_cif.initialize(FFI_SYSV)) {
+		if(!proxy_cif.initialize(ffi::target_abi)) {
 			error("vmod: failed to initialize send proxy cif\n"sv);
 			return false;
 		}
@@ -189,22 +189,21 @@ namespace vmod::bindings::ent
 							target_proxy = static_cast<const gsdk::CSendPropExtra_UtlVector *>(prop->m_pExtraData)->m_ProxyFn;
 						}
 
-						{
-							if(prop->m_nBits == 32) {
-								struct dummy_t {
-									unsigned int val{256};
-								} dummy;
+						switch(prop->m_nBits) {
+						case 32: {
+							struct dummy_t {
+								unsigned int val{256};
+							} dummy;
 
-								gsdk::DVariant out{};
-								target_proxy(prop, static_cast<const void *>(&dummy), static_cast<const void *>(&dummy.val), &out, 0, static_cast<int>(gsdk::INVALID_EHANDLE_INDEX));
-								if(out.m_Int == 65536) {
-									return &ffi_type_color32;
-								}
+							gsdk::DVariant out{};
+							target_proxy(prop, static_cast<const void *>(&dummy), static_cast<const void *>(&dummy.val), &out, 0, static_cast<int>(gsdk::INVALID_EHANDLE_INDEX));
+							if(out.m_Int == 65536) {
+								return &ffi_type_color32;
 							}
-						}
-
-						{
-							if(prop->m_nBits == gsdk::NUM_NETWORKED_EHANDLE_BITS) {
+						} break;
+						case gsdk::NUM_NETWORKED_EHANDLE_BITS:
+						#if 0
+							{
 								struct dummy_t {
 									gsdk::EHANDLE val{};
 								} dummy;
@@ -214,7 +213,11 @@ namespace vmod::bindings::ent
 								if(out.m_Int == gsdk::INVALID_NETWORKED_EHANDLE_VALUE) {
 									return &ffi_type_ehandle;
 								}
-							}
+							} break;
+						#else
+							return &ffi_type_ehandle;
+						#endif
+						default: break;
 						}
 
 						return &ffi_type_uint;

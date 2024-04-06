@@ -5,6 +5,7 @@
 #include <utility>
 #include <cstddef>
 #include <variant>
+#include "platform.hpp"
 
 namespace vmod
 {
@@ -56,7 +57,7 @@ namespace vmod
 
 			using pointer_type = R(*)(Args...);
 			using plain_pointer_type = pointer_type;
-			using thiscall_pointer_type = R(__attribute__((__thiscall__)) *)(Args...);
+			using thiscall_pointer_type = R(VMOD_KATTR_THISCALL *)(Args...);
 		};
 
 		template <typename R, typename C, typename ...Args>
@@ -79,7 +80,7 @@ namespace vmod
 
 			using pointer_type = R(C::*)(Args...);
 			using plain_pointer_type = R(*)(C *, Args...);
-			using thiscall_pointer_type = R(__attribute__((__thiscall__)) *)(C *, Args...);
+			using thiscall_pointer_type = R(VMOD_KATTR_THISCALL *)(C *, Args...);
 		};
 
 		template <typename R, typename C, typename ...Args>
@@ -89,7 +90,7 @@ namespace vmod
 
 			using pointer_type = R(C::*)(Args...) const;
 			using plain_pointer_type = R(*)(const C *, Args...);
-			using thiscall_pointer_type = R(__attribute__((__thiscall__)) *)(const C *, Args...);
+			using thiscall_pointer_type = R(VMOD_KATTR_THISCALL *)(const C *, Args...);
 		};
 
 		template <typename R, typename ...Args>

@@ -18,7 +18,8 @@ export CC_LD=lld
 export LD=/usr/bin/ld.lld
 fi
 
-export LLVM_CONFIG='/usr/bin/llvm-config32'
+#export LLVM_CONFIG='/usr/bin/llvm-config32'
+export LLVM_CONFIG='/usr/bin/llvm-config'
 
 clear
 
@@ -38,7 +39,8 @@ if [[ ! -f 'subprojects/libyaml.wrap' ]]; then
 fi
 
 if [[ ! -d $builddir ]]; then
-	meson setup --backend=ninja --cross-file ./'x86-linux-gnu' -Dengine_dir="$engine_dir" -Dgame=$game $builddir
+	#--cross-file ./'x86-linux-gnu'
+	meson setup --backend=ninja -Dengine_dir="$engine_dir" -Dgame=$game $builddir
 	if [[ $? != 0 ]]; then
 		exit 1
 	fi

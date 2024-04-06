@@ -235,6 +235,22 @@ namespace vmod::bindings::ffi
 		}
 
 		{
+		#ifdef __x86_64__
+			if(!vm->SetValue(*abi_table, "unix64", vscript::variant{FFI_UNIX64})) {
+				error("vmod: failed to set ffi unix64 abi value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(*abi_table, "win64", vscript::variant{FFI_WIN64})) {
+				error("vmod: failed to set ffi win64 abi value\n"sv);
+				return false;
+			}
+
+			if(!vm->SetValue(*abi_table, "gnuw64", vscript::variant{FFI_GNUW64})) {
+				error("vmod: failed to set ffi gnuw64 abi value\n"sv);
+				return false;
+			}
+		#else
 			if(!vm->SetValue(*abi_table, "sysv", vscript::variant{FFI_SYSV})) {
 				error("vmod: failed to set ffi sysv abi value\n"sv);
 				return false;
@@ -259,6 +275,7 @@ namespace vmod::bindings::ffi
 				error("vmod: failed to set ffi stdcall abi value\n"sv);
 				return false;
 			}
+		#endif
 
 			if(!vm->SetValue(*abi_table, "current", vscript::variant{FFI_DEFAULT_ABI})) {
 				error("vmod: failed to set ffi current abi value\n"sv);
@@ -372,7 +389,7 @@ namespace vmod::bindings::ffi
 		}
 
 		caller *cif{new caller{ret, std::move(args_types)}};
-		if(!cif->initialize(FFI_SYSV, true)) {
+		if(!cif->initialize(vmod::ffi::target_abi, true)) {
 			delete cif;
 			return nullptr;
 		}
@@ -452,7 +469,7 @@ namespace vmod::bindings::ffi
 		auto it{members.find(old_target.mfp)};
 		if(it == members.end()) {
 			det = new detour{ret, std::move(args_types)};
-			if(!det->initialize(old_target, FFI_SYSV)) {
+			if(!det->initialize(old_target, vmod::ffi::target_abi)) {
 				delete det;
 				return nullptr;
 			}

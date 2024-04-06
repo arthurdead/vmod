@@ -84,9 +84,11 @@ namespace vmod
 			main.remove_search_path(it, "mod"sv);
 		}
 
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		for(const auto &it : vpks) {
 			filesystem->RemoveVPKFile(it.c_str());
 		}
+	#endif
 
 		loaded = false;
 	}
@@ -134,9 +136,11 @@ namespace vmod
 			//main.add_search_path(it, "mod"sv);
 		}
 
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		for(const auto &it : vpks) {
 			filesystem->AddVPKFile(it.c_str());
 		}
+	#endif
 
 		bool any_loaded{false};
 

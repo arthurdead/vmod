@@ -53,7 +53,7 @@ namespace gsdk
 			(this->*squirrel_CreateArray_ptr)(var);
 			break;
 			default:
-			return INVALID_HSCRIPT;
+			return ScriptHandleWrapper_t{};
 		}
 	#elif GSDK_ENGINE == GSDK_ENGINE_L4D2
 		CreateArray_impl(var);

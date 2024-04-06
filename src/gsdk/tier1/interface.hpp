@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../../platform.hpp"
+
 namespace gsdk
 {
 	enum : int
@@ -17,4 +19,4 @@ namespace gsdk
 	};
 }
 
-extern "C" __attribute__((__visibility__("default"))) void  * __attribute__((__cdecl__)) CreateInterface(const char *, int *);
+extern "C" __attribute__((__visibility__("default"))) void  * VMOD_KATTR_CDECL CreateInterface(const char *, int *);

@@ -36,3 +36,7 @@
 #if GSDK_ENGINE == GSDK_ENGINE_PORTAL2
 	#define GSDK_NO_SYMBOLS
 #endif
+
+#if GSDK_ENGINE != GSDK_ENGINE_TF2 && defined __x86_64__
+	#error
+#endif

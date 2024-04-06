@@ -140,7 +140,7 @@ namespace gsdk
 	inline __attribute__((__always_inline__)) T *alloc(std::size_t size) noexcept
 	{
 	#ifndef GSDK_NO_ALLOC_OVERRIDE
-		return static_cast<T *>(g_pMemAlloc->Alloc(sizeof(T)));
+		return static_cast<T *>(g_pMemAlloc->Alloc(size));
 	#else
 		return static_cast<T *>(std::malloc(size));
 	#endif

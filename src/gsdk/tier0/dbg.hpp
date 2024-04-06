@@ -4,6 +4,7 @@
 #include "../config.hpp"
 #include "threadtools.hpp"
 #include "../../hacking.hpp"
+#include "../../platform.hpp"
 
 union alignas(unsigned int) Color
 {
@@ -207,57 +208,57 @@ namespace gsdk
 }
 
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-extern "C" __attribute__((__visibility__("default"))) const char * __attribute__((__cdecl__)) GetSpewOutputGroup();
-extern "C" __attribute__((__visibility__("default"))) int __attribute__((__cdecl__)) GetSpewOutputLevel();
-extern "C" __attribute__((__visibility__("default"))) const gsdk::Color * __attribute__((__cdecl__)) GetSpewOutputColor();
+extern "C" __attribute__((__visibility__("default"))) const char * VMOD_KATTR_CDECL GetSpewOutputGroup();
+extern "C" __attribute__((__visibility__("default"))) int VMOD_KATTR_CDECL GetSpewOutputLevel();
+extern "C" __attribute__((__visibility__("default"))) const gsdk::Color * VMOD_KATTR_CDECL GetSpewOutputColor();
 
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) SpewOutputFunc(gsdk::SpewOutputFunc_t);
-extern "C" __attribute__((__visibility__("default"))) gsdk::SpewOutputFunc_t __attribute__((__cdecl__)) GetSpewOutputFunc();
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL SpewOutputFunc(gsdk::SpewOutputFunc_t);
+extern "C" __attribute__((__visibility__("default"))) gsdk::SpewOutputFunc_t VMOD_KATTR_CDECL GetSpewOutputFunc();
 
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) SpewActivate(const char *, int);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL SpewActivate(const char *, int);
 
-extern "C" __attribute__((__visibility__("default"))) gsdk::SpewRetval_t __attribute__((__cdecl__)) ColorSpewMessage(gsdk::SpewType_t, const gsdk::Color *, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) gsdk::SpewRetval_t VMOD_KATTR_CDECL ColorSpewMessage(gsdk::SpewType_t, const gsdk::Color *, const char *, ...);
 #endif
 
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) Error(const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL Error(const char *, ...);
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ErrorV(const char *, va_list);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL ErrorV(const char *, va_list);
 #endif
 
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) Msg(const char * , ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL Msg(const char * , ...);
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DMsg(const char *, int, const char *, ...);
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) MsgV(const char *, va_list);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL DMsg(const char *, int, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL MsgV(const char *, va_list);
 #endif
 
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) Warning(const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL Warning(const char *, ...);
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DWarning(const char *, int, const char *, ...);
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) WarningV(const char *, va_list);
-#endif
-
-#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) Log(const char *, ...);
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DLog(const char *, int, const char *, ...);
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) LogV(const char *, va_list);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL DWarning(const char *, int, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL WarningV(const char *, va_list);
 #endif
 
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DevLog(const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL Log(const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL DLog(const char *, int, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL LogV(const char *, va_list);
 #endif
 
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DevMsg(int, const char *, ...);
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DevWarning(int, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL DevLog(const char *, ...);
+#endif
+
+#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL DevMsg(int, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL DevWarning(int, const char *, ...);
 #elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DevMsg(const char *, ...);
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) DevWarning(const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL DevMsg(const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL DevWarning(const char *, ...);
 #else
 	#error
 #endif
 
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConColorMsg(int, const gsdk::Color &, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL ConColorMsg(int, const gsdk::Color &, const char *, ...);
 #elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 extern __attribute__((__visibility__("default"))) void ConColorMsg(const gsdk::Color &, const char *, ...);
 #else
@@ -265,11 +266,11 @@ extern __attribute__((__visibility__("default"))) void ConColorMsg(const gsdk::C
 #endif
 
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConWarning(int, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL ConWarning(int, const char *, ...);
 #endif
 
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConMsg(int, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL ConMsg(int, const char *, ...);
 #elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 extern __attribute__((__visibility__("default"))) void ConMsg(const char *, ...);
 #else
@@ -277,24 +278,24 @@ extern __attribute__((__visibility__("default"))) void ConMsg(const char *, ...)
 #endif
 
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConLog(int, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL ConLog(int, const char *, ...);
 #endif
 
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConDColorMsg(const gsdk::Color &, const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL ConDColorMsg(const gsdk::Color &, const char *, ...);
 #endif
 
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConDMsg(const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL ConDMsg(const char *, ...);
 
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConDWarning(const char *, ...);
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) ConDLog(const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL ConDWarning(const char *, ...);
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL ConDLog(const char *, ...);
 #endif
 
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2007, >=, GSDK_ENGINE_BRANCH_2007_V0)
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) NetMsg(int, const char *, ... );
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) NetWarning(int, const char *, ... );
-extern "C" __attribute__((__visibility__("default"))) void __attribute__((__cdecl__)) NetLog(int, const char *, ... );
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL NetMsg(int, const char *, ... );
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL NetWarning(int, const char *, ... );
+extern "C" __attribute__((__visibility__("default"))) void VMOD_KATTR_CDECL NetLog(int, const char *, ... );
 #endif
 
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)

@@ -121,7 +121,10 @@ endif
 
 game_dir = join_paths(engine_dir,game)
 
-if engine_branch == '2010' and engine_branch_ver >= 1
+if compiler.sizeof('void *') == 8
+	engine_bin = join_paths(engine_dir,'bin/linux64')
+	game_bin = join_paths(game_dir,'bin/linux64')
+elif engine_branch == '2010' and engine_branch_ver >= 1
 	engine_bin = join_paths(engine_dir,'bin/linux32')
 	game_bin = join_paths(game_dir,'bin/linux32')
 else

@@ -109,5 +109,7 @@ namespace gsdk
 		DVariant &operator=(DVariant &&) = delete;
 	};
 
+#if GSDK_ENGINE != GSDK_ENGINE_TF2 || !defined __x86_64__
 	static_assert(sizeof(DVariant) == (sizeof(Vector) + sizeof(SendPropType)));
+#endif
 }

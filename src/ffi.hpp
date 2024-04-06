@@ -36,6 +36,12 @@ extern ffi_type ffi_type_ent_ptr;
 
 namespace vmod::ffi
 {
+#ifdef __x86_64__
+	constexpr inline ffi_abi target_abi{FFI_UNIX64};
+#else
+	constexpr inline ffi_abi target_abi{FFI_SYSV};
+#endif
+
 	extern void script_var_to_ptr(const vscript::variant &var, void *ptr, ffi_type *type) noexcept;
 	extern void ptr_to_script_var(void *ptr, ffi_type *type, gsdk::ScriptVariant_t &var) noexcept;
 	extern ffi_type *type_id_to_ptr(int id) noexcept;

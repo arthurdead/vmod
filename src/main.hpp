@@ -19,19 +19,33 @@
 #include "plugin.hpp"
 #include "mod.hpp"
 
+#ifndef __clang__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 #pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 #pragma GCC diagnostic ignored "-Wredundant-tags"
 #pragma GCC diagnostic ignored "-Wconditionally-supported"
-#pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
 #pragma GCC diagnostic ignored "-Wuseless-cast"
+#pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
 #pragma GCC diagnostic ignored "-Wcast-align"
 #pragma GCC diagnostic ignored "-Wsuggest-override"
 #pragma GCC diagnostic ignored "-Woverloaded-virtual"
+#else
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wnon-virtual-dtor"
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wsuggest-override"
+#pragma clang diagnostic ignored "-Woverloaded-virtual"
+#endif
 #include <steam/isteamremotestorage.h>
 #include <steam/isteamugc.h>
+#ifndef __clang__
 #pragma GCC diagnostic pop
+#else
+#pragma clang diagnostic pop
+#endif
 
 namespace vmod
 {
@@ -244,7 +258,8 @@ namespace vmod
 			{
 				unknown,
 				vpk,
-				search_path
+				search_path,
+				map,
 			};
 
 			enum class itemtype : unsigned char
@@ -260,7 +275,19 @@ namespace vmod
 			std::string metadata{};
 			std::filesystem::path cloud_path{};
 			std::filesystem::path disk_path{};
+		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 			std::filesystem::path mount_path{};
+		#endif
+
+			inline const std::filesystem::path &target_path() const noexcept
+			{
+			#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+				return mount_path;
+			#else
+				return disk_path;
+			#endif
+			}
+
 			std::size_t cloud_filesize{0};
 			std::size_t disk_filesize{0};
 			std::size_t disk_timestamp{0};
@@ -278,6 +305,7 @@ namespace vmod
 		float next_workshop_upkeep{0.0f};
 
 		std::filesystem::path workshop_dir_;
+		std::filesystem::path workshop_assets_dir_;
 		bool workshop_initalized{false};
 		ConCommand vmod_workshop_track;
 		ConCommand vmod_workshop_untrack;

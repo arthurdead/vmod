@@ -103,6 +103,20 @@ namespace gsdk
 
 		return m_nFlags;
 	}
+#else
+	void ConCommandBase::RemoveFlags(int flags) noexcept
+	{
+		flags &= ~FCVAR_UNREGISTERED;
+
+		if(!IsCommand()) {
+			const ConVar *var{static_cast<const ConVar *>(this)};
+			if(var->m_pParent && var->m_pParent != var) {
+				var->m_pParent->ConCommandBase::RemoveFlags(flags);
+			}
+		}
+
+		m_nFlags &= ~flags;
+	}
 #endif
 
 	bool ConCommandBase::IsRegistered() const
@@ -382,7 +396,7 @@ namespace gsdk
 				m_pszString = alloc<char>(2);
 			}
 
-			std::strncpy(m_pszString, value ? "1" : "0", 1);
+			m_pszString[0] = (value ? '1' : '0');
 			m_pszString[1] = '\0';
 			m_StringLength = 1;
 		} else {

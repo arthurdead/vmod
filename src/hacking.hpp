@@ -11,6 +11,7 @@
 #include "type_traits.hpp"
 #include <memory>
 #include <typeinfo>
+#include "platform.hpp"
 
 #include <cxxabi.h>
 
@@ -96,16 +97,22 @@ namespace vmod
 	using generic_object_t = generic_class;
 	using generic_func_t = void(*)();
 	using generic_func_va_t = void(*)(...);
-	using generic_plain_mfp_t = void(__attribute__((__thiscall__)) *)(generic_class *);
+	using generic_plain_mfp_t = void(VMOD_KATTR_THISCALL *)(generic_class *);
 	using generic_plain_mfp_va_t = void(*)(generic_class *, ...);
 	using generic_mfp_t = void(generic_class::*)();
 	using generic_mfp_va_t = void(generic_class::*)(...);
 
-	static_assert(sizeof(&generic_class::generic_function) == sizeof(std::uint64_t));
-	static_assert(alignof(&generic_class::generic_function) == alignof(std::uint64_t));
+#ifdef __x86_64__
+	using intmfp_t __attribute__((__aligned__(8))) = __int128;
+#else
+	using intmfp_t = std::uint64_t;
+#endif
+
+	static_assert(sizeof(&generic_class::generic_function) == sizeof(intmfp_t));
+	static_assert(alignof(&generic_class::generic_function) == alignof(intmfp_t));
 
 	template <typename R, typename C, typename ...Args>
-	union alignas(std::uint64_t) mfp_internal_t
+	union alignas(intmfp_t) mfp_internal_t
 	{
 		constexpr mfp_internal_t() noexcept = default;
 
@@ -114,7 +121,7 @@ namespace vmod
 		{
 		}
 
-		constexpr inline mfp_internal_t(std::uint64_t value_) noexcept
+		constexpr inline mfp_internal_t(intmfp_t value_) noexcept
 			: value{value_}
 		{
 		}
@@ -124,17 +131,17 @@ namespace vmod
 		{
 		}
 
-		constexpr inline mfp_internal_t(R(__attribute__((__thiscall__)) *addr_)(C *, Args...)) noexcept
+		constexpr inline mfp_internal_t(R(VMOD_KATTR_THISCALL *addr_)(C *, Args...)) noexcept
 			: addr{addr_}, adjustor{0}
 		{
 		}
 
-		constexpr inline mfp_internal_t(R(__attribute__((__thiscall__)) *addr_)(C *, Args...), std::size_t adjustor_) noexcept
+		constexpr inline mfp_internal_t(R(VMOD_KATTR_THISCALL *addr_)(C *, Args...), std::size_t adjustor_) noexcept
 			: addr{addr_}, adjustor{adjustor_}
 		{
 		}
 
-		constexpr inline mfp_internal_t &operator=(std::uint64_t value_) noexcept
+		constexpr inline mfp_internal_t &operator=(intmfp_t value_) noexcept
 		{
 			value = value_;
 			return *this;
@@ -146,7 +153,7 @@ namespace vmod
 			return *this;
 		}
 
-		constexpr inline mfp_internal_t &operator=(R(__attribute__((__thiscall__)) *addr_)(C *, Args...)) noexcept
+		constexpr inline mfp_internal_t &operator=(R(VMOD_KATTR_THISCALL *addr_)(C *, Args...)) noexcept
 		{
 			addr = addr_;
 			adjustor = 0;
@@ -163,16 +170,16 @@ namespace vmod
 		constexpr inline bool operator!() const noexcept
 		{ return !addr; }
 
-		std::uint64_t value;
+		intmfp_t value;
 		struct {
-			R(__attribute__((__thiscall__)) *addr)(C *, Args...);
+			R(VMOD_KATTR_THISCALL *addr)(C *, Args...);
 			std::size_t adjustor;
 		};
 		R(C::*func)(Args...) {nullptr};
 	};
 
 	template <typename R, typename C, typename ...Args>
-	union alignas(std::uint64_t) mfp_internal_va_t
+	union alignas(intmfp_t) mfp_internal_va_t
 	{
 		constexpr mfp_internal_va_t() noexcept = default;
 
@@ -181,7 +188,7 @@ namespace vmod
 		{
 		}
 
-		constexpr inline mfp_internal_va_t(std::uint64_t value_) noexcept
+		constexpr inline mfp_internal_va_t(intmfp_t value_) noexcept
 			: value{value_}
 		{
 		}
@@ -201,7 +208,7 @@ namespace vmod
 		{
 		}
 
-		constexpr inline mfp_internal_va_t &operator=(std::uint64_t value_) noexcept
+		constexpr inline mfp_internal_va_t &operator=(intmfp_t value_) noexcept
 		{
 			value = value_;
 			return *this;
@@ -230,7 +237,7 @@ namespace vmod
 		constexpr inline bool operator!() const noexcept
 		{ return !addr; }
 
-		std::uint64_t value;
+		intmfp_t value;
 		struct {
 			R(*addr)(C *, Args..., ...);
 			std::size_t adjustor;
@@ -321,7 +328,7 @@ namespace vmod
 	}
 
 	template <typename R, typename C, typename ...Args>
-	constexpr inline std::pair<R(__attribute__((__thiscall__)) *)(C *, Args...), std::size_t> mfp_to_func(R(C::*func)(Args...)) noexcept
+	constexpr inline std::pair<R(VMOD_KATTR_THISCALL *)(C *, Args...), std::size_t> mfp_to_func(R(C::*func)(Args...)) noexcept
 	{
 		mfp_internal_t<R, C, Args...> internal{func};
 		return {internal.addr, internal.adjustor};
@@ -335,14 +342,14 @@ namespace vmod
 	}
 
 	template <typename R, typename C, typename ...Args>
-	constexpr inline auto mfp_from_func(R(__attribute__((__thiscall__)) *addr)(C *, Args...)) noexcept -> R(C::*)(Args...)
+	constexpr inline auto mfp_from_func(R(VMOD_KATTR_THISCALL *addr)(C *, Args...)) noexcept -> R(C::*)(Args...)
 	{
 		mfp_internal_t<R, C, Args...> internal{addr};
 		return internal.func;
 	}
 
 	template <typename R, typename C, typename ...Args>
-	constexpr inline auto mfp_from_func(R(__attribute__((__thiscall__)) *addr)(C *, Args...), std::size_t adjustor) noexcept -> R(C::*)(Args...)
+	constexpr inline auto mfp_from_func(R(VMOD_KATTR_THISCALL *addr)(C *, Args...), std::size_t adjustor) noexcept -> R(C::*)(Args...)
 	{
 		mfp_internal_t<R, C, Args...> internal{addr, adjustor};
 		return internal.func;
@@ -366,11 +373,11 @@ namespace vmod
 	constexpr inline std::size_t vfunc_index(R(C::*func)(Args...)) noexcept
 	{
 		mfp_internal_t<R, C, Args...> internal{func};
-		std::uintptr_t addr_value{0};
+		uintptr_t addr_value{0};
 		if(std::is_constant_evaluated()) {
-			addr_value = (__builtin_bit_cast(std::uint64_t, internal.func) & 0xFFFFFFFF);
+			addr_value = (__builtin_bit_cast(intmfp_t, internal.func) & 0xFFFFFFFF);
 		} else {
-			addr_value = reinterpret_cast<std::uintptr_t>(internal.addr);
+			addr_value = reinterpret_cast<uintptr_t>(internal.addr);
 		}
 		if(!(addr_value & 1)) {
 			return static_cast<std::size_t>(-1);
@@ -445,7 +452,11 @@ namespace vmod
 			std::size_t pagesize{static_cast<std::size_t>(sysconf(_SC_PAGESIZE))};
 			start = align(ptr, pagesize);
 			void *end{align(static_cast<unsigned char *>(ptr) + len, pagesize)};
-			size = ((reinterpret_cast<std::uintptr_t>(start) - reinterpret_cast<std::uintptr_t>(end)) - pagesize);
+			if(start == end) {
+				size = len;
+			} else {
+				size = ((reinterpret_cast<std::uintptr_t>(start) - reinterpret_cast<std::uintptr_t>(end)) - pagesize);
+			}
 		}
 
 		inline void protect(int flags) noexcept
@@ -478,7 +489,7 @@ namespace vmod
 		#pragma GCC diagnostic push
 		#pragma GCC diagnostic ignored "-Wcast-function-type"
 		vtable[index] = reinterpret_cast<generic_plain_mfp_t>(new_func);
-		auto mfp{mfp_from_func<R, C, Args...>(reinterpret_cast<R(__attribute__((__thiscall__)) *)(C *, Args...)>(old_vfunc))};
+		auto mfp{mfp_from_func<R, C, Args...>(reinterpret_cast<R(VMOD_KATTR_THISCALL *)(C *, Args...)>(old_vfunc))};
 		#pragma GCC diagnostic pop
 		return mfp;
 	}
@@ -536,7 +547,13 @@ namespace vmod
 		mfp_or_func_t old_target;
 		mfp_or_func_t new_target;
 
-		unsigned char old_bytes[1 + sizeof(std::uintptr_t)];
+		unsigned char old_bytes[
+		#ifdef __x86_64__
+			5
+		#else
+			1
+		#endif
+		 + sizeof(std::uintptr_t)];
 
 	private:
 		detour_base(const detour_base &) = delete;
@@ -633,19 +650,24 @@ namespace vmod
 
 namespace std
 {
+	#pragma GCC diagnostic push
+	#pragma GCC diagnostic ignored "-Wignored-attributes"
+
 	template <typename R, typename C, typename ...Args>
 	struct hash<vmod::mfp_internal_t<R, C, Args...>>
 	{
 		inline size_t operator()(vmod::mfp_internal_t<R, C, Args...> ptr) const noexcept
-		{ return hash<uint64_t>{}(ptr.value); }
+		{ return hash<vmod::intmfp_t>{}(ptr.value); }
 	};
 
 	template <typename R, typename C, typename ...Args>
 	struct hash<vmod::mfp_internal_va_t<R, C, Args...>>
 	{
 		inline size_t operator()(vmod::mfp_internal_va_t<R, C, Args...> ptr) const noexcept
-		{ return hash<uint64_t>{}(ptr.value); }
+		{ return hash<vmod::intmfp_t>{}(ptr.value); }
 	};
+
+	#pragma GCC diagnostic pop
 
 	template <>
 	struct hash<vmod::generic_mfp_t>

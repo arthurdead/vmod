@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../config.hpp"
+#include "../../platform.hpp"
 
 namespace gsdk
 {
@@ -33,9 +34,9 @@ namespace gsdk
 }
 
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
-extern "C" __attribute__((__visibility__("default"))) gsdk::ICommandLine * __attribute__((__cdecl__)) CommandLine();
+extern "C" __attribute__((__visibility__("default"))) gsdk::ICommandLine * VMOD_KATTR_CDECL CommandLine();
 #else
-extern "C" __attribute__((__visibility__("default"))) gsdk::ICommandLine * __attribute__((__cdecl__)) CommandLine_Tier0();
+extern "C" __attribute__((__visibility__("default"))) gsdk::ICommandLine * VMOD_KATTR_CDECL CommandLine_Tier0();
 
 inline __attribute__((__always_inline__)) gsdk::ICommandLine *CommandLine() noexcept
 { return CommandLine_Tier0(); }

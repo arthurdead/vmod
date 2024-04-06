@@ -27,6 +27,7 @@
 #include "gsdk/server/gamerules.hpp"
 #include "gsdk/server/baseentity.hpp"
 #include "gsdk/server/datamap.hpp"
+#include "gsdk/server/gamesystem.hpp"
 
 #include <filesystem>
 #include <iterator>
@@ -167,6 +168,9 @@ namespace vmod
 	static gsdk::IScriptVM **g_pScriptVM_ptr{nullptr};
 	static bool(*VScriptServerInit)() {nullptr};
 	static void(*VScriptServerTerm)() {nullptr};
+#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
+	static void(gsdk::CVScriptGameSystem::*LevelShutdownPostEntity)() {nullptr};
+#endif
 	static bool(*VScriptServerRunScript)(const char *, gsdk::HSCRIPT, bool) {nullptr};
 #if GSDK_ENGINE == GSDK_ENGINE_L4D2
 	static bool(*VScriptServerRunScriptForAllAddons)(const char *, gsdk::HSCRIPT, bool) {nullptr};
@@ -558,6 +562,25 @@ namespace vmod
 		gsdk::g_pScriptVM = vm;
 		in_vscript_server_term = false;
 	}
+
+#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
+	static detour<decltype(LevelShutdownPostEntity)> LevelShutdownPostEntity_detour;
+	static void LevelShutdownPostEntity_detour_callback(gsdk::CVScriptGameSystem *pthis) noexcept
+	{
+		in_vscript_server_term = true;
+		LevelShutdownPostEntity_detour(pthis);
+		gsdk::IScriptVM *vm{main::instance().vm()};
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+		vm->CollectGarbage(nullptr, false);
+	#endif
+	#if GSDK_ENGINE != GSDK_ENGINE_L4D2
+		vm->RemoveOrphanInstances();
+	#endif
+		*g_pScriptVM_ptr = vm;
+		gsdk::g_pScriptVM = vm;
+		in_vscript_server_term = false;
+	}
+#endif
 
 	static char __vscript_printfunc_buffer[gsdk::MAXPRINTMSG];
 	static detour<decltype(PrintFunc)> PrintFunc_detour;
@@ -1007,6 +1030,15 @@ namespace vmod
 		VScriptServerInit_detour.initialize(VScriptServerInit, VScriptServerInit_detour_callback);
 		VScriptServerInit_detour.enable();
 
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
+		if(!LevelShutdownPostEntity) {
+			error("vmod: missing CVScriptGameSystem::LevelShutdownPostEntity address\n");
+			return false;
+		}
+		LevelShutdownPostEntity_detour.initialize(LevelShutdownPostEntity, LevelShutdownPostEntity_detour_callback);
+		LevelShutdownPostEntity_detour.enable();
+	#endif
+
 		if(!VScriptServerTerm) {
 			error("vmod: missing VScriptServerTerm address\n");
 			return false;
@@ -1086,6 +1118,7 @@ namespace vmod
 
 		old_path_command(args);
 
+	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		gsdk::CUtlVector<gsdk::CUtlString> vpks{};
 		filesystem->GetVPKFileNames(vpks);
 
@@ -1094,6 +1127,7 @@ namespace vmod
 		for(const auto &str : vpks) {
 			print("\"%s\"\n"sv, str.c_str());
 		}
+	#endif
 	}
 
 	void main::add_search_path(const std::filesystem::path &path, std::string_view id, gsdk::SearchPathAdd_t priority) noexcept
@@ -1182,14 +1216,16 @@ namespace vmod
 
 		bin_folder = exe_filename.parent_path();
 		bin_folder /= "bin"sv;
-	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
+	#ifdef __x86_64__
+		bin_folder /= "linux64"sv;
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
 		bin_folder /= "linux32"sv;
 	#endif
 
 		exe_filename = exe_filename.filename();
 		exe_filename.replace_extension();
 
-		srcds_executable = (exe_filename == "srcds_linux"sv);
+		srcds_executable = (exe_filename == "srcds_linux"sv || exe_filename == "srcds_linux64"sv);
 
 	#if GSDK_ENGINE == GSDK_ENGINE_PORTAL2
 		if(exe_filename != "portal2_linux"sv) {
@@ -1197,7 +1233,7 @@ namespace vmod
 			return false;
 		}
 	#else
-		if(exe_filename != "hl2_linux"sv && exe_filename != "srcds_linux"sv) {
+		if(exe_filename != "hl2_linux"sv && exe_filename != "srcds_linux"sv && exe_filename != "srcds_linux64"sv) {
 			std::cout << "\033[0;31m"sv << "vmod: unsupported exe filename: '"sv << exe_filename << "'\n"sv << "\033[0m"sv;
 			return false;
 		}
@@ -1290,6 +1326,15 @@ namespace vmod
 		{
 			std::error_code ec;
 			std::filesystem::create_directories(workshop_dir_, ec);
+		}
+
+		workshop_assets_dir_ = root_dir_;
+		workshop_assets_dir_ /= "workshop_assets"sv;
+
+		{
+			std::error_code ec;
+			std::filesystem::create_directories(workshop_assets_dir_, ec);
+			std::filesystem::create_directories(workshop_assets_dir_/"maps"sv, ec);
 		}
 
 		//TODO!!!
@@ -1606,7 +1651,9 @@ namespace vmod
 
 		std::filesystem::path server_lib_name{game_dir_};
 		server_lib_name /= "bin"sv;
-	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
+	#ifdef __x86_64__
+		server_lib_name /= "linux64"sv;
+	#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
 		server_lib_name /= "linux32"sv;
 	#endif
 		if(sv_engine->IsDedicatedServer()) {
@@ -1654,6 +1701,20 @@ namespace vmod
 				error("vmod: missing 'VScriptServerTerm()' symbol\n"sv);
 				return false;
 			}
+
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
+			auto CVScriptGameSystem_it{sv_symbols.find("CVScriptGameSystem"s)};
+			if(CVScriptGameSystem_it == sv_symbols.end()) {
+				error("vmod: missing 'CVScriptGameSystem' symbols\n"sv);
+				return false;
+			}
+
+			auto LevelShutdownPostEntity_it{CVScriptGameSystem_it->second->find("LevelShutdownPostEntity()"s)};
+			if(LevelShutdownPostEntity_it == CVScriptGameSystem_it->second->end()) {
+				error("vmod: missing 'CVScriptGameSystem::LevelShutdownPostEntity()' symbol\n"sv);
+				return false;
+			}
+		#endif
 
 		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
 			auto VScriptServerRunScript_it{sv_global_qual.find("VScriptRunScript(char const*, HSCRIPT__*, bool)"s)};
@@ -1856,6 +1917,9 @@ namespace vmod
 
 			VScriptServerInit = VScriptServerInit_it->second->func<decltype(VScriptServerInit)>();
 			VScriptServerTerm = VScriptServerTerm_it->second->func<decltype(VScriptServerTerm)>();
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
+			LevelShutdownPostEntity = LevelShutdownPostEntity_it->second->mfp<decltype(LevelShutdownPostEntity)>();
+		#endif
 			VScriptServerRunScript = VScriptServerRunScript_it->second->func<decltype(VScriptServerRunScript)>();
 		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 			VScriptServerRunScriptForAllAddons = VScriptServerRunScriptForAllAddons_it->second->func<decltype(VScriptServerRunScriptForAllAddons)>();
@@ -2357,8 +2421,8 @@ namespace vmod
 							file += enum_name;
 							file += "\n{\n"sv;
 
-							gsdk::HSCRIPT enum_table{value.get<gsdk::HSCRIPT>()};
-							if(enum_table && enum_table != gsdk::INVALID_HSCRIPT) {
+							vscript::handle_wrapper enum_table{std::move(value)};
+							if(enum_table) {
 								bindings::docs::write(file, 1, enum_table, enum_name[0] == 'F' ? bindings::docs::write_enum_how::flags : bindings::docs::write_enum_how::normal);
 							}
 
@@ -3328,12 +3392,14 @@ namespace vmod
 						} else {
 							info("\n"sv);
 						}
+					#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 						info("    mount path = "sv);
 						if(!it.second->mount_path.empty()) {
 							info("%s\n"sv, it.second->mount_path.c_str());
 						} else {
 							info("\n"sv);
 						}
+					#endif
 						info("    mounttype = %u\n"sv, it.second->mounttype);
 						info("    disk filesize = %zu\n"sv, it.second->disk_filesize);
 						info("    metadata = "sv);
@@ -3387,11 +3453,13 @@ namespace vmod
 		);
 
 		if(filesystem) {
-			std::filesystem::path assets_dir{root_dir_};
-			assets_dir /= "assets"sv;
+			std::filesystem::path assets_dir{root_dir_/"assets"sv};
 
 			add_search_path(assets_dir, "GAME"sv);
 			//add_search_path(assets_dir, "mod"sv);
+
+			add_search_path(workshop_assets_dir_, "GAME"sv);
+			//add_search_path(workshop_assets_dir_, "mod"sv);
 
 			assets_dir = root_dir_;
 			assets_dir /= "script_overrides"sv;
@@ -3738,6 +3806,8 @@ namespace vmod
 			if(sv_engine->IsDedicatedServer()) {
 			#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 				workshop_initalized = ugc()->BInitWorkshopForGameServer(app_l4d2, workshop_dir_.c_str());
+			#elif GSDK_ENGINE == GSDK_ENGINE_TF2
+				workshop_initalized = ugc()->BInitWorkshopForGameServer(app_tf2, workshop_dir_.c_str());
 			#else
 				#error
 			#endif
@@ -3798,18 +3868,23 @@ namespace vmod
 				disk_filesize = static_cast<std::size_t>(filesize);
 				disk_timestamp = timestamp;
 
+			#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 				mount_path = instance().mount_dir_;
 				mount_path /= std::to_string(std::hash<std::filesystem::path>{}(disk_path));
+			#endif
 
 				bool handled{true};
 
 				switch(app) {
 				case app_l4d2_sdk:
 				case app_l4d2_dedi:
-				case app_l4d2: {
-					mount_path.replace_extension(".vpk"sv);
-					mounttype = mounttype::vpk;
-				} break;
+				case app_l4d2:
+				mounttype = mounttype::vpk;
+				break;
+				case app_tf2_dedi:
+				case app_tf2:
+				mounttype = mounttype::map;
+				break;
 				case k_uAppIdInvalid:
 				handled = false;
 				break;
@@ -3820,10 +3895,13 @@ namespace vmod
 				}
 
 				if(handled) {
+					//TODO!!!!!! move this to main::workshop_item_t::mount
+				#if 0 && GSDK_ENGINE == GSDK_ENGINE_L4D2
 					if(std::filesystem::exists(disk_path) && !std::filesystem::exists(mount_path)) {
 						std::error_code ec;
 						std::filesystem::create_symlink(disk_path, mount_path, ec);
 					}
+				#endif
 
 					state |= workshop_item_t::state::installed;
 				}
@@ -3917,14 +3995,42 @@ namespace vmod
 
 	void main::workshop_item_t::mount() noexcept
 	{
+		using namespace std::literals::string_view_literals;
+
 		if(!(state & workshop_item_t::state::mounted)) {
 			switch(mounttype) {
 			case mounttype::vpk:
 			if(filesystem) {
-				filesystem->AddVPKFile(mount_path.c_str());
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+				std::filesystem::path tmp{target_path()};
+				tmp.replace_extension(".vpk"sv);
+				filesystem->AddVPKFile(tmp.c_str());
+				state |= workshop_item_t::state::mounted;
+			#endif
+			}
+			break;
+			case mounttype::search_path:
+			if(filesystem) {
+				filesystem->AddSearchPath(target_path().c_str(), "GAME");
+				//filesystem->AddSearchPath(target_path().c_str(), "mod");
 				state |= workshop_item_t::state::mounted;
 			}
 			break;
+			case mounttype::map: {
+				std::filesystem::path tmp_src{target_path()/metadata};
+				std::filesystem::path tmp_dst{instance().workshop_assets_dir_/"maps"sv/metadata};
+
+				if(!std::filesystem::exists(tmp_dst)) {
+					std::error_code ec;
+					std::filesystem::create_symlink(tmp_src, tmp_dst, ec);
+
+					if(!ec) {
+						state |= workshop_item_t::state::mounted;
+					}
+				} else {
+					state |= workshop_item_t::state::mounted;
+				}
+			} break;
 			default:
 			break;
 			}
@@ -3933,14 +4039,40 @@ namespace vmod
 
 	void main::workshop_item_t::unmount() noexcept
 	{
+		using namespace std::literals::string_view_literals;
+
 		if(state & state::mounted) {
 			switch(mounttype) {
 			case mounttype::vpk:
 			if(filesystem) {
-				filesystem->RemoveVPKFile(mount_path.c_str());
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+				std::filesystem::path tmp{target_path()};
+				tmp.replace_extension(".vpk"sv);
+				filesystem->RemoveVPKFile(tmp.c_str());
+			#endif
 				state &= ~state::mounted;
 			}
 			break;
+			case mounttype::search_path:
+			if(filesystem) {
+				if(filesystem->RemoveSearchPath(target_path().c_str(), "GAME") &&
+					filesystem->RemoveSearchPath(target_path().c_str(), "mod")) {
+					state &= ~state::mounted;
+				}
+			}
+			break;
+			case mounttype::map: {
+				std::filesystem::path tmp_dst{instance().workshop_assets_dir_/"maps"sv/metadata};
+
+				if(std::filesystem::exists(tmp_dst)) {
+					std::error_code ec;
+					if(std::filesystem::remove(tmp_dst, ec) && !ec) {
+						state &= ~state::mounted;
+					}
+				} else {
+					state &= ~state::mounted;
+				}
+			} break;
 			default:
 			break;
 			}
@@ -4288,6 +4420,9 @@ namespace vmod
 
 		VScriptServerInit_detour.disable();
 		VScriptServerTerm_detour.disable();
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
+		LevelShutdownPostEntity_detour.disable();
+	#endif
 		VScriptServerRunScript_detour.disable();
 
 	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
@@ -4485,7 +4620,7 @@ namespace vmod
 	{ return ::vmod::vsp; }
 }
 
-extern "C" __attribute__((__visibility__("default"))) void * __attribute__((__cdecl__)) CreateInterface(const char *name, int *status)
+extern "C" __attribute__((__visibility__("default"))) void * VMOD_KATTR_CDECL CreateInterface(const char *name, int *status)
 {
 	using namespace gsdk;
 

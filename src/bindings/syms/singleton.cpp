@@ -259,7 +259,7 @@ namespace vmod::bindings::syms
 		instance.free();
 
 		auto symbols_table{main::instance().symbols_table()};
-		if(vm->ValueExists(*symbols_table, name.data())) {
+		if(vm && vm->ValueExists(*symbols_table, name.data())) {
 			vm->ClearValue(*symbols_table, name.data());
 		}
 	}

@@ -38,10 +38,12 @@
 #pragma clang diagnostic ignored "-Wextra-semi-stmt"
 #pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
 #pragma clang diagnostic ignored "-Wshadow-field"
+#pragma clang diagnostic ignored "-Wcast-align"
 #else
 #pragma GCC diagnostic ignored "-Wsuggest-override"
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 #pragma GCC diagnostic ignored "-Wuseless-cast"
+#pragma GCC diagnostic ignored "-Wcast-align"
 #endif
 #include <sqfuncproto.h>
 #include <sqclosure.h>
@@ -3470,22 +3472,22 @@ namespace vmod::vm
 			sq_pushroottable(impl);
 		}
 
-		int size{sq_getsize(impl, -1)};
+		SQInteger size{sq_getsize(impl, -1)};
 
 		sq_pop(impl, 1);
 
-		return size;
+		return static_cast<int>(size);
 	}
 
 	int squirrel::GetArrayCount_nonvirtual(gsdk::HSCRIPT obj) noexcept
 	{
 		sq_pushobject(impl, *vs_cast(obj));
 
-		int size{sq_getsize(impl, -1)};
+		SQInteger size{sq_getsize(impl, -1)};
 
 		sq_pop(impl, 1);
 
-		return size;
+		return static_cast<int>(size);
 	}
 
 	int squirrel::GetKeyValue(gsdk::HSCRIPT obj, int it, gsdk::ScriptVariant_t *key, gsdk::ScriptVariant_t *value)
@@ -3502,7 +3504,7 @@ namespace vmod::vm
 			sq_pushinteger(impl, it);
 		}
 
-		int next_it{-1};
+		SQInteger next_it{-1};
 
 		if(SQ_SUCCEEDED(sq_next(impl, -2))) {
 			if(key) {
@@ -3520,7 +3522,7 @@ namespace vmod::vm
 
 		sq_pop(impl, 2);
 
-		return next_it;
+		return static_cast<int>(next_it);
 	}
 
 	int squirrel::GetKeyValue2(gsdk::HSCRIPT obj, int it, gsdk::ScriptVariant_t *key, gsdk::ScriptVariant_t *value)
