@@ -891,7 +891,7 @@ namespace vmod
 		}
 
 		if(scope == nullptr) {
-			if(value.m_type == gsdk::FIELD_HSCRIPT && last_registered_instance.instance == value.m_object) {
+			if((value.m_type == gsdk::FIELD_HSCRIPT || value.m_type == gsdk::FIELD_HSCRIPT_NEW_INSTANCE) && last_registered_instance.instance == value.m_object) {
 				if(!main::instance().vm()) {
 					auto &map{internal_vscript_values};
 					map.emplace(name, last_registered_instance.desc);
