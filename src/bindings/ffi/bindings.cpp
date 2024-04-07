@@ -72,7 +72,7 @@ namespace vmod::bindings::ffi
 		file += "enum class abi\n"sv;
 		docs::ident(file, 1);
 		file += "{\n"sv;
-		docs::write(file, 2, singleton::instance().abi_table, docs::write_enum_how::normal);
+		docs::write(file, 2, singleton::instance().abi_table, docs::write_enum_how::name);
 		docs::ident(file, 1);
 		file += "};\n\n"sv;
 

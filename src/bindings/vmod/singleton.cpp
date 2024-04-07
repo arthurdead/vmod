@@ -45,6 +45,8 @@ namespace vmod
 			}
 		}
 	#elif GSDK_ENGINE == GSDK_ENGINE_TF2
+		//TODO!!!! fix MaxClients
+
 		unsigned char tmp{0};
 
 		it = sv_script_class_descs.find("CBasePlayer"s);
@@ -255,11 +257,11 @@ namespace vmod
 		bindings::docs::ident(file, 1);
 		file += "{\n"sv;
 		bindings::docs::ident(file, 2);
-		file += "ignored\n"sv;
+		file += "ignored,\n"sv;
 		bindings::docs::ident(file, 2);
-		file += "error\n"sv;
+		file += "error,\n"sv;
 		bindings::docs::ident(file, 2);
-		file += "halt\n"sv;
+		file += "halt,\n"sv;
 		bindings::docs::ident(file, 2);
 		file += "handled\n"sv;
 		bindings::docs::ident(file, 1);

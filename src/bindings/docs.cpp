@@ -924,29 +924,42 @@ namespace vmod::bindings::docs
 
 	void write(std::string &file, std::size_t depth, vscript::handle_ref enum_table, write_enum_how how) noexcept
 	{
-		//TODO!!!! sort by value
-
 		using namespace std::literals::string_view_literals;
-
-		std::unordered_map<unsigned char, std::string> bit_str_map;
 
 		gsdk::IScriptVM *vm{vscript::vm()};
 
 		int num2{vm->GetNumTableEntries(*enum_table)};
 
-		if(how == write_enum_how::flags) {
-			for(int j{0}, it2{0}; it2 != -1 && j < num2; ++j) {
-				vscript::variant key2;
-				vscript::variant value2;
-				it2 = vm->GetKeyValue(*enum_table, it2, &key2, &value2);
+		std::vector<std::pair<vscript::variant, vscript::variant>> values;
 
-				if(value2.m_type == gsdk::FIELD_VOID) {
+		for(int j{0}, it2{0}; it2 != -1 && j < num2; ++j) {
+			vscript::variant key2;
+			vscript::variant value2;
+			it2 = vm->GetKeyValue(*enum_table, it2, &key2, &value2);
+
+			auto &val{values.emplace_back()};
+			val.first = std::move(key2);
+			val.second = std::move(value2);
+		}
+
+		//TODO!!!! push bitcount to end
+
+		std::sort(values.begin(), values.end(),
+			[](const auto &rhs, const auto &lhs) noexcept -> bool {
+				return (rhs.second.template get<unsigned int>() < lhs.second.template get<unsigned int>());
+			}
+		);
+
+		std::unordered_map<unsigned char, std::string> bit_str_map;
+
+		if(how == write_enum_how::flags) {
+			for(const auto &it : values) {
+				unsigned int val{it.second.get<unsigned int>()};
+				if(val == 0) {
 					continue;
 				}
 
-				std::string_view value_name{key2.get<std::string_view>()};
-
-				unsigned int val{value2.get<unsigned int>()};
+				std::string_view value_name{it.first.get<std::string_view>()};
 
 				unsigned char found_bits{0};
 				unsigned char last_bit{0};
@@ -967,12 +980,8 @@ namespace vmod::bindings::docs
 			}
 		}
 
-		for(int j{0}, it2{0}; it2 != -1 && j < num2; ++j) {
-			vscript::variant key2;
-			vscript::variant value2;
-			it2 = vm->GetKeyValue(*enum_table, it2, &key2, &value2);
-
-			std::string_view value_name{key2.get<std::string_view>()};
+		for(auto it{values.cbegin()}; it != values.cend(); ++it) {
+			std::string_view value_name{it->first.get<std::string_view>()};
 
 			ident(file, depth);
 			file += value_name;
@@ -980,80 +989,89 @@ namespace vmod::bindings::docs
 				file += " = "sv;
 			}
 
-			constexpr bool respect_null{true};
+			constexpr bool respect_null{false};
 
 			std::string_view value_str;
-			if(value2.m_type == gsdk::FIELD_VOID) {
+			if(it->second.m_type == gsdk::FIELD_VOID) {
 				if constexpr(respect_null) {
 					value_str = "null"sv;
 				} else {
 					value_str = "0"sv;
 				}
 			} else {
-				value_str = value2.get<std::string_view>();
+				value_str = it->second.get<std::string_view>();
 			}
 
-			if(value2.m_type == gsdk::FIELD_VOID) {
+			if(it->second.m_type == gsdk::FIELD_VOID) {
 				if(how != write_enum_how::name) {
 					file += value_str;
 				}
 			} else {
 				if(how == write_enum_how::flags) {
-					unsigned int val{value2.get<unsigned int>()};
+					if(value_name.ends_with("_BITCOUNT"sv) || value_name.ends_with("_BITS"sv)) {
+						file += value_str;
+					} else {
+						unsigned int val{it->second.get<unsigned int>()};
 
-					std::vector<unsigned char> bits;
+						std::vector<unsigned char> bits;
 
-					for(unsigned char k{0}; val; val >>= 1, ++k) {
-						if(val & 1) {
-							bits.emplace_back(k);
-						}
-					}
-
-					std::size_t num_bits{bits.size()};
-
-					if(num_bits > 0) {
-						std::string temp_bit_str;
-
-						if(num_bits > 1) {
-							file += '(';
-						}
-						for(unsigned char bit : bits) {
-							auto name_it{bit_str_map.find(bit)};
-							if(name_it != bit_str_map.end() && name_it->second != value_name) {
-								file += name_it->second;
-								file += '|';
-							} else {
-								file += "(1 << "sv;
-
-								temp_bit_str.resize(6);
-
-								char *begin{temp_bit_str.data()};
-								char *end{begin + 6};
-
-								std::to_chars_result tc_res{std::to_chars(begin, end, bit)};
-								tc_res.ptr[0] = '\0';
-
-								file += begin;
-								file += ")|"sv;
+						for(unsigned char k{0}; val; val >>= 1, ++k) {
+							if(val & 1) {
+								bits.emplace_back(k);
 							}
 						}
-						file.pop_back();
-						if(num_bits > 1) {
-							file += ')';
+
+						std::size_t num_bits{bits.size()};
+
+						if(num_bits > 0) {
+							std::string temp_bit_str;
+
+							if(num_bits > 1) {
+								file += "(\n"sv;
+								ident(file, depth+1);
+							}
+							for(auto itbit{bits.cbegin()}; itbit != bits.cend(); ++itbit) {
+								auto name_it{bit_str_map.find(*itbit)};
+								if(name_it != bit_str_map.end() && name_it->second != value_name) {
+									file += name_it->second;
+								} else {
+									file += "(1 << "sv;
+
+									temp_bit_str.resize(6);
+
+									char *begin{temp_bit_str.data()};
+									char *end{begin + 6};
+
+									std::to_chars_result tc_res{std::to_chars(begin, end, *itbit)};
+									tc_res.ptr[0] = '\0';
+
+									file += begin;
+									file += ')';
+								}
+								if(num_bits > 1 && itbit != bits.cend()-1) {
+									file += "|\n"sv;
+									ident(file, depth+1);
+								}
+							}
+							if(num_bits > 1) {
+								file += '\n';
+								ident(file, depth);
+								file += ')';
+							}
+						} else {
+							file += value_str;
 						}
-					} else {
-						file += value_str;
 					}
 				} else if(how == write_enum_how::normal) {
 					file += value_str;
 				}
 			}
 
-			if(j < num2-1) {
+			if(it < values.cend()-1) {
 				file += ',';
 			}
 
-			if(value2.m_type != gsdk::FIELD_VOID) {
+			if(it->second.m_type != gsdk::FIELD_VOID) {
 				if(how == write_enum_how::flags) {
 					file += " //"sv;
 					file += value_str;
