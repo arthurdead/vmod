@@ -924,6 +924,8 @@ namespace vmod::bindings::docs
 
 	void write(std::string &file, std::size_t depth, vscript::handle_ref enum_table, write_enum_how how) noexcept
 	{
+		//TODO!!!! sort by value
+
 		using namespace std::literals::string_view_literals;
 
 		std::unordered_map<unsigned char, std::string> bit_str_map;

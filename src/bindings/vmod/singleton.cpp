@@ -20,7 +20,6 @@ namespace vmod
 	{
 		using namespace std::literals::string_literals;
 
-	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 		auto it{sv_script_class_descs.find("CBaseEntity"s)};
 		for(auto &func : it->second->m_FunctionBindings) {
 			if(std::strcmp(func.m_desc.m_pszScriptName, "GetEntityHandle") == 0) {
@@ -29,6 +28,7 @@ namespace vmod
 			}
 		}
 
+	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
 		it = sv_script_class_descs.find("TerrorNavArea"s);
 		for(auto &func : it->second->m_FunctionBindings) {
 			if(std::strcmp(func.m_desc.m_pszScriptName, "GetCorner") == 0) {
@@ -42,6 +42,25 @@ namespace vmod
 			if(std::strcmp(func.m_desc.m_pszScriptName, "GetZombieType") == 0) {
 				func.m_desc.m_ReturnType = gsdk::FIELD_INTEGER;
 				break;
+			}
+		}
+	#elif GSDK_ENGINE == GSDK_ENGINE_TF2
+		unsigned char tmp{0};
+
+		it = sv_script_class_descs.find("CBasePlayer"s);
+		for(auto &func : it->second->m_FunctionBindings) {
+			if(std::strcmp(func.m_desc.m_pszScriptName, "GetPlayerMins") == 0) {
+				func.m_desc.m_ReturnType = gsdk::FIELD_VECTOR;
+				tmp |= (1 << 0);
+				if(tmp & (1 << 1)) {
+					break;
+				}
+			} else if(std::strcmp(func.m_desc.m_pszScriptName, "GetPlayerMaxs") == 0) {
+				func.m_desc.m_ReturnType = gsdk::FIELD_VECTOR;
+				tmp |= (1 << 1);
+				if(tmp & (1 << 0)) {
+					break;
+				}
 			}
 		}
 	#endif
