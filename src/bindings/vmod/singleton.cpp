@@ -20,12 +20,52 @@ namespace vmod
 	{
 		using namespace std::literals::string_literals;
 
+		unsigned char tmp{0};
+
 		auto it{sv_script_class_descs.find("CBaseEntity"s)};
 		for(auto &func : it->second->m_FunctionBindings) {
 			if(std::strcmp(func.m_desc.m_pszScriptName, "GetEntityHandle") == 0) {
 				func.m_desc.m_ReturnType = gsdk::FIELD_EHANDLE;
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2
+				tmp |= (1 << 0);
+				if(tmp == 31) {
+					break;
+				}
+			#else
 				break;
+			#endif
 			}
+		#if GSDK_ENGINE == GSDK_ENGINE_TF2
+			else if(std::strcmp(func.m_desc.m_pszScriptName, "SetOwner") == 0 && (!func.m_desc.m_pszDescription || func.m_desc.m_pszDescription[0] == '\0')) {
+				func.m_desc.m_pszDescription = "!!!DUPLICATE!!! DO NOT USE ME.";
+				func.m_desc.m_pszScriptName = "__SetOwner";
+				tmp |= (1 << 1);
+				if(tmp == 31) {
+					break;
+				}
+			} else if(std::strcmp(func.m_desc.m_pszScriptName, "SetGravity") == 0 && (!func.m_desc.m_pszDescription || func.m_desc.m_pszDescription[0] == '\0')) {
+				func.m_desc.m_pszDescription = "!!!DUPLICATE!!! DO NOT USE ME.";
+				func.m_desc.m_pszScriptName = "__SetGravity";
+				tmp |= (1 << 2);
+				if(tmp == 31) {
+					break;
+				}
+			} else if(std::strcmp(func.m_desc.m_pszScriptName, "GetFriction") == 0 && (!func.m_desc.m_pszDescription || func.m_desc.m_pszDescription[0] == '\0')) {
+				func.m_desc.m_pszDescription = "!!!DUPLICATE!!! DO NOT USE ME.";
+				func.m_desc.m_pszScriptName = "__GetFriction";
+				tmp |= (1 << 3);
+				if(tmp == 31) {
+					break;
+				}
+			} else if(std::strcmp(func.m_desc.m_pszScriptName, "SetFriction") == 0 && (!func.m_desc.m_pszDescription || func.m_desc.m_pszDescription[0] == '\0')) {
+				func.m_desc.m_pszDescription = "!!!DUPLICATE!!! DO NOT USE ME.";
+				func.m_desc.m_pszScriptName = "__SetFriction";
+				tmp |= (1 << 4);
+				if(tmp == 31) {
+					break;
+				}
+			}
+		#endif
 		}
 
 	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
@@ -47,20 +87,20 @@ namespace vmod
 	#elif GSDK_ENGINE == GSDK_ENGINE_TF2
 		//TODO!!!! fix MaxClients
 
-		unsigned char tmp{0};
+		tmp = 0;
 
 		it = sv_script_class_descs.find("CBasePlayer"s);
 		for(auto &func : it->second->m_FunctionBindings) {
 			if(std::strcmp(func.m_desc.m_pszScriptName, "GetPlayerMins") == 0) {
 				func.m_desc.m_ReturnType = gsdk::FIELD_VECTOR;
 				tmp |= (1 << 0);
-				if(tmp & (1 << 1)) {
+				if(tmp == 3) {
 					break;
 				}
 			} else if(std::strcmp(func.m_desc.m_pszScriptName, "GetPlayerMaxs") == 0) {
 				func.m_desc.m_ReturnType = gsdk::FIELD_VECTOR;
 				tmp |= (1 << 1);
-				if(tmp & (1 << 0)) {
+				if(tmp == 3) {
 					break;
 				}
 			}
