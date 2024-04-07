@@ -70,6 +70,43 @@ namespace vmod
 		return true;
 	}
 
+	bool main::binding_mods_late() noexcept
+	{
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		vscript::variant const_table_var;
+		if(vm_->GetValue(nullptr, "Constants", &const_table_var)) {
+			vscript::handle_ref const_table_ref{const_table_var};
+			vscript::variant taunt_table_var;
+			if(vm_->GetValue(*const_table_ref, "FTaunts", &taunt_table_var)) {
+				vscript::handle_wrapper taunt_table_hndl{std::move(taunt_table_var)};
+
+				auto new_taunt_table{vm_->CreateTable()};
+				if(new_taunt_table.object && new_taunt_table.object != gsdk::INVALID_HSCRIPT) {
+					int num2{vm_->GetNumTableEntries(*taunt_table_hndl)};
+					for(int j{0}, it2{0}; it2 != -1 && j < num2; ++j) {
+						vscript::variant key2;
+						vscript::variant value2;
+						it2 = vm_->GetKeyValue(*taunt_table_hndl, it2, &key2, &value2);
+
+						std::string_view value_name{key2.get<std::string_view>()};
+
+						vm_->SetValue(new_taunt_table.object, value_name.data(), value2);
+					}
+
+					if(vm_->SetValue(*const_table_ref, "ETaunts", new_taunt_table.object)) {
+						new_taunt_table.should_free_ = false;
+						vm_->ClearValue(*const_table_ref, "FTaunts");
+						taunt_table_hndl.free();
+						//vm_->SetValue(*const_table_ref, "FTaunts", new_taunt_table.object);
+					}
+				}
+			}
+		}
+	#endif
+
+		return true;
+	}
+
 	bool main::bindings() noexcept
 	{
 		using namespace std::literals::string_view_literals;

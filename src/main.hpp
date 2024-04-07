@@ -139,6 +139,7 @@ namespace vmod
 		void map_active() noexcept;
 
 		bool binding_mods() noexcept;
+		bool binding_mods_late() noexcept;
 		bool bindings() noexcept;
 		void unbindings() noexcept;
 

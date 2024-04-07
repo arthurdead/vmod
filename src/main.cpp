@@ -2197,6 +2197,10 @@ namespace vmod
 			return false;
 		}
 
+		if(!binding_mods_late()) {
+			return false;
+		}
+
 		vmod_reload_mods.initialize("vmod_reload_mods"sv,
 			[this](const gsdk::CCommand &) noexcept -> void {
 				auto it{mods.begin()};
