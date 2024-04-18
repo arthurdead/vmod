@@ -1,5 +1,6 @@
 #include "mod.hpp"
 #include "main.hpp"
+#include "filesystem.hpp"
 
 namespace vmod
 {
@@ -65,6 +66,29 @@ namespace vmod
 				vpks.emplace_back(std::move(filepath));
 			}
 		}
+
+		std::filesystem::path workshop_file{path/"workshop.txt"sv};
+
+		if(std::filesystem::exists(workshop_file)) {
+			auto &main{main::instance()};
+
+			size_t size{0};
+			auto bytes{read_file(workshop_file, size)};
+			char *begin{reinterpret_cast<char *>(bytes.get())};
+			char *end{begin + size};
+			while(begin != end) {
+				char *line{begin};
+				while(line != end && *line != '\n' && *line != '\0') {
+					++line;
+				}
+				*line = '\0';
+				auto id{static_cast<PublishedFileId_t>(std::strtoul(begin, nullptr, 10))};
+				if(main.track_workshop_item(id, false)) {
+					workshop_items.emplace_back(id);
+				}
+				begin = line;
+			}
+		}
 	}
 
 	void mod::unload() noexcept
@@ -84,11 +108,18 @@ namespace vmod
 			main.remove_search_path(it, "mod"sv);
 		}
 
-	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		for(const auto &it : vpks) {
+		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 			filesystem->RemoveVPKFile(it.c_str());
+		#else
+			filesystem->RemoveVPKFile(it.c_str(), "GAME");
+			filesystem->RemoveVPKFile(it.c_str(), "mod");
+		#endif
 		}
-	#endif
+
+		for(auto it : workshop_items) {
+			main.untrack_workshop_item(it, false);
+		}
 
 		loaded = false;
 	}
@@ -100,6 +131,7 @@ namespace vmod
 		plugins.clear();
 		paths.clear();
 		vpks.clear();
+		workshop_items.clear();
 
 		init();
 
@@ -136,11 +168,14 @@ namespace vmod
 			//main.add_search_path(it, "mod"sv);
 		}
 
-	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		for(const auto &it : vpks) {
+		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 			filesystem->AddVPKFile(it.c_str());
+		#else
+			filesystem->AddVPKFile(it.c_str(), "GAME");
+			//filesystem->AddVPKFile(it.c_str(), "mod");
+		#endif
 		}
-	#endif
 
 		bool any_loaded{false};
 

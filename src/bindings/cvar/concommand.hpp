@@ -78,6 +78,9 @@ namespace vmod::bindings::cvar
 
 		~concommand() noexcept override;
 
+		inline vscript::handle_ref func_ref() noexcept
+		{ return callback; }
+
 	protected:
 		static vscript::class_desc<concommand> desc;
 

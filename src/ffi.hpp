@@ -44,6 +44,7 @@ namespace vmod::ffi
 
 	extern void script_var_to_ptr(const vscript::variant &var, void *ptr, ffi_type *type) noexcept;
 	extern void ptr_to_script_var(void *ptr, ffi_type *type, gsdk::ScriptVariant_t &var) noexcept;
+	extern void init_ptr(void *ptr, ffi_type *type) noexcept;
 	extern ffi_type *type_id_to_ptr(int id) noexcept;
 	extern int to_field_type(ffi_type *type);
 

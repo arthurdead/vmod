@@ -38,8 +38,23 @@ namespace vmod::bindings::syms
 
 	void singleton::unbindings() noexcept
 	{
-		
+		sv_.free();
 	}
+
+	void singleton::free() noexcept
+	{
+		gsdk::IScriptVM *vm{vscript::vm()};
+
+		auto symbols_table{main::instance().symbols_table()};
+		if(vm && symbols_table && vm->ValueExists(*symbols_table, name.data())) {
+			vm->ClearValue(*symbols_table, name.data());
+		}
+
+		instance.free();
+	}
+
+	singleton::~singleton() noexcept
+	{ free(); }
 
 	bool singleton::qualification_it::bindings() noexcept
 	{
@@ -250,18 +265,6 @@ namespace vmod::bindings::syms
 		}
 
 		return true;
-	}
-
-	singleton::~singleton() noexcept
-	{
-		gsdk::IScriptVM *vm{vscript::vm()};
-
-		instance.free();
-
-		auto symbols_table{main::instance().symbols_table()};
-		if(vm && vm->ValueExists(*symbols_table, name.data())) {
-			vm->ClearValue(*symbols_table, name.data());
-		}
 	}
 
 	const symbol_cache &sv::cache() const noexcept

@@ -5,6 +5,7 @@
 #include "vscript/vscript.hpp"
 #include "gsdk/engine/vsp.hpp"
 #include "gsdk/tier0/dbg.hpp"
+#include "gsdk/tier0/commandline.hpp"
 #include "gsdk/tier1/utlvector.hpp"
 #include "gsdk/tier1/utlstring.hpp"
 #include <cstring>
@@ -78,12 +79,34 @@ namespace vmod
 	#ifdef __clang__
 		#pragma clang diagnostic pop
 	#endif
-		#define __VMOD_SQUIRREL_SERVER_SCRIPT_HEADER_INCLUDED
+		#define __VMOD_SQUIRREL_SERVER_INIT_SCRIPT_HEADER_INCLUDED
 	#endif
 	}
 
-#ifdef __VMOD_SQUIRREL_SERVER_SCRIPT_HEADER_INCLUDED
+#ifdef __VMOD_SQUIRREL_SERVER_INIT_SCRIPT_HEADER_INCLUDED
 	static std::string __squirrel_vmod_server_init_script{reinterpret_cast<const char *>(detail::__squirrel_vmod_server_init_script_data), sizeof(detail::__squirrel_vmod_server_init_script_data)};
+#endif
+}
+
+namespace vmod
+{
+	namespace detail
+	{
+	#if __has_include("vmod_server_init_late.nut.h")
+	#ifdef __clang__
+		#pragma clang diagnostic push
+		#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+	#endif
+		#include "vmod_server_init_late.nut.h"
+	#ifdef __clang__
+		#pragma clang diagnostic pop
+	#endif
+		#define __VMOD_SQUIRREL_SERVER_INIT_LATE_SCRIPT_HEADER_INCLUDED
+	#endif
+	}
+
+#ifdef __VMOD_SQUIRREL_SERVER_INIT_LATE_SCRIPT_HEADER_INCLUDED
+	static std::string __squirrel_vmod_server_init_late_script{reinterpret_cast<const char *>(detail::__squirrel_vmod_server_init_late_script_data), sizeof(detail::__squirrel_vmod_server_init_late_script_data)};
 #endif
 }
 
@@ -141,18 +164,23 @@ namespace vmod
 		}
 	}
 
-	gsdk::INetworkStringTable *m_pDownloadableFileTable;
-	gsdk::INetworkStringTable *m_pModelPrecacheTable;
-	gsdk::INetworkStringTable *m_pGenericPrecacheTable;
-	gsdk::INetworkStringTable *m_pSoundPrecacheTable;
-	gsdk::INetworkStringTable *m_pDecalPrecacheTable;
+#if GSDK_ENGINE == GSDK_ENGINE_TF2
+	static gsdk::ConCommand *tf_workshop_refresh{nullptr};
+	static gsdk::ConCommand *tf_workshop_map_sync{nullptr};
+#endif
 
-	gsdk::INetworkStringTable *g_pStringTableParticleEffectNames;
-	gsdk::INetworkStringTable *g_pStringTableEffectDispatch;
-	gsdk::INetworkStringTable *g_pStringTableVguiScreen;
-	gsdk::INetworkStringTable *g_pStringTableMaterials;
-	gsdk::INetworkStringTable *g_pStringTableInfoPanel;
-	gsdk::INetworkStringTable *g_pStringTableClientSideChoreoScenes;
+	gsdk::INetworkStringTable *m_pDownloadableFileTable{nullptr};
+	gsdk::INetworkStringTable *m_pModelPrecacheTable{nullptr};
+	gsdk::INetworkStringTable *m_pGenericPrecacheTable{nullptr};
+	gsdk::INetworkStringTable *m_pSoundPrecacheTable{nullptr};
+	gsdk::INetworkStringTable *m_pDecalPrecacheTable{nullptr};
+
+	gsdk::INetworkStringTable *g_pStringTableParticleEffectNames{nullptr};
+	gsdk::INetworkStringTable *g_pStringTableEffectDispatch{nullptr};
+	gsdk::INetworkStringTable *g_pStringTableVguiScreen{nullptr};
+	gsdk::INetworkStringTable *g_pStringTableMaterials{nullptr};
+	gsdk::INetworkStringTable *g_pStringTableInfoPanel{nullptr};
+	gsdk::INetworkStringTable *g_pStringTableClientSideChoreoScenes{nullptr};
 
 	main::~main() noexcept {}
 
@@ -228,22 +256,21 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
+		switch(lvl) {
+			case gsdk::SCRIPT_LEVEL_ERROR: {
+				error("%s"sv, txt);
+			} break;
+			case gsdk::SCRIPT_LEVEL_WARNING: {
+				warning("%s"sv, txt);
+			} break;
+		#ifndef __clang__
+			default: break;
+		#endif
+		}
+
 		bool ret{false};
 		if(server_vs_error_cb) {
 			ret = server_vs_error_cb(lvl, txt);
-		} else {
-			switch(lvl) {
-				case gsdk::SCRIPT_LEVEL_ERROR: {
-					error("%s"sv, txt);
-				} break;
-				case gsdk::SCRIPT_LEVEL_WARNING: {
-					warning("%s"sv, txt);
-				} break;
-			#ifndef __clang__
-				default: break;
-			#endif
-			}
-			ret = false;
 		}
 
 		return ret;
@@ -1214,7 +1241,9 @@ namespace vmod
 			return false;
 		}
 
-		bin_folder = exe_filename.parent_path();
+		std::filesystem::path exe_dir{exe_filename.parent_path()};
+
+		bin_folder = exe_dir;
 		bin_folder /= "bin"sv;
 	#ifdef __x86_64__
 		bin_folder /= "linux64"sv;
@@ -1233,7 +1262,7 @@ namespace vmod
 			return false;
 		}
 	#else
-		if(exe_filename != "hl2_linux"sv && exe_filename != "srcds_linux"sv && exe_filename != "srcds_linux64"sv) {
+		if(exe_filename != "hl2_linux"sv && !srcds_executable) {
 			std::cout << "\033[0;31m"sv << "vmod: unsupported exe filename: '"sv << exe_filename << "'\n"sv << "\033[0m"sv;
 			return false;
 		}
@@ -1320,8 +1349,15 @@ namespace vmod
 			cl_logged_off_callback.Register(this, &main::logged_off);
 		}
 
-		workshop_dir_ = root_dir_;
-		workshop_dir_ /= "workshop"sv;
+		int ugcpath_arg{CommandLine()->FindParm("-ugcpath")};
+		if(ugcpath_arg) {
+			const char *ugcpath{CommandLine()->GetParm(ugcpath_arg+1)};
+
+			std::error_code ec;
+			workshop_dir_ = std::filesystem::absolute(ugcpath, ec);
+		} else {
+			workshop_dir_ = exe_dir/"steamapps"sv/"workshop"sv;
+		}
 
 		{
 			std::error_code ec;
@@ -1490,6 +1526,9 @@ namespace vmod
 			if(sq_setparamscheck_it == vscript_global_qual.end()) {
 				warning("vmod: missing 'sq_setparamscheck' symbol\n"sv);
 			}
+
+			//TODO!!!! detour sq_call
+			#error
 		#endif
 
 		#ifndef __VMOD_USING_CUSTOM_VM
@@ -2090,7 +2129,7 @@ namespace vmod
 		bool server_init_script_from_file{false};
 
 		if(!compile_internal_script(vm_, server_init_script_path,
-		#ifdef __VMOD_SQUIRREL_SERVER_SCRIPT_HEADER_INCLUDED
+		#ifdef __VMOD_SQUIRREL_SERVER_INIT_SCRIPT_HEADER_INCLUDED
 		(script_language == gsdk::SL_SQUIRREL) ? reinterpret_cast<const unsigned char *>(__squirrel_vmod_server_init_script.c_str()) : nullptr
 		#else
 		nullptr
@@ -2198,6 +2237,27 @@ namespace vmod
 		}
 
 		if(!binding_mods_late()) {
+			return false;
+		}
+
+		std::filesystem::path server_init_late_script_path{base_scripts_dir};
+		server_init_late_script_path /= "vmod_server_init_late"sv;
+		server_init_late_script_path.replace_extension(scripts_extension_);
+
+		bool server_init_late_script_from_file{false};
+
+		if(!compile_internal_script(vm_, server_init_late_script_path,
+		#ifdef __VMOD_SQUIRREL_SERVER_INIT_LATE_SCRIPT_HEADER_INCLUDED
+		(script_language == gsdk::SL_SQUIRREL) ? reinterpret_cast<const unsigned char *>(__squirrel_vmod_server_init_late_script.c_str()) : nullptr
+		#else
+		nullptr
+		#endif
+		, server_init_late_script, server_init_late_script_from_file)) {
+			return false;
+		}
+
+		if(vm_->Run(*server_init_late_script, nullptr, true) == gsdk::SCRIPT_ERROR) {
+			error("vmod: failed to run server init late script\n"sv);
 			return false;
 		}
 
@@ -3174,27 +3234,8 @@ namespace vmod
 					return;
 				}
 
-				if(!ugc()) {
-					error("vmod: workshop not available\n"sv);
-					return;
-				}
-
-				if(!workshop_initalized) {
-					error("vmod: workshop not initialized\n"sv);
-					return;
-				}
-
 				auto id{static_cast<PublishedFileId_t>(std::strtoul(args.m_ppArgv[1], nullptr, 10))};
-				if(id == k_PublishedFileIdInvalid) {
-					error("vmod: invalid id\n"sv);
-					return;
-				}
-
-				if(workshop_items.find(id) == workshop_items.end()) {
-					std::unique_ptr<workshop_item_t> ptr{new workshop_item_t{id}};
-					ptr->init();
-					workshop_items.emplace(id, std::move(ptr));
-				}
+				track_workshop_item(id, true);
 			}
 		);
 
@@ -3205,49 +3246,13 @@ namespace vmod
 					return;
 				}
 
-				if(!ugc()) {
-					error("vmod: workshop not available\n"sv);
-					return;
-				}
-
-				if(!workshop_initalized) {
-					error("vmod: workshop not initialized\n"sv);
-					return;
-				}
-
-				if(workshop_items.empty()) {
-					error("vmod: no workshop items\n"sv);
-					return;
-				}
-
 				auto id{static_cast<PublishedFileId_t>(std::strtoul(args.m_ppArgv[1], nullptr, 10))};
-				if(id == k_PublishedFileIdInvalid) {
-					error("vmod: invalid id\n"sv);
-					return;
-				}
-
-				auto it{workshop_items.find(id)};
-				if(it == workshop_items.end()) {
-					error("vmod: not tracked\n"sv);
-					return;
-				}
-
-				workshop_items.erase(it);
+				untrack_workshop_item(id, true);
 			}
 		);
 
 		vmod_workshop_status.initialize("vmod_workshop_status"sv,
 			[this](const gsdk::CCommand &args) noexcept -> void {
-				if(!ugc()) {
-					error("vmod: workshop not available\n"sv);
-					return;
-				}
-
-				if(!workshop_initalized) {
-					error("vmod: workshop not initialized\n"sv);
-					return;
-				}
-
 				if(workshop_items.empty()) {
 					error("vmod: no workshop items\n"sv);
 					return;
@@ -3268,21 +3273,13 @@ namespace vmod
 
 				switch(args.m_nArgc) {
 				case 1: break;
-				case 2: { 
-					level_arg = 1;
-					if(std::strcmp(args.m_ppArgv[1], "verbose") == 0) {
-						verbose = true;
-					} else if(std::strcmp(args.m_ppArgv[1], "simple") == 0) {
-						verbose = false;
-					} else {
-						error("vmod: invalid level\n"sv);
-						return;
-					}
-				} break;
-				case 3: {
-					filter_arg = 1;
-					level_arg = 2;
-				} break;
+				case 2:
+				level_arg = 1;
+				break;
+				case 3:
+				filter_arg = 1;
+				level_arg = 2;
+				break;
 				default:
 				error("vmod: usage vmod_workshop_status <level^filter> [<level>]\n"sv);
 				return;
@@ -3305,9 +3302,15 @@ namespace vmod
 				}
 
 				for(const auto &it : workshop_items) {
-					EItemState steam_state{static_cast<EItemState>(ugc()->GetItemState(it.first))};
-
 					if(!verbose) {
+						info("%u - '"sv, it.first);
+						if(!it.second->title.empty()) {
+							info("%s"sv, it.second->title.c_str());
+						}
+						info("' "sv);
+						if(it.second->mounttype == workshop_item_t::mounttype::map) {
+							info("- %s "sv, it.second->mount_info.map.engine_path.c_str());
+						}
 						std::string_view state_str;
 						if(it.second->state & workshop_item_t::state::mounted) {
 							state_str = "installed"sv;
@@ -3318,34 +3321,33 @@ namespace vmod
 						} else {
 							state_str = "unknown"sv;
 						}
-						info("%u - '"sv, it.first);
-						if(!it.second->title.empty()) {
-							info("%s"sv, it.second->title.c_str());
-						}
-						info("' ["sv);
-						info("%s"sv, state_str.data());
-						info("]\n"sv);
+						info("[%s]\n"sv, state_str.data());
 					} else {
 						info("%u\n"sv, it.first);
 
 						info("  steam state:\n"sv, it.first);
-						if(steam_state & k_EItemStateSubscribed) {
-							info("    subscribed\n"sv);
-						}
-						if(steam_state & k_EItemStateLegacyItem) {
-							info("    legacy\n"sv);
-						}
-						if(steam_state & k_EItemStateInstalled) {
-							info("    installed\n"sv);
-						}
-						if(steam_state & k_EItemStateNeedsUpdate) {
-							info("    needs update\n"sv);
-						}
-						if(steam_state & k_EItemStateDownloading) {
-							info("    downloading\n"sv);
-						}
-						if(steam_state & k_EItemStateDownloadPending) {
-							info("    download pending\n"sv);
+						if(ugc()) {
+							EItemState steam_state{static_cast<EItemState>(ugc()->GetItemState(it.first))};
+							if(steam_state & k_EItemStateSubscribed) {
+								info("    subscribed\n"sv);
+							}
+							if(steam_state & k_EItemStateLegacyItem) {
+								info("    legacy\n"sv);
+							}
+							if(steam_state & k_EItemStateInstalled) {
+								info("    installed\n"sv);
+							}
+							if(steam_state & k_EItemStateNeedsUpdate) {
+								info("    needs update\n"sv);
+							}
+							if(steam_state & k_EItemStateDownloading) {
+								info("    downloading\n"sv);
+							}
+							if(steam_state & k_EItemStateDownloadPending) {
+								info("    download pending\n"sv);
+							}
+						} else {
+							error("    workshop not available\n"sv);
 						}
 
 						info("  vmod state:\n"sv);
@@ -3396,14 +3398,6 @@ namespace vmod
 						} else {
 							info("\n"sv);
 						}
-					#if GSDK_ENGINE == GSDK_ENGINE_L4D2
-						info("    mount path = "sv);
-						if(!it.second->mount_path.empty()) {
-							info("%s\n"sv, it.second->mount_path.c_str());
-						} else {
-							info("\n"sv);
-						}
-					#endif
 						info("    mounttype = %u\n"sv, it.second->mounttype);
 						info("    disk filesize = %zu\n"sv, it.second->disk_filesize);
 						info("    metadata = "sv);
@@ -3411,6 +3405,9 @@ namespace vmod
 							info("%s\n"sv, it.second->metadata.c_str());
 						} else {
 							info("\n"sv);
+						}
+						if(it.second->mounttype == workshop_item_t::mounttype::map) {
+							info("    engine path = %s\n"sv, it.second->mount_info.map.engine_path.c_str());
 						}
 					}
 				}
@@ -3437,30 +3434,31 @@ namespace vmod
 				for(auto &it : workshop_items) {
 					it.second->refresh();
 				}
+
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2
+				tf_workshop_refresh->Dispatch({});
+			#endif
 			}
 		);
 
 		vmod_workshop_clear.initialize("vmod_workshop_clear"sv,
 			[this](const gsdk::CCommand &args) noexcept -> void {
-				if(!ugc()) {
-					error("vmod: workshop not available\n"sv);
-					return;
-				}
-
-				if(!workshop_initalized) {
-					error("vmod: workshop not initialized\n"sv);
-					return;
-				}
-
 				workshop_items.clear();
 			}
 		);
+
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2
+		tf_workshop_refresh = cvar->FindCommand("tf_workshop_refresh");
+		tf_workshop_map_sync = cvar->FindCommand("tf_workshop_map_sync");
+	#endif
 
 		if(filesystem) {
 			std::filesystem::path assets_dir{root_dir_/"assets"sv};
 
 			add_search_path(assets_dir, "GAME"sv);
-			//add_search_path(assets_dir, "mod"sv);
+		#if GSDK_ENGINE != GSDK_ENGINE_L4D2
+			add_search_path(assets_dir, "mod"sv);
+		#endif
 
 			add_search_path(workshop_assets_dir_, "GAME"sv);
 			//add_search_path(workshop_assets_dir_, "mod"sv);
@@ -3859,6 +3857,84 @@ namespace vmod
 		}
 	}
 
+	bool main::track_workshop_item(PublishedFileId_t id, bool user) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		if(!ugc()) {
+			error("vmod: failed to track workshop item '%u' workshop is not available\n"sv, id);
+			return false;
+		}
+
+		if(!workshop_initalized) {
+			error("vmod: failed to track workshop item '%u' workshop is not initialized\n"sv, id);
+			return false;
+		}
+
+		if(id == k_PublishedFileIdInvalid) {
+			error("vmod: invalid workshop item id\n"sv);
+			return false;
+		}
+
+		auto it{workshop_items.find(id)};
+		if(it == workshop_items.end()) {
+			std::unique_ptr<workshop_item_t> ptr{new workshop_item_t{id}};
+			ptr->init();
+			ptr->refs.emplace_back(
+				user ?
+				workshop_item_t::reftype::user
+				:
+				workshop_item_t::reftype::mod
+			);
+			workshop_items.emplace(id, std::move(ptr));
+		} else {
+			workshop_item_t &ptr{*it->second};
+			if(user) {
+				if(std::find(ptr.refs.begin(), ptr.refs.end(), workshop_item_t::reftype::user) == ptr.refs.end()) {
+					ptr.refs.emplace_back(workshop_item_t::reftype::user);
+				}
+			} else {
+				ptr.refs.emplace_back(workshop_item_t::reftype::mod);
+			}
+		}
+
+		return true;
+	}
+
+	bool main::untrack_workshop_item(PublishedFileId_t id, bool user) noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		if(id == k_PublishedFileIdInvalid) {
+			error("vmod: invalid workshop item id\n"sv);
+			return false;
+		}
+
+		auto it{workshop_items.find(id)};
+		if(it == workshop_items.end()) {
+			error("vmod: workshop item '%u' is not tracked\n"sv, id);
+			return false;
+		}
+
+		workshop_item_t &ptr{*it->second};
+
+		auto refit{std::find(ptr.refs.begin(), ptr.refs.end(), 
+			user ?
+			workshop_item_t::reftype::user
+			:
+			workshop_item_t::reftype::mod
+		)};
+		if(refit != ptr.refs.end()) {
+			ptr.refs.erase(refit);
+		}
+
+		if(ptr.refs.empty()) {
+			workshop_items.erase(it);
+		}
+
+		return true;
+	}
+
 	void main::workshop_item_t::on_installed() noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -3872,23 +3948,57 @@ namespace vmod
 				disk_filesize = static_cast<std::size_t>(filesize);
 				disk_timestamp = timestamp;
 
-			#if GSDK_ENGINE == GSDK_ENGINE_L4D2
-				mount_path = instance().mount_dir_;
-				mount_path /= std::to_string(std::hash<std::filesystem::path>{}(disk_path));
-			#endif
-
 				bool handled{true};
 
 				switch(app) {
 				case app_l4d2_sdk:
 				case app_l4d2_dedi:
-				case app_l4d2:
-				mounttype = mounttype::vpk;
-				break;
+				case app_l4d2: {
+					mounttype = mounttype::vpk;
+					using T = decltype(mount_info.vpk);
+					new (&mount_info.vpk) T{};
+
+				#if GSDK_ENGINE == GSDK_ENGINE_L4D2
+					mount_info.vpk.dst = instance().mount_dir_/std::to_string(std::hash<std::filesystem::path>{}(disk_path));
+				#else
+					mount_info.vpk.dst = instance().workshop_assets_dir_/disk_path.filename();
+				#endif
+
+					mount_info.vpk.dst.replace_extension(".vpk"sv);
+				} break;
 				case app_tf2_dedi:
-				case app_tf2:
-				mounttype = mounttype::map;
-				break;
+				case app_tf2: {
+					mounttype = mounttype::map;
+					using T = decltype(mount_info.map);
+					new (&mount_info.map) T{};
+
+					mount_info.map.src = disk_path/metadata;
+					mount_info.map.dst = instance().workshop_assets_dir_/"maps"sv/metadata;
+
+					mount_info.map.engine_path = "workshop"sv;
+					mount_info.map.engine_path /= metadata;
+
+					std::string ext{".ugc"};
+					ext += std::to_string(id);
+					mount_info.map.engine_path.replace_extension(ext);
+
+				#if GSDK_ENGINE == GSDK_ENGINE_TF2
+					std::string tmp;
+					tmp.resize(12);
+
+					char *begin{tmp.data()};
+					char *end{begin + tmp.size()};
+
+					std::to_chars_result tc_res{std::to_chars(begin, end, id)};
+					tc_res.ptr[0] = '\0';
+
+					gsdk::CCommand cmd{};
+					cmd.m_ppArgv[1] = begin;
+					cmd.m_nArgc = 2;
+
+					tf_workshop_map_sync->Dispatch(cmd);
+				#endif
+				} break;
 				case k_uAppIdInvalid:
 				handled = false;
 				break;
@@ -3899,14 +4009,6 @@ namespace vmod
 				}
 
 				if(handled) {
-					//TODO!!!!!! move this to main::workshop_item_t::mount
-				#if 0 && GSDK_ENGINE == GSDK_ENGINE_L4D2
-					if(std::filesystem::exists(disk_path) && !std::filesystem::exists(mount_path)) {
-						std::error_code ec;
-						std::filesystem::create_symlink(disk_path, mount_path, ec);
-					}
-				#endif
-
 					state |= workshop_item_t::state::installed;
 				}
 			} else {
@@ -3927,12 +4029,12 @@ namespace vmod
 		}
 
 		if(result->m_eResult != k_EResultOK) {
-			error("vmod: workshop item '%u' failed to download\n"sv, result->m_nPublishedFileId);
+			error("vmod: workshop item '%u' failed to download with result: %i\n"sv, result->m_nPublishedFileId, result->m_eResult);
 			return;
 		}
 
 		if(!ugc()->GetItemDownloadInfo(result->m_nPublishedFileId, nullptr, nullptr)) {
-			error("vmod: workshop item '%u' failed to download\n"sv, result->m_nPublishedFileId);
+			error("vmod: failed to get workshop item '%u' download info\n"sv, result->m_nPublishedFileId);
 			return;
 		}
 
@@ -3997,102 +4099,142 @@ namespace vmod
 		}
 	}
 
-	void main::workshop_item_t::mount() noexcept
+	bool main::workshop_item_t::mount() noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
 		if(!(state & workshop_item_t::state::mounted)) {
 			switch(mounttype) {
 			case mounttype::vpk:
+			if(!std::filesystem::exists(mount_info.vpk.dst)) {
+				std::error_code ec;
+				std::filesystem::create_symlink(disk_path, mount_info.vpk.dst, ec);
+				if(ec) {
+					return false;
+				}
+			}
 			if(filesystem) {
 			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
-				std::filesystem::path tmp{target_path()};
-				tmp.replace_extension(".vpk"sv);
-				filesystem->AddVPKFile(tmp.c_str());
-				state |= workshop_item_t::state::mounted;
+				filesystem->AddVPKFile(mount_info.vpk.dst.c_str());
+			#else
+				filesystem->AddVPKFile(mount_info.vpk.dst.c_str(), "GAME");
+				//filesystem->AddVPKFile(mount_info.vpk.dst.c_str(), "mod");
 			#endif
+				state |= workshop_item_t::state::mounted;
+			} else {
+				return false;
 			}
 			break;
 			case mounttype::search_path:
 			if(filesystem) {
-				filesystem->AddSearchPath(target_path().c_str(), "GAME");
-				//filesystem->AddSearchPath(target_path().c_str(), "mod");
+				filesystem->AddSearchPath(disk_path.c_str(), "GAME");
+				//filesystem->AddSearchPath(disk_path.c_str(), "mod");
 				state |= workshop_item_t::state::mounted;
+			} else {
+				return false;
 			}
 			break;
-			case mounttype::map: {
-				std::filesystem::path tmp_src{target_path()/metadata};
-				std::filesystem::path tmp_dst{instance().workshop_assets_dir_/"maps"sv/metadata};
-
-				if(!std::filesystem::exists(tmp_dst)) {
-					std::error_code ec;
-					std::filesystem::create_symlink(tmp_src, tmp_dst, ec);
-
-					if(!ec) {
-						state |= workshop_item_t::state::mounted;
-					}
-				} else {
-					state |= workshop_item_t::state::mounted;
+			case mounttype::map:
+			if(!std::filesystem::exists(mount_info.map.dst)) {
+				std::error_code ec;
+				std::filesystem::create_symlink(mount_info.map.src, mount_info.map.dst, ec);
+				if(ec) {
+					return false;
 				}
-			} break;
+			}
+			state |= workshop_item_t::state::mounted;
+			break;
 			default:
 			break;
 			}
 		}
+
+		return true;
 	}
 
-	void main::workshop_item_t::unmount() noexcept
+	bool main::workshop_item_t::unmount(bool force) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
 		if(state & state::mounted) {
 			switch(mounttype) {
-			case mounttype::vpk:
-			if(filesystem) {
-			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
-				std::filesystem::path tmp{target_path()};
-				tmp.replace_extension(".vpk"sv);
-				filesystem->RemoveVPKFile(tmp.c_str());
-			#endif
-				state &= ~state::mounted;
-			}
-			break;
-			case mounttype::search_path:
-			if(filesystem) {
-				if(filesystem->RemoveSearchPath(target_path().c_str(), "GAME") &&
-					filesystem->RemoveSearchPath(target_path().c_str(), "mod")) {
-					state &= ~state::mounted;
+			case mounttype::vpk: {
+				unsigned char removed{0};
+				if(filesystem) {
+				#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+					filesystem->RemoveVPKFile(mount_info.vpk.dst.c_str());
+					removed |= (1 << 0);
+				#else
+					if(filesystem->RemoveVPKFile(mount_info.vpk.dst.c_str(), "GAME") &&
+						filesystem->RemoveVPKFile(mount_info.vpk.dst.c_str(), "mod")) {
+						removed |= (1 << 0);
+					}
+				#endif
 				}
+				if(removed == 1) {
+					std::error_code ec;
+					if(!std::filesystem::exists(mount_info.vpk.dst) || (std::filesystem::remove(mount_info.vpk.dst, ec) && !ec)) {
+						removed |= (1 << 1);
+					}
+				}
+				if(removed == 3) {
+					state &= ~state::mounted;
+					return true;
+				}
+			} break;
+			case mounttype::search_path:
+			if(filesystem && (filesystem->RemoveSearchPath(disk_path.c_str(), "GAME") &&
+								filesystem->RemoveSearchPath(disk_path.c_str(), "mod"))) {
+				state &= ~state::mounted;
+				return true;
 			}
 			break;
 			case mounttype::map: {
-				std::filesystem::path tmp_dst{instance().workshop_assets_dir_/"maps"sv/metadata};
+				const char *currmap{gsdk::server::STRING(sv_globals->mapname)};
 
-				if(std::filesystem::exists(tmp_dst)) {
-					std::error_code ec;
-					if(std::filesystem::remove(tmp_dst, ec) && !ec) {
-						state &= ~state::mounted;
-					}
-				} else {
+				if(!force && (std::strcmp(currmap, mount_info.map.engine_path.c_str()) == 0 || std::strcmp(currmap, metadata.c_str()) == 0)) {
+					return false;
+				}
+
+				std::error_code ec;
+				if(!std::filesystem::exists(mount_info.map.dst) || (std::filesystem::remove(mount_info.map.dst, ec) && !ec)) {
 					state &= ~state::mounted;
+					return true;
 				}
 			} break;
 			default:
 			break;
 			}
+
+			return false;
+		} else {
+			return true;
 		}
 	}
 
 	main::workshop_item_t::~workshop_item_t() noexcept
 	{
 		cancel();
-		unmount();
+		unmount(true);
+
+		switch(mounttype) {
+		case mounttype::vpk: {
+			using T = decltype(mount_info.vpk);
+			mount_info.vpk.~T();
+		} break;
+		case mounttype::map: {
+			using T = decltype(mount_info.map);
+			mount_info.map.~T();
+		} break;
+		default:
+		break;
+		}
 	}
 
 	void main::workshop_item_t::refresh() noexcept
 	{
 		cancel();
-		unmount();
+		unmount(false);
 
 		state &= ~state::details_queried;
 		state &= ~state::metadata_queried;
@@ -4110,7 +4252,7 @@ namespace vmod
 
 		EItemState steam_state{static_cast<EItemState>(ugc()->GetItemState(id))};
 		if(steam_state & k_EItemStateNeedsUpdate) {
-			unmount();
+			unmount(false);
 			state &= ~state::downloaded;
 			state &= ~state::installed;
 			state &= ~state::details_queried;
@@ -4185,6 +4327,7 @@ namespace vmod
 	void main::workshop_item_t::on_details_queried(SteamUGCQueryCompleted_t *result, bool err) noexcept
 	{
 		using namespace std::literals::string_view_literals;
+		using namespace std::literals::string_literals;
 
 		state &= ~state::details_query_active;
 		query_details_call.Cancel();
@@ -4451,6 +4594,7 @@ namespace vmod
 			base_script_scope.free();
 
 			server_init_script.free();
+			server_init_late_script.free();
 
 			unbindings();
 

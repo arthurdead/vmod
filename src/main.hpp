@@ -228,8 +228,8 @@ namespace vmod
 			void refresh() noexcept;
 			void upkeep() noexcept;
 			void cancel() noexcept;
-			void unmount() noexcept;
-			void mount() noexcept;
+			bool unmount(bool force) noexcept;
+			bool mount() noexcept;
 			void init() noexcept;
 
 			enum class state : unsigned char
@@ -263,6 +263,20 @@ namespace vmod
 				map,
 			};
 
+			union mount_info_t {
+				mount_info_t() {}
+				~mount_info_t() {}
+
+				struct {
+					std::filesystem::path dst;
+				} vpk;
+				struct {
+					std::filesystem::path src;
+					std::filesystem::path dst;
+					std::filesystem::path engine_path;
+				} map;
+			} mount_info;
+
 			enum class itemtype : unsigned char
 			{
 				unknown,
@@ -276,18 +290,6 @@ namespace vmod
 			std::string metadata{};
 			std::filesystem::path cloud_path{};
 			std::filesystem::path disk_path{};
-		#if GSDK_ENGINE == GSDK_ENGINE_L4D2
-			std::filesystem::path mount_path{};
-		#endif
-
-			inline const std::filesystem::path &target_path() const noexcept
-			{
-			#if GSDK_ENGINE == GSDK_ENGINE_L4D2
-				return mount_path;
-			#else
-				return disk_path;
-			#endif
-			}
 
 			std::size_t cloud_filesize{0};
 			std::size_t disk_filesize{0};
@@ -298,10 +300,23 @@ namespace vmod
 			UGCQueryHandle_t query_details_handle{k_UGCQueryHandleInvalid};
 			CCallResult<workshop_item_t, SteamUGCQueryCompleted_t> query_details_call{};
 
+			enum class reftype : unsigned char
+			{
+				user,
+				mod
+			};
+
+			std::vector<reftype> refs;
+
 			void on_installed() noexcept;
 			void on_details_queried(SteamUGCQueryCompleted_t *result, bool err) noexcept;
 		};
 		std::unordered_map<PublishedFileId_t, std::unique_ptr<workshop_item_t>> workshop_items;
+
+		friend class mod;
+
+		bool track_workshop_item(PublishedFileId_t id, bool user) noexcept;
+		bool untrack_workshop_item(PublishedFileId_t id, bool user) noexcept;
 
 		float next_workshop_upkeep{0.0f};
 
@@ -358,6 +373,7 @@ namespace vmod
 	#endif
 
 		vscript::handle_wrapper server_init_script{};
+		vscript::handle_wrapper server_init_late_script{};
 
 		vscript::handle_wrapper base_script_scope{};
 		vscript::handle_wrapper base_script{};

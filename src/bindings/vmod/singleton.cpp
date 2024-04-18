@@ -189,7 +189,12 @@ namespace vmod
 
 		{
 			if(!vm_->SetValue(*return_flags_table, "ignored", vscript::variant{plugin::callable::return_flags::ignored})) {
-				error("vmod: failed to set return flags continue value\n"sv);
+				error("vmod: failed to set return flags ignored value\n"sv);
+				return false;
+			}
+
+			if(!vm_->SetValue(*return_flags_table, "changed", vscript::variant{plugin::callable::return_flags::changed})) {
+				error("vmod: failed to set return flags changed value\n"sv);
 				return false;
 			}
 
@@ -198,13 +203,28 @@ namespace vmod
 				return false;
 			}
 
+			if(!vm_->SetValue(*return_flags_table, "halt_changed", vscript::variant{plugin::callable::return_flags::halt|plugin::callable::return_flags::changed})) {
+				error("vmod: failed to set return flags halt_changed value\n"sv);
+				return false;
+			}
+
 			if(!vm_->SetValue(*return_flags_table, "handled", vscript::variant{plugin::callable::return_flags::handled})) {
 				error("vmod: failed to set return flags handled value\n"sv);
 				return false;
 			}
 
+			if(!vm_->SetValue(*return_flags_table, "handled_changed", vscript::variant{plugin::callable::return_flags::handled|plugin::callable::return_flags::changed})) {
+				error("vmod: failed to set return flags handled_changed value\n"sv);
+				return false;
+			}
+
 			if(!vm_->SetValue(*return_flags_table, "handled_halt", vscript::variant{plugin::callable::return_flags::handled|plugin::callable::return_flags::halt})) {
 				error("vmod: failed to set return flags handled_halt value\n"sv);
+				return false;
+			}
+
+			if(!vm_->SetValue(*return_flags_table, "handled_halt_changed", vscript::variant{plugin::callable::return_flags::handled|plugin::callable::return_flags::halt|plugin::callable::return_flags::changed})) {
+				error("vmod: failed to set return flags handled_halt_changed value\n"sv);
 				return false;
 			}
 		}
@@ -329,18 +349,14 @@ namespace vmod
 		bindings::docs::write(&plugin::owned_instance::desc, true, 1, file, false);
 		file += "\n\n"sv;
 
+		bindings::docs::write(&plugin::shared_instance::desc, true, 1, file, false);
+		file += "\n\n"sv;
+
 		bindings::docs::ident(file, 1);
-		file += "enum class callback_return_flags\n"sv;
+		file += "enum class ret\n"sv;
 		bindings::docs::ident(file, 1);
 		file += "{\n"sv;
-		bindings::docs::ident(file, 2);
-		file += "ignored,\n"sv;
-		bindings::docs::ident(file, 2);
-		file += "error,\n"sv;
-		bindings::docs::ident(file, 2);
-		file += "halt,\n"sv;
-		bindings::docs::ident(file, 2);
-		file += "handled\n"sv;
+		bindings::docs::write(file, 2, return_flags_table, bindings::docs::write_enum_how::name);
 		bindings::docs::ident(file, 1);
 		file += "};\n\n"sv;
 
@@ -396,29 +412,15 @@ namespace vmod
 
 	void main::unbindings() noexcept
 	{
+		bindings::strtables::unbindings();
+
+		if(scope && vm_->ValueExists(*scope, "strtables")) {
+			vm_->ClearValue(*scope, "strtables");
+		}
+
 		script_stringtables.clear();
 
 		stringtable_table.free();
-
-		if(scope) {
-			if(vm_->ValueExists(*scope, "strtables")) {
-				vm_->ClearValue(*scope, "strtables");
-			}
-		}
-
-		bindings::strtables::unbindings();
-
-	#ifndef GSDK_NO_SYMBOLS
-		if(symbols_available) {
-			symbols_table_.free();
-
-			if(scope) {
-				if(vm_->ValueExists(*scope, "syms")) {
-					vm_->ClearValue(*scope, "syms");
-				}
-			}
-		}
-	#endif
 
 		bindings::ent::unbindings();
 
@@ -427,6 +429,12 @@ namespace vmod
 	#ifndef GSDK_NO_SYMBOLS
 		if(symbols_available) {
 			bindings::syms::unbindings();
+
+			if(scope && vm_->ValueExists(*scope, "syms")) {
+				vm_->ClearValue(*scope, "syms");
+			}
+
+			symbols_table_.free();
 		}
 	#endif
 
@@ -440,8 +448,6 @@ namespace vmod
 
 		mod::unbindings();
 
-		return_flags_table.free();
-
 		if(scope) {
 			if(vm_->ValueExists(*scope, "ret")) {
 				vm_->ClearValue(*scope, "ret");
@@ -451,6 +457,8 @@ namespace vmod
 				vm_->ClearValue(*scope, "root_dir");
 			}
 		}
+
+		return_flags_table.free();
 
 		singleton_base::unbindings();
 	}

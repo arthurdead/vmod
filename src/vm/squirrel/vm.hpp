@@ -68,7 +68,7 @@ namespace vmod::vm
 		void ReleaseScope(gsdk::HSCRIPT) override;
 		gsdk::HSCRIPT LookupFunction_impl(const char *, gsdk::HSCRIPT = nullptr) override;
 		void ReleaseFunction(gsdk::HSCRIPT) override;
-		gsdk::ScriptStatus_t ExecuteFunction_impl(gsdk::HSCRIPT, const gsdk::ScriptVariant_t *, int, gsdk::ScriptVariant_t *, gsdk::HSCRIPT, bool) override;
+		gsdk::ScriptStatus_t ExecuteFunction_impl(gsdk::HSCRIPT, gsdk::ScriptVariant_t *, int, gsdk::ScriptVariant_t *, gsdk::HSCRIPT, gsdk::ScriptExecuteFlags_t) override;
 		void RegisterFunction(gsdk::ScriptFunctionBinding_t *) override;
 		bool RegisterClass(gsdk::ScriptClassDesc_t *) override;
 		gsdk::HSCRIPT RegisterInstance_impl(gsdk::ScriptClassDesc_t *, void *) override;

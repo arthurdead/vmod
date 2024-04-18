@@ -311,6 +311,22 @@ namespace vmod
 		#endif
 		}
 
+	#ifndef GSDK_NO_SYMBOLS
+		if(symbols_available) {
+			std::uint64_t offset{symbol_cache::uncached_find_mangled_func(path, "_ZN15CBaseFileSystem10AddVPKFileEPKcS1_15SearchPathAdd_t"sv)};
+			if(offset != 0) {
+				mfp_internal_t<void, gsdk::IFileSystem, const char *, const char *, gsdk::SearchPathAdd_t> internal{reinterpret_cast<uintptr_t>(base() + offset)};
+				gsdk::IFileSystem::AddVPKFile_ptr = internal.func;
+			}
+
+			offset = symbol_cache::uncached_find_mangled_func(path, "_ZN15CBaseFileSystem13RemoveVPKFileEPKcS1_"sv);
+			if(offset != 0) {
+				mfp_internal_t<bool, gsdk::IFileSystem, const char *, const char *> internal{reinterpret_cast<uintptr_t>(base() + offset)};
+				gsdk::IFileSystem::RemoveVPKFile_ptr = internal.func;
+			}
+		}
+	#endif
+
 		return true;
 	}
 

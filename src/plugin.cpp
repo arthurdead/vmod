@@ -56,7 +56,7 @@ namespace vmod
 			{
 				std::hash<std::filesystem::path> path_hash{};
 
-				char temp_buffer[16];
+				char temp_buffer[25];
 
 				char *begin{temp_buffer};
 				char *end{begin + sizeof(temp_buffer)};
@@ -292,15 +292,13 @@ namespace vmod
 	#endif
 	}
 
-	bool plugin::callable::call(callbacks_t &callbacks, const gsdk::ScriptVariant_t *args, std::size_t num_args, bool post) noexcept
+	plugin::callable::return_value plugin::callable::call(callbacks_t &callbacks, gsdk::ScriptVariant_t *args, std::size_t num_args, bool post, bool copyback) noexcept
 	{
 		if(callbacks.empty()) {
-			return true;
+			return return_value::call_orig;
 		}
 
 		gsdk::IScriptVM *vm{main::instance().vm()};
-
-		bool call_orig{true};
 
 	#ifdef __VMOD_PASS_EXTRA_INFO_TO_CALLABLES
 		constexpr const std::size_t extra_args{1};
@@ -320,6 +318,13 @@ namespace vmod
 		args = argsblock;
 	#endif
 
+		unsigned char execflags{gsdk::SCRIPT_EXEC_WAIT};
+		if(copyback) {
+			execflags |= gsdk::SCRIPT_EXEC_COPYBACK;
+		}
+
+		return_value retval{return_value::call_orig};
+
 		for(auto &it : callbacks) {
 			if(!it.second->enabled) {
 				continue;
@@ -327,27 +332,31 @@ namespace vmod
 
 			vscript::handle_ref pl_scope{it.second->owner_scope()};
 
-			vscript::variant ret;
-			if(vm->ExecuteFunction(*it.first, args, static_cast<int>(num_args), &ret, *pl_scope, true) == gsdk::SCRIPT_ERROR) {
+			vscript::variant ret_var;
+			if(vm->ExecuteFunction(*it.first, args, static_cast<int>(num_args), &ret_var, *pl_scope, static_cast<gsdk::ScriptExecuteFlags_t>(execflags)) == gsdk::SCRIPT_ERROR) {
 				continue;
 			}
 
-			return_flags flags{ret.get<return_flags>()};
+			return_flags retflags{ret_var.get<return_flags>()};
 
-			if(flags & return_flags::error) {
+			if(retflags & return_flags::error) {
 				continue;
 			}
 
-			if(flags & return_flags::handled) {
-				call_orig = false;
+			if(retflags & return_flags::changed) {
+				retval |= return_value::changed;
 			}
 
-			if(flags & return_flags::halt) {
+			if(retflags & return_flags::handled) {
+				retval &= ~return_value::call_orig;
+			}
+
+			if(retflags & return_flags::halt) {
 				break;
 			}
 		}
 
-		return call_orig;
+		return retval;
 	}
 
 	plugin::owned_instance::~owned_instance() noexcept
@@ -364,6 +373,44 @@ namespace vmod
 
 	void plugin::owned_instance::plugin_unloaded() noexcept
 	{ delete this; }
+
+	plugin::shared_instance::~shared_instance() noexcept
+	{
+		for(auto pl : owner_plugins) {
+			if(!pl->clearing_instances) {
+				auto it{std::find(pl->shared_instances.begin(), pl->shared_instances.end(), this)};
+				if(it != pl->shared_instances.end()) {
+					pl->shared_instances.erase(it);
+				}
+			}
+		}
+	}
+
+	void plugin::shared_instance::plugin_unloaded(plugin *pl) noexcept
+	{
+		auto it{std::find(owner_plugins.begin(), owner_plugins.end(), pl)};
+		if(it != owner_plugins.end()) {
+			owner_plugins.erase(it);
+		}
+
+		if(owner_plugins.empty()) {
+			delete this;
+		}
+	}
+
+	void plugin::shared_instance::remove_plugin() noexcept
+	{
+		if(assumed_currently_running_) {
+			if(!assumed_currently_running_->clearing_instances) {
+				auto it{std::find(assumed_currently_running_->shared_instances.begin(), assumed_currently_running_->shared_instances.end(), this)};
+				if(it != assumed_currently_running_->shared_instances.end()) {
+					assumed_currently_running_->shared_instances.erase(it);
+				}
+			}
+
+			plugin_unloaded(assumed_currently_running_);
+		}
+	}
 
 	bool plugin::owned_instance::register_class(gsdk::ScriptClassDesc_t *target_desc) noexcept
 	{
@@ -430,6 +477,27 @@ namespace vmod
 		}
 	}
 
+	bool plugin::shared_instance::register_instance(gsdk::ScriptClassDesc_t *target_desc, void *pthis) noexcept
+	{
+		if(!bindings::instance_base::register_instance(target_desc, pthis)) {
+			return false;
+		}
+
+		add_plugin();
+
+		return true;
+	}
+
+	void plugin::shared_instance::add_plugin() noexcept
+	{
+		if(assumed_currently_running_) {
+			auto it{std::find(owner_plugins.begin(), owner_plugins.end(), assumed_currently_running_)};
+			if(it == owner_plugins.end()) {
+				owner_plugins.emplace_back(assumed_currently_running_);
+			}
+		}
+	}
+
 	plugin::load_status plugin::reload() noexcept
 	{
 		unload();
@@ -448,6 +516,15 @@ namespace vmod
 				it->plugin_unloaded();
 			}
 			owned_instances.clear();
+			clearing_instances = false;
+		}
+
+		if(!shared_instances.empty()) {
+			clearing_instances = true;
+			for(shared_instance *it : shared_instances) {
+				it->plugin_unloaded(this);
+			}
+			shared_instances.clear();
 			clearing_instances = false;
 		}
 

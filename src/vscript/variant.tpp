@@ -659,15 +659,7 @@ namespace vmod::vscript
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<void *>() noexcept
-	{
-	#if __SIZEOF_POINTER__ == __SIZEOF_INT__
-		return gsdk::FIELD_UINT32;
-	#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
-		return gsdk::FIELD_UINT64;
-	#else
-		#error
-	#endif
-	}
+	{ return gsdk::FIELD_CLASSPTR; }
 	inline void initialize_impl(gsdk::ScriptVariant_t &var, void *value) noexcept
 	{
 		if(value) {
@@ -686,9 +678,13 @@ namespace vmod::vscript
 			case gsdk::FIELD_UINT32:
 		#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
 			case gsdk::FIELD_UINT64:
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			case gsdk::FIELD_INTEGER64:
+			#endif
 		#else
 			#error
 		#endif
+			case gsdk::FIELD_CLASSPTR:
 			return var.m_ptr;
 			default:
 			return nullptr;
@@ -728,6 +724,17 @@ namespace vmod::vscript
 	{
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
+		#if __SIZEOF_POINTER__ == __SIZEOF_INT__
+			case gsdk::FIELD_UINT32:
+		#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
+			case gsdk::FIELD_UINT64:
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			case gsdk::FIELD_INTEGER64:
+			#endif
+		#else
+			#error
+		#endif
+			case gsdk::FIELD_CLASSPTR:
 			case gsdk::FIELD_FUNCTION:
 		#ifndef __clang__
 			#pragma GCC diagnostic push
@@ -766,6 +773,17 @@ namespace vmod::vscript
 	{
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
+		#if __SIZEOF_POINTER__ == __SIZEOF_INT__
+			case gsdk::FIELD_UINT32:
+		#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
+			case gsdk::FIELD_UINT64:
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			case gsdk::FIELD_INTEGER64:
+			#endif
+		#else
+			#error
+		#endif
+			case gsdk::FIELD_CLASSPTR:
 			case gsdk::FIELD_FUNCTION:
 		#ifndef __clang__
 			#pragma GCC diagnostic push
@@ -815,6 +833,17 @@ namespace vmod::vscript
 	{
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
+		#if __SIZEOF_POINTER__ == __SIZEOF_INT__
+			case gsdk::FIELD_UINT32:
+		#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
+			case gsdk::FIELD_UINT64:
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			case gsdk::FIELD_INTEGER64:
+			#endif
+		#else
+			#error
+		#endif
+			case gsdk::FIELD_CLASSPTR:
 			case gsdk::FIELD_FUNCTION: {
 			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 				generic_internal_mfp_t internal{var.m_ulonglong};
@@ -864,6 +893,17 @@ namespace vmod::vscript
 	{
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
+		#if __SIZEOF_POINTER__ == __SIZEOF_INT__
+			case gsdk::FIELD_UINT32:
+		#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
+			case gsdk::FIELD_UINT64:
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			case gsdk::FIELD_INTEGER64:
+			#endif
+		#else
+			#error
+		#endif
+			case gsdk::FIELD_CLASSPTR:
 			case gsdk::FIELD_FUNCTION: {
 			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 				generic_internal_mfp_t internal{var.m_ulonglong};
@@ -913,6 +953,17 @@ namespace vmod::vscript
 	{
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
+		#if __SIZEOF_POINTER__ == __SIZEOF_INT__
+			case gsdk::FIELD_UINT32:
+		#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
+			case gsdk::FIELD_UINT64:
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			case gsdk::FIELD_INTEGER64:
+			#endif
+		#else
+			#error
+		#endif
+			case gsdk::FIELD_CLASSPTR:
 			case gsdk::FIELD_FUNCTION: {
 			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 				generic_internal_mfp_va_t internal{var.m_ulonglong};
@@ -962,6 +1013,17 @@ namespace vmod::vscript
 	{
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
+		#if __SIZEOF_POINTER__ == __SIZEOF_INT__
+			case gsdk::FIELD_UINT32:
+		#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
+			case gsdk::FIELD_UINT64:
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			case gsdk::FIELD_INTEGER64:
+			#endif
+		#else
+			#error
+		#endif
+			case gsdk::FIELD_CLASSPTR:
 			case gsdk::FIELD_FUNCTION: {
 				mfp_or_func_t internal;
 			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
@@ -980,15 +1042,7 @@ namespace vmod::vscript
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<generic_vtable_t>() noexcept
-	{
-	#if __SIZEOF_POINTER__ == __SIZEOF_INT__
-		return gsdk::FIELD_UINT32;
-	#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
-		return gsdk::FIELD_UINT64;
-	#else
-		#error
-	#endif
-	}
+	{ return gsdk::FIELD_FUNCTION; }
 	inline void initialize_impl(gsdk::ScriptVariant_t &var, generic_vtable_t value) noexcept
 	{
 		if(value) {
@@ -1007,9 +1061,14 @@ namespace vmod::vscript
 			case gsdk::FIELD_UINT32:
 		#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
 			case gsdk::FIELD_UINT64:
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			case gsdk::FIELD_INTEGER64:
+			#endif
 		#else
 			#error
 		#endif
+			case gsdk::FIELD_CLASSPTR:
+			case gsdk::FIELD_FUNCTION:
 			return static_cast<generic_vtable_t>(var.m_ptr);
 			default:
 			return nullptr;
@@ -1033,6 +1092,16 @@ namespace vmod::vscript
 	{
 		switch(var.m_type) {
 			case gsdk::FIELD_INTEGER:
+		#if __SIZEOF_POINTER__ == __SIZEOF_INT__
+			case gsdk::FIELD_UINT32:
+		#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
+			case gsdk::FIELD_UINT64:
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			case gsdk::FIELD_INTEGER64:
+			#endif
+		#else
+			#error
+		#endif
 			case gsdk::FIELD_CLASSPTR:
 			return static_cast<generic_object_t *>(var.m_ptr);
 			default:
@@ -1062,6 +1131,16 @@ namespace vmod::vscript
 			case gsdk::FIELD_EDICT:
 			return nullptr;
 			case gsdk::FIELD_INTEGER:
+		#if __SIZEOF_POINTER__ == __SIZEOF_INT__
+			case gsdk::FIELD_UINT32:
+		#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
+			case gsdk::FIELD_UINT64:
+			#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
+			case gsdk::FIELD_INTEGER64:
+			#endif
+		#else
+			#error
+		#endif
 			case gsdk::FIELD_CLASSPTR:
 			return static_cast<gsdk::CBaseEntity *>(var.m_ptr);
 			case gsdk::FIELD_HSCRIPT:

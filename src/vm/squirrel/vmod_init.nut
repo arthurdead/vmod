@@ -369,7 +369,10 @@ else
 	}
 	else if ( scope.__vrefs == 0 )
 	{
-		delete scope.getdelegate()[scope.__vname];
+		local delegate = scope.getdelegate();
+		if(scope.__vname in delegate) {
+			delete delegate[scope.__vname];
+		}
 		scope.__vname = null;
 		scope.setdelegate( null );
 	}

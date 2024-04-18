@@ -827,6 +827,20 @@ namespace gsdk
 
 	class CSquirrelMetamethodDelegateImpl;
 
+#ifdef __VMOD_USING_CUSTOM_VM
+	enum ScriptExecuteFlags_t : unsigned char
+	{
+		SCRIPT_EXEC_DEFAULT =        0,
+		SCRIPT_EXEC_WAIT =     (1 << 0),
+		SCRIPT_EXEC_COPYBACK = (1 << 1),
+	};
+
+	static_assert(sizeof(ScriptExecuteFlags_t) == sizeof(bool));
+	static_assert(alignof(ScriptExecuteFlags_t) == alignof(bool));
+#else
+	using ScriptExecuteFlags_t = bool;
+#endif
+
 #ifdef __clang__
 	#pragma clang diagnostic push
 	#pragma clang diagnostic ignored "-Wweak-vtables"
@@ -893,8 +907,9 @@ namespace gsdk
 		ScriptHandleWrapper_t LookupFunction(const char *name, HSCRIPT scope = nullptr) noexcept;
 		virtual void ReleaseFunction(HSCRIPT) = 0;
 	private:
-		virtual ScriptStatus_t ExecuteFunction_impl(HSCRIPT, const ScriptVariant_t *, int, ScriptVariant_t *, HSCRIPT, bool) = 0;
+		virtual ScriptStatus_t ExecuteFunction_impl(HSCRIPT, ScriptVariant_t *, int, ScriptVariant_t *, HSCRIPT, ScriptExecuteFlags_t) = 0;
 	public:
+		ScriptStatus_t ExecuteFunction(HSCRIPT func, ScriptVariant_t *args, int num_args, ScriptVariant_t *ret, HSCRIPT scope, ScriptExecuteFlags_t flags) noexcept;
 		ScriptStatus_t ExecuteFunction(HSCRIPT func, const ScriptVariant_t *args, int num_args, ScriptVariant_t *ret, HSCRIPT scope, bool wait) noexcept;
 		virtual void RegisterFunction(ScriptFunctionBinding_t *) = 0;
 		virtual bool RegisterClass(ScriptClassDesc_t *) = 0;

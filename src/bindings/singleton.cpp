@@ -91,16 +91,6 @@ namespace vmod::bindings
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
-	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
-		if(get_impl) {
-			vm->DestroySquirrelMetamethod_Get(get_impl);
-		}
-	#endif
-
-		instance.free();
-
-		scope.free();
-
 		vscript::handle_ref target_scope{root ? nullptr : *main::instance().scope};
 
 		if(target_scope) {
@@ -108,5 +98,15 @@ namespace vmod::bindings
 				vm->ClearValue(*target_scope, name.data());
 			}
 		}
+
+		scope.free();
+
+	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+		if(get_impl) {
+			vm->DestroySquirrelMetamethod_Get(get_impl);
+		}
+	#endif
+
+		instance.free();
 	}
 }

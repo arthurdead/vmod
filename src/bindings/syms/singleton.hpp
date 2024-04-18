@@ -133,6 +133,8 @@ namespace vmod::bindings::syms
 		bool initialize() noexcept;
 
 	private:
+		void free() noexcept;
+
 		qual_cache_t glob_qual_cache;
 		name_cache_t glob_name_cache;
 

@@ -124,6 +124,42 @@ namespace vmod
 	public:
 		function lookup_function(std::string_view func_name) noexcept = delete;
 
+		class shared_instance : public bindings::instance_base
+		{
+			friend class plugin;
+			friend class main;
+
+		public:
+			shared_instance() noexcept = default;
+			~shared_instance() noexcept override;
+
+			shared_instance(shared_instance &&other) noexcept = default;
+			shared_instance &operator=(shared_instance &&other) noexcept = default;
+
+			bool register_instance(gsdk::ScriptClassDesc_t *target_desc, void *pthis) noexcept override;
+			bool register_instance(gsdk::ScriptClassDesc_t *) = delete;
+
+			static bool bindings() noexcept;
+			static void unbindings() noexcept;
+
+			void add_plugin() noexcept;
+			void remove_plugin() noexcept;
+
+		public:
+			static vscript::class_desc<shared_instance> desc;
+
+		private:
+			void plugin_unloaded(plugin *pl) noexcept;
+
+			void script_delete() noexcept;
+
+			std::vector<plugin *> owner_plugins;
+
+		private:
+			shared_instance(const shared_instance &) = delete;
+			shared_instance &operator=(const shared_instance &) = delete;
+		};
+
 		class owned_instance : public bindings::instance_base
 		{
 			friend class plugin;
@@ -243,7 +279,8 @@ namespace vmod
 				ignored =          0,
 				error =      (1 << 1),
 				halt =       (1 << 2),
-				handled =    (1 << 3)
+				handled =    (1 << 3),
+				changed =    (1 << 4)
 			};
 			friend constexpr inline bool operator&(return_flags lhs, return_flags rhs) noexcept
 			{ return static_cast<bool>(static_cast<unsigned char>(lhs) & static_cast<unsigned char>(rhs)); }
@@ -255,10 +292,27 @@ namespace vmod
 			inline bool empty() const noexcept
 			{ return (callbacks_pre.empty() && callbacks_post.empty()); }
 
-			inline bool call_pre(const gsdk::ScriptVariant_t *args, std::size_t num_args) noexcept
-			{ return call(callbacks_pre, args, num_args, false); }
-			inline bool call_post(const gsdk::ScriptVariant_t *args, std::size_t num_args) noexcept
-			{ return call(callbacks_post, args, num_args, true); }
+			enum class return_value : unsigned char
+			{
+				none =            0,
+				changed =   (1 << 0),
+				call_orig = (1 << 1)
+			};
+			friend constexpr inline bool operator&(return_value lhs, return_value rhs) noexcept
+			{ return static_cast<bool>(static_cast<unsigned char>(lhs) & static_cast<unsigned char>(rhs)); }
+			friend constexpr inline return_value operator~(return_value lhs) noexcept
+			{ return static_cast<return_value>(~static_cast<unsigned char>(lhs)); }
+			friend constexpr inline return_value &operator&=(return_value &lhs, return_value rhs) noexcept
+			{ lhs = static_cast<return_value>(static_cast<unsigned char>(lhs) & static_cast<unsigned char>(rhs)); return lhs; }
+			friend constexpr inline return_value operator|(return_value lhs, return_value rhs) noexcept
+			{ return static_cast<return_value>(static_cast<unsigned char>(lhs) | static_cast<unsigned char>(rhs)); }
+			friend constexpr inline return_value &operator|=(return_value &lhs, return_value rhs) noexcept
+			{ lhs = static_cast<return_value>(static_cast<unsigned char>(lhs) | static_cast<unsigned char>(rhs)); return lhs; }
+
+			inline return_value call_pre(gsdk::ScriptVariant_t *args, std::size_t num_args, bool copyback = false) noexcept
+			{ return call(callbacks_pre, args, num_args, false, copyback); }
+			inline return_value call_post(gsdk::ScriptVariant_t *args, std::size_t num_args, bool copyback = false) noexcept
+			{ return call(callbacks_post, args, num_args, true, copyback); }
 
 		protected:
 			virtual void on_wake() noexcept;
@@ -267,7 +321,7 @@ namespace vmod
 		private:
 			using callbacks_t = std::unordered_map<vscript::handle_ref, callback_instance *>;
 
-			bool call(callbacks_t &callbacks, const gsdk::ScriptVariant_t *args, std::size_t num_args, bool post) noexcept;
+			return_value call(callbacks_t &callbacks, gsdk::ScriptVariant_t *args, std::size_t num_args, bool post, bool copyback) noexcept;
 
 			callbacks_t callbacks_pre;
 			callbacks_t callbacks_post;
@@ -331,6 +385,7 @@ namespace vmod
 		std::unordered_map<std::string, vscript::handle_wrapper> function_cache;
 
 		std::vector<owned_instance *> owned_instances;
+		std::vector<shared_instance *> shared_instances;
 		bool clearing_instances{false};
 
 		typed_function<void()> map_active;

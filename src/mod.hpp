@@ -76,6 +76,7 @@ namespace vmod
 
 		std::vector<std::filesystem::path> paths;
 		std::vector<std::filesystem::path> vpks;
+		std::vector<PublishedFileId_t> workshop_items;
 
 		std::unordered_map<std::filesystem::path, std::unique_ptr<plugin>> plugins;
 

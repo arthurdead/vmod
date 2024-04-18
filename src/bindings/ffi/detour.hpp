@@ -9,38 +9,31 @@
 
 namespace vmod::bindings::ffi
 {
-	class detour final : public vmod::ffi::cif, public plugin::callable
+	class detour final : public vmod::ffi::cif, public plugin::callable, public plugin::shared_instance
 	{
 		friend class singleton;
 		friend void write_docs(const std::filesystem::path &) noexcept;
 
 	public:
-		inline detour(ffi_type *ret, std::vector<ffi_type *> &&args) noexcept
+		inline detour(ffi_type *ret, std::vector<ffi_type *> &&args, std::vector<std::string> &&args_names) noexcept
 			: vmod::ffi::cif{ret, std::move(args)}
 		{
 		}
 
 		~detour() noexcept override;
 
-		bool initialize(mfp_or_func_t old_target_, ffi_abi abi) noexcept;
+		bool initialize(mfp_or_func_t old_target_, ffi_abi abi, bool member_) noexcept;
 
 		void enable() noexcept;
-
-		inline void disable() noexcept
-		{
-		#ifndef __clang__
-			#pragma GCC diagnostic push
-			#pragma GCC diagnostic ignored "-Wconditionally-supported"
-		#endif
-			unsigned char *bytes{reinterpret_cast<unsigned char *>(old_target.mfp.addr)};
-		#ifndef __clang__
-			#pragma GCC diagnostic pop
-		#endif
-			std::memcpy(bytes, old_bytes, sizeof(old_bytes));
-		}
+		void disable() noexcept;
 
 		static bool bindings() noexcept;
 		static void unbindings() noexcept;
+
+		static vscript::class_desc<detour> desc;
+
+		vscript::variant script_call(const vscript::variant *args, std::size_t num_args, ...) noexcept;
+		vscript::handle_ref script_hook(vscript::handle_wrapper callback, bool post) noexcept;
 
 		class callback_instance final : public plugin::callback_instance
 		{
@@ -55,21 +48,18 @@ namespace vmod::bindings::ffi
 
 			~callback_instance() noexcept override;
 
-		private:
-			static vscript::class_desc<callback_instance> desc;
-
 		public:
 			inline bool initialize() noexcept
 			{ return register_instance(&desc, this); }
-
-		private:
-			vscript::variant script_call(const vscript::variant *args, std::size_t num_args, ...) noexcept;
 
 			detour *owner;
 		};
 
 	private:
 		static void closure_binding(ffi_cif *cif, void *ret, void *args[], void *userptr) noexcept;
+
+		static std::vector<vscript::variant> sargs;
+		static const char uninitalized_str[17];
 
 		void on_sleep() noexcept override;
 		void on_wake() noexcept override;
@@ -92,7 +82,16 @@ namespace vmod::bindings::ffi
 
 		mfp_or_func_t old_target;
 
-		unsigned char old_bytes[1 + sizeof(std::uintptr_t)];
+		unsigned char old_bytes[
+		#ifdef __x86_64__
+			5
+		#else
+			1
+		#endif
+		 + sizeof(std::uintptr_t)];
+
+		bool member{false};
+		bool enabled{false};
 
 		static std::unordered_map<generic_func_t, std::unique_ptr<detour>> static_detours;
 		static std::unordered_map<generic_internal_mfp_t, std::unique_ptr<detour>> member_detours;

@@ -119,7 +119,7 @@ namespace vmod::bindings::ent
 		std::memset(dvar->m_data, 0, sizeof(gsdk::DVariant::m_data));
 		dvar->m_Type = prop->prop->m_Type;
 
-		if(prop->call_pre(vargs, std::size(vargs))) {
+		if(prop->call_pre(vargs, std::size(vargs)) & return_value::call_orig) {
 			ffi_call(closure_cif, reinterpret_cast<void(*)()>(prop->old_proxy), ret, args);
 		}
 

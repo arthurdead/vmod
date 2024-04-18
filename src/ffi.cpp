@@ -122,6 +122,8 @@ namespace vmod::ffi
 					**static_cast<gsdk::Vector **>(ptr) = var.get<gsdk::Vector>();
 				} else if(type == &ffi_type_qangle_ptr) {
 					**static_cast<gsdk::QAngle **>(ptr) = var.get<gsdk::QAngle>();
+				} else if(type == &ffi_type_cstr) {
+					*static_cast<const char **>(ptr) = var.get<const char *>();
 				} else {
 					*static_cast<void **>(ptr) = var.get<void *>();
 				}
@@ -164,10 +166,18 @@ namespace vmod::ffi
 			var.m_qangle = new gsdk::QAngle{*static_cast<gsdk::QAngle *>(ptr)};
 			var.m_type = gsdk::FIELD_QANGLE;
 			var.m_flags |= gsdk::SV_FREE;
+		} else if(type == &ffi_type_cstr) {
+			var.m_ccstr = *static_cast<const char **>(ptr);
+			var.m_type = gsdk::FIELD_CSTRING;
 		} else {
 			std::memcpy(var.m_data, ptr, type->size);
 			var.m_type = static_cast<short>(to_field_type(type));
 		}
+	}
+
+	void init_ptr(void *ptr, ffi_type *type) noexcept
+	{
+		std::memset(ptr, 0, type->size);
 	}
 
 	int to_field_type(ffi_type *type)
@@ -210,15 +220,11 @@ namespace vmod::ffi
 					return gsdk::FIELD_VECTOR;
 				} else if(type == &ffi_type_qangle_ptr) {
 					return gsdk::FIELD_QANGLE;
+				} else if(type == &ffi_type_cstr) {
+					return gsdk::FIELD_CSTRING;
 				}
 
-			#if __SIZEOF_POINTER__ == __SIZEOF_INT__
-				return gsdk::FIELD_UINT32;
-			#elif __SIZEOF_POINTER__ == __SIZEOF_LONG_LONG__
-				return gsdk::FIELD_UINT64;
-			#else
-				#error
-			#endif
+				return gsdk::FIELD_CLASSPTR;
 			}
 			case FFI_TYPE_STRUCT: {
 				if(type == &ffi_type_vector) {

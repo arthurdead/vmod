@@ -35,9 +35,9 @@ namespace vmod::bindings::ffi
 		static vscript::handle_ref script_create_static_cif(ffi_abi abi, ffi_type *ret, vscript::handle_wrapper args) noexcept;
 		static vscript::handle_ref script_create_member_cif(ffi_type *ret, ffi_type *this_type, vscript::handle_wrapper args) noexcept;
 
-		static bool script_create_detour_shared(mfp_or_func_t old_target, vscript::handle_ref callback, ffi_type *ret, vscript::handle_ref args, std::vector<ffi_type *> &args_types) noexcept;
-		static vscript::handle_ref script_create_detour_member(mfp_or_func_t old_target, vscript::handle_wrapper callback, ffi_type *ret, ffi_type *this_type, vscript::handle_wrapper args, bool post) noexcept;
-		static vscript::handle_ref script_create_detour_static(mfp_or_func_t old_target, vscript::handle_wrapper callback, ffi_abi abi, ffi_type *ret, vscript::handle_wrapper args, bool post) noexcept;
+		static bool script_create_detour_shared(mfp_or_func_t old_target, ffi_type *ret, vscript::handle_ref args, std::vector<ffi_type *> &args_types, std::vector<std::string> &args_names) noexcept;
+		static vscript::handle_ref script_create_detour_member(mfp_or_func_t old_target, ffi_type *ret, ffi_type *this_type, vscript::handle_wrapper args) noexcept;
+		static vscript::handle_ref script_create_detour_static(mfp_or_func_t old_target, ffi_abi abi, ffi_type *ret, vscript::handle_wrapper args) noexcept;
 
 		vscript::handle_wrapper types_table{};
 		vscript::handle_wrapper this_types_table{};

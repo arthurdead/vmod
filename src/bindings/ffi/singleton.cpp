@@ -28,10 +28,10 @@ namespace vmod::bindings::ffi
 		.desc("[cif_member](types|ret, this_types|this, array<types>|args)"sv);
 
 		desc.func(&singleton::script_create_detour_static, "script_create_detour_static"sv, "detour_static"sv)
-		.desc("[detour](fp|target, function|callback, abi|, types|ret, array<types>|args, post)"sv);
+		.desc("[detour](fp|target, abi|, types|ret, array<types>|args, post)"sv);
 
 		desc.func(&singleton::script_create_detour_member, "script_create_detour_member"sv, "detour_member"sv)
-		.desc("[detour](mfp|target, function|callback, types|ret, this_types|this, array<types>|args, post)"sv);
+		.desc("[detour](mfp|target, types|ret, this_types|this, array<types>|args, post)"sv);
 
 		if(!singleton_base::bindings(&desc)) {
 			return false;
@@ -397,17 +397,12 @@ namespace vmod::bindings::ffi
 		return cif->instance_;
 	}
 
-	bool singleton::script_create_detour_shared(mfp_or_func_t old_target, vscript::handle_ref callback, ffi_type *ret, vscript::handle_ref args, std::vector<ffi_type *> &args_types) noexcept
+	bool singleton::script_create_detour_shared(mfp_or_func_t old_target, ffi_type *ret, vscript::handle_ref args, std::vector<ffi_type *> &args_types, std::vector<std::string> &args_names) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(!old_target) {
 			vm->RaiseException("vmod: invalid function");
-			return false;
-		}
-
-		if(!callback) {
-			vm->RaiseException("vmod: invalid callback");
 			return false;
 		}
 
@@ -427,28 +422,84 @@ namespace vmod::bindings::ffi
 		}
 
 		int num_args{vm->GetArrayCount(*args)};
+
+		bool member{!args_types.empty()};
+
+		args_types.resize(member ? num_args+1 : num_args);
+		args_names.resize(num_args);
+
+		auto type_it{member ? args_types.begin()+1 : args_types.begin()};
+
 		for(int i{0}, it{0}; it != -1 && i < num_args; ++i) {
 			vscript::variant value;
 			it = vm->GetArrayValue(*args, it, &value);
 
-			ffi_type *arg_type{value.get<ffi_type *>()};
+			ffi_type *arg_type{nullptr};
+
+			if(value.m_type == gsdk::FIELD_HSCRIPT || value.m_type == gsdk::FIELD_HSCRIPT_NEW_INSTANCE) {
+				vscript::handle_wrapper value_obj{std::move(value)};
+				if(vm->IsTable(*value_obj)) {
+					if(vm->GetNumTableEntries(*value_obj) != 2) {
+						vm->RaiseException("vmod: arg %i has invalid table", i);
+						return false;
+					}
+
+					if(vm->GetValue(*value_obj, "name", &value)) {
+						args_names[i] = value.get<std::string>();
+					}
+
+					if(vm->GetValue(*value_obj, "type", &value)) {
+						arg_type = value.get<ffi_type *>();
+					} else {
+						vm->RaiseException("vmod: arg %i has invalid table", i);
+						return false;
+					}
+				} else if(vm->IsArray(*value_obj)) {
+					int count{vm->GetArrayCount(*value_obj)};
+					if(count < 1 || count > 2) {
+						vm->RaiseException("vmod: arg %i has invalid array", i);
+						return false;
+					}
+
+					vm->GetArrayValue(*value_obj, 0, &value);
+					if(count == 2) {
+						if(value.m_type == gsdk::FIELD_CSTRING) {
+							args_names[i] = value.get<std::string>();
+							vm->GetArrayValue(*value_obj, 1, &value);
+							arg_type = value.get<ffi_type *>();
+						} else {
+							arg_type = value.get<ffi_type *>();
+							vm->GetArrayValue(*value_obj, 1, &value);
+							args_names[i] = value.get<std::string>();
+						}
+					} else {
+						arg_type = value.get<ffi_type *>();
+					}
+				}
+			} else {
+				arg_type = value.get<ffi_type *>();
+			}
+
 			if(!arg_type) {
 				vm->RaiseException("vmod: arg %i is invalid", i);
 				return false;
 			}
 
-			args_types.emplace_back(arg_type);
+			*type_it++ = arg_type;
 		}
 
 		return true;
 	}
 
 	//TODO!!! should you be able to change the abi?
-	vscript::handle_ref singleton::script_create_detour_member(mfp_or_func_t old_target, vscript::handle_wrapper callback, ffi_type *ret, ffi_type *this_type, vscript::handle_wrapper args, bool post) noexcept
+	vscript::handle_ref singleton::script_create_detour_member(mfp_or_func_t old_target, ffi_type *ret, ffi_type *this_type, vscript::handle_wrapper args) noexcept
 	{
+		using namespace std::literals::string_literals;
+
 		gsdk::IScriptVM *vm{vscript::vm()};
 
 		std::vector<ffi_type *> args_types;
+		std::vector<std::string> args_names;
 
 		if(!this_type) {
 			vm->RaiseException("vmod: invalid this type");
@@ -457,7 +508,7 @@ namespace vmod::bindings::ffi
 
 		args_types.emplace_back(this_type);
 
-		if(!script_create_detour_shared(old_target, *callback, ret, *args, args_types)) {
+		if(!script_create_detour_shared(old_target, ret, *args, args_types, args_names)) {
 			return nullptr;
 		}
 
@@ -468,8 +519,8 @@ namespace vmod::bindings::ffi
 
 		auto it{members.find(old_target.mfp)};
 		if(it == members.end()) {
-			det = new detour{ret, std::move(args_types)};
-			if(!det->initialize(old_target, vmod::ffi::target_abi)) {
+			det = new detour{ret, std::move(args_types), std::move(args_names)};
+			if(!det->initialize(old_target, vmod::ffi::target_abi, true)) {
 				delete det;
 				return nullptr;
 			}
@@ -477,30 +528,21 @@ namespace vmod::bindings::ffi
 			members.emplace(members_t::value_type{old_target.mfp, det});
 		} else {
 			det = it->second.get();
+
+			det->add_plugin();
 		}
 
-		callback = vm->ReferenceFunction(*callback);
-		if(!callback) {
-			vm->RaiseException("vmod: failed to get callback reference");
-			return nullptr;
-		}
-
-		detour::callback_instance *clbk_instance{new detour::callback_instance{det, std::move(callback), post}};
-		if(!clbk_instance->initialize()) {
-			delete clbk_instance;
-			return nullptr;
-		}
-
-		return clbk_instance->instance_;
+		return det->instance_;
 	}
 
-	vscript::handle_ref singleton::script_create_detour_static(mfp_or_func_t old_target, vscript::handle_wrapper callback, ffi_abi abi, ffi_type *ret, vscript::handle_wrapper args, bool post) noexcept
+	vscript::handle_ref singleton::script_create_detour_static(mfp_or_func_t old_target, ffi_abi abi, ffi_type *ret, vscript::handle_wrapper args) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
 		std::vector<ffi_type *> args_types;
+		std::vector<std::string> args_names;
 
-		if(!script_create_detour_shared(old_target, *callback, ret, *args, args_types)) {
+		if(!script_create_detour_shared(old_target, ret, *args, args_types, args_names)) {
 			return nullptr;
 		}
 
@@ -511,8 +553,8 @@ namespace vmod::bindings::ffi
 
 		auto it{statics.find(old_target.func)};
 		if(it == statics.end()) {
-			det = new detour{ret, std::move(args_types)};
-			if(!det->initialize(old_target, abi)) {
+			det = new detour{ret, std::move(args_types), std::move(args_names)};
+			if(!det->initialize(old_target, abi, false)) {
 				delete det;
 				return nullptr;
 			}
@@ -520,20 +562,10 @@ namespace vmod::bindings::ffi
 			statics.emplace(statics_t::value_type{old_target.func, det});
 		} else {
 			det = it->second.get();
+
+			det->add_plugin();
 		}
 
-		callback = vm->ReferenceFunction(*callback);
-		if(!callback) {
-			vm->RaiseException("vmod: failed to get callback reference");
-			return nullptr;
-		}
-
-		detour::callback_instance *clbk_instance{new detour::callback_instance{det, std::move(callback), post}};
-		if(!clbk_instance->initialize()) {
-			delete clbk_instance;
-			return nullptr;
-		}
-
-		return clbk_instance->instance_;
+		return det->instance_;
 	}
 }

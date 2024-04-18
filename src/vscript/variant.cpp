@@ -168,30 +168,35 @@ namespace vmod::vscript
 	void handle_wrapper::free() noexcept
 	{
 		if(free_ && object && object != gsdk::INVALID_HSCRIPT) {
+			gsdk::IScriptVM *vm{vscript::vm()};
+			if(!vm) {
+				return;
+			}
+
 			switch(type_) {
 		#ifndef __clang__
 			default:
 		#endif
 			case gsdk::HANDLETYPE_UNKNOWN:
-			vm()->ReleaseObject(object);
+			vm->ReleaseObject(object);
 			break;
 			case gsdk::HANDLETYPE_FUNCTION:
-			vm()->ReleaseFunction(object);
+			vm->ReleaseFunction(object);
 			break;
 			case gsdk::HANDLETYPE_TABLE:
-			vm()->ReleaseTable(object);
+			vm->ReleaseTable(object);
 			break;
 			case gsdk::HANDLETYPE_ARRAY:
-			vm()->ReleaseArray(object);
+			vm->ReleaseArray(object);
 			break;
 			case gsdk::HANDLETYPE_SCOPE:
-			vm()->ReleaseScope(object);
+			vm->ReleaseScope(object);
 			break;
 			case gsdk::HANDLETYPE_INSTANCE:
-			vm()->RemoveInstance(object);
+			vm->RemoveInstance(object);
 			break;
 			case gsdk::HANDLETYPE_SCRIPT:
-			vm()->ReleaseScript(object);
+			vm->ReleaseScript(object);
 			break;
 			}
 			type_ = gsdk::HANDLETYPE_UNKNOWN;

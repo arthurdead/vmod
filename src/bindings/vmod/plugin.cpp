@@ -5,6 +5,7 @@ namespace vmod
 	vscript::class_desc<plugin> plugin::desc{"plugin"};
 	vscript::class_desc<plugin::owned_instance> plugin::owned_instance::desc{"plugin::owned_instance"};
 	vscript::class_desc<plugin::callback_instance> plugin::callback_instance::desc{"plugin::callback_instance"};
+	vscript::class_desc<plugin::shared_instance> plugin::shared_instance::desc{"plugin::shared_instance"};
 
 	bool plugin::bindings() noexcept
 	{
@@ -27,12 +28,17 @@ namespace vmod
 			return false;
 		}
 
+		if(!shared_instance::bindings()) {
+			return false;
+		}
+
 		return true;
 	}
 
 	void plugin::unbindings() noexcept
 	{
 		owned_instance::unbindings();
+		shared_instance::unbindings();
 	}
 
 	vscript::variant plugin::script_lookup_value(std::string_view val_name) noexcept
@@ -125,4 +131,29 @@ namespace vmod
 
 	void plugin::owned_instance::script_delete() noexcept
 	{ delete this; }
+
+	bool plugin::shared_instance::bindings() noexcept
+	{
+		using namespace std::literals::string_view_literals;
+
+		gsdk::IScriptVM *vm{vscript::vm()};
+
+		desc.func(&shared_instance::script_delete, "script_delete"sv, "release"sv);
+		desc.dtor();
+
+		if(!vm->RegisterClass(&shared_instance::desc)) {
+			error("vmod: failed to register plugin shared instance script class\n"sv);
+			return false;
+		}
+
+		return true;
+	}
+
+	void plugin::shared_instance::unbindings() noexcept
+	{
+
+	}
+
+	void plugin::shared_instance::script_delete() noexcept
+	{ remove_plugin(); }
 }

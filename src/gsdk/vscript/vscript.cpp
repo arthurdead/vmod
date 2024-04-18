@@ -335,7 +335,7 @@ namespace gsdk
 		return tmp;
 	}
 
-	ScriptStatus_t IScriptVM::ExecuteFunction(HSCRIPT func, const ScriptVariant_t *args, int num_args, ScriptVariant_t *ret, HSCRIPT scope, bool wait) noexcept
+	ScriptStatus_t IScriptVM::ExecuteFunction(HSCRIPT func, ScriptVariant_t *args, int num_args, ScriptVariant_t *ret, HSCRIPT scope, ScriptExecuteFlags_t flags) noexcept
 	{
 	#ifndef __VMOD_USING_CUSTOM_VM
 		if(!func || func == INVALID_HSCRIPT) {
@@ -350,12 +350,15 @@ namespace gsdk
 	#ifndef __VMOD_USING_CUSTOM_VM
 		std::size_t num_args_siz{static_cast<std::size_t>(num_args)};
 		for(std::size_t i{0}; i < num_args_siz; ++i) {
-			fixup_var(const_cast<ScriptVariant_t &>(args[i]));
+			fixup_var(args[i]);
 		}
 	#endif
 
-		return ExecuteFunction_impl(func, args, num_args, ret, scope, wait);
+		return ExecuteFunction_impl(func, args, num_args, ret, scope, flags);
 	}
+
+	ScriptStatus_t IScriptVM::ExecuteFunction(HSCRIPT func, const ScriptVariant_t *args, int num_args, ScriptVariant_t *ret, HSCRIPT scope, bool wait) noexcept
+	{ return ExecuteFunction(func, const_cast<ScriptVariant_t *>(args), num_args, ret, scope, static_cast<ScriptExecuteFlags_t>(wait ? SCRIPT_EXEC_WAIT : SCRIPT_EXEC_DEFAULT)); }
 
 	bool IScriptVM::SetValue(HSCRIPT scope, const char *name, const ScriptVariant_t &var) noexcept
 	{

@@ -294,6 +294,7 @@ namespace vmod::vm
 				case OT_NULL: sig += "null"sv; break;
 				case OT_INTEGER: sig += std::to_string(param.second->_unVal.nInteger); break;
 				case OT_FLOAT: sig += std::to_string(param.second->_unVal.fFloat); break;
+				case OT_USERPOINTER: sig += std::to_string(reinterpret_cast<std::uintptr_t>(param.second->_unVal.pUserPointer)); break;
 				case OT_STRING: {
 					sig += '"';
 					sig += static_cast<const SQChar *>(param.second->_unVal.pString->_val);
@@ -613,50 +614,36 @@ namespace vmod::vm
 		return 0;
 	}
 
-	template <typename T>
-	static bool create_vector3d(HSQUIRRELVM vm, gsdk::vec_t x, gsdk::vec_t y, gsdk::vec_t z) noexcept
+	template <typename T, typename ...Args>
+	static bool create_vector3d(HSQUIRRELVM vm, Args &&...args) noexcept
 	{
+		squirrel *actual_vm{static_cast<squirrel *>(sq_getforeignptr(vm))};
+
+		if constexpr(std::is_same_v<T, gsdk::Vector>) {
+			sq_pushobject(vm, actual_vm->vector_class);
+		} else if constexpr(std::is_same_v<T, gsdk::QAngle>) {
+			sq_pushobject(vm, actual_vm->qangle_class);
+		} else {
+			static_assert(false_t<T>::value);
+		}
+
 		if(SQ_FAILED(sq_createinstance(vm, -1))) {
+			sq_pop(vm, 1);
 			return false;
 		}
 
 		SQUserPointer userptr{nullptr};
 		if(SQ_FAILED(sq_getinstanceup(vm, -1, &userptr, typeid_ptr<T>()))) {
-			sq_pop(vm, 1);
+			sq_pop(vm, 2);
 			return false;
 		}
 
-		new (userptr) T{x, y, z};
+		new (userptr) T{std::forward<Args>(args)...};
 
 		sq_setreleasehook(vm, -1, plain_release<T>);
 
+		sq_remove(vm, -2);
 		return true;
-	}
-
-	template <typename T>
-	static bool create_vector3d(HSQUIRRELVM vm, HSQOBJECT classobj, gsdk::vec_t x, gsdk::vec_t y, gsdk::vec_t z) noexcept
-	{
-		sq_pushobject(vm, classobj);
-
-		if(!create_vector3d<T>(vm, x, y, z)) {
-			sq_pop(vm, 1);
-			return false;
-		} else {
-			sq_remove(vm, -2);
-			return true;
-		}
-	}
-
-	template <typename T>
-	static bool create_vector3d(HSQUIRRELVM vm, const T &vec) noexcept
-	{
-		return create_vector3d<T>(vm, vec.x, vec.y, vec.z);
-	}
-
-	template <typename T>
-	static bool create_vector3d(HSQUIRRELVM vm, HSQOBJECT classobj, const T &vec) noexcept
-	{
-		return create_vector3d<T>(vm, classobj, vec.x, vec.y, vec.z);
 	}
 
 	template <typename T>
@@ -979,6 +966,30 @@ namespace vmod::vm
 	}
 
 	template <typename T>
+	static SQInteger vector3d_zero(HSQUIRRELVM vm)
+	{
+		using namespace std::literals::string_view_literals;
+
+		SQInteger top{sq_gettop(vm)};
+		if(top != 1) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -1, &userptr, typeid_ptr<T>()))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		T &vec{*static_cast<T *>(userptr)};
+
+		vec.x = 0.0f;
+		vec.y = 0.0f;
+		vec.z = 0.0f;
+
+		return 0;
+	}
+
+	template <typename T>
 	static SQInteger vector3d_str(HSQUIRRELVM vm)
 	{
 		using namespace std::literals::string_view_literals;
@@ -1006,6 +1017,337 @@ namespace vmod::vm
 		}
 
 		sqstd_pushstringf(vm, "%s(%f, %f, %f)", name.data(), static_cast<double>(vec.x), static_cast<double>(vec.y), static_cast<double>(vec.z));
+		return 1;
+	}
+
+	static SQInteger qangle_fwd(HSQUIRRELVM vm)
+	{
+		using namespace std::literals::string_view_literals;
+
+		SQInteger top{sq_gettop(vm)};
+		if(top != 1) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -1, &userptr, typeid_ptr<gsdk::QAngle>()))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		gsdk::QAngle &vec{*static_cast<gsdk::QAngle *>(userptr)};
+
+		if(!create_vector3d<gsdk::Vector>(vm, vec.forward())) {
+			return sq_throwerror(vm, _SC("failed to create object"));
+		}
+
+		return 1;
+	}
+
+	static SQInteger qangle_left(HSQUIRRELVM vm)
+	{
+		using namespace std::literals::string_view_literals;
+
+		SQInteger top{sq_gettop(vm)};
+		if(top != 1) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -1, &userptr, typeid_ptr<gsdk::QAngle>()))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		gsdk::QAngle &vec{*static_cast<gsdk::QAngle *>(userptr)};
+
+		if(!create_vector3d<gsdk::Vector>(vm, vec.left())) {
+			return sq_throwerror(vm, _SC("failed to create object"));
+		}
+
+		return 1;
+	}
+
+	static SQInteger qangle_right(HSQUIRRELVM vm)
+	{
+		using namespace std::literals::string_view_literals;
+
+		SQInteger top{sq_gettop(vm)};
+		if(top != 1) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -1, &userptr, typeid_ptr<gsdk::QAngle>()))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		gsdk::QAngle &vec{*static_cast<gsdk::QAngle *>(userptr)};
+
+		if(!create_vector3d<gsdk::Vector>(vm, vec.right())) {
+			return sq_throwerror(vm, _SC("failed to create object"));
+		}
+
+		return 1;
+	}
+
+	static SQInteger qangle_up(HSQUIRRELVM vm)
+	{
+		using namespace std::literals::string_view_literals;
+
+		SQInteger top{sq_gettop(vm)};
+		if(top != 1) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -1, &userptr, typeid_ptr<gsdk::QAngle>()))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		gsdk::QAngle &vec{*static_cast<gsdk::QAngle *>(userptr)};
+
+		if(!create_vector3d<gsdk::Vector>(vm, vec.up())) {
+			return sq_throwerror(vm, _SC("failed to create object"));
+		}
+
+		return 1;
+	}
+
+	static SQInteger qangle_x(HSQUIRRELVM vm)
+	{
+		using namespace std::literals::string_view_literals;
+
+		SQInteger top{sq_gettop(vm)};
+		if(top != 1) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -1, &userptr, typeid_ptr<gsdk::QAngle>()))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		gsdk::QAngle &vec{*static_cast<gsdk::QAngle *>(userptr)};
+
+		sq_pushfloat(vm, vec.x);
+		return 1;
+	}
+
+	static SQInteger qangle_y(HSQUIRRELVM vm)
+	{
+		using namespace std::literals::string_view_literals;
+
+		SQInteger top{sq_gettop(vm)};
+		if(top != 1) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -1, &userptr, typeid_ptr<gsdk::QAngle>()))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		gsdk::QAngle &vec{*static_cast<gsdk::QAngle *>(userptr)};
+
+		sq_pushfloat(vm, vec.y);
+		return 1;
+	}
+
+	static SQInteger qangle_z(HSQUIRRELVM vm)
+	{
+		using namespace std::literals::string_view_literals;
+
+		SQInteger top{sq_gettop(vm)};
+		if(top != 1) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -1, &userptr, typeid_ptr<gsdk::QAngle>()))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		gsdk::QAngle &vec{*static_cast<gsdk::QAngle *>(userptr)};
+
+		sq_pushfloat(vm, vec.z);
+		return 1;
+	}
+
+	static SQInteger vector3d_len(HSQUIRRELVM vm)
+	{
+		using namespace std::literals::string_view_literals;
+
+		SQInteger top{sq_gettop(vm)};
+		if(top != 1) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -1, &userptr, typeid_ptr<gsdk::Vector>()))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		gsdk::Vector &vec{*static_cast<gsdk::Vector *>(userptr)};
+
+		sq_pushfloat(vm, vec.length());
+		return 1;
+	}
+
+	static SQInteger vector3d_len_sqr(HSQUIRRELVM vm)
+	{
+		using namespace std::literals::string_view_literals;
+
+		SQInteger top{sq_gettop(vm)};
+		if(top != 1) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -1, &userptr, typeid_ptr<gsdk::Vector>()))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		gsdk::Vector &vec{*static_cast<gsdk::Vector *>(userptr)};
+
+		sq_pushfloat(vm, vec.length_sqr());
+		return 1;
+	}
+
+	static SQInteger vector3d_len2d(HSQUIRRELVM vm)
+	{
+		using namespace std::literals::string_view_literals;
+
+		SQInteger top{sq_gettop(vm)};
+		if(top != 1) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -1, &userptr, typeid_ptr<gsdk::Vector>()))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		gsdk::Vector &vec{*static_cast<gsdk::Vector *>(userptr)};
+
+		sq_pushfloat(vm, vec.length2d());
+		return 1;
+	}
+
+	static SQInteger vector3d_len2d_sqr(HSQUIRRELVM vm)
+	{
+		using namespace std::literals::string_view_literals;
+
+		SQInteger top{sq_gettop(vm)};
+		if(top != 1) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -1, &userptr, typeid_ptr<gsdk::Vector>()))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		gsdk::Vector &vec{*static_cast<gsdk::Vector *>(userptr)};
+
+		sq_pushfloat(vm, vec.length2d_sqr());
+		return 1;
+	}
+
+	static SQInteger vector3d_dot(HSQUIRRELVM vm)
+	{
+		using namespace std::literals::string_view_literals;
+
+		SQInteger top{sq_gettop(vm)};
+		if(top != 2) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr1{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -1, &userptr1, typeid_ptr<gsdk::Vector>()))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		SQUserPointer userptr2{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -2, &userptr2, typeid_ptr<gsdk::Vector>()))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		gsdk::Vector &vec1{*static_cast<gsdk::Vector *>(userptr1)};
+		gsdk::Vector &vec2{*static_cast<gsdk::Vector *>(userptr2)};
+
+		sq_pushfloat(vm, vec1.dot(vec2));
+		return 1;
+	}
+
+	static SQInteger vector3d_cross(HSQUIRRELVM vm)
+	{
+		using namespace std::literals::string_view_literals;
+
+		SQInteger top{sq_gettop(vm)};
+		if(top != 2) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr1{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -1, &userptr1, typeid_ptr<gsdk::Vector>()))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		SQUserPointer userptr2{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -2, &userptr2, typeid_ptr<gsdk::Vector>()))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		gsdk::Vector &vec1{*static_cast<gsdk::Vector *>(userptr1)};
+		gsdk::Vector &vec2{*static_cast<gsdk::Vector *>(userptr2)};
+
+		if(!create_vector3d<gsdk::Vector>(vm, vec1.cross(vec2))) {
+			return sq_throwerror(vm, _SC("failed to create object"));
+		}
+
+		return 1;
+	}
+
+	static SQInteger vector3d_norm(HSQUIRRELVM vm)
+	{
+		using namespace std::literals::string_view_literals;
+
+		SQInteger top{sq_gettop(vm)};
+		if(top != 1) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -1, &userptr, typeid_ptr<gsdk::Vector>()))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		gsdk::Vector &vec{*static_cast<gsdk::Vector *>(userptr)};
+
+		vec.normalize();
+
+		return 0;
+	}
+
+	static SQInteger vector3d_ang(HSQUIRRELVM vm)
+	{
+		using namespace std::literals::string_view_literals;
+
+		SQInteger top{sq_gettop(vm)};
+		if(top != 1) {
+			return sq_throwerror(vm, _SC("wrong number of parameters"));
+		}
+
+		SQUserPointer userptr{nullptr};
+		if(SQ_FAILED(sq_getinstanceup(vm, -1, &userptr, typeid_ptr<gsdk::Vector>()))) {
+			return sq_throwerror(vm, _SC("failed to get userptr"));
+		}
+
+		gsdk::Vector &vec{*static_cast<gsdk::Vector *>(userptr)};
+
+		if(!create_vector3d<gsdk::QAngle>(vm, vec.angles())) {
+			return sq_throwerror(vm, _SC("failed to create object"));
+		}
+
 		return 1;
 	}
 
@@ -1474,18 +1816,29 @@ namespace vmod::vm
 						native_closure_info{"_set"sv, vector3d_set<T>, 3, "xs|in"sv},
 						native_closure_info{"_add"sv, vector3d_add<T, false>, 2, "xx|n"sv},
 						native_closure_info{"_sub"sv, vector3d_sub<T, false>, 2, "xx|n"sv},
-						native_closure_info{"_mult"sv, vector3d_mult<T, false>, 2, "xx|n"sv},
+						native_closure_info{"_mul"sv, vector3d_mult<T, false>, 2, "xx|n"sv},
 						native_closure_info{"_div"sv, vector3d_div<T, false>, 2, "xx|n"sv},
 						native_closure_info{"Add"sv, vector3d_add<T, true>, 2, "xx|n"sv},
 						native_closure_info{"Subtract"sv, vector3d_sub<T, true>, 2, "xx|n"sv},
 						native_closure_info{"Multiply"sv, vector3d_mult<T, true>, 2, "xx|n"sv},
-						native_closure_info{"Divide"sv, vector3d_div<T, true>, 2, "xx|n"sv}
+						native_closure_info{"Scale"sv, vector3d_mult<T, true>, 2, "xx|n"sv},
+						native_closure_info{"Divide"sv, vector3d_div<T, true>, 2, "xx|n"sv},
+						native_closure_info{"Zero"sv, vector3d_zero<T>, 1, "x"sv}
 					};
 				}
 			};
 
 			{
 				std::vector<native_closure_info> vector_funcs{get_shared_vector3d_funcs(std::type_identity<gsdk::Vector>{})};
+
+				vector_funcs.emplace_back(native_closure_info{"Cross"sv, vector3d_cross, 2, "xx"sv});
+				vector_funcs.emplace_back(native_closure_info{"Dot"sv, vector3d_dot, 2, "xx"sv});
+				vector_funcs.emplace_back(native_closure_info{"Length"sv, vector3d_len, 1, "x"sv});
+				vector_funcs.emplace_back(native_closure_info{"LengthSqr"sv, vector3d_len_sqr, 1, "x"sv});
+				vector_funcs.emplace_back(native_closure_info{"Length2D"sv, vector3d_len2d, 1, "x"sv});
+				vector_funcs.emplace_back(native_closure_info{"Length2DSqr"sv, vector3d_len2d_sqr, 1, "x"sv});
+				vector_funcs.emplace_back(native_closure_info{"Norm"sv, vector3d_norm, 1, "x"sv});
+				vector_funcs.emplace_back(native_closure_info{"Angles"sv, vector3d_ang, 1, "x"sv});
 
 				if(!register_class(
 					vector_class, vector_registered, "Vector"sv, std::type_identity<gsdk::Vector>{}, vector_funcs)) {
@@ -1496,6 +1849,14 @@ namespace vmod::vm
 
 			{
 				std::vector<native_closure_info> qangle_funcs{get_shared_vector3d_funcs(std::type_identity<gsdk::QAngle>{})};
+
+				qangle_funcs.emplace_back(native_closure_info{"Forward"sv, qangle_fwd, 1, "x"sv});
+				qangle_funcs.emplace_back(native_closure_info{"Left"sv, qangle_left, 1, "x"sv});
+				qangle_funcs.emplace_back(native_closure_info{"Right"sv, qangle_right, 1, "x"sv});
+				qangle_funcs.emplace_back(native_closure_info{"Pitch"sv, qangle_x, 1, "x"sv});
+				qangle_funcs.emplace_back(native_closure_info{"Roll"sv, qangle_y, 1, "x"sv});
+				qangle_funcs.emplace_back(native_closure_info{"Up"sv, qangle_up, 1, "x"sv});
+				qangle_funcs.emplace_back(native_closure_info{"Yaw"sv, qangle_z, 1, "x"sv});
 
 				if(!register_class(
 					qangle_class, qangle_registered, "QAngle"sv, std::type_identity<gsdk::QAngle>{}, qangle_funcs)) {
@@ -2057,9 +2418,16 @@ namespace vmod::vm
 				return true;
 			}
 			case gsdk::FIELD_POSITIVEINTEGER_OR_NULL: {
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+				if(var.m_longlong > 0) {
+					sq_pushinteger(impl, var.m_longlong);
+				}
+			#else
 				if(var.m_int > 0) {
 					sq_pushinteger(impl, var.m_int);
-				} else {
+				}
+			#endif
+				else {
 					sq_pushnull(impl);
 				}
 				return true;
@@ -2068,7 +2436,11 @@ namespace vmod::vm
 			case gsdk::FIELD_MATERIALINDEX:
 			case gsdk::FIELD_TICK:
 			case gsdk::FIELD_INTEGER: {
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+				sq_pushinteger(impl, var.m_longlong);
+			#else
 				sq_pushinteger(impl, var.m_int);
+			#endif
 				return true;
 			}
 			case gsdk::FIELD_UINT32: {
@@ -2109,19 +2481,13 @@ namespace vmod::vm
 				return true;
 			}
 			case gsdk::FIELD_QANGLE:
-			return create_vector3d<gsdk::QAngle>(impl, qangle_class, *var.m_qangle);
+			return create_vector3d<gsdk::QAngle>(impl, *var.m_qangle);
 			case gsdk::FIELD_POSITION_VECTOR:
 			case gsdk::FIELD_VECTOR:
-			return create_vector3d<gsdk::Vector>(impl, vector_class, *var.m_vector);
+			return create_vector3d<gsdk::Vector>(impl, *var.m_vector);
 			case gsdk::FIELD_CLASSPTR:
 			case gsdk::FIELD_FUNCTION: {
-			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
-				sq_pushinteger(impl, static_cast<SQInteger>(var.m_ulonglong));
-			#elif GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
-				sq_pushinteger(impl, static_cast<SQInteger>(var.m_ulong));
-			#else
-				#error
-			#endif
+				sq_pushuserpointer(impl, static_cast<SQUserPointer>(var.m_ptr));
 				return true;
 			}
 			case gsdk::FIELD_EHANDLE: {
@@ -2173,7 +2539,23 @@ namespace vmod::vm
 				SQInteger value{0};
 				if(SQ_SUCCEEDED(sq_getinteger(impl, idx, &value))) {
 					var.m_type = gsdk::FIELD_INTEGER;
+				#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+					var.m_longlong = value;
+				#else
 					var.m_int = value;
+				#endif
+					return true;
+				} else {
+					var.m_type = gsdk::FIELD_VOID;
+					var.m_object = gsdk::INVALID_HSCRIPT;
+					return false;
+				}
+			}
+			case OT_USERPOINTER: {
+				SQUserPointer value{nullptr};
+				if(SQ_SUCCEEDED(sq_getuserpointer(impl, idx, &value))) {
+					var.m_type = gsdk::FIELD_CLASSPTR;
+					var.m_ptr = value;
 					return true;
 				} else {
 					var.m_type = gsdk::FIELD_VOID;
@@ -2303,7 +2685,16 @@ namespace vmod::vm
 			}
 			case OT_INTEGER: {
 				var.m_type = gsdk::FIELD_INTEGER;
+			#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
+				var.m_longlong = sq_objtointeger(&obj);
+			#else
 				var.m_int = sq_objtointeger(&obj);
+			#endif
+				return true;
+			}
+			case OT_USERPOINTER: {
+				var.m_type = gsdk::FIELD_CLASSPTR;
+				var.m_ptr = sq_objtouserpointer(&obj);
 				return true;
 			}
 			case OT_FLOAT: {
@@ -2391,7 +2782,20 @@ namespace vmod::vm
 		}
 	}
 
-	gsdk::ScriptStatus_t squirrel::ExecuteFunction_impl(gsdk::HSCRIPT obj, const gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret_var, gsdk::HSCRIPT scope, bool wait)
+	static SQRESULT sq_call_nopop(HSQUIRRELVM v,SQInteger params,SQBool retval,SQBool raiseerror)
+	{
+		SQObjectPtr res;
+		if(!v->Call(v->GetUp(-(params+1)), params, v->_top-params, res, raiseerror ? true : false)) {
+			v->Pop(params); //pop args
+			return SQ_ERROR;
+		}
+		if(retval) {
+			v->Push(res); // push result
+		}
+		return SQ_OK;
+	}
+
+	gsdk::ScriptStatus_t squirrel::ExecuteFunction_impl(gsdk::HSCRIPT obj, gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret_var, gsdk::HSCRIPT scope, gsdk::ScriptExecuteFlags_t flags)
 	{
 		//TODO!!! CDirector::PostRunScript gives invalid function find out why
 		if(obj == gsdk::INVALID_HSCRIPT) {
@@ -2414,28 +2818,49 @@ namespace vmod::vm
 			}
 		}
 
+		bool copyback{static_cast<bool>(flags & gsdk::ScriptExecuteFlags_t::SCRIPT_EXEC_COPYBACK)};
+
+		SQRESULT callret{
+			copyback ?
+			sq_call_nopop(impl, static_cast<SQInteger>(1+num_args_siz), ret_var ? SQTrue : SQFalse, SQTrue)
+			:
+			sq_call(impl, static_cast<SQInteger>(1+num_args_siz), ret_var ? SQTrue : SQFalse, SQTrue)
+		};
+
 		bool failed{false};
 
-		if(SQ_FAILED(sq_call(impl, static_cast<SQInteger>(1+num_args_siz), ret_var ? SQTrue : SQFalse, SQTrue))) {
+		if(SQ_FAILED(callret)) {
 			failed = true;
-		} else if(ret_var) {
-			HSQOBJECT ret_obj;
-			sq_resetobject(&ret_obj);
+		} else {
+			if(ret_var) {
+				HSQOBJECT ret_obj;
+				sq_resetobject(&ret_obj);
 
-			if(SQ_SUCCEEDED(sq_getstackobj(impl, -1, &ret_obj))) {
-				get(ret_obj, *ret_var);
-			} else {
-				failed = true;
+				if(SQ_SUCCEEDED(sq_getstackobj(impl, -1, &ret_obj))) {
+					get(ret_obj, *ret_var);
+				} else {
+					failed = true;
+				}
+
+				sq_pop(impl, 1);
 			}
 
-			sq_pop(impl, 1);
+			if(copyback) {
+				for(std::size_t i{1}; i <= num_args_siz; ++i) {
+					if(!get(-static_cast<SQInteger>(i), args[num_args_siz-i])) {
+						debugtrap(); //TODO!!! pop pushed values
+					}
+				}
+
+				sq_pop(impl, num_args);
+			}
 		}
 
 		sq_pop(impl, 1);
 
 		if(failed) {
 			return gsdk::SCRIPT_ERROR;
-		} else if(wait) {
+		} else if(flags & gsdk::ScriptExecuteFlags_t::SCRIPT_EXEC_WAIT) {
 			return gsdk::SCRIPT_DONE;
 		} else {
 			return gsdk::SCRIPT_RUNNING;
@@ -2690,7 +3115,7 @@ namespace vmod::vm
 			break;
 			case gsdk::FIELD_CLASSPTR:
 			case gsdk::FIELD_FUNCTION:
-			typemask += 'i';
+			typemask += 'p';
 			break;
 		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 			case gsdk::FIELD_INTEGER64:

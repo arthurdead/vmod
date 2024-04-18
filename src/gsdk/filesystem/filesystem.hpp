@@ -249,6 +249,27 @@ namespace gsdk
 		virtual bool IsSpecificDLCPresent(unsigned int) = 0;
 		virtual void SetIODelayAlarm(float) = 0;
 		virtual void AddXLSPUpdateSearchPath(const void *, int) = 0;
+	#else
+		static inline void(IFileSystem::*AddVPKFile_ptr)(const char *, const char *, SearchPathAdd_t){nullptr};
+		static inline bool(IFileSystem::*RemoveVPKFile_ptr)(const char *, const char *){nullptr};
+
+		inline void AddVPKFile(const char *path, const char *id, SearchPathAdd_t add = PATH_ADD_TO_TAIL) noexcept
+		{
+			if(AddVPKFile_ptr) {
+				(this->*AddVPKFile_ptr)(path, id, add);
+			} else {
+				AddSearchPath(path, id, add);
+			}
+		}
+
+		inline bool RemoveVPKFile(const char *path, const char *id) noexcept
+		{
+			if(RemoveVPKFile_ptr) {
+				return (this->*RemoveVPKFile_ptr)(path, id);
+			} else {
+				return RemoveSearchPath(path, id);
+			}
+		}
 	#endif
 	};
 	#pragma GCC diagnostic pop

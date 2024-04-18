@@ -341,6 +341,19 @@ if custom_vm
 	endif
 endif
 
+squirrel_vmod_server_init_late_script_src = files('src/squirrel/vmod_server_init_late.nut')
+
+if xxd_exe.found()
+	squirrel_vmod_server_init_late_script = declare_dependency(
+		sources: xxd_named.process(
+			squirrel_vmod_server_init_late_script_src,
+			extra_args: '__squirrel_vmod_server_init_late_script_data'
+		)
+	)
+
+	vmod_dependencies += [squirrel_vmod_server_init_late_script]
+endif
+
 if engine_dir != ''
 	tier0_lib_name = 'libtier0.so'
 	if dedicated
@@ -542,6 +555,12 @@ if install
 			install_dir: addons
 		)
 	endif
+
+	install_data(
+		squirrel_vmod_server_init_late_script_src,
+		rename: join_paths(vmod_root,'base/squirrel/vmod_server_init_late.nut'),
+		install_dir: addons
+	)
 
 	if game == 'portal2'
 		install_data(

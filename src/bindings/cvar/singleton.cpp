@@ -243,7 +243,7 @@ namespace vmod::bindings::cvar
 		plugin *pl{plugin::assumed_currently_running()};
 		vscript::handle_ref scope{pl ? pl->private_scope() : nullptr};
 
-		vscript::handle_ref callback_ref{callback};
+		vscript::handle_ref callback_ref{svar->func_ref()};
 
 		var->initialize(varname, [var,vm,callback_ref,scope](const gsdk::CCommand &cmdargs) noexcept -> void {
 			vscript::handle_wrapper arr{vm->CreateArray()};
