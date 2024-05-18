@@ -269,12 +269,12 @@ const NDEBUG_PERSIST_TILL_NEXT_SERVER 	= 0.01023;
 
 	if ( ::ScriptDebugDrawTextEnabled || ::ScriptDebugDrawWatchesEnabled )
 	{
-		::ScriptDebugTextDraw( ::ScriptDebugFirstLine );
+		::ScriptDebugTextDraw( ScriptDebugFirstLine );
 	}
 
 	if ( ::ScriptDebugDrawWatchesEnabled )
 	{
-		::ScriptDebugDrawWatches( ::ScriptDebugWatchFistLine );
+		::ScriptDebugDrawWatches( ScriptDebugWatchFistLine );
 	}
 
 	::ScriptDebugInDebugDraw = false;
@@ -577,7 +577,7 @@ const NDEBUG_PERSIST_TILL_NEXT_SERVER 	= 0.01023;
 		// Screen overlay
 		local debugString = timeString + indentString + text.tostring();
 		::ScriptDebugText.append( [ ::Time(), debugString.tostring(), color ] );
-		if ( ::ScriptDebugText.len() > ::ScriptDebugTextLines )
+		if ( ::ScriptDebugText.len() > ScriptDebugTextLines )
 		{
 			::ScriptDebugText.remove( 0 );
 		}
@@ -605,11 +605,11 @@ const NDEBUG_PERSIST_TILL_NEXT_SERVER 	= 0.01023;
 			break;
 		}
 
-		if ( age < ::ScriptDebugTextTime )
+		if ( age < ScriptDebugTextTime )
 		{
-			if ( age >= ::ScriptDebugTextTime - 1.0 )
+			if ( age >= ScriptDebugTextTime - 1.0 )
 			{
-				alpha = ( 255.0 * ( ::ScriptDebugTextTime - age ) ).tointeger();
+				alpha = ( 255.0 * ( ScriptDebugTextTime - age ) ).tointeger();
 				::Assert( alpha >= 0 );
 			}
 			else
@@ -621,7 +621,7 @@ const NDEBUG_PERSIST_TILL_NEXT_SERVER 	= 0.01023;
 		}
 	}
 	
-	return line + ::ScriptDebugTextLines - i;
+	return line + ScriptDebugTextLines - i;
 };
 
 //-----------------------------------------------------------------------------

@@ -126,7 +126,7 @@ namespace vmod::bindings::ent
 		prop->call_post(vargs, std::size(vargs));
 	}
 
-	vscript::handle_ref sendprop::script_hook_proxy(vscript::handle_wrapper callback, bool post, [[maybe_unused]] bool per_client) noexcept
+	vscript::instance_handle_ref sendprop::script_hook_proxy(vscript::func_handle_ref callback, bool post, [[maybe_unused]] bool per_client) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -135,13 +135,13 @@ namespace vmod::bindings::ent
 			return nullptr;
 		}
 
-		callback = vm->ReferenceFunction(*callback);
-		if(!callback) {
+		vscript::func_handle_wrapper callback_copy{vm->ReferenceFunction(*callback)};
+		if(!callback_copy) {
 			vm->RaiseException("vmod: failed to get callback reference");
 			return nullptr;
 		}
 
-		plugin::callback_instance *clbk_instance{new plugin::callback_instance{this, std::move(callback), post}};
+		plugin::callback_instance *clbk_instance{new plugin::callback_instance{this, std::move(callback_copy), post}};
 		if(!clbk_instance->initialize()) {
 			delete clbk_instance;
 			return nullptr;

@@ -66,7 +66,7 @@ namespace vmod::bindings::ent
 		return factory->Create(classname.data());
 	}
 
-	bool factory_impl::initialize(std::vector<std::string> &&names_, vscript::handle_wrapper &&callback_, vscript::handle_wrapper &&size_callback_) noexcept
+	bool factory_impl::initialize(std::vector<std::string> &&names_, vscript::func_handle_wrapper &&callback_, vscript::func_handle_wrapper &&size_callback_) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -151,7 +151,7 @@ namespace vmod::bindings::ent
 		return true;
 	}
 
-	gsdk::IServerNetworkable *factory_impl::script_create(std::string_view classname, std::optional<vscript::handle_wrapper> script_opts) noexcept
+	gsdk::IServerNetworkable *factory_impl::script_create(std::string_view classname, std::optional<vscript::table_handle_wrapper> script_opts) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -165,11 +165,6 @@ namespace vmod::bindings::ent
 		std::size_t new_size{0};
 		if(script_opts && *script_opts) {
 			opts.emplace();
-
-			if(!vm->IsTable(*(*script_opts))) {
-				vm->RaiseException("vmod: not a table");
-				return nullptr;
-			}
 
 			vscript::variant additional_size;
 			if(vm->GetValue(*(*script_opts), "additional_size", &additional_size)) {
@@ -428,7 +423,7 @@ namespace vmod::bindings::ent
 		if(size_callback) {
 			gsdk::IScriptVM *vm{vscript::vm()};
 
-			vscript::handle_ref pl_scope{owner_scope()};
+			vscript::scope_handle_ref pl_scope{owner_scope()};
 
 			vscript::variant args[]{
 				instance_

@@ -23,12 +23,12 @@
 #include <sqstdsystem.h>
 #ifdef __VMOD_USING_QUIRREL
 #include <sqstddatetime.h>
+#include <sqstddebug.h>
 #endif
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
 
-#ifndef __VMOD_USING_QUIRREL
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsuggest-destructor-override"
@@ -40,6 +40,7 @@
 #pragma clang diagnostic ignored "-Wshadow-field"
 #pragma clang diagnostic ignored "-Wcast-align"
 #else
+#pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsuggest-override"
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 #pragma GCC diagnostic ignored "-Wuseless-cast"
@@ -51,7 +52,6 @@
 #pragma clang diagnostic pop
 #else
 #pragma GCC diagnostic pop
-#endif
 #endif
 
 #define USQTrue (1u)
@@ -1351,6 +1351,30 @@ namespace vmod::vm
 		return 1;
 	}
 
+#ifdef __VMOD_USING_QUIRREL
+	void squirrel::compile_err_func(HSQUIRRELVM vm, const SQChar *desc, const SQChar *src, SQInteger line, SQInteger column, const SQChar *extra)
+	{
+		using namespace std::literals::string_view_literals;
+
+		if(extra && extra[0] != '\0') {
+			error("%s:%i:%i - %s - %s\n"sv, src, line, column, desc, extra);
+		} else {
+			error("%s:%i:%i - %s\n"sv, src, line, column, desc);
+		}
+	}
+
+	void squirrel::compile_msg_func(HSQUIRRELVM vm, const SQCompilerMessage *msg)
+	{
+		using namespace std::literals::string_view_literals;
+
+		if(msg->isError) {
+			error("%s:%i:%i-%i - %s - %s\n"sv, msg->fileName, msg->line, msg->column, msg->columnsWidth, msg->message);
+		} else {
+			warning("%s:%i:%i-%i - %s - %s\n"sv, msg->fileName, msg->line, msg->column, msg->columnsWidth, msg->message);
+		}
+	}
+#endif
+
 	void squirrel::error_func(HSQUIRRELVM vm, const SQChar *fmt, ...)
 	{
 		using namespace std::literals::string_view_literals;
@@ -1404,6 +1428,15 @@ namespace vmod::vm
 		#endif
 		}
 	}
+
+#ifdef __VMOD_USING_QUIRREL
+	template <typename ...Args>
+	static inline auto sq_compilebuffer(HSQUIRRELVM vm, Args &&...args) noexcept -> decltype(sq_compile(vm, std::forward<Args>(args)...))
+	{
+		auto &&ret{sq_compile(vm, std::forward<Args>(args)...)};
+		return ret;
+	}
+#endif
 
 	template <typename ...Args>
 	static inline auto sq_compilebuffer_strict(HSQUIRRELVM vm, Args &&...args) noexcept -> decltype(sq_compilebuffer(vm, std::forward<Args>(args)...))
@@ -1513,6 +1546,10 @@ namespace vmod::vm
 		#pragma GCC diagnostic ignored "-Wsuggest-attribute=format"
 	#endif
 		sq_setprintfunc(impl, print_func, error_func);
+	#ifdef __VMOD_USING_QUIRREL
+		sq_setcompilererrorhandler(impl, compile_err_func);
+		sq_setcompilerdiaghandler(impl, compile_msg_func);
+	#endif
 	#ifndef __clang__
 		#pragma GCC diagnostic pop
 	#endif
@@ -1523,10 +1560,12 @@ namespace vmod::vm
 		debug_vm = true;
 	#endif
 
-		if(debug_vm) {
-			sq_enabledebuginfo(impl, SQTrue);
-			sq_notifyallexceptions(impl, SQTrue);
-		}
+		sq_enabledebuginfo(impl, debug_vm ? SQTrue : SQFalse);
+		sq_notifyallexceptions(impl, debug_vm ? SQTrue : SQFalse);
+	#ifdef __VMOD_USING_QUIRREL
+		sq_lineinfo_in_expressions(impl, debug_vm ? SQTrue : SQFalse);
+		sq_setcompilecheckmode(impl, debug_vm ? SQTrue : SQFalse);
+	#endif
 
 	#ifdef __VMOD_USING_QUIRREL
 		sq_forbidglobalconstrewrite(impl, SQTrue);
@@ -1553,6 +1592,14 @@ namespace vmod::vm
 			sq_pushroottable(impl);
 
 			sqstd_seterrorhandlers(impl);
+
+		#ifdef __VMOD_USING_QUIRREL
+			if(SQ_FAILED(sq_registerbaselib(impl))) {
+				error("vmod vm: failed to register baselib\n"sv);
+				sq_pop(impl, 1);
+				return false;
+			}
+		#endif
 
 			if(SQ_FAILED(sqstd_register_mathlib(impl))) {
 				error("vmod vm: failed to register mathlib\n"sv);
@@ -1590,6 +1637,12 @@ namespace vmod::vm
 				sq_pop(impl, 1);
 				return false;
 			}
+
+			if(SQ_FAILED(sqstd_register_debuglib(impl))) {
+				error("vmod vm: failed to register debuglib\n"sv);
+				sq_pop(impl, 1);
+				return false;
+			}
 		#endif
 
 			sq_pop(impl, 1);
@@ -1603,6 +1656,7 @@ namespace vmod::vm
 		modules->registerIoStreamLib();
 		modules->registerIoLib();
 		modules->registerDateTimeLib();
+		modules->registerDebugLib();
 	#endif
 
 		{
@@ -2324,23 +2378,49 @@ namespace vmod::vm
 
 	void squirrel::ReleaseValue(gsdk::ScriptVariant_t &value)
 	{
-		switch(value.m_type) {
-			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
-			case gsdk::FIELD_HSCRIPT:
-			if(value.m_flags & gsdk::SV_FREE) {
+		if(value.m_flags & gsdk::SV_FREE) {
+			switch(value.m_type) {
+				case gsdk::FIELD_VOID:
+				break;
+				case gsdk::FIELD_TYPEUNKNOWN:
+				break;
+				case gsdk::FIELD_POSITION_VECTOR:
+				case gsdk::FIELD_VECTOR:
+				delete value.m_vector;
+				break;
+				case gsdk::FIELD_VECTOR2D:
+				//delete m_vector2d;
+				break;
+				case gsdk::FIELD_QANGLE:
+				delete value.m_qangle;
+				break;
+				case gsdk::FIELD_QUATERNION:
+				//delete value.m_quaternion;
+				break;
+				case gsdk::FIELD_UTLSTRINGTOKEN:
+				//delete value.m_utlstringtoken;
+				break;
+				case gsdk::FIELD_CSTRING:
+				gsdk::free_arr<char>(value.m_cstr);
+				break;
+				case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
+				case gsdk::FIELD_HSCRIPT:
+				case gsdk::FIELD_CUSTOM:
+				case gsdk::FIELD_FUNCTION:
+				case gsdk::FIELD_EMBEDDED:
 				sq_release(impl, vs_cast(value.m_object));
 				delete vs_cast(value.m_object);
-
-				value.m_flags = gsdk::SV_NOFLAGS;
-				std::memset(value.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
-				value.m_object = gsdk::INVALID_HSCRIPT;
-				value.m_type = gsdk::FIELD_TYPEUNKNOWN;
+				break;
+				default:
+				gsdk::free<void>(static_cast<void *>(value.m_data));
+				break;
 			}
-			break;
-			default:
-			value.free();
-			break;
 		}
+
+		value.m_flags = gsdk::SV_NOFLAGS;
+		std::memset(value.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
+		value.m_object = gsdk::INVALID_HSCRIPT;
+		value.m_type = gsdk::FIELD_TYPEUNKNOWN;
 	}
 
 	gsdk::HSCRIPT squirrel::LookupFunction_impl(const char *name, gsdk::HSCRIPT scope)
@@ -2471,6 +2551,9 @@ namespace vmod::vm
 				sq_pushbool(impl, var.m_bool);
 				return true;
 			}
+			case gsdk::FIELD_FUNCTION:
+			case gsdk::FIELD_EMBEDDED:
+			case gsdk::FIELD_CUSTOM:
 			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
 			case gsdk::FIELD_HSCRIPT: {
 				if(var.m_object && var.m_object != gsdk::INVALID_HSCRIPT) {
@@ -2485,8 +2568,7 @@ namespace vmod::vm
 			case gsdk::FIELD_POSITION_VECTOR:
 			case gsdk::FIELD_VECTOR:
 			return create_vector3d<gsdk::Vector>(impl, *var.m_vector);
-			case gsdk::FIELD_CLASSPTR:
-			case gsdk::FIELD_FUNCTION: {
+			case gsdk::FIELD_CLASSPTR: {
 				sq_pushuserpointer(impl, static_cast<SQUserPointer>(var.m_ptr));
 				return true;
 			}
@@ -2508,16 +2590,37 @@ namespace vmod::vm
 
 	bool squirrel::get(SQInteger idx, gsdk::ScriptVariant_t &var) noexcept
 	{
-		std::memset(var.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
+		var.reset();
+
+		auto type{sq_gettype(impl, idx)};
 
 		auto handle_obj(
-			[this,&var,idx]() noexcept -> bool {
+			[this,&var,idx,type]() noexcept -> bool {
 				HSQOBJECT *copy{new HSQOBJECT};
 				sq_resetobject(copy);
 				if(SQ_SUCCEEDED(sq_getstackobj(impl, idx, copy))) {
 					sq_addref(impl, copy);
 					var.m_object = vs_cast(copy);
+
+					switch(type) {
+					case OT_INSTANCE:
+					var.m_type = gsdk::FIELD_HSCRIPT_NEW_INSTANCE;
+					break;
+					case OT_NATIVECLOSURE:
+					case OT_CLOSURE:
+					var.m_type = gsdk::FIELD_FUNCTION;
+					break;
+					case OT_ARRAY:
+					var.m_type = gsdk::FIELD_CUSTOM;
+					break;
+					case OT_TABLE:
+					var.m_type = gsdk::FIELD_EMBEDDED;
+					break;
+					default:
 					var.m_type = gsdk::FIELD_HSCRIPT;
+					break;
+					}
+
 					var.m_flags |= gsdk::SV_FREE;
 					return true;
 				} else {
@@ -2529,7 +2632,7 @@ namespace vmod::vm
 			}
 		);
 
-		switch(sq_gettype(impl, idx)) {
+		switch(type) {
 			case OT_NULL: {
 				var.m_type = gsdk::FIELD_VOID;
 				var.m_object = gsdk::INVALID_HSCRIPT;
@@ -2654,17 +2757,38 @@ namespace vmod::vm
 
 	bool squirrel::get(HSQOBJECT obj, gsdk::ScriptVariant_t &var, bool scalar) noexcept
 	{
-		std::memset(var.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
+		var.reset();
+
+		auto type{sq_type(obj)};
 
 		auto handle_obj(
-			[this,&var,&obj]() noexcept -> bool {
+			[this,&var,&obj,type]() noexcept -> bool {
 				HSQOBJECT *copy{new HSQOBJECT};
 				sq_resetobject(copy);
 				if(SQ_SUCCEEDED(sq_getstackobj(impl, -1, copy))) {
 					sq_addref(impl, copy);
 					sq_pop(impl, 1);
 					var.m_object = vs_cast(copy);
+
+					switch(type) {
+					case OT_INSTANCE:
+					var.m_type = gsdk::FIELD_HSCRIPT_NEW_INSTANCE;
+					break;
+					case OT_NATIVECLOSURE:
+					case OT_CLOSURE:
+					var.m_type = gsdk::FIELD_FUNCTION;
+					break;
+					case OT_ARRAY:
+					var.m_type = gsdk::FIELD_CUSTOM;
+					break;
+					case OT_TABLE:
+					var.m_type = gsdk::FIELD_EMBEDDED;
+					break;
+					default:
 					var.m_type = gsdk::FIELD_HSCRIPT;
+					break;
+					}
+
 					var.m_flags |= gsdk::SV_FREE;
 					return true;
 				} else {
@@ -2677,7 +2801,7 @@ namespace vmod::vm
 			}
 		);
 
-		switch(sq_type(obj)) {
+		switch(type) {
 			case OT_NULL: {
 				var.m_type = gsdk::FIELD_VOID;
 				var.m_object = gsdk::INVALID_HSCRIPT;
@@ -2797,8 +2921,15 @@ namespace vmod::vm
 
 	gsdk::ScriptStatus_t squirrel::ExecuteFunction_impl(gsdk::HSCRIPT obj, gsdk::ScriptVariant_t *args, int num_args, gsdk::ScriptVariant_t *ret_var, gsdk::HSCRIPT scope, gsdk::ScriptExecuteFlags_t flags)
 	{
+		std::size_t num_args_siz{static_cast<std::size_t>(num_args)};
+
+		std::vector<gsdk::ScriptVariant_t *> to_free;
+
 		//TODO!!! CDirector::PostRunScript gives invalid function find out why
 		if(obj == gsdk::INVALID_HSCRIPT) {
+			for(std::size_t i{0}; i < num_args_siz; ++i) {
+				args[i].free();
+			}
 			return gsdk::SCRIPT_ERROR;
 		}
 
@@ -2810,8 +2941,11 @@ namespace vmod::vm
 			sq_pushroottable(impl);
 		}
 
-		std::size_t num_args_siz{static_cast<std::size_t>(num_args)};
 		for(std::size_t i{0}; i < num_args_siz; ++i) {
+			if(args[i].should_free()) {
+				to_free.emplace_back(&args[i]);
+			}
+
 			if(!push(args[i])) {
 				debugtrap(); //TODO!!! pop pushed values
 				return gsdk::SCRIPT_ERROR;
@@ -2857,6 +2991,10 @@ namespace vmod::vm
 		}
 
 		sq_pop(impl, 1);
+
+		for(auto &arg : to_free) {
+			arg->free();
+		}
 
 		if(failed) {
 			return gsdk::SCRIPT_ERROR;
@@ -3000,8 +3138,12 @@ namespace vmod::vm
 	{
 		bool is_ret_void{info->m_desc.m_ReturnType == gsdk::FIELD_VOID};
 
-		gsdk::ScriptVariant_t ret_var;
+		gsdk::ScriptVariant_t ret_var{};
 		bool success{info->m_pfnBinding(info->m_pFunction, obj, args.empty() ? nullptr : args.data(), static_cast<int>(args.size()), is_ret_void ? nullptr : &ret_var)};
+
+		for(auto &arg : args) {
+			arg.free();
+		}
 
 		if(got_last_exception) {
 			sq_pushobject(impl, last_exception);
@@ -3114,8 +3256,10 @@ namespace vmod::vm
 			typemask += 'i';
 			break;
 			case gsdk::FIELD_CLASSPTR:
-			case gsdk::FIELD_FUNCTION:
 			typemask += 'p';
+			break;
+			case gsdk::FIELD_FUNCTION:
+			typemask += 'c';
 			break;
 		#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 			case gsdk::FIELD_INTEGER64:
@@ -3124,18 +3268,26 @@ namespace vmod::vm
 			case gsdk::FIELD_UINT64:
 			case gsdk::FIELD_UINT32:
 			case gsdk::FIELD_INTEGER:
-			typemask += 'n';
+			typemask += 'i';
 			break;
 			case gsdk::FIELD_FLOAT64:
 			case gsdk::FIELD_FLOAT:
-			typemask += 'n';
+			typemask += 'f';
 			break;
 			case gsdk::FIELD_BOOLEAN:
 			typemask += 'b';
 			break;
+			case gsdk::FIELD_EMBEDDED:
+			typemask += 't';
+			break;
+			case gsdk::FIELD_CUSTOM:
+			typemask += 'a';
+			break;
 			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
+			typemask += 'x';
+			break;
 			case gsdk::FIELD_HSCRIPT:
-			typemask += '.';
+			typemask += "t|a|x|c"sv;
 			break;
 			case gsdk::FIELD_VARIANT:
 			typemask += '.';
@@ -3787,7 +3939,7 @@ namespace vmod::vm
 		return SetValue_nonvirtual(obj, name, value);
 	}
 
-	bool squirrel::SetValue_impl_nonvirtual(gsdk::HSCRIPT obj, const char *name, const gsdk::ScriptVariant_t &value) noexcept
+	bool squirrel::SetValue_impl_nonvirtual(gsdk::HSCRIPT obj, const char *name, gsdk::ScriptVariant_t &value) noexcept
 	{
 		if(obj) {
 			sq_pushobject(impl, *vs_cast(obj));
@@ -3798,6 +3950,7 @@ namespace vmod::vm
 		sq_pushstring(impl, name, -1);
 		if(!push(value)) {
 			sq_pop(impl, 2);
+			value.free();
 			return false;
 		}
 
@@ -3805,15 +3958,16 @@ namespace vmod::vm
 
 		sq_pop(impl, 1);
 
+		value.free();
 		return success;
 	}
 
-	bool squirrel::SetValue_impl(gsdk::HSCRIPT obj, const char *name, const gsdk::ScriptVariant_t &value)
+	bool squirrel::SetValue_impl(gsdk::HSCRIPT obj, const char *name, gsdk::ScriptVariant_t &value)
 	{
 		return SetValue_impl_nonvirtual(obj, name, value);
 	}
 
-	bool squirrel::SetValue_impl(gsdk::HSCRIPT obj, int idx, const gsdk::ScriptVariant_t &value)
+	bool squirrel::SetValue_impl(gsdk::HSCRIPT obj, int idx, gsdk::ScriptVariant_t &value)
 	{
 		if(obj) {
 			sq_pushobject(impl, *vs_cast(obj));
@@ -3824,6 +3978,7 @@ namespace vmod::vm
 		sq_pushinteger(impl, idx);
 		if(!push(value)) {
 			sq_pop(impl, 2);
+			value.free();
 			return false;
 		}
 
@@ -3831,12 +3986,13 @@ namespace vmod::vm
 
 		sq_pop(impl, 1);
 
+		value.free();
 		return success;
 	}
 
 	void squirrel::get_obj(gsdk::ScriptVariant_t &value) noexcept
 	{
-		std::memset(value.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
+		value.reset();
 
 		HSQOBJECT *copy{new HSQOBJECT};
 		sq_resetobject(copy);
@@ -3847,7 +4003,26 @@ namespace vmod::vm
 			value.m_object = gsdk::INVALID_HSCRIPT;
 		} else {
 			sq_addref(impl, copy);
+
+			switch(sq_type(*copy)) {
+			case OT_INSTANCE:
+			value.m_type = gsdk::FIELD_HSCRIPT_NEW_INSTANCE;
+			break;
+			case OT_NATIVECLOSURE:
+			case OT_CLOSURE:
+			value.m_type = gsdk::FIELD_FUNCTION;
+			break;
+			case OT_ARRAY:
+			value.m_type = gsdk::FIELD_CUSTOM;
+			break;
+			case OT_TABLE:
+			value.m_type = gsdk::FIELD_EMBEDDED;
+			break;
+			default:
 			value.m_type = gsdk::FIELD_HSCRIPT;
+			break;
+			}
+
 			value.m_object = vs_cast(copy);
 			value.m_flags |= gsdk::SV_FREE;
 		}
@@ -3971,6 +4146,8 @@ namespace vmod::vm
 			got = get(-1, *value);
 
 			sq_pop(impl, 1);
+		} else {
+			value->reset();
 		}
 
 		sq_pop(impl, 1);
@@ -3994,6 +4171,8 @@ namespace vmod::vm
 			got = get(-1, *value);
 
 			sq_pop(impl, 1);
+		} else {
+			value->reset();
 		}
 
 		sq_pop(impl, 1);
@@ -4183,7 +4362,7 @@ namespace vmod::vm
 			return sq_throwerror(vm, _SC("failed to get name"));
 		}
 
-		gsdk::ScriptVariant_t value;
+		gsdk::ScriptVariant_t value{};
 		if(delegate_impl->interface->Get(name, value)) {
 			if(!actual_vm->push(value)) {
 				return sq_throwerror(vm, _SC("failed to push value"));

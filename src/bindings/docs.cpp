@@ -458,6 +458,7 @@ namespace vmod::bindings::docs
 				case gsdk::FIELD_BOOLEAN:
 				return "bool"sv;
 				case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
+				return "instance"sv;
 				case gsdk::FIELD_HSCRIPT:
 				return "handle"sv;
 				case gsdk::FIELD_POSITION_VECTOR:
@@ -494,7 +495,7 @@ namespace vmod::bindings::docs
 				return "edict"sv;
 				case gsdk::FIELD_FUNCTION: {
 					if(vscript) {
-						return "function *"sv;
+						return "function"sv;
 					} else if(flags & gsdk::FTYPEDESC_OUTPUT) {
 						return "output"sv;
 					} else if(flags & gsdk::FTYPEDESC_FUNCTIONTABLE) {
@@ -504,13 +505,23 @@ namespace vmod::bindings::docs
 					}
 				}
 				case gsdk::FIELD_CLASSPTR:
-				return "object *"sv;
+				return "pointer"sv;
 				case gsdk::FIELD_COLOR32:
 				return "color32"sv;
-				case gsdk::FIELD_EMBEDDED:
-				return "struct"sv;
-				case gsdk::FIELD_CUSTOM:
-				return "<<unknown>>"sv;
+				case gsdk::FIELD_EMBEDDED: {
+					if(vscript) {
+						return "table"sv;
+					} else {
+						return "struct"sv;
+					}
+				}
+				case gsdk::FIELD_CUSTOM: {
+					if(vscript) {
+						return "array"sv;
+					} else {
+						return "<<unknown>>"sv;
+					}
+				}
 				case gsdk::FIELD_TYPEUNKNOWN:
 				return "<<unknown>>"sv;
 				default:
@@ -922,7 +933,7 @@ namespace vmod::bindings::docs
 		write_file(doc_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
 	}
 
-	void write(std::string &file, std::size_t depth, vscript::handle_ref enum_table, write_enum_how how) noexcept
+	void write(std::string &file, std::size_t depth, vscript::table_handle_ref enum_table, write_enum_how how) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 

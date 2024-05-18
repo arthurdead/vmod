@@ -35,13 +35,13 @@ namespace vmod::bindings::cvar
 	private:
 		static vscript::singleton_class_desc<singleton> desc;
 
-		static vscript::handle_ref script_create_cvar(std::string_view name, std::string_view value) noexcept;
-		static vscript::handle_ref script_create_concmd(std::string_view name, vscript::handle_wrapper callback) noexcept;
-		vscript::handle_ref script_find_cvar(std::string &&name) noexcept;
+		static vscript::instance_handle_ref script_create_cvar(std::string_view name, std::string_view value) noexcept;
+		static vscript::instance_handle_ref script_create_concmd(std::string_view name, vscript::func_handle_ref callback) noexcept;
+		vscript::instance_handle_ref script_find_cvar(std::string &&name) noexcept;
 
-		vscript::handle_ref script_find_concmd(std::string &&name) noexcept;
+		vscript::instance_handle_ref script_find_concmd(std::string &&name) noexcept;
 
-		vscript::handle_wrapper flags_table{};
+		vscript::table_handle_wrapper flags_table{};
 
 		std::unordered_map<std::string, std::unique_ptr<convar_ref>> convars;
 		std::unordered_map<std::string, std::unique_ptr<concommand_ref>> concommands;

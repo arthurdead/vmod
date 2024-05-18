@@ -45,7 +45,7 @@ namespace vmod
 		inline bool operator!() const noexcept
 		{ return !loaded; }
 
-		inline vscript::handle_ref instance() noexcept
+		inline vscript::instance_handle_ref instance() noexcept
 		{ return instance_; }
 
 	private:
@@ -80,7 +80,7 @@ namespace vmod
 
 		std::unordered_map<std::filesystem::path, std::unique_ptr<plugin>> plugins;
 
-		vscript::handle_wrapper instance_{};
+		vscript::instance_handle_wrapper instance_{};
 
 	private:
 		mod() = delete;

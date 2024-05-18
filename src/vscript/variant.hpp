@@ -22,6 +22,9 @@ namespace vmod::vscript
 
 	class handle_ref;
 
+	template <gsdk::ScriptHandleType_t>
+	class typed_handle_ref;
+
 	//TODO!!! replace all raw HSCRIPT with handle_wrapper
 	class handle_wrapper
 	{
@@ -109,15 +112,41 @@ namespace vmod::vscript
 
 		operator handle_ref() noexcept;
 
-	private:
+	protected:
 		gsdk::HSCRIPT object{gsdk::INVALID_HSCRIPT};
 		bool free_{false};
 		gsdk::ScriptHandleType_t type_{gsdk::HANDLETYPE_UNKNOWN};
 	};
 
+	template <gsdk::ScriptHandleType_t T>
+	class typed_handle_wrapper : public handle_wrapper
+	{
+	public:
+		using handle_wrapper::handle_wrapper;
+		using handle_wrapper::operator=;
+
+		typed_handle_wrapper(typed_handle_ref<T> &&) = delete;
+		typed_handle_wrapper &operator=(typed_handle_ref<T> &&) = delete;
+		typed_handle_wrapper(const typed_handle_ref<T> &) = delete;
+		typed_handle_wrapper &operator=(const typed_handle_ref<T> &) = delete;
+
+		operator typed_handle_ref<T>() noexcept;
+	};
+
+	using unknown_handle_wrapper = typed_handle_wrapper<gsdk::HANDLETYPE_UNKNOWN>;
+	using instance_handle_wrapper = typed_handle_wrapper<gsdk::HANDLETYPE_INSTANCE>;
+	using table_handle_wrapper = typed_handle_wrapper<gsdk::HANDLETYPE_TABLE>;
+	using array_handle_wrapper = typed_handle_wrapper<gsdk::HANDLETYPE_ARRAY>;
+	using scope_handle_wrapper = typed_handle_wrapper<gsdk::HANDLETYPE_SCOPE>;
+	using script_handle_wrapper = typed_handle_wrapper<gsdk::HANDLETYPE_SCRIPT>;
+	using func_handle_wrapper = typed_handle_wrapper<gsdk::HANDLETYPE_FUNCTION>;
+
 	class handle_ref
 	{
 		friend class handle_wrapper;
+
+		template <gsdk::ScriptHandleType_t T>
+		friend class typed_handle_wrapper;
 
 	public:
 		handle_ref() noexcept = default;
@@ -159,6 +188,9 @@ namespace vmod::vscript
 		{
 			switch(other.m_type) {
 			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
+			case gsdk::FIELD_EMBEDDED:
+			case gsdk::FIELD_CUSTOM:
+			case gsdk::FIELD_FUNCTION:
 			case gsdk::FIELD_HSCRIPT:
 			object = other.m_object;
 			break;
@@ -224,7 +256,7 @@ namespace vmod::vscript
 		inline explicit operator bool() const noexcept
 		{ return (object && object != gsdk::INVALID_HSCRIPT); }
 
-	private:
+	protected:
 		gsdk::HSCRIPT object{gsdk::INVALID_HSCRIPT};
 		gsdk::ScriptHandleType_t type_{gsdk::HANDLETYPE_UNKNOWN};
 	};
@@ -232,6 +264,44 @@ namespace vmod::vscript
 	inline handle_wrapper::operator handle_ref() noexcept
 	{
 		handle_ref tmp;
+		tmp.object = object;
+		tmp.type_ = type_;
+		return tmp;
+	}
+
+	template <gsdk::ScriptHandleType_t T>
+	class typed_handle_ref : public handle_ref
+	{
+	public:
+		using handle_ref::handle_ref;
+		using handle_ref::operator=;
+
+		typed_handle_ref(typed_handle_wrapper<T> &&) = delete;
+		typed_handle_ref &operator=(typed_handle_wrapper<T> &&) = delete;
+		inline typed_handle_ref(const typed_handle_wrapper<T> &other) noexcept
+			: handle_ref{other}
+		{
+		}
+		inline typed_handle_ref &operator=(const typed_handle_wrapper<T> &other) noexcept
+		{
+			object = *other;
+			type_ = other.type();
+			return *this;
+		}
+	};
+
+	using unknown_handle_ref = typed_handle_ref<gsdk::HANDLETYPE_UNKNOWN>;
+	using instance_handle_ref = typed_handle_ref<gsdk::HANDLETYPE_INSTANCE>;
+	using table_handle_ref = typed_handle_ref<gsdk::HANDLETYPE_TABLE>;
+	using array_handle_ref = typed_handle_ref<gsdk::HANDLETYPE_ARRAY>;
+	using scope_handle_ref = typed_handle_ref<gsdk::HANDLETYPE_SCOPE>;
+	using script_handle_ref = typed_handle_ref<gsdk::HANDLETYPE_SCRIPT>;
+	using func_handle_ref = typed_handle_ref<gsdk::HANDLETYPE_FUNCTION>;
+
+	template <gsdk::ScriptHandleType_t T>
+	inline typed_handle_wrapper<T>::operator typed_handle_ref<T>() noexcept
+	{
+		typed_handle_ref<T> tmp;
 		tmp.object = object;
 		tmp.type_ = type_;
 		return tmp;
@@ -322,11 +392,11 @@ namespace vmod::vscript
 	namespace detail
 	{
 		template <typename T>
-		concept initialize_specialized =
-			requires () { static_cast<void(*)(gsdk::ScriptVariant_t &, const std::remove_cvref_t<std::decay_t<T>> &)>(initialize_impl); } ||
-			requires () { static_cast<void(*)(gsdk::ScriptVariant_t &, std::remove_cvref_t<std::decay_t<T>> &)>(initialize_impl); } ||
-			requires () { static_cast<void(*)(gsdk::ScriptVariant_t &, std::remove_cvref_t<std::decay_t<T>>)>(initialize_impl); } ||
-			requires () { static_cast<void(*)(gsdk::ScriptVariant_t &, std::remove_cvref_t<std::decay_t<T>> &&)>(initialize_impl); }
+		concept initialize_data_specialized =
+			requires () { static_cast<void(*)(gsdk::ScriptVariant_t &, const std::remove_cvref_t<std::decay_t<T>> &)>(initialize_data_impl); } ||
+			requires () { static_cast<void(*)(gsdk::ScriptVariant_t &, std::remove_cvref_t<std::decay_t<T>> &)>(initialize_data_impl); } ||
+			requires () { static_cast<void(*)(gsdk::ScriptVariant_t &, std::remove_cvref_t<std::decay_t<T>>)>(initialize_data_impl); } ||
+			requires () { static_cast<void(*)(gsdk::ScriptVariant_t &, std::remove_cvref_t<std::decay_t<T>> &&)>(initialize_data_impl); }
 		;
 
 		template <typename T>
@@ -358,25 +428,27 @@ namespace vmod::vscript
 
 		template <typename T>
 		concept is_vscript_variant = std::is_base_of_v<gsdk::ScriptVariant_t, std::decay_t<T>>;
-	}
 
-	template <typename T>
-	inline void initialize(gsdk::ScriptVariant_t &var, T &&value) noexcept
-	{
-		std::memset(var.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
+		template <typename T>
+		inline void initialize_data(gsdk::ScriptVariant_t &var, T &&value) noexcept
+		{
+			using decayed_t = std::decay_t<T>;
 
-		using decayed_t = std::decay_t<T>;
+			if constexpr(!std::is_base_of_v<gsdk::ScriptVariant_t, decayed_t>) {
+				std::memset(var.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
+			}
 
-		if constexpr(detail::initialize_specialized<T>) {
-			initialize_impl(var, std::forward<T>(value));
-		} else if constexpr(!std::is_same_v<decayed_t, gsdk::HSCRIPT> && std::is_pointer_v<decayed_t>) {
-			initialize_impl(var, static_cast<void *>(value));
-		} else if constexpr(std::is_enum_v<decayed_t>) {
-			initialize_impl(var, static_cast<std::underlying_type_t<T>>(value));
-		} else if constexpr(std::is_base_of_v<gsdk::ScriptVariant_t, decayed_t>) {
-			var = std::forward<T>(value);
-		} else {
-			static_assert(false_t<T>::value);
+			if constexpr(detail::initialize_data_specialized<T>) {
+				initialize_data_impl(var, std::forward<T>(value));
+			} else if constexpr(!std::is_same_v<decayed_t, gsdk::HSCRIPT> && std::is_pointer_v<decayed_t>) {
+				initialize_data_impl(var, static_cast<void *>(value));
+			} else if constexpr(std::is_enum_v<decayed_t>) {
+				initialize_data_impl(var, static_cast<std::underlying_type_t<T>>(value));
+			} else if constexpr(std::is_base_of_v<gsdk::ScriptVariant_t, decayed_t>) {
+				std::memcpy(var.m_data, value.m_data, sizeof(gsdk::ScriptVariant_t::m_data));
+			} else {
+				static_assert(false_t<T>::value);
+			}
 		}
 	}
 
@@ -409,16 +481,6 @@ namespace vmod::vscript
 
 		using BVT = std::conditional_t<isconst, const gsdk::ScriptVariant_t, gsdk::ScriptVariant_t>;
 		BVT *target_var{&var};
-
-		gsdk::ScriptVariant_t tmp_var;
-		if(target_var->m_type == gsdk::FIELD_HSCRIPT && target_var->m_object && target_var->m_object != gsdk::INVALID_HSCRIPT) {
-			tmp_var.m_type = var.m_type;
-			tmp_var.m_flags = (var.m_flags & ~gsdk::SV_FREE);
-			std::memcpy(tmp_var.m_data, var.m_data, sizeof(gsdk::ScriptVariant_t::m_data));
-			if(detail::get_scalar(var.m_object, &tmp_var)) {
-				target_var = &tmp_var;
-			}
-		}
 
 		using decayed_t = std::decay_t<T>;
 
@@ -524,9 +586,16 @@ namespace vmod::vscript
 	template <typename T>
 	inline void to_variant(gsdk::ScriptVariant_t &var, T &&value) noexcept
 	{
-		var.m_type = static_cast<short>(type_to_field<std::decay_t<T>>());
+		using decayed_t = std::decay_t<T>;
+
+		var.m_type = static_cast<short>(type_to_field<decayed_t>());
 		var.m_flags = gsdk::SV_NOFLAGS;
-		initialize(var, std::forward<T>(value));
+		detail::initialize_data(var, std::forward<T>(value));
+
+		if constexpr(std::is_base_of_v<gsdk::ScriptVariant_t, decayed_t> && std::is_rvalue_reference_v<T>) {
+			value.m_flags &= ~gsdk::SV_FREE;
+			value.reset();
+		}
 	}
 
 	template <typename T>
@@ -556,6 +625,13 @@ namespace std
 	struct hash<vmod::vscript::handle_ref>
 	{
 		inline size_t operator()(vmod::vscript::handle_ref ptr) const noexcept
+		{ return hash<gsdk::HSCRIPT>{}(*ptr); }
+	};
+
+	template <gsdk::ScriptHandleType_t T>
+	struct hash<vmod::vscript::typed_handle_ref<T>>
+	{
+		inline size_t operator()(vmod::vscript::typed_handle_ref<T> ptr) const noexcept
 		{ return hash<gsdk::HSCRIPT>{}(*ptr); }
 	};
 }

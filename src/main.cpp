@@ -43,6 +43,7 @@
 #include "bindings/strtables/singleton.hpp"
 #include "bindings/ent/bindings.hpp"
 #include "bindings/ent/sendtable.hpp"
+#include "bindings/net/singleton.hpp"
 
 namespace vmod
 {
@@ -107,6 +108,28 @@ namespace vmod
 
 #ifdef __VMOD_SQUIRREL_SERVER_INIT_LATE_SCRIPT_HEADER_INCLUDED
 	static std::string __squirrel_vmod_server_init_late_script{reinterpret_cast<const char *>(detail::__squirrel_vmod_server_init_late_script_data), sizeof(detail::__squirrel_vmod_server_init_late_script_data)};
+#endif
+}
+
+namespace vmod
+{
+	namespace detail
+	{
+	#if __has_include("vmod_init_late.nut.h")
+	#ifdef __clang__
+		#pragma clang diagnostic push
+		#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+	#endif
+		#include "vmod_init_late.nut.h"
+	#ifdef __clang__
+		#pragma clang diagnostic pop
+	#endif
+		#define __VMOD_SQUIRREL_INIT_LATE_SCRIPT_HEADER_INCLUDED
+	#endif
+	}
+
+#ifdef __VMOD_SQUIRREL_INIT_LATE_SCRIPT_HEADER_INCLUDED
+	static std::string __squirrel_vmod_init_late_script{reinterpret_cast<const char *>(detail::__squirrel_vmod_init_late_script_data), sizeof(detail::__squirrel_vmod_init_late_script_data)};
 #endif
 }
 
@@ -222,7 +245,7 @@ namespace vmod
 	static void(gsdk::IScriptVM::*RegisterFunction)(gsdk::ScriptFunctionBinding_t *) {nullptr};
 	static bool(gsdk::IScriptVM::*RegisterClass)(gsdk::ScriptClassDesc_t *) {nullptr};
 	static gsdk::HSCRIPT(gsdk::IScriptVM::*RegisterInstance)(gsdk::ScriptClassDesc_t *, void *) {nullptr};
-	static bool(gsdk::IScriptVM::*SetValue_var)(gsdk::HSCRIPT, const char *, const gsdk::ScriptVariant_t &) {nullptr};
+	static bool(gsdk::IScriptVM::*SetValue_var)(gsdk::HSCRIPT, const char *, gsdk::ScriptVariant_t &) {nullptr};
 	static bool(gsdk::IScriptVM::*SetValue_str)(gsdk::HSCRIPT, const char *, const char *) {nullptr};
 #if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V1)
 	static gsdk::ScriptClassDesc_t **sv_classdesc_pHead{nullptr};
@@ -256,6 +279,29 @@ namespace vmod
 	{
 		using namespace std::literals::string_view_literals;
 
+	#if 0
+		if(server_vs_error_cb) {
+			return server_vs_error_cb(lvl, txt);
+		} else {
+			switch(lvl) {
+				case gsdk::SCRIPT_LEVEL_ERROR: {
+					error("%s"sv, txt);
+				} break;
+				case gsdk::SCRIPT_LEVEL_WARNING: {
+					warning("%s"sv, txt);
+				} break;
+			#ifndef __clang__
+				default: break;
+			#endif
+			}
+
+			return false;
+		}
+	#else
+		if(server_vs_error_cb) {
+			server_vs_error_cb(lvl, txt);
+		}
+
 		switch(lvl) {
 			case gsdk::SCRIPT_LEVEL_ERROR: {
 				error("%s"sv, txt);
@@ -268,12 +314,8 @@ namespace vmod
 		#endif
 		}
 
-		bool ret{false};
-		if(server_vs_error_cb) {
-			ret = server_vs_error_cb(lvl, txt);
-		}
-
-		return ret;
+		return false;
+	#endif
 	}
 
 	static bool invalid_color(const gsdk::Color &clr) noexcept
@@ -426,7 +468,7 @@ namespace vmod
 		(pthis->*DestroyVM_original)(vm);
 	}
 
-	#define __VMOD_FORCE_DUMP_ALL
+	//#define __VMOD_FORCE_DUMP_ALL
 
 	bool main::dump_scripts() const noexcept
 	{
@@ -905,9 +947,9 @@ namespace vmod
 		return ret;
 	}
 
-	static bool (gsdk::IScriptVM::*SetValue_var_original)(gsdk::HSCRIPT, const char *, const gsdk::ScriptVariant_t &value) {nullptr};
+	static bool (gsdk::IScriptVM::*SetValue_var_original)(gsdk::HSCRIPT, const char *, gsdk::ScriptVariant_t &value) {nullptr};
 	static detour<decltype(SetValue_var)> SetValue_var_detour;
-	static bool SetValue_var_detour_callback(gsdk::IScriptVM *vm, gsdk::HSCRIPT scope, const char *name, const gsdk::ScriptVariant_t &value)
+	static bool SetValue_var_detour_callback(gsdk::IScriptVM *vm, gsdk::HSCRIPT scope, const char *name, gsdk::ScriptVariant_t &value)
 	{
 		bool ret;
 
@@ -918,7 +960,7 @@ namespace vmod
 		}
 
 		if(scope == nullptr) {
-			if((value.m_type == gsdk::FIELD_HSCRIPT || value.m_type == gsdk::FIELD_HSCRIPT_NEW_INSTANCE) && last_registered_instance.instance == value.m_object) {
+			if(value.is_object() && last_registered_instance.instance == value.m_object) {
 				if(!main::instance().vm()) {
 					auto &map{internal_vscript_values};
 					map.emplace(name, last_registered_instance.desc);
@@ -1254,23 +1296,26 @@ namespace vmod
 		exe_filename = exe_filename.filename();
 		exe_filename.replace_extension();
 
-		srcds_executable = (exe_filename == "srcds_linux"sv || exe_filename == "srcds_linux64"sv);
-
-	#if GSDK_ENGINE == GSDK_ENGINE_PORTAL2
-		if(exe_filename != "portal2_linux"sv) {
+		if(exe_filename == "srcds_linux"sv || exe_filename == "srcds_linux64"sv) {
+			environment = environment::dedicated_server;
+		} else if(
+		#if GSDK_ENGINE == GSDK_ENGINE_PORTAL2
+			exe_filename == "portal2_linux"sv
+		#elif GSDK_ENGINE == GSDK_ENGINE_TF2
+			exe_filename == "tf_linux64"sv
+		#else
+			exe_filename == "hl2_linux"sv
+		#endif
+		) {
+			environment = environment::client;
+		} else {
 			std::cout << "\033[0;31m"sv << "vmod: unsupported exe filename: '"sv << exe_filename << "'\n"sv << "\033[0m"sv;
 			return false;
 		}
-	#else
-		if(exe_filename != "hl2_linux"sv && !srcds_executable) {
-			std::cout << "\033[0;31m"sv << "vmod: unsupported exe filename: '"sv << exe_filename << "'\n"sv << "\033[0m"sv;
-			return false;
-		}
-	#endif
 
 	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 		std::string_view tier0_lib_name;
-		if(srcds_executable) {
+		if(environment == environment::dedicated_server) {
 			tier0_lib_name = "libtier0_srv.so"sv;
 		} else {
 			tier0_lib_name = "libtier0.so"sv;
@@ -1302,7 +1347,7 @@ namespace vmod
 	#endif
 
 		std::string_view launcher_lib_name;
-		if(srcds_executable) {
+		if(environment == environment::dedicated_server) {
 			launcher_lib_name = "dedicated_srv.so"sv;
 		} else {
 			launcher_lib_name = "launcher.so"sv;
@@ -1448,38 +1493,38 @@ namespace vmod
 
 		gsdk::ScriptLanguage_t script_language{gsdk::SL_SQUIRREL};
 
-		std::filesystem::path base_scripts_dir{root_dir_};
-		base_scripts_dir /= "base"sv;
+		base_scripts_dir_ = root_dir_;
+		base_scripts_dir_ /= "base"sv;
 
 		switch(script_language) {
 			case gsdk::SL_NONE: break;
 			case gsdk::SL_GAMEMONKEY: {
 				scripts_extension_ = ".gm"sv;
-				base_scripts_dir /= "gamemonkey"sv;
+				base_scripts_dir_ /= "gamemonkey"sv;
 			} break;
 			case gsdk::SL_SQUIRREL: {
 				scripts_extension_ = ".nut"sv;
-				base_scripts_dir /= "squirrel"sv;
+				base_scripts_dir_ /= "squirrel"sv;
 			} break;
 			case gsdk::SL_LUA: {
 				scripts_extension_ = ".lua"sv;
-				base_scripts_dir /= "lua"sv;
+				base_scripts_dir_ /= "lua"sv;
 			} break;
 			case gsdk::SL_PYTHON: {
 				scripts_extension_ = ".py"sv;
-				base_scripts_dir /= "python"sv;
+				base_scripts_dir_ /= "python"sv;
 			} break;
 		#if defined __VMOD_USING_CUSTOM_VM
 			#ifdef __VMOD_ENABLE_SOURCEPAWN
 			case gsdk::SL_SOURCEPAWN: {
 				scripts_extension_ = ".sp"sv;
-				base_scripts_dir /= "sourcepawn"sv;
+				base_scripts_dir_ /= "sourcepawn"sv;
 			} break;
 			#endif
 			#ifdef __VMOD_ENABLE_JS
 			case gsdk::SL_JAVASCRIPT: {
 				scripts_extension_ = ".js"sv;
-				base_scripts_dir /= "javascript"sv;
+				base_scripts_dir_ /= "javascript"sv;
 			} break;
 			#endif
 		#endif
@@ -1653,7 +1698,7 @@ namespace vmod
 			RegisterClass = reinterpret_cast<decltype(RegisterClass)>(&vm::squirrel::RegisterClass_nonvirtual);
 			RegisterInstance = reinterpret_cast<decltype(RegisterInstance)>(&vm::squirrel::RegisterInstance_impl_nonvirtual);
 			SetValue_str = reinterpret_cast<decltype(SetValue_str)>(static_cast<bool(vm::squirrel::*)(gsdk::HSCRIPT, const char *, const char *)>(&vm::squirrel::SetValue_nonvirtual));
-			SetValue_var = reinterpret_cast<decltype(SetValue_var)>(static_cast<bool(vm::squirrel::*)(gsdk::HSCRIPT, const char *, const gsdk::ScriptVariant_t &)>(&vm::squirrel::SetValue_impl_nonvirtual));
+			SetValue_var = reinterpret_cast<decltype(SetValue_var)>(static_cast<bool(vm::squirrel::*)(gsdk::HSCRIPT, const char *, gsdk::ScriptVariant_t &)>(&vm::squirrel::SetValue_impl_nonvirtual));
 			PrintFunc = vm::squirrel::print_func;
 			ErrorFunc = vm::squirrel::error_func;
 
@@ -2090,7 +2135,11 @@ namespace vmod
 			return false;
 		}
 
-		std::filesystem::path base_script_path{base_scripts_dir};
+		if(!bindings::net::singleton::instance().initialize()) {
+			return false;
+		}
+
+		std::filesystem::path base_script_path{base_scripts_dir_};
 		base_script_path /= "vmod_base"sv;
 		base_script_path.replace_extension(scripts_extension_);
 
@@ -2121,37 +2170,43 @@ namespace vmod
 			return false;
 		}
 
-	#ifdef __VMOD_SQUIRREL_OVERRIDE_SERVER_INIT_SCRIPT
-		std::filesystem::path server_init_script_path{base_scripts_dir};
-		server_init_script_path /= "vmod_server_init"sv;
-		server_init_script_path.replace_extension(scripts_extension_);
-
-		bool server_init_script_from_file{false};
-
-		if(!compile_internal_script(vm_, server_init_script_path,
-		#ifdef __VMOD_SQUIRREL_SERVER_INIT_SCRIPT_HEADER_INCLUDED
-		(script_language == gsdk::SL_SQUIRREL) ? reinterpret_cast<const unsigned char *>(__squirrel_vmod_server_init_script.c_str()) : nullptr
-		#else
-		nullptr
-		#endif
-		, server_init_script, server_init_script_from_file)) {
-			return false;
-		}
-	#else
-		if(script_language == gsdk::SL_SQUIRREL) {
-			server_init_script = vm_->CompileScript(reinterpret_cast<const char *>(g_Script_vscript_server), "vscript_server.nut");
-			if(!server_init_script) {
-				error("vmod: failed to compile server init script\n"sv);
-				return false;
+		auto get_func_from_base_script{
+			[this,base_script_from_file,&base_script_path = std::as_const(base_script_path)]
+			(vscript::func_handle_wrapper &func, std::string_view funcname) noexcept -> bool {
+				func = vm_->LookupFunction(funcname.data(), *base_script_scope);
+				if(!func) {
+					if(base_script_from_file) {
+						error("vmod: base script '%s' missing '%s' function\n"sv, base_script_path.c_str(), funcname.data());
+					} else {
+						error("vmod: base script missing '%s' function\n"sv, funcname.data());
+					}
+					return false;
+				}
+				return true;
 			}
-		} else {
-			error("vmod: server init script not supported on this language\n"sv);
+		};
+
+		if(!get_func_from_base_script(to_string_func, "__vmod_to_string__"sv)) {
 			return false;
 		}
-	#endif
 
-		if(vm_->Run(*server_init_script, nullptr, true) == gsdk::SCRIPT_ERROR) {
-			error("vmod: failed to run server init script\n"sv);
+		if(!get_func_from_base_script(to_int_func, "__vmod_to_int__"sv)) {
+			return false;
+		}
+
+		if(!get_func_from_base_script(to_float_func, "__vmod_to_float__"sv)) {
+			return false;
+		}
+
+		if(!get_func_from_base_script(to_bool_func, "__vmod_to_bool__"sv)) {
+			return false;
+		}
+
+		if(!get_func_from_base_script(typeof_func, "__vmod_typeof__"sv)) {
+			return false;
+		}
+
+		if(!get_func_from_base_script(funcisg_func, "__vmod_get_func_sig__"sv)) {
 			return false;
 		}
 
@@ -2194,53 +2249,47 @@ namespace vmod
 		(reinterpret_cast<gsdk::CPortalMPGameRules *>(uninitialized_memory)->*RegisterScriptFunctionsMP)();
 	#endif
 
-		vscript_server_init_called = true;
+	#ifdef __VMOD_SQUIRREL_OVERRIDE_SERVER_INIT_SCRIPT
+		std::filesystem::path server_init_script_path{base_scripts_dir_};
+		server_init_script_path /= "vmod_server_init"sv;
+		server_init_script_path.replace_extension(scripts_extension_);
 
-		auto get_func_from_base_script{
-			[this,base_script_from_file,&base_script_path = std::as_const(base_script_path)]
-			(vscript::handle_wrapper &func, std::string_view funcname) noexcept -> bool {
-				func = vm_->LookupFunction(funcname.data(), *base_script_scope);
-				if(!func) {
-					if(base_script_from_file) {
-						error("vmod: base script '%s' missing '%s' function\n"sv, base_script_path.c_str(), funcname.data());
-					} else {
-						error("vmod: base script missing '%s' function\n"sv, funcname.data());
-					}
-					return false;
-				}
-				return true;
+		bool server_init_script_from_file{false};
+
+		if(!compile_internal_script(vm_, server_init_script_path,
+		#ifdef __VMOD_SQUIRREL_SERVER_INIT_SCRIPT_HEADER_INCLUDED
+		(script_language == gsdk::SL_SQUIRREL) ? reinterpret_cast<const unsigned char *>(__squirrel_vmod_server_init_script.c_str()) : nullptr
+		#else
+		nullptr
+		#endif
+		, server_init_script, server_init_script_from_file)) {
+			return false;
+		}
+	#else
+		if(script_language == gsdk::SL_SQUIRREL) {
+			server_init_script = vm_->CompileScript(reinterpret_cast<const char *>(g_Script_vscript_server), "vscript_server.nut");
+			if(!server_init_script) {
+				error("vmod: failed to compile server init script\n"sv);
+				return false;
 			}
-		};
+		} else {
+			error("vmod: server init script not supported on this language\n"sv);
+			return false;
+		}
+	#endif
 
-		if(!get_func_from_base_script(to_string_func, "__vmod_to_string__"sv)) {
+		if(vm_->Run(*server_init_script, nullptr, true) == gsdk::SCRIPT_ERROR) {
+			error("vmod: failed to run server init script\n"sv);
 			return false;
 		}
 
-		if(!get_func_from_base_script(to_int_func, "__vmod_to_int__"sv)) {
-			return false;
-		}
-
-		if(!get_func_from_base_script(to_float_func, "__vmod_to_float__"sv)) {
-			return false;
-		}
-
-		if(!get_func_from_base_script(to_bool_func, "__vmod_to_bool__"sv)) {
-			return false;
-		}
-
-		if(!get_func_from_base_script(typeof_func, "__vmod_typeof__"sv)) {
-			return false;
-		}
-
-		if(!get_func_from_base_script(funcisg_func, "__vmod_get_func_sig__"sv)) {
-			return false;
-		}
+		vscript_server_init_called = true;
 
 		if(!binding_mods_late()) {
 			return false;
 		}
 
-		std::filesystem::path server_init_late_script_path{base_scripts_dir};
+		std::filesystem::path server_init_late_script_path{base_scripts_dir_};
 		server_init_late_script_path /= "vmod_server_init_late"sv;
 		server_init_late_script_path.replace_extension(scripts_extension_);
 
@@ -2485,7 +2534,7 @@ namespace vmod
 							file += enum_name;
 							file += "\n{\n"sv;
 
-							vscript::handle_wrapper enum_table{std::move(value)};
+							vscript::table_handle_ref enum_table{value};
 							if(enum_table) {
 								bindings::docs::write(file, 1, enum_table, enum_name[0] == 'F' ? bindings::docs::write_enum_how::flags : bindings::docs::write_enum_how::normal);
 							}
@@ -2544,7 +2593,7 @@ namespace vmod
 							vscript::variant value;
 							it = vm_->GetKeyValue(func_table.m_object, it, &key, &value);
 
-							vscript::handle_wrapper arr{value.get<vscript::handle_wrapper>()};
+							vscript::array_handle_ref arr{value.get<vscript::array_handle_ref>()};
 							if(vm_->GetArrayCount(*arr) != 3) {
 								continue;
 							}
@@ -3067,99 +3116,6 @@ namespace vmod
 		);
 
 	#ifndef GSDK_NO_SYMBOLS
-		vmod_auto_dump_entity_vtables.initialize("vmod_auto_dump_entity_vtables"sv, false);
-
-		vmod_dump_entity_vtables.initialize("vmod_dump_entity_vtables"sv,
-			[this](const gsdk::CCommand &) noexcept -> void {
-				if(!symbols_available) {
-					error("vmod: no symbols available\n"sv);
-					return;
-				}
-
-				const auto &sv_symbols{server_lib.symbols()};
-
-				std::filesystem::path dump_dir{root_dir_/"dumps"sv/"vtables"sv};
-
-				std::error_code ec;
-				std::filesystem::create_directories(dump_dir, ec);
-
-				for(const auto &it : sv_classes) {
-					auto sv_sym_it{sv_symbols.find(it.first)};
-					if(sv_sym_it == sv_symbols.end()) {
-						error("vmod: missing '%s' symbols\n"sv, it.first.c_str());
-						continue;
-					}
-
-					const symbol_cache::class_info *class_info{dynamic_cast<const symbol_cache::class_info *>(sv_sym_it->second.get())};
-					const symbol_cache::class_info::vtable_info &vtable_info{class_info->vtable()};
-
-					std::string file;
-
-					bindings::docs::gen_date(file);
-
-					file += "class "sv;
-					file += it.first;
-
-					std::size_t start{0};
-
-					auto data_it{sv_ent_class_info.find(it.first)};
-					if(data_it != sv_ent_class_info.end()) {
-						auto map{data_it->second.datamap};
-						if(map && map->baseMap) {
-							std::string basename{map->baseMap->dataClassName};
-
-							file += " : "sv;
-							file += basename;
-							file += " (assumed based on datamap)"sv;
-
-							auto base_sym_it{sv_symbols.find(basename)};
-							if(base_sym_it != sv_symbols.end()) {
-								const symbol_cache::class_info *base_class_info{dynamic_cast<const symbol_cache::class_info *>(base_sym_it->second.get())};
-								const symbol_cache::class_info::vtable_info &base_vtable_info{base_class_info->vtable()};
-
-								start = base_vtable_info.size();
-							}
-						}
-					}
-
-					if(start >= vtable_info.size()) {
-						continue;
-					}
-
-					file += "\n{\n"sv;
-
-					for(std::size_t i{start}; i < vtable_info.size(); ++i) {
-						const auto &func_it{vtable_info[i]};
-						bindings::docs::ident(file, 1);
-
-						if(func_it.qual != sv_symbols.end()) {
-							if(func_it.qual->first != it.first) {
-								file += func_it.qual->first;
-								file += "::"sv;
-							}
-						} else {
-							file += "<<unknown>>::"sv;
-						}
-
-						if(func_it.func != class_info->end()) {
-							file += func_it.func->first;
-							file += ";\n"sv;
-						} else {
-							file += "<<unknown>>\n"sv;
-						}
-					}
-
-					file += "};"sv;
-
-					std::filesystem::path dump_path{dump_dir};
-					dump_path /= it.first;
-					dump_path.replace_extension(".txt"sv);
-
-					write_file(dump_path, reinterpret_cast<const unsigned char *>(file.c_str()), file.length());
-				}
-			}
-		);
-
 		vmod_auto_dump_entity_funcs.initialize("vmod_auto_dump_entity_funcs"sv, false);
 
 		vmod_dump_entity_funcs.initialize("vmod_dump_entity_funcs"sv,
@@ -3536,7 +3492,7 @@ namespace vmod
 		static std::string type_of_buffer;
 	}
 
-	vscript::variant main::call_to_func(vscript::handle_ref func, vscript::handle_ref value) noexcept
+	vscript::variant main::call_to_func(vscript::func_handle_ref func, vscript::handle_ref value) noexcept
 	{
 		vscript::variant ret;
 		vscript::variant args[]{
@@ -4428,6 +4384,27 @@ namespace vmod
 			return false;
 		}
 
+		std::filesystem::path vmod_init_late_script_path{base_scripts_dir_};
+		vmod_init_late_script_path /= "vmod_init_late"sv;
+		vmod_init_late_script_path.replace_extension(scripts_extension_);
+
+		bool vmod_init_late_script_from_file{false};
+
+		if(!compile_internal_script(vm_, vmod_init_late_script_path,
+		#ifdef __VMOD_SQUIRREL_INIT_LATE_SCRIPT_HEADER_INCLUDED
+		(vm_->GetLanguage() == gsdk::SL_SQUIRREL) ? reinterpret_cast<const unsigned char *>(__squirrel_vmod_init_late_script.c_str()) : nullptr
+		#else
+		nullptr
+		#endif
+		, vmod_init_late_script, vmod_init_late_script_from_file)) {
+			return false;
+		}
+
+		if(vm_->Run(*vmod_init_late_script, nullptr, true) == gsdk::SCRIPT_ERROR) {
+			error("vmod: failed to run init late script\n"sv);
+			return false;
+		}
+
 		can_gen_docs = true;
 
 		sv_engine->InsertServerCommand("exec vmod/load_late.cfg\n");
@@ -4440,7 +4417,6 @@ namespace vmod
 		vmod_auto_dump_datamaps = true;
 		vmod_auto_dump_keyvalues = true;
 		vmod_auto_dump_entity_classes = true;
-		vmod_auto_dump_entity_vtables = true;
 		vmod_auto_dump_entity_funcs = true;
 		vmod_auto_gen_docs = true;
 		vmod_auto_gen_script_docs = true;
@@ -4455,10 +4431,6 @@ namespace vmod
 		}
 
 	#ifndef GSDK_NO_SYMBOLS
-		if(vmod_auto_dump_entity_vtables.get<bool>()) {
-			vmod_dump_entity_vtables();
-		}
-
 		if(vmod_auto_dump_entity_funcs.get<bool>()) {
 			vmod_dump_entity_funcs();
 		}
@@ -4541,6 +4513,8 @@ namespace vmod
 		vm_->Frame(sv_globals->frametime);
 	#endif
 
+		bindings::net::singleton::instance().runner();
+
 		for(const auto &it : mods) {
 			it.second->game_frame(simulating);
 		}
@@ -4549,6 +4523,8 @@ namespace vmod
 	void main::unload() noexcept
 	{
 		vmod_unload_mods();
+
+		bindings::net::singleton::instance().shutdown();
 
 	#ifdef __VMOD_USING_PREPROCESSOR
 		pp.shutdown();
@@ -4595,6 +4571,8 @@ namespace vmod
 
 			server_init_script.free();
 			server_init_late_script.free();
+
+			vmod_init_late_script.free();
 
 			unbindings();
 
@@ -4659,9 +4637,6 @@ namespace vmod
 		vmod_auto_dump_entity_classes.unregister();
 
 	#ifndef GSDK_NO_SYMBOLS
-		vmod_dump_entity_vtables.unregister();
-		vmod_auto_dump_entity_vtables.unregister();
-
 		vmod_dump_entity_funcs.unregister();
 		vmod_auto_dump_entity_funcs.unregister();
 	#endif

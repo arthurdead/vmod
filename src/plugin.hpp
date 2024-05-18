@@ -23,14 +23,8 @@ namespace vmod
 		static bool bindings() noexcept;
 		static void unbindings() noexcept;
 
-		inline plugin(std::filesystem::path &&path__) noexcept
-			: path_{std::move(path__)}
-		{
-		}
-		inline plugin(const std::filesystem::path &path__) noexcept
-			: path_{path__}
-		{
-		}
+		plugin(std::filesystem::path &&path__) noexcept;
+		plugin(const std::filesystem::path &path__) noexcept;
 		~plugin() noexcept;
 
 		enum class load_status : unsigned char
@@ -44,9 +38,9 @@ namespace vmod
 		load_status reload() noexcept;
 		void unload() noexcept;
 
-		inline vscript::handle_ref instance() noexcept
+		inline vscript::instance_handle_ref instance() noexcept
 		{ return instance_; }
-		inline vscript::handle_ref private_scope() noexcept
+		inline vscript::scope_handle_ref private_scope() noexcept
 		{ return private_scope_; }
 
 		inline std::filesystem::path path() const noexcept
@@ -57,8 +51,7 @@ namespace vmod
 		inline bool operator!() const noexcept
 		{ return (!running || !script); }
 
-		static inline plugin *assumed_currently_running() noexcept
-		{ return assumed_currently_running_; }
+		static plugin *assumed_currently_running() noexcept;
 
 		class function
 		{
@@ -71,32 +64,34 @@ namespace vmod
 			{ return static_cast<bool>(func); }
 			inline bool operator!() const noexcept
 			{ return !func; }
+			inline gsdk::HSCRIPT operator*() noexcept
+			{ return *func; }
 
 			template <typename R, typename ...Args>
 			R execute(Args &&...args) noexcept;
 
+			void free() noexcept;
+
 		private:
 			function() noexcept = default;
+			function(function &&) noexcept = default;
+			function &operator=(function &&) noexcept = default;
 
 			gsdk::ScriptStatus_t execute_internal(gsdk::ScriptVariant_t &ret, const gsdk::ScriptVariant_t *args, std::size_t num_args) noexcept;
 			gsdk::ScriptStatus_t execute_internal() noexcept;
 			gsdk::ScriptStatus_t execute_internal(gsdk::ScriptVariant_t &ret) noexcept;
 			gsdk::ScriptStatus_t execute_internal(const gsdk::ScriptVariant_t *args, std::size_t num_args) noexcept;
 
-			void unload() noexcept;
-
 			inline bool valid() const noexcept
-			{ return (func && scope); }
+			{ return static_cast<bool>(func); }
 
-			vscript::handle_ref scope{};
-			vscript::handle_wrapper func{};
+			vscript::scope_handle_ref scope{};
+			vscript::func_handle_wrapper func{};
 			plugin *owner{nullptr};
 
 		private:
 			function(const function &) = delete;
 			function &operator=(const function &) = delete;
-			function(function &&) noexcept = delete;
-			function &operator=(function &&) noexcept = delete;
 		};
 
 		template <typename T>
@@ -111,15 +106,17 @@ namespace vmod
 			inline R operator()(Args ...args) noexcept
 			{ return function::execute<R, Args...>(std::forward<Args>(args)...); }
 
-		private:
 			using function::function;
+			using function::operator=;
 
+		private:
 			template <typename ER, typename ...EArgs>
 			ER execute(EArgs &&...args) = delete;
 		};
 
-	private:
-		void lookup_function(std::string_view func_name, function &func) noexcept;
+	public:
+		bool lookup_function(std::string_view func_name, function &func) noexcept;
+		static bool read_function(vscript::func_handle_ref func_hndl, function &func_obj) noexcept;
 
 	public:
 		function lookup_function(std::string_view func_name) noexcept = delete;
@@ -179,8 +176,14 @@ namespace vmod
 
 			inline plugin *owner() noexcept
 			{ return owner_plugin; }
-			inline vscript::handle_ref owner_scope() noexcept
-			{ return owner_plugin->private_scope_; }
+			inline vscript::scope_handle_ref owner_scope() noexcept
+			{
+				if(owner_plugin) {
+					return owner_plugin->private_scope_;
+				} else {
+					return nullptr;
+				}
+			}
 
 			inline owned_instance(owned_instance &&other) noexcept
 			{ operator=(std::move(other)); }
@@ -195,9 +198,13 @@ namespace vmod
 		public:
 			static vscript::class_desc<owned_instance> desc;
 
-		private:
-			void plugin_unloaded() noexcept;
+		protected:
+			virtual void free() noexcept
+			{ delete this; }
 
+			virtual void plugin_unloaded() noexcept;
+
+		private:
 			void set_plugin() noexcept;
 
 			void script_delete() noexcept;
@@ -222,7 +229,7 @@ namespace vmod
 			~callback_instance() noexcept override;
 
 		public:
-			callback_instance(callable *caller_, vscript::handle_wrapper &&callback_, bool post_) noexcept;
+			callback_instance(callable *caller_, vscript::func_handle_wrapper &&callback_, bool post_) noexcept;
 
 		public:
 			static vscript::class_desc<callback_instance> desc;
@@ -251,7 +258,7 @@ namespace vmod
 
 			void callable_destroyed() noexcept;
 
-			vscript::handle_wrapper callback;
+			vscript::func_handle_wrapper callback;
 			bool post;
 			callable *caller;
 			bool enabled;
@@ -319,7 +326,7 @@ namespace vmod
 			virtual void on_sleep() noexcept;
 
 		private:
-			using callbacks_t = std::unordered_map<vscript::handle_ref, callback_instance *>;
+			using callbacks_t = std::unordered_map<vscript::func_handle_ref, callback_instance *>;
 
 			return_value call(callbacks_t &callbacks, gsdk::ScriptVariant_t *args, std::size_t num_args, bool post, bool copyback) noexcept;
 
@@ -349,7 +356,7 @@ namespace vmod
 
 			inline scope_assume_current(plugin *pl_) noexcept
 			{
-				old_running = assumed_currently_running_;
+				old_running = assumed_currently_running();
 				if(pl_) {
 					assumed_currently_running_ = pl_;
 				}
@@ -359,8 +366,9 @@ namespace vmod
 		};
 
 		static plugin *assumed_currently_running_;
+		static std::unordered_map<std::filesystem::path, plugin *> path_plugin_map;
 
-		vscript::handle_ref script_lookup_function(std::string_view func_name) noexcept;
+		vscript::func_handle_ref script_lookup_function(std::string_view func_name) noexcept;
 		vscript::variant script_lookup_value(std::string_view val_name) noexcept;
 
 		void game_frame(bool simulating) noexcept;
@@ -373,16 +381,16 @@ namespace vmod
 		int inotify_fd{-1};
 		std::vector<int> watch_fds;
 
-		vscript::handle_wrapper instance_{};
-		vscript::handle_wrapper script{};
-		vscript::handle_wrapper private_scope_{};
-		vscript::handle_wrapper public_scope_{};
-		vscript::handle_wrapper functions_table{};
-		vscript::handle_wrapper values_table{};
+		vscript::instance_handle_wrapper instance_{};
+		vscript::script_handle_wrapper script{};
+		vscript::scope_handle_wrapper private_scope_{};
+		vscript::scope_handle_wrapper public_scope_{};
+		vscript::table_handle_wrapper functions_table{};
+		vscript::table_handle_wrapper values_table{};
 
 		bool running{false};
 
-		std::unordered_map<std::string, vscript::handle_wrapper> function_cache;
+		std::unordered_map<std::string, vscript::func_handle_wrapper> function_cache;
 
 		std::vector<owned_instance *> owned_instances;
 		std::vector<shared_instance *> shared_instances;

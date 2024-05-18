@@ -31,6 +31,7 @@ extern ffi_type ffi_type_bool;
 extern ffi_type ffi_type_cstr;
 extern ffi_type ffi_type_object_tstr;
 extern ffi_type ffi_type_ent_ptr;
+extern ffi_type ffi_type_nullptr;
 #define ffi_type_plain_tstr ffi_type_cstr
 #define ffi_type_weak_tstr ffi_type_sint
 

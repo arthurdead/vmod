@@ -53,7 +53,7 @@ namespace vmod
 		return var;
 	}
 
-	vscript::handle_ref plugin::script_lookup_function(std::string_view func_name) noexcept
+	vscript::func_handle_ref plugin::script_lookup_function(std::string_view func_name) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -130,7 +130,7 @@ namespace vmod
 	}
 
 	void plugin::owned_instance::script_delete() noexcept
-	{ delete this; }
+	{ free(); }
 
 	bool plugin::shared_instance::bindings() noexcept
 	{

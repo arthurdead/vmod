@@ -69,7 +69,7 @@ namespace vmod::bindings::cvar
 		cmd->Dispatch(cmd_args);
 	}
 
-	concommand::concommand(gsdk::ConCommand *cmd_, vscript::handle_wrapper &&callback_) noexcept
+	concommand::concommand(gsdk::ConCommand *cmd_, vscript::func_handle_wrapper &&callback_) noexcept
 		: concommand_base{cmd_}, callback{std::move(callback_)}
 	{
 	}

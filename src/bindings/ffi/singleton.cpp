@@ -316,17 +316,12 @@ namespace vmod::bindings::ffi
 		singleton_base::unbindings();
 	}
 
-	bool singleton::script_create_cif_shared(std::vector<ffi_type *> &args_types, vscript::handle_ref args) noexcept
+	bool singleton::script_create_cif_shared(std::vector<ffi_type *> &args_types, vscript::array_handle_ref args) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
-		if(!args || args == gsdk::INVALID_HSCRIPT) {
+		if(!args) {
 			vm->RaiseException("vmod: invalid args");
-			return false;
-		}
-
-		if(!vm->IsArray(*args)) {
-			vm->RaiseException("vmod: args is not a array");
 			return false;
 		}
 
@@ -347,7 +342,7 @@ namespace vmod::bindings::ffi
 		return true;
 	}
 
-	vscript::handle_ref singleton::script_create_static_cif(ffi_abi abi, ffi_type *ret, vscript::handle_wrapper args) noexcept
+	vscript::instance_handle_ref singleton::script_create_static_cif(ffi_abi abi, ffi_type *ret, vscript::array_handle_ref args) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -357,7 +352,7 @@ namespace vmod::bindings::ffi
 		}
 
 		std::vector<ffi_type *> args_types;
-		if(!script_create_cif_shared(args_types, *args)) {
+		if(!script_create_cif_shared(args_types, args)) {
 			return nullptr;
 		}
 
@@ -371,7 +366,7 @@ namespace vmod::bindings::ffi
 	}
 
 	//TODO!!! should you be able to change the abi?
-	vscript::handle_ref singleton::script_create_member_cif(ffi_type *ret, ffi_type *this_type, vscript::handle_wrapper args) noexcept
+	vscript::instance_handle_ref singleton::script_create_member_cif(ffi_type *ret, ffi_type *this_type, vscript::array_handle_ref args) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -384,7 +379,7 @@ namespace vmod::bindings::ffi
 
 		args_types.emplace_back(this_type);
 
-		if(!script_create_cif_shared(args_types, *args)) {
+		if(!script_create_cif_shared(args_types, args)) {
 			return nullptr;
 		}
 
@@ -397,7 +392,7 @@ namespace vmod::bindings::ffi
 		return cif->instance_;
 	}
 
-	bool singleton::script_create_detour_shared(mfp_or_func_t old_target, ffi_type *ret, vscript::handle_ref args, std::vector<ffi_type *> &args_types, std::vector<std::string> &args_names) noexcept
+	bool singleton::script_create_detour_shared(mfp_or_func_t old_target, ffi_type *ret, vscript::array_handle_ref args, std::vector<ffi_type *> &args_types, std::vector<std::string> &args_names) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -416,11 +411,6 @@ namespace vmod::bindings::ffi
 			return false;
 		}
 
-		if(!vm->IsArray(*args)) {
-			vm->RaiseException("vmod: args is not a array");
-			return false;
-		}
-
 		int num_args{vm->GetArrayCount(*args)};
 
 		bool member{!args_types.empty()};
@@ -436,8 +426,8 @@ namespace vmod::bindings::ffi
 
 			ffi_type *arg_type{nullptr};
 
-			if(value.m_type == gsdk::FIELD_HSCRIPT || value.m_type == gsdk::FIELD_HSCRIPT_NEW_INSTANCE) {
-				vscript::handle_wrapper value_obj{std::move(value)};
+			if(value.is_object()) {
+				vscript::handle_ref value_obj{value};
 				if(vm->IsTable(*value_obj)) {
 					if(vm->GetNumTableEntries(*value_obj) != 2) {
 						vm->RaiseException("vmod: arg %i has invalid table", i);
@@ -492,7 +482,7 @@ namespace vmod::bindings::ffi
 	}
 
 	//TODO!!! should you be able to change the abi?
-	vscript::handle_ref singleton::script_create_detour_member(mfp_or_func_t old_target, ffi_type *ret, ffi_type *this_type, vscript::handle_wrapper args) noexcept
+	vscript::instance_handle_ref singleton::script_create_detour_member(mfp_or_func_t old_target, ffi_type *ret, ffi_type *this_type, vscript::array_handle_ref args) noexcept
 	{
 		using namespace std::literals::string_literals;
 
@@ -508,7 +498,7 @@ namespace vmod::bindings::ffi
 
 		args_types.emplace_back(this_type);
 
-		if(!script_create_detour_shared(old_target, ret, *args, args_types, args_names)) {
+		if(!script_create_detour_shared(old_target, ret, args, args_types, args_names)) {
 			return nullptr;
 		}
 
@@ -535,14 +525,14 @@ namespace vmod::bindings::ffi
 		return det->instance_;
 	}
 
-	vscript::handle_ref singleton::script_create_detour_static(mfp_or_func_t old_target, ffi_abi abi, ffi_type *ret, vscript::handle_wrapper args) noexcept
+	vscript::instance_handle_ref singleton::script_create_detour_static(mfp_or_func_t old_target, ffi_abi abi, ffi_type *ret, vscript::array_handle_ref args) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
 		std::vector<ffi_type *> args_types;
 		std::vector<std::string> args_names;
 
-		if(!script_create_detour_shared(old_target, ret, *args, args_types, args_names)) {
+		if(!script_create_detour_shared(old_target, ret, args, args_types, args_names)) {
 			return nullptr;
 		}
 

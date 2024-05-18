@@ -73,6 +73,12 @@ ffi_type ffi_type_ent_ptr{
 	FFI_TYPE_POINTER,
 	nullptr
 };
+ffi_type ffi_type_nullptr{
+	sizeof(nullptr),
+	alignof(nullptr),
+	FFI_TYPE_POINTER,
+	nullptr
+};
 
 namespace vmod::ffi
 {
@@ -145,7 +151,7 @@ namespace vmod::ffi
 
 	void ptr_to_script_var(void *ptr, ffi_type *type, gsdk::ScriptVariant_t &var) noexcept
 	{
-		std::memset(var.m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
+		var.reset();
 
 		if(type == &ffi_type_ent_ptr) {
 			var.m_object = (*static_cast<gsdk::CBaseEntity **>(ptr))->GetScriptInstance();

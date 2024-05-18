@@ -24,7 +24,8 @@ cpp_args = [
 cpp_args += [
 	'-Wno-padded',
 	'-Wno-switch-enum',
-	'-Wno-conversion'
+	'-Wno-conversion',
+	'-Wno-error=noexcept'
 ]
 
 cpp_args += [
@@ -87,7 +88,7 @@ endif
 engine_dir = get_option('engine_dir')
 game = get_option('game')
 
-gsdk_cpp_args = []
+gsdk_cpp_args = ['-DGSDK_ENVIRONMENT=GSDK_ENVIRONMENT_SERVER']
 
 #INFO!!! keep these synced with gsdk/config.hpp
 if game == 'portal2'
@@ -109,16 +110,6 @@ else
 	error('unknown game')
 endif
 
-dedicated = game != 'portal2'
-
-if game == 'portal2' and dedicated
-	error('portal2 doenst support dedicated')
-endif
-
-if not dedicated
-	no_symbols = true
-endif
-
 game_dir = join_paths(engine_dir,game)
 
 if compiler.sizeof('void *') == 8
@@ -130,6 +121,12 @@ elif engine_branch == '2010' and engine_branch_ver >= 1
 else
 	engine_bin = join_paths(engine_dir,'bin')
 	game_bin = join_paths(game_dir,'bin')
+endif
+
+dedicated = true
+
+if not dedicated
+	no_symbols = true
 endif
 
 addons = join_paths(game_dir,'addons')
@@ -265,7 +262,8 @@ vmod_dependencies = [
 	squirrel.get_variable('squirrel_dep'),
 	squirrel.get_variable('squirrel_internal_dep'),
 	steamworks.get_variable('steamworks_dep'),
-	steam_api
+	steam_api,
+	dependency('mariadb')
 ]
 
 if enable_preprocessor
@@ -354,6 +352,19 @@ if xxd_exe.found()
 	vmod_dependencies += [squirrel_vmod_server_init_late_script]
 endif
 
+squirrel_vmod_init_late_script_src = files('src/squirrel/vmod_init_late.nut')
+
+if xxd_exe.found()
+	squirrel_vmod_init_late_script = declare_dependency(
+		sources: xxd_named.process(
+			squirrel_vmod_init_late_script_src,
+			extra_args: '__squirrel_vmod_init_late_script_data'
+		)
+	)
+
+	vmod_dependencies += [squirrel_vmod_init_late_script]
+endif
+
 if engine_dir != ''
 	tier0_lib_name = 'libtier0.so'
 	if dedicated
@@ -422,6 +433,9 @@ sources = [
 		'src/bindings/docs.cpp',
 		'src/bindings/singleton.cpp',
 		'src/bindings/instance.cpp',
+		'src/bindings/net/singleton.cpp',
+		'src/bindings/net/mysql.cpp',
+		'src/bindings/net/bindings.cpp',
 		'src/ffi.cpp',
 		'src/hacking.cpp',
 		'src/xxhash.cpp',
@@ -471,6 +485,7 @@ vtable_dumper = executable('vtable_dumper',
 	files(
 		'src/gsdk_library.cpp',
 		'src/symbol_cache.cpp',
+		'src/hacking.cpp',
 		'src/filesystem.cpp',
 		'src/vtable_dumper.cpp'
 	),
@@ -559,6 +574,12 @@ if install
 	install_data(
 		squirrel_vmod_server_init_late_script_src,
 		rename: join_paths(vmod_root,'base/squirrel/vmod_server_init_late.nut'),
+		install_dir: addons
+	)
+
+	install_data(
+		squirrel_vmod_init_late_script_src,
+		rename: join_paths(vmod_root,'base/squirrel/vmod_init_late.nut'),
 		install_dir: addons
 	)
 

@@ -126,6 +126,12 @@
 	::Constants.FContents.CONTENTS_IGNORE_NODRAW_OPAQUE
 );
 
+::Constants.EBrushSolid <- {
+	BRUSHSOLID_TOGGLE = 0,
+	BRUSHSOLID_NEVER = 1,
+	BRUSHSOLID_ALWAYS = 2
+};
+
 ::Constants.Server.MIN_COORD_FLOAT <- -16384.0;
 ::Constants.Server.MAX_COORD_FLOAT <- 16384.0;
 
@@ -140,3 +146,23 @@
 	HUDTYPE_ARENA = 4,
 	HUDTYPE_TRAINING = 5
 };
+
+local csnt = ::getconsttable();
+foreach(i,j in ::Constants) {
+	local valid = true;
+	foreach(k,l in j) {
+		local typ = typeof(l);
+		if(typ == "null") {
+			j[k] = 0;
+			typ = "integer";
+		}
+		if(typ == "string" || typ == "integer" || typ == "float") {
+			csnt[k] <- l;
+		} else {
+			valid = false;
+		}
+	}
+	if(valid) {
+		csnt[i] <- j;
+	}
+}

@@ -67,16 +67,11 @@ namespace vmod::bindings::ent
 		singleton_base::unbindings();
 	}
 
-	vscript::handle_ref singleton::script_create_datatable(vscript::handle_wrapper datadesc) noexcept
+	vscript::instance_handle_ref singleton::script_create_datatable(vscript::table_handle_wrapper datadesc) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
 		if(!datadesc) {
-			vm->RaiseException("vmod: invalid description");
-			return nullptr;
-		}
-
-		if(!vm->IsTable(*datadesc)) {
 			vm->RaiseException("vmod: invalid description");
 			return nullptr;
 		}
@@ -87,14 +82,9 @@ namespace vmod::bindings::ent
 			return nullptr;
 		}
 
-		vscript::handle_wrapper props_array{props_var.get<vscript::handle_wrapper>()};
+		vscript::array_handle_wrapper props_array{props_var.get<vscript::array_handle_wrapper>()};
 		if(!props_array) {
 			vm->RaiseException("vmod: invalid props");
-			return nullptr;
-		}
-
-		if(!vm->IsArray(*props_array)) {
-			vm->RaiseException("vmod: props is not a array");
 			return nullptr;
 		}
 
@@ -106,21 +96,16 @@ namespace vmod::bindings::ent
 
 		std::size_t total_size{0};
 
-		std::function<bool(vscript::handle_ref)> read_props{
-			[&read_props,vm,&props,&props_storage,&total_size](vscript::handle_ref var) noexcept -> bool {
+		std::function<bool(vscript::array_handle_ref)> read_props{
+			[&read_props,vm,&props,&props_storage,&total_size](vscript::array_handle_ref var) noexcept -> bool {
 				int array_num{vm->GetArrayCount(*var)};
 				for(int i{0}, it{0}; it != -1 && i < array_num; ++i) {
 					vscript::variant value;
 					it = vm->GetArrayValue(*var, it, &value);
 
-					vscript::handle_wrapper prop_table{value.get<vscript::handle_wrapper>()};
+					vscript::table_handle_wrapper prop_table{value.get<vscript::table_handle_wrapper>()};
 					if(!prop_table) {
 						vm->RaiseException("vmod: prop %i is invalid", i);
-						return false;
-					}
-
-					if(!vm->IsTable(*prop_table)) {
-						vm->RaiseException("vmod: prop %i is not a table", i);
 						return false;
 					}
 
@@ -148,7 +133,7 @@ namespace vmod::bindings::ent
 						return false;
 					}
 
-					vscript::handle_wrapper value_hndl{value.get<vscript::handle_wrapper>()};
+					vscript::table_handle_wrapper value_hndl{value.get<vscript::table_handle_wrapper>()};
 
 					ffi_type *type{mem::singleton::read_type(value_hndl)};
 					if(!type) {
@@ -219,7 +204,7 @@ namespace vmod::bindings::ent
 		return nullptr;
 	}
 
-	vscript::handle_ref singleton::script_create_factory(std::variant<vscript::handle_wrapper, std::string_view> names_var, vscript::handle_wrapper callback, std::optional<vscript::handle_wrapper> size_callback_opt) noexcept
+	vscript::instance_handle_ref singleton::script_create_factory(std::variant<vscript::array_handle_wrapper, std::string_view> names_var, vscript::func_handle_wrapper callback, std::optional<vscript::func_handle_wrapper> size_callback_opt) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -233,11 +218,6 @@ namespace vmod::bindings::ent
 			auto &names_arr{std::get<0>(names_var)};
 			if(!names_arr) {
 				vm->RaiseException("vmod: invalid names array");
-				return nullptr;
-			}
-
-			if(!vm->IsArray(*names_arr)) {
-				vm->RaiseException("vmod: names not a array");
 				return nullptr;
 			}
 
@@ -284,7 +264,7 @@ namespace vmod::bindings::ent
 			return nullptr;
 		}
 
-		vscript::handle_wrapper size_callback{};
+		vscript::func_handle_wrapper size_callback{};
 		if(size_callback_opt && *size_callback_opt) {
 			size_callback = vm->ReferenceFunction(*(*size_callback_opt));
 			if(!size_callback) {
@@ -302,7 +282,7 @@ namespace vmod::bindings::ent
 		return sfac->instance_;
 	}
 
-	vscript::handle_ref singleton::script_find_factory(std::string &&facname) noexcept
+	vscript::instance_handle_ref singleton::script_find_factory(std::string &&facname) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -334,7 +314,7 @@ namespace vmod::bindings::ent
 		return it->second->instance_;
 	}
 
-	vscript::handle_ref singleton::script_from_ptr(gsdk::CBaseEntity *ptr) noexcept
+	vscript::instance_handle_ref singleton::script_from_ptr(gsdk::CBaseEntity *ptr) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -346,7 +326,7 @@ namespace vmod::bindings::ent
 		return ptr->GetScriptInstance();
 	}
 
-	void *singleton::script_to_ptr(vscript::handle_wrapper obj) noexcept
+	void *singleton::script_to_ptr(vscript::instance_handle_wrapper obj) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -358,7 +338,7 @@ namespace vmod::bindings::ent
 		return gsdk::CBaseEntity::from_instance(*obj);
 	}
 
-	vscript::handle_ref singleton::script_lookup_sendprop(std::string_view path) noexcept
+	vscript::instance_handle_ref singleton::script_lookup_sendprop(std::string_view path) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -392,7 +372,7 @@ namespace vmod::bindings::ent
 		return it->second->instance_;
 	}
 
-	vscript::handle_ref singleton::script_lookup_sendtable(std::string_view path) noexcept
+	vscript::instance_handle_ref singleton::script_lookup_sendtable(std::string_view path) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -426,7 +406,7 @@ namespace vmod::bindings::ent
 		return it->second->instance_;
 	}
 
-	vscript::handle_ref singleton::script_lookup_dataprop(std::string_view path) noexcept
+	vscript::instance_handle_ref singleton::script_lookup_dataprop(std::string_view path) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -460,7 +440,7 @@ namespace vmod::bindings::ent
 		return it->second->instance_;
 	}
 
-	vscript::handle_ref singleton::script_lookup_serverclass(std::string_view clsname) noexcept
+	vscript::instance_handle_ref singleton::script_lookup_serverclass(std::string_view clsname) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -491,7 +471,7 @@ namespace vmod::bindings::ent
 		return inst_it->second->instance_;
 	}
 
-	vscript::handle_ref singleton::script_lookup_datatable(std::string_view path) noexcept
+	vscript::instance_handle_ref singleton::script_lookup_datatable(std::string_view path) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 

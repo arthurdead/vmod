@@ -180,7 +180,7 @@ namespace vmod::bindings::cvar
 		singleton_base::unbindings();
 	}
 
-	vscript::handle_ref singleton::script_create_cvar(std::string_view varname, std::string_view value) noexcept
+	vscript::instance_handle_ref singleton::script_create_cvar(std::string_view varname, std::string_view value) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -207,7 +207,7 @@ namespace vmod::bindings::cvar
 		return svar->instance_;
 	}
 
-	vscript::handle_ref singleton::script_create_concmd(std::string_view varname, vscript::handle_wrapper callback) noexcept
+	vscript::instance_handle_ref singleton::script_create_concmd(std::string_view varname, vscript::func_handle_ref callback) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -226,27 +226,27 @@ namespace vmod::bindings::cvar
 			return nullptr;
 		}
 
-		callback = vm->ReferenceFunction(*callback);
-		if(!callback) {
+		vscript::func_handle_wrapper callback_copy{vm->ReferenceFunction(*callback)};
+		if(!callback_copy) {
 			vm->RaiseException("vmod: failed to get callback reference");
 			return nullptr;
 		}
 
 		ConCommand *var{new ConCommand};
 
-		concommand *svar{new concommand{var, std::move(callback)}};
+		concommand *svar{new concommand{var, std::move(callback_copy)}};
 		if(!svar->initialize()) {
 			delete svar;
 			return nullptr;
 		}
 
 		plugin *pl{plugin::assumed_currently_running()};
-		vscript::handle_ref scope{pl ? pl->private_scope() : nullptr};
+		vscript::scope_handle_ref scope{pl ? pl->private_scope() : nullptr};
 
 		vscript::handle_ref callback_ref{svar->func_ref()};
 
 		var->initialize(varname, [var,vm,callback_ref,scope](const gsdk::CCommand &cmdargs) noexcept -> void {
-			vscript::handle_wrapper arr{vm->CreateArray()};
+			vscript::array_handle_wrapper arr{vm->CreateArray()};
 
 			for(int i{0}; i < cmdargs.m_nArgc; ++i) {
 				vscript::variant tmp{cmdargs.m_ppArgv[i]};
@@ -264,7 +264,7 @@ namespace vmod::bindings::cvar
 		return svar->instance_;
 	}
 
-	vscript::handle_ref singleton::script_find_cvar(std::string &&varname) noexcept
+	vscript::instance_handle_ref singleton::script_find_cvar(std::string &&varname) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -291,7 +291,7 @@ namespace vmod::bindings::cvar
 		return it->second->instance_;
 	}
 
-	vscript::handle_ref singleton::script_find_concmd(std::string &&varname) noexcept
+	vscript::instance_handle_ref singleton::script_find_concmd(std::string &&varname) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 

@@ -86,5 +86,5 @@ namespace vmod::bindings::docs
 		name,
 		normal
 	};
-	extern void write(std::string &file, std::size_t depth, vscript::handle_ref enum_table, write_enum_how how) noexcept;
+	extern void write(std::string &file, std::size_t depth, vscript::table_handle_ref enum_table, write_enum_how how) noexcept;
 }

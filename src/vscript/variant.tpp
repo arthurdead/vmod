@@ -86,9 +86,6 @@ namespace vmod::vscript
 			#endif
 				case gsdk::FIELD_BOOLEAN:
 				return var.m_bool ? static_cast<T>(1.0f) : static_cast<T>(0.0f);
-				case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
-				case gsdk::FIELD_HSCRIPT:
-				return static_cast<T>(to_float(var.m_object));
 				default:
 				return {};
 			}
@@ -174,9 +171,6 @@ namespace vmod::vscript
 			#endif
 				case gsdk::FIELD_BOOLEAN:
 				return var.m_bool ? static_cast<T>(1) : static_cast<T>(0);
-				case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
-				case gsdk::FIELD_HSCRIPT:
-				return static_cast<T>(to_int(var.m_object));
 				default:
 				return {};
 			}
@@ -322,6 +316,9 @@ namespace vmod::vscript
 					}
 				}
 				case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
+				case gsdk::FIELD_CUSTOM:
+				case gsdk::FIELD_EMBEDDED:
+				case gsdk::FIELD_FUNCTION:
 				case gsdk::FIELD_HSCRIPT: {
 					if constexpr(std::is_same_v<T, std::string_view>) {
 						return to_string(var.m_object);
@@ -358,7 +355,7 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<bool>() noexcept
 	{ return gsdk::FIELD_BOOLEAN; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, bool value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, bool value) noexcept
 	{ var.m_bool = value; }
 	template <>
 	bool to_value_impl<bool>(const gsdk::ScriptVariant_t &var) noexcept;
@@ -366,7 +363,7 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<unsigned char>() noexcept
 	{ return gsdk::FIELD_SHORT; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, unsigned char value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, unsigned char value) noexcept
 	{ var.m_uchar = value; }
 	template <>
 	inline unsigned char to_value_impl<unsigned char>(const gsdk::ScriptVariant_t &var) noexcept
@@ -375,7 +372,7 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<signed char>() noexcept
 	{ return gsdk::FIELD_SHORT; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, signed char value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, signed char value) noexcept
 	{ var.m_schar = value; }
 	template <>
 	inline signed char to_value_impl<signed char>(const gsdk::ScriptVariant_t &var) noexcept
@@ -384,7 +381,7 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<char>() noexcept
 	{ return gsdk::FIELD_CHARACTER; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, char value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, char value) noexcept
 	{ var.m_char = value; }
 	template <>
 	inline char to_value_impl<char>(const gsdk::ScriptVariant_t &var) noexcept
@@ -393,7 +390,7 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<unsigned int>() noexcept
 	{ return gsdk::FIELD_UINT32; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, unsigned int value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, unsigned int value) noexcept
 	{ var.m_uint = value; }
 	template <>
 	inline unsigned int to_value_impl<unsigned int>(const gsdk::ScriptVariant_t &var) noexcept
@@ -402,7 +399,7 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<int>() noexcept
 	{ return gsdk::FIELD_INTEGER; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, int value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, int value) noexcept
 	{ var.m_int = value; }
 	template <>
 	inline int to_value_impl<int>(const gsdk::ScriptVariant_t &var) noexcept
@@ -411,7 +408,7 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<unsigned short>() noexcept
 	{ return gsdk::FIELD_SHORT; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, unsigned short value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, unsigned short value) noexcept
 	{ var.m_ushort = value; }
 	template <>
 	inline unsigned short to_value_impl<unsigned short>(const gsdk::ScriptVariant_t &var) noexcept
@@ -420,7 +417,7 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<short>() noexcept
 	{ return gsdk::FIELD_SHORT; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, short value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, short value) noexcept
 	{ var.m_short = value; }
 	template <>
 	inline short to_value_impl<short>(const gsdk::ScriptVariant_t &var) noexcept
@@ -437,7 +434,7 @@ namespace vmod::vscript
 		#error
 	#endif
 	}
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, unsigned long value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, unsigned long value) noexcept
 	{ var.m_ulong = value; }
 	template <>
 	inline unsigned long to_value_impl<unsigned long>(const gsdk::ScriptVariant_t &var) noexcept
@@ -460,7 +457,7 @@ namespace vmod::vscript
 		#error
 	#endif
 	}
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, long value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, long value) noexcept
 	{ var.m_long = value; }
 	template <>
 	inline long to_value_impl<long>(const gsdk::ScriptVariant_t &var) noexcept
@@ -469,7 +466,7 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<unsigned long long>() noexcept
 	{ return gsdk::FIELD_UINT64; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, unsigned long long value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, unsigned long long value) noexcept
 	{
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 		var.m_ulonglong = value;
@@ -494,7 +491,7 @@ namespace vmod::vscript
 		#error
 	#endif
 	}
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, long long value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, long long value) noexcept
 	{
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 		var.m_longlong = value;
@@ -511,7 +508,7 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<float>() noexcept
 	{ return gsdk::FIELD_FLOAT; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, float value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, float value) noexcept
 	{ var.m_float = value; }
 	template <>
 	inline float to_value_impl<float>(const gsdk::ScriptVariant_t &var) noexcept
@@ -520,7 +517,7 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<double>() noexcept
 	{ return gsdk::FIELD_FLOAT64; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, double value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, double value) noexcept
 	{
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 		var.m_double = value;
@@ -537,7 +534,7 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<long double>() noexcept
 	{ return gsdk::FIELD_FLOAT64; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, long double value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, long double value) noexcept
 	{
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 		var.m_double = static_cast<double>(value);
@@ -553,22 +550,22 @@ namespace vmod::vscript
 
 	template <>
 	gsdk::ScriptDataType_t type_to_field_impl<gsdk::HSCRIPT>() noexcept = delete;
-	void initialize_impl(gsdk::ScriptVariant_t &var, gsdk::HSCRIPT value) noexcept = delete;
+	void initialize_data_impl(gsdk::ScriptVariant_t &var, gsdk::HSCRIPT value) noexcept = delete;
 	template <>
 	gsdk::HSCRIPT to_value_impl<gsdk::HSCRIPT>(const gsdk::ScriptVariant_t &var) noexcept = delete;
 
 	template <>
 	gsdk::ScriptDataType_t type_to_field_impl<gsdk::ScriptHandleWrapper_t>() noexcept = delete;
-	void initialize_impl(gsdk::ScriptVariant_t &var, const gsdk::ScriptHandleWrapper_t &value) noexcept = delete;
+	void initialize_data_impl(gsdk::ScriptVariant_t &var, const gsdk::ScriptHandleWrapper_t &value) noexcept = delete;
 	template <>
 	gsdk::ScriptHandleWrapper_t to_value_impl<gsdk::ScriptHandleWrapper_t>(const gsdk::ScriptVariant_t &var) noexcept = delete;
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<handle_wrapper>() noexcept
 	{ return gsdk::FIELD_HSCRIPT; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, const handle_wrapper &value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, const handle_wrapper &value) noexcept
 	{ var.m_object = value.get(); }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, handle_wrapper &&value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, handle_wrapper &&value) noexcept
 	{
 		if(value.should_free()){
 			var.m_flags |= gsdk::SV_FREE;
@@ -582,18 +579,132 @@ namespace vmod::vscript
 	{ return handle_wrapper{std::move(var)}; }
 
 	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<typed_handle_wrapper<gsdk::HANDLETYPE_UNKNOWN>>() noexcept
+	{ return gsdk::FIELD_HSCRIPT; }
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<typed_handle_wrapper<gsdk::HANDLETYPE_FUNCTION>>() noexcept
+	{ return gsdk::FIELD_FUNCTION; }
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<typed_handle_wrapper<gsdk::HANDLETYPE_TABLE>>() noexcept
+	{ return gsdk::FIELD_EMBEDDED; }
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<typed_handle_wrapper<gsdk::HANDLETYPE_ARRAY>>() noexcept
+	{ return gsdk::FIELD_CUSTOM; }
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<typed_handle_wrapper<gsdk::HANDLETYPE_SCOPE>>() noexcept
+	{ return gsdk::FIELD_EMBEDDED; }
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<typed_handle_wrapper<gsdk::HANDLETYPE_INSTANCE>>() noexcept
+	{ return gsdk::FIELD_HSCRIPT_NEW_INSTANCE; }
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<typed_handle_wrapper<gsdk::HANDLETYPE_SCRIPT>>() noexcept
+	{ return gsdk::FIELD_HSCRIPT; }
+	template <gsdk::ScriptHandleType_t T>
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, const typed_handle_wrapper<T> &value) noexcept
+	{ var.m_object = value.get(); }
+	template <gsdk::ScriptHandleType_t T>
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, typed_handle_wrapper<T> &&value) noexcept
+	{
+		if(value.should_free()){
+			var.m_flags |= gsdk::SV_FREE;
+		}
+		var.m_object = value.release();
+	}
+	template <>
+	typed_handle_wrapper<gsdk::HANDLETYPE_UNKNOWN> to_value_impl<typed_handle_wrapper<gsdk::HANDLETYPE_UNKNOWN>>(const gsdk::ScriptVariant_t &var) noexcept = delete;
+	template <>
+	typed_handle_wrapper<gsdk::HANDLETYPE_FUNCTION> to_value_impl<typed_handle_wrapper<gsdk::HANDLETYPE_FUNCTION>>(const gsdk::ScriptVariant_t &var) noexcept = delete;
+	template <>
+	typed_handle_wrapper<gsdk::HANDLETYPE_TABLE> to_value_impl<typed_handle_wrapper<gsdk::HANDLETYPE_TABLE>>(const gsdk::ScriptVariant_t &var) noexcept = delete;
+	template <>
+	typed_handle_wrapper<gsdk::HANDLETYPE_ARRAY> to_value_impl<typed_handle_wrapper<gsdk::HANDLETYPE_ARRAY>>(const gsdk::ScriptVariant_t &var) noexcept = delete;
+	template <>
+	typed_handle_wrapper<gsdk::HANDLETYPE_SCOPE> to_value_impl<typed_handle_wrapper<gsdk::HANDLETYPE_SCOPE>>(const gsdk::ScriptVariant_t &var) noexcept = delete;
+	template <>
+	typed_handle_wrapper<gsdk::HANDLETYPE_INSTANCE> to_value_impl<typed_handle_wrapper<gsdk::HANDLETYPE_INSTANCE>>(const gsdk::ScriptVariant_t &var) noexcept = delete;
+	template <>
+	typed_handle_wrapper<gsdk::HANDLETYPE_SCRIPT> to_value_impl<typed_handle_wrapper<gsdk::HANDLETYPE_SCRIPT>>(const gsdk::ScriptVariant_t &var) noexcept = delete;
+	template <>
+	inline typed_handle_wrapper<gsdk::HANDLETYPE_UNKNOWN> to_value_impl<typed_handle_wrapper<gsdk::HANDLETYPE_UNKNOWN>>(gsdk::ScriptVariant_t &&var) noexcept
+	{ return typed_handle_wrapper<gsdk::HANDLETYPE_UNKNOWN>{std::move(var)}; }
+	template <>
+	inline typed_handle_wrapper<gsdk::HANDLETYPE_FUNCTION> to_value_impl<typed_handle_wrapper<gsdk::HANDLETYPE_FUNCTION>>(gsdk::ScriptVariant_t &&var) noexcept
+	{ return typed_handle_wrapper<gsdk::HANDLETYPE_FUNCTION>{std::move(var)}; }
+	template <>
+	inline typed_handle_wrapper<gsdk::HANDLETYPE_TABLE> to_value_impl<typed_handle_wrapper<gsdk::HANDLETYPE_TABLE>>(gsdk::ScriptVariant_t &&var) noexcept
+	{ return typed_handle_wrapper<gsdk::HANDLETYPE_TABLE>{std::move(var)}; }
+	template <>
+	inline typed_handle_wrapper<gsdk::HANDLETYPE_ARRAY> to_value_impl<typed_handle_wrapper<gsdk::HANDLETYPE_ARRAY>>(gsdk::ScriptVariant_t &&var) noexcept
+	{ return typed_handle_wrapper<gsdk::HANDLETYPE_ARRAY>{std::move(var)}; }
+	template <>
+	inline typed_handle_wrapper<gsdk::HANDLETYPE_SCOPE> to_value_impl<typed_handle_wrapper<gsdk::HANDLETYPE_SCOPE>>(gsdk::ScriptVariant_t &&var) noexcept
+	{ return typed_handle_wrapper<gsdk::HANDLETYPE_SCOPE>{std::move(var)}; }
+	template <>
+	inline typed_handle_wrapper<gsdk::HANDLETYPE_INSTANCE> to_value_impl<typed_handle_wrapper<gsdk::HANDLETYPE_INSTANCE>>(gsdk::ScriptVariant_t &&var) noexcept
+	{ return typed_handle_wrapper<gsdk::HANDLETYPE_INSTANCE>{std::move(var)}; }
+	template <>
+	inline typed_handle_wrapper<gsdk::HANDLETYPE_SCRIPT> to_value_impl<typed_handle_wrapper<gsdk::HANDLETYPE_SCRIPT>>(gsdk::ScriptVariant_t &&var) noexcept
+	{ return typed_handle_wrapper<gsdk::HANDLETYPE_SCRIPT>{std::move(var)}; }
+
+	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<handle_ref>() noexcept
 	{ return gsdk::FIELD_HSCRIPT; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, handle_ref value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, handle_ref value) noexcept
 	{ var.m_object = value.get(); }
 	template <>
 	inline handle_ref to_value_impl<handle_ref>(const gsdk::ScriptVariant_t &var) noexcept
 	{ return handle_ref{var}; }
 
 	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<typed_handle_ref<gsdk::HANDLETYPE_UNKNOWN>>() noexcept
+	{ return gsdk::FIELD_HSCRIPT; }
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<typed_handle_ref<gsdk::HANDLETYPE_FUNCTION>>() noexcept
+	{ return gsdk::FIELD_FUNCTION; }
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<typed_handle_ref<gsdk::HANDLETYPE_TABLE>>() noexcept
+	{ return gsdk::FIELD_EMBEDDED; }
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<typed_handle_ref<gsdk::HANDLETYPE_ARRAY>>() noexcept
+	{ return gsdk::FIELD_CUSTOM; }
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<typed_handle_ref<gsdk::HANDLETYPE_SCOPE>>() noexcept
+	{ return gsdk::FIELD_EMBEDDED; }
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<typed_handle_ref<gsdk::HANDLETYPE_INSTANCE>>() noexcept
+	{ return gsdk::FIELD_HSCRIPT_NEW_INSTANCE; }
+	template <>
+	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<typed_handle_ref<gsdk::HANDLETYPE_SCRIPT>>() noexcept
+	{ return gsdk::FIELD_HSCRIPT; }
+	template <gsdk::ScriptHandleType_t T>
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, typed_handle_ref<T> value) noexcept
+	{ var.m_object = value.get(); }
+	template <>
+	inline typed_handle_ref<gsdk::HANDLETYPE_UNKNOWN> to_value_impl<typed_handle_ref<gsdk::HANDLETYPE_UNKNOWN>>(const gsdk::ScriptVariant_t &var) noexcept
+	{ return typed_handle_ref<gsdk::HANDLETYPE_UNKNOWN>{var}; }
+	template <>
+	inline typed_handle_ref<gsdk::HANDLETYPE_FUNCTION> to_value_impl<typed_handle_ref<gsdk::HANDLETYPE_FUNCTION>>(const gsdk::ScriptVariant_t &var) noexcept
+	{ return typed_handle_ref<gsdk::HANDLETYPE_FUNCTION>{var}; }
+	template <>
+	inline typed_handle_ref<gsdk::HANDLETYPE_TABLE> to_value_impl<typed_handle_ref<gsdk::HANDLETYPE_TABLE>>(const gsdk::ScriptVariant_t &var) noexcept
+	{ return typed_handle_ref<gsdk::HANDLETYPE_TABLE>{var}; }
+	template <>
+	inline typed_handle_ref<gsdk::HANDLETYPE_ARRAY> to_value_impl<typed_handle_ref<gsdk::HANDLETYPE_ARRAY>>(const gsdk::ScriptVariant_t &var) noexcept
+	{ return typed_handle_ref<gsdk::HANDLETYPE_ARRAY>{var}; }
+	template <>
+	inline typed_handle_ref<gsdk::HANDLETYPE_SCOPE> to_value_impl<typed_handle_ref<gsdk::HANDLETYPE_SCOPE>>(const gsdk::ScriptVariant_t &var) noexcept
+	{ return typed_handle_ref<gsdk::HANDLETYPE_SCOPE>{var}; }
+	template <>
+	inline typed_handle_ref<gsdk::HANDLETYPE_INSTANCE> to_value_impl<typed_handle_ref<gsdk::HANDLETYPE_INSTANCE>>(const gsdk::ScriptVariant_t &var) noexcept
+	{ return typed_handle_ref<gsdk::HANDLETYPE_INSTANCE>{var}; }
+	template <>
+	inline typed_handle_ref<gsdk::HANDLETYPE_SCRIPT> to_value_impl<typed_handle_ref<gsdk::HANDLETYPE_SCRIPT>>(const gsdk::ScriptVariant_t &var) noexcept
+	{ return typed_handle_ref<gsdk::HANDLETYPE_SCRIPT>{var}; }
+
+	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<std::string_view>() noexcept
 	{ return gsdk::FIELD_CSTRING; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, std::string_view value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, std::string_view value) noexcept
 	{
 		if(!value.empty()) {
 			var.m_ccstr = value.data();
@@ -608,7 +719,7 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<const char *>() noexcept
 	{ return gsdk::FIELD_CSTRING; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, const char *value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, const char *value) noexcept
 	{
 		if(value && value[0] != '\0') {
 			var.m_ccstr = value;
@@ -623,7 +734,7 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<std::string>() noexcept
 	{ return gsdk::FIELD_CSTRING; }
-	extern void initialize_impl(gsdk::ScriptVariant_t &var, std::string &&value) noexcept;
+	extern void initialize_data_impl(gsdk::ScriptVariant_t &var, std::string &&value) noexcept;
 	template <>
 	inline std::string to_value_impl<std::string>(const gsdk::ScriptVariant_t &var) noexcept
 	{ return detail::to_string_impl<std::string>(var); }
@@ -631,9 +742,9 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<std::filesystem::path>() noexcept
 	{ return gsdk::FIELD_CSTRING; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, const std::filesystem::path &value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, const std::filesystem::path &value) noexcept
 	{ var.m_ccstr = value.c_str(); }
-	extern void initialize_impl(gsdk::ScriptVariant_t &var, std::filesystem::path &&value) noexcept;
+	extern void initialize_data_impl(gsdk::ScriptVariant_t &var, std::filesystem::path &&value) noexcept;
 	template <>
 	inline std::filesystem::path to_value_impl<std::filesystem::path>(const gsdk::ScriptVariant_t &var) noexcept
 	{
@@ -652,7 +763,7 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<std::nullptr_t>() noexcept
 	{ return gsdk::FIELD_VOID; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, std::nullptr_t) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, std::nullptr_t) noexcept
 	{ var.m_ptr = nullptr; }
 	template <>
 	std::nullptr_t to_value_impl<std::nullptr_t>(const gsdk::ScriptVariant_t &var) noexcept = delete;
@@ -660,7 +771,7 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<void *>() noexcept
 	{ return gsdk::FIELD_CLASSPTR; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, void *value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, void *value) noexcept
 	{
 		if(value) {
 			var.m_ptr = value;
@@ -694,16 +805,16 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<const void *>() noexcept
 	{ return type_to_field_impl<void *>(); }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, const void *value) noexcept
-	{ initialize_impl(var, const_cast<void *>(value)); }
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, const void *value) noexcept
+	{ initialize_data_impl(var, const_cast<void *>(value)); }
 	template <>
 	inline const void *to_value_impl<const void *>(const gsdk::ScriptVariant_t &var) noexcept
 	{ return to_value_impl<void *>(var); }
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<generic_func_t>() noexcept
-	{ return gsdk::FIELD_FUNCTION; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, generic_func_t value) noexcept
+	{ return gsdk::FIELD_CLASSPTR; }
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, generic_func_t value) noexcept
 	{
 		if(value) {
 		#ifndef __clang__
@@ -751,8 +862,8 @@ namespace vmod::vscript
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<generic_plain_mfp_t>() noexcept
-	{ return gsdk::FIELD_FUNCTION; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, generic_plain_mfp_t value) noexcept
+	{ return gsdk::FIELD_CLASSPTR; }
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, generic_plain_mfp_t value) noexcept
 	{
 		if(value) {
 		#ifndef __clang__
@@ -800,8 +911,8 @@ namespace vmod::vscript
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<generic_mfp_t>() noexcept
-	{ return gsdk::FIELD_FUNCTION; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, generic_mfp_t value) noexcept
+	{ return gsdk::FIELD_CLASSPTR; }
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, generic_mfp_t value) noexcept
 	{
 		if(value) {
 			generic_internal_mfp_t internal{value};
@@ -861,8 +972,8 @@ namespace vmod::vscript
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<generic_internal_mfp_t>() noexcept
-	{ return gsdk::FIELD_FUNCTION; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, generic_internal_mfp_t value) noexcept
+	{ return gsdk::FIELD_CLASSPTR; }
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, generic_internal_mfp_t value) noexcept
 	{
 		if(value) {
 		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
@@ -921,8 +1032,8 @@ namespace vmod::vscript
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<generic_internal_mfp_va_t>() noexcept
-	{ return gsdk::FIELD_FUNCTION; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, generic_internal_mfp_va_t value) noexcept
+	{ return gsdk::FIELD_CLASSPTR; }
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, generic_internal_mfp_va_t value) noexcept
 	{
 		if(value) {
 		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
@@ -981,8 +1092,8 @@ namespace vmod::vscript
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<mfp_or_func_t>() noexcept
-	{ return gsdk::FIELD_FUNCTION; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, mfp_or_func_t value) noexcept
+	{ return gsdk::FIELD_CLASSPTR; }
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, mfp_or_func_t value) noexcept
 	{
 		if(value) {
 		#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
@@ -1042,8 +1153,8 @@ namespace vmod::vscript
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<generic_vtable_t>() noexcept
-	{ return gsdk::FIELD_FUNCTION; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, generic_vtable_t value) noexcept
+	{ return gsdk::FIELD_CLASSPTR; }
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, generic_vtable_t value) noexcept
 	{
 		if(value) {
 			var.m_ptr = static_cast<void *>(value);
@@ -1078,7 +1189,7 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<generic_object_t *>() noexcept
 	{ return gsdk::FIELD_CLASSPTR; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, generic_object_t *value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, generic_object_t *value) noexcept
 	{
 		if(value) {
 			var.m_ptr = static_cast<void *>(value);
@@ -1111,8 +1222,8 @@ namespace vmod::vscript
 
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<gsdk::CBaseEntity *>() noexcept
-	{ return gsdk::FIELD_HSCRIPT; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, gsdk::CBaseEntity *value) noexcept
+	{ return gsdk::FIELD_HSCRIPT_NEW_INSTANCE; }
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, gsdk::CBaseEntity *value) noexcept
 	{
 		if(value) {
 			var.m_object = value->GetScriptInstance();
@@ -1143,6 +1254,7 @@ namespace vmod::vscript
 		#endif
 			case gsdk::FIELD_CLASSPTR:
 			return static_cast<gsdk::CBaseEntity *>(var.m_ptr);
+			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
 			case gsdk::FIELD_HSCRIPT:
 			return gsdk::CBaseEntity::from_instance(var.m_object);
 			default:
@@ -1153,8 +1265,8 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<gsdk::IServerNetworkable *>() noexcept
 	{ return type_to_field_impl<gsdk::CBaseEntity *>(); }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, gsdk::IServerNetworkable *value) noexcept
-	{ initialize_impl(var, value ? value->GetBaseEntity() : static_cast<gsdk::CBaseEntity *>(nullptr)); }
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, gsdk::IServerNetworkable *value) noexcept
+	{ initialize_data_impl(var, value ? value->GetBaseEntity() : static_cast<gsdk::CBaseEntity *>(nullptr)); }
 	template <>
 	inline gsdk::IServerNetworkable *to_value_impl<gsdk::IServerNetworkable *>(const gsdk::ScriptVariant_t &var) noexcept
 	{
@@ -1172,15 +1284,15 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<gsdk::Vector>() noexcept
 	{ return gsdk::FIELD_VECTOR; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, const gsdk::Vector &value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, const gsdk::Vector &value) noexcept
 	{
 		var.m_vector = new gsdk::Vector{value};
 		var.m_flags |= gsdk::SV_FREE;
 	}
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, gsdk::Vector *value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, gsdk::Vector *value) noexcept
 	{
 		if(value) {
-			initialize_impl(var, *value);
+			initialize_data_impl(var, *value);
 		} else {
 			var.m_type = gsdk::FIELD_VOID;
 			var.m_object = gsdk::INVALID_HSCRIPT;
@@ -1213,15 +1325,15 @@ namespace vmod::vscript
 	template <>
 	constexpr inline gsdk::ScriptDataType_t type_to_field_impl<gsdk::QAngle>() noexcept
 	{ return gsdk::FIELD_QANGLE; }
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, const gsdk::QAngle &value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, const gsdk::QAngle &value) noexcept
 	{
 		var.m_qangle = new gsdk::QAngle{value};
 		var.m_flags |= gsdk::SV_FREE;
 	}
-	inline void initialize_impl(gsdk::ScriptVariant_t &var, gsdk::QAngle *value) noexcept
+	inline void initialize_data_impl(gsdk::ScriptVariant_t &var, gsdk::QAngle *value) noexcept
 	{
 		if(value) {
-			initialize_impl(var, *value);
+			initialize_data_impl(var, *value);
 		} else {
 			var.m_type = gsdk::FIELD_VOID;
 			var.m_object = gsdk::INVALID_HSCRIPT;

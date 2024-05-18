@@ -12,6 +12,11 @@ namespace vmod
 	plugin *plugin::assumed_currently_running_;
 	plugin *plugin::scope_assume_current::old_running;
 
+	std::unordered_map<std::filesystem::path, plugin *> plugin::path_plugin_map;
+
+	plugin *plugin::assumed_currently_running() noexcept
+	{ return assumed_currently_running_; }
+
 	plugin::load_status plugin::load() noexcept
 	{
 		using namespace std::literals::string_view_literals;
@@ -225,10 +230,28 @@ namespace vmod
 		inotify_fd = -1;
 	}
 
-	plugin::~plugin() noexcept
-	{ unload(); }
+	plugin::plugin(std::filesystem::path &&path__) noexcept
+		: path_{std::move(path__)}
+	{
+		path_plugin_map.emplace(path_, this);
+	}
+	plugin::plugin(const std::filesystem::path &path__) noexcept
+		: path_{path__}
+	{
+		path_plugin_map.emplace(path_, this);
+	}
 
-	plugin::callback_instance::callback_instance(callable *caller_, vscript::handle_wrapper &&callback_, bool post_) noexcept
+	plugin::~plugin() noexcept
+	{
+		auto it{path_plugin_map.find(path_)};
+		if(it == path_plugin_map.end()) {
+			path_plugin_map.erase(it);
+		}
+
+		unload();
+	}
+
+	plugin::callback_instance::callback_instance(callable *caller_, vscript::func_handle_wrapper &&callback_, bool post_) noexcept
 		: callback{std::move(callback_)}, post{post_}, caller{caller_}, enabled{true}
 	{
 		auto &callbacks{post ? caller->callbacks_post : caller->callbacks_pre};
@@ -330,7 +353,7 @@ namespace vmod
 				continue;
 			}
 
-			vscript::handle_ref pl_scope{it.second->owner_scope()};
+			vscript::scope_handle_ref pl_scope{it.second->owner_scope()};
 
 			vscript::variant ret_var;
 			if(vm->ExecuteFunction(*it.first, args, static_cast<int>(num_args), &ret_var, *pl_scope, static_cast<gsdk::ScriptExecuteFlags_t>(execflags)) == gsdk::SCRIPT_ERROR) {
@@ -372,7 +395,22 @@ namespace vmod
 	}
 
 	void plugin::owned_instance::plugin_unloaded() noexcept
-	{ delete this; }
+	{
+		if(owner_plugin && !owner_plugin->clearing_instances) {
+			std::vector<owned_instance *> &instances{owner_plugin->owned_instances};
+
+			auto it{std::find(instances.begin(), instances.end(), this)};
+			if(it != instances.end()) {
+				instances.erase(it);
+			}
+		}
+
+		instance_.free();
+
+		owner_plugin = nullptr;
+
+		free();
+	}
 
 	plugin::shared_instance::~shared_instance() noexcept
 	{
@@ -400,15 +438,16 @@ namespace vmod
 
 	void plugin::shared_instance::remove_plugin() noexcept
 	{
-		if(assumed_currently_running_) {
-			if(!assumed_currently_running_->clearing_instances) {
-				auto it{std::find(assumed_currently_running_->shared_instances.begin(), assumed_currently_running_->shared_instances.end(), this)};
-				if(it != assumed_currently_running_->shared_instances.end()) {
-					assumed_currently_running_->shared_instances.erase(it);
+		plugin *currpl{assumed_currently_running()};
+		if(currpl) {
+			if(!currpl->clearing_instances) {
+				auto it{std::find(currpl->shared_instances.begin(), currpl->shared_instances.end(), this)};
+				if(it != currpl->shared_instances.end()) {
+					currpl->shared_instances.erase(it);
 				}
 			}
 
-			plugin_unloaded(assumed_currently_running_);
+			plugin_unloaded(currpl);
 		}
 	}
 
@@ -470,7 +509,7 @@ namespace vmod
 
 	void plugin::owned_instance::set_plugin() noexcept
 	{
-		owner_plugin = assumed_currently_running_;
+		owner_plugin = assumed_currently_running();
 
 		if(owner_plugin) {
 			owner_plugin->owned_instances.emplace_back(this);
@@ -490,10 +529,11 @@ namespace vmod
 
 	void plugin::shared_instance::add_plugin() noexcept
 	{
-		if(assumed_currently_running_) {
-			auto it{std::find(owner_plugins.begin(), owner_plugins.end(), assumed_currently_running_)};
+		plugin *currpl{assumed_currently_running()};
+		if(currpl) {
+			auto it{std::find(owner_plugins.begin(), owner_plugins.end(), currpl)};
 			if(it == owner_plugins.end()) {
-				owner_plugins.emplace_back(assumed_currently_running_);
+				owner_plugins.emplace_back(currpl);
 			}
 		}
 	}
@@ -541,12 +581,12 @@ namespace vmod
 			function_cache.clear();
 		}
 
-		map_active.unload();
-		map_loaded.unload();
-		map_unloaded.unload();
-		plugin_loaded.unload();
-		plugin_unloaded.unload();
-		all_mods_loaded.unload();
+		map_active.free();
+		map_loaded.free();
+		map_unloaded.free();
+		plugin_loaded.free();
+		plugin_unloaded.free();
+		all_mods_loaded.free();
 
 		functions_table.free();
 
@@ -581,16 +621,81 @@ namespace vmod
 		public_scope_.free();
 	}
 
-	void plugin::lookup_function(std::string_view func_name, function &func) noexcept
+	bool plugin::lookup_function(std::string_view func_name, function &func) noexcept
 	{
 		auto func_obj{main::instance().vm()->LookupFunction(func_name.data(), *private_scope_)};
 		if(!func_obj.object || func_obj.object == gsdk::INVALID_HSCRIPT) {
-			return;
+			func.owner = nullptr;
+			func.scope = nullptr;
+			func.func.free();
+			return false;
 		}
 
 		func.owner = this;
 		func.scope = private_scope_;
 		func.func = std::move(func_obj);
+		return true;
+	}
+
+	bool plugin::read_function(vscript::func_handle_ref func_hndl, function &func_obj) noexcept
+	{
+		gsdk::IScriptVM *vm{main::instance().vm()};
+
+		if(!func_hndl) {
+			func_obj.owner = nullptr;
+			func_obj.scope = nullptr;
+			func_obj.func.free();
+			return false;
+		}
+
+		switch(vm->GetLanguage()) {
+		case gsdk::ScriptLanguage_t::SL_SQUIRREL: {
+			#ifdef __clang__
+			#pragma clang diagnostic push
+			#pragma clang diagnostic ignored "-Wcast-align"
+			#else
+			#pragma GCC diagnostic push
+			#pragma GCC diagnostic ignored "-Wcast-align"
+			#endif
+			HSQOBJECT &sq_obj{*reinterpret_cast<HSQOBJECT *>(*func_hndl)};
+			#ifdef __clang__
+			#pragma clang diagnostic pop
+			#else
+			#pragma GCC diagnostic pop
+			#endif
+
+			if(!sq_isclosure(sq_obj)) {
+				func_obj.owner = nullptr;
+				func_obj.scope = nullptr;
+				func_obj.func.free();
+				return false;
+			}
+
+			SQClosure *closure{sq_obj._unVal.pClosure};
+			SQFunctionProto *proto{closure->_function};
+
+			if(sq_isstring(proto->_sourcename)) {
+				std::filesystem::path srcfile{proto->_sourcename._unVal.pString->_val};
+
+				auto it{path_plugin_map.find(srcfile)};
+				if(it != path_plugin_map.end()) {
+					func_obj.owner = it->second;
+					func_obj.scope = it->second->private_scope_;
+				} else {
+					func_obj.owner = nullptr;
+					func_obj.scope = nullptr;
+				}
+			} else {
+				func_obj.owner = nullptr;
+				func_obj.scope = nullptr;
+			}
+
+			func_obj.func = vm->ReferenceFunction(*func_hndl);
+
+			return static_cast<bool>(func_obj.func);
+		}
+		default: return false;
+		}
 	}
 
 	gsdk::ScriptStatus_t plugin::function::execute_internal(gsdk::ScriptVariant_t &ret, const gsdk::ScriptVariant_t *args, std::size_t num_args) noexcept
@@ -600,7 +705,7 @@ namespace vmod
 		}
 
 		scope_assume_current sac{owner};
-		return main::instance().vm()->ExecuteFunction(*func, args, static_cast<int>(num_args), &ret, *scope, true);
+		return main::instance().vm()->ExecuteFunction(*func, args, static_cast<int>(num_args), &ret, scope ? *scope : nullptr, true);
 	}
 
 	gsdk::ScriptStatus_t plugin::function::execute_internal(gsdk::ScriptVariant_t &ret) noexcept
@@ -610,7 +715,7 @@ namespace vmod
 		}
 
 		scope_assume_current sac{owner};
-		return main::instance().vm()->ExecuteFunction(*func, nullptr, 0, &ret, *scope, true);
+		return main::instance().vm()->ExecuteFunction(*func, nullptr, 0, &ret, scope ? *scope : nullptr, true);
 	}
 
 	gsdk::ScriptStatus_t plugin::function::execute_internal(const gsdk::ScriptVariant_t *args, std::size_t num_args) noexcept
@@ -620,7 +725,7 @@ namespace vmod
 		}
 
 		scope_assume_current sac{owner};
-		return main::instance().vm()->ExecuteFunction(*func, args, static_cast<int>(num_args), nullptr, *scope, true);
+		return main::instance().vm()->ExecuteFunction(*func, args, static_cast<int>(num_args), nullptr, scope ? *scope : nullptr, true);
 	}
 
 	gsdk::ScriptStatus_t plugin::function::execute_internal() noexcept
@@ -630,10 +735,10 @@ namespace vmod
 		}
 
 		scope_assume_current sac{owner};
-		return main::instance().vm()->ExecuteFunction(*func, nullptr, 0, nullptr, *scope, true);
+		return main::instance().vm()->ExecuteFunction(*func, nullptr, 0, nullptr, scope ? *scope : nullptr, true);
 	}
 
-	void plugin::function::unload() noexcept
+	void plugin::function::free() noexcept
 	{
 		func.free();
 	}

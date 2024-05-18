@@ -94,9 +94,9 @@ namespace vmod::bindings::ent
 	private:
 		static vscript::class_desc<factory_impl> desc;
 
-		bool initialize(std::vector<std::string> &&names_, vscript::handle_wrapper &&callback_, vscript::handle_wrapper &&size_callback_) noexcept;
+		bool initialize(std::vector<std::string> &&names_, vscript::func_handle_wrapper &&callback_, vscript::func_handle_wrapper &&size_callback_) noexcept;
 
-		gsdk::IServerNetworkable *script_create(std::string_view classname, std::optional<vscript::handle_wrapper> opts) noexcept;
+		gsdk::IServerNetworkable *script_create(std::string_view classname, std::optional<vscript::table_handle_wrapper> opts) noexcept;
 
 		inline factory_impl() noexcept
 			: factory_base{this}

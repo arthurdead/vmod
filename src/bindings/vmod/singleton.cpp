@@ -11,6 +11,7 @@
 #include "../syms/bindings.hpp"
 #include "../ffi/bindings.hpp"
 #include "../ent/bindings.hpp"
+#include "../net/bindings.hpp"
 
 namespace vmod
 {
@@ -115,10 +116,10 @@ namespace vmod
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		vscript::variant const_table_var;
 		if(vm_->GetValue(nullptr, "Constants", &const_table_var)) {
-			vscript::handle_ref const_table_ref{const_table_var};
+			vscript::table_handle_ref const_table_ref{const_table_var};
 			vscript::variant taunt_table_var;
 			if(vm_->GetValue(*const_table_ref, "FTaunts", &taunt_table_var)) {
-				vscript::handle_wrapper taunt_table_hndl{std::move(taunt_table_var)};
+				vscript::table_handle_wrapper taunt_table_hndl{std::move(taunt_table_var)};
 
 				auto new_taunt_table{vm_->CreateTable()};
 				if(new_taunt_table.object && new_taunt_table.object != gsdk::INVALID_HSCRIPT) {
@@ -262,6 +263,10 @@ namespace vmod
 			return false;
 		}
 
+		if(!bindings::net::bindings()) {
+			return false;
+		}
+
 		if(!bindings::strtables::bindings()) {
 			return false;
 		}
@@ -321,6 +326,10 @@ namespace vmod
 		}
 
 		if(!bindings::ent::create_get()) {
+			return false;
+		}
+
+		if(!bindings::net::create_get()) {
 			return false;
 		}
 
@@ -401,6 +410,10 @@ namespace vmod
 		file += "namespace ent;\n"sv;
 		bindings::ent::write_docs(dir);
 
+		bindings::docs::ident(file, 1);
+		file += "namespace net;\n"sv;
+		bindings::net::write_docs(dir);
+
 		file += '}';
 
 		std::filesystem::path doc_path{dir};
@@ -444,6 +457,8 @@ namespace vmod
 
 		bindings::cvar::unbindings();
 
+		bindings::net::unbindings();
+
 		plugin::unbindings();
 
 		mod::unbindings();
@@ -463,7 +478,7 @@ namespace vmod
 		singleton_base::unbindings();
 	}
 
-	vscript::handle_ref main::script_find_mod(std::string_view mdname) noexcept
+	vscript::instance_handle_ref main::script_find_mod(std::string_view mdname) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 

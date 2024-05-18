@@ -38,7 +38,7 @@ namespace vmod::bindings::ent
 
 			static ffi_type *guess_type(const gsdk::typedescription_t *prop, const gsdk::datamap_t *table) noexcept;
 
-			inline vscript::handle_ref script_type() noexcept
+			inline vscript::table_handle_ref script_type() noexcept
 			{ return type->table(); }
 
 			dataprop_base(gsdk::typedescription_t *prop_) noexcept;

@@ -33,7 +33,7 @@ namespace vmod::bindings::ffi
 		static vscript::class_desc<detour> desc;
 
 		vscript::variant script_call(const vscript::variant *args, std::size_t num_args, ...) noexcept;
-		vscript::handle_ref script_hook(vscript::handle_wrapper callback, bool post) noexcept;
+		vscript::instance_handle_ref script_hook(vscript::func_handle_ref callback, bool post) noexcept;
 
 		class callback_instance final : public plugin::callback_instance
 		{
@@ -42,9 +42,9 @@ namespace vmod::bindings::ffi
 			friend void write_docs(const std::filesystem::path &) noexcept;
 
 		public:
-			callback_instance(callable *caller_, vscript::handle_wrapper &&callback_, bool post_) noexcept = delete;
+			callback_instance(callable *caller_, vscript::func_handle_wrapper &&callback_, bool post_) noexcept = delete;
 
-			callback_instance(detour *owner_, vscript::handle_wrapper &&callback_, bool post_) noexcept;
+			callback_instance(detour *owner_, vscript::func_handle_wrapper &&callback_, bool post_) noexcept;
 
 			~callback_instance() noexcept override;
 

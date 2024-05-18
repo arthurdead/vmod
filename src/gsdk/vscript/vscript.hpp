@@ -20,10 +20,16 @@
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wundef"
+#else
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wundef"
+#pragma GCC diagnostic ignored "-Wnoexcept"
 #endif
 #include <squirrel.h>
 #ifdef __clang__
 #pragma clang diagnostic pop
+#else
+#pragma GCC diagnostic pop
 #endif
 
 //TODO!! how to detect
@@ -61,6 +67,7 @@ SQUIRREL_API SQInteger sq_getversion();
 #pragma clang diagnostic ignored "-Wreorder-ctor"
 #pragma clang diagnostic ignored "-Wstring-conversion"
 #pragma clang diagnostic ignored "-Wundef"
+#pragma clang diagnostic ignored "-Wcast-align"
 #else
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsuggest-override"
@@ -74,6 +81,10 @@ SQUIRREL_API SQInteger sq_getversion();
 #pragma GCC diagnostic ignored "-Weffc++"
 #pragma GCC diagnostic ignored "-Wuseless-cast"
 #pragma GCC diagnostic ignored "-Wswitch-enum"
+#pragma GCC diagnostic ignored "-Wundef"
+#pragma GCC diagnostic ignored "-Wreorder"
+#pragma GCC diagnostic ignored "-Wnoexcept"
+#pragma GCC diagnostic ignored "-Wcast-align"
 #endif
 #include <sqstate.h>
 #include <squtils.h>
@@ -83,6 +94,8 @@ SQUIRREL_API SQInteger sq_getversion();
 #include <sqtable.h>
 #include <sqarray.h>
 #include <sqclass.h>
+#include <sqfuncproto.h>
+#include <sqclosure.h>
 #undef type
 #ifdef __clang__
 #pragma clang diagnostic pop
@@ -183,7 +196,6 @@ namespace gsdk
 		FIELD_EHANDLE,
 		FIELD_EDICT,
 		FIELD_POSITION_VECTOR,
-		FIELD_FUNCTION,
 		FIELD_VMATRIX,
 		FIELD_MATRIX3X4_WORLDSPACE,
 		FIELD_VECTOR2D,
@@ -220,7 +232,6 @@ namespace gsdk
 		case FIELD_EHANDLE: return SlimScriptDataType_t::FIELD_EHANDLE;
 		case FIELD_EDICT: return SlimScriptDataType_t::FIELD_EDICT;
 		case FIELD_POSITION_VECTOR: return SlimScriptDataType_t::FIELD_POSITION_VECTOR;
-		case FIELD_FUNCTION: return SlimScriptDataType_t::FIELD_FUNCTION;
 		case FIELD_VMATRIX: return SlimScriptDataType_t::FIELD_VMATRIX;
 		case FIELD_MATRIX3X4_WORLDSPACE: return SlimScriptDataType_t::FIELD_MATRIX3X4_WORLDSPACE;
 	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
@@ -230,6 +241,10 @@ namespace gsdk
 		case FIELD_VECTOR4D: return SlimScriptDataType_t::FIELD_VECTOR4D;
 	#endif
 		case FIELD_CSTRING: return SlimScriptDataType_t::FIELD_CSTRING;
+		case FIELD_HSCRIPT_NEW_INSTANCE:
+		case FIELD_CUSTOM:
+		case FIELD_EMBEDDED:
+		case FIELD_FUNCTION:
 		case FIELD_HSCRIPT: return SlimScriptDataType_t::FIELD_HSCRIPT;
 		case FIELD_VARIANT: return SlimScriptDataType_t::FIELD_VARIANT;
 		case FIELD_UINT64: return SlimScriptDataType_t::FIELD_UINT64;
@@ -256,7 +271,6 @@ namespace gsdk
 		case SlimScriptDataType_t::FIELD_EHANDLE: return FIELD_EHANDLE;
 		case SlimScriptDataType_t::FIELD_EDICT: return FIELD_EDICT;
 		case SlimScriptDataType_t::FIELD_POSITION_VECTOR: return FIELD_POSITION_VECTOR;
-		case SlimScriptDataType_t::FIELD_FUNCTION: return FIELD_FUNCTION;
 		case SlimScriptDataType_t::FIELD_VMATRIX: return FIELD_VMATRIX;
 		case SlimScriptDataType_t::FIELD_MATRIX3X4_WORLDSPACE: return FIELD_MATRIX3X4_WORLDSPACE;
 	#if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
@@ -336,21 +350,7 @@ namespace gsdk
 		{ return (flags() & FIELD_FLAG_OPTIONAL); }
 
 		constexpr bool can_be_anything() const noexcept
-		{
-			if(has_extra_type(SlimScriptDataType_t::FIELD_VARIANT) ||
-				has_extra_type(SlimScriptDataType_t::FIELD_HSCRIPT)) {
-				return true;
-			}
-
-			switch(main_type()) {
-				case FIELD_VARIANT:
-				case FIELD_HSCRIPT_NEW_INSTANCE:
-				case FIELD_HSCRIPT:
-				return true;
-				default:
-				return false;
-			}
-		}
+		{ return (has_extra_type(SlimScriptDataType_t::FIELD_VARIANT) || main_type() == FIELD_VARIANT); }
 
 		constexpr bool can_be_null() const noexcept
 		{
@@ -478,8 +478,30 @@ namespace gsdk
 			);
 		}
 
+		inline bool is_object() const noexcept
+		{
+			switch(m_type) {
+			case FIELD_HSCRIPT:
+			case FIELD_HSCRIPT_NEW_INSTANCE:
+			case FIELD_EMBEDDED:
+			case FIELD_CUSTOM:
+			case FIELD_FUNCTION:
+			return true;
+			default:
+			return false;
+			}
+		}
+
 		inline bool should_free() const noexcept
 		{ return (m_flags & SV_FREE); }
+
+		void reset() noexcept
+		{
+			free();
+			m_type = FIELD_TYPEUNKNOWN;
+			m_flags = SV_NOFLAGS;
+			std::memset(m_data, 0, sizeof(m_data));
+		}
 
 		union
 		{
@@ -935,11 +957,12 @@ namespace gsdk
 		virtual bool ValueExists(HSCRIPT, const char *) = 0;
 		virtual bool SetValue(HSCRIPT, const char *, const char *) = 0;
 	public:
-		virtual bool SetValue_impl(HSCRIPT, const char *, const ScriptVariant_t &) = 0;
+		virtual bool SetValue_impl(HSCRIPT, const char *, ScriptVariant_t &) = 0;
 	#if GSDK_ENGINE == GSDK_ENGINE_L4D2
-		virtual bool SetValue_impl(HSCRIPT, int, const ScriptVariant_t &) = 0;
+		virtual bool SetValue_impl(HSCRIPT, int, ScriptVariant_t &) = 0;
 	#endif
 	public:
+		bool SetValue(HSCRIPT scope, const char *name, ScriptVariant_t &var) noexcept;
 		bool SetValue(HSCRIPT scope, const char *name, const ScriptVariant_t &var) noexcept;
 		bool SetValue(HSCRIPT scope, const char *name, ScriptVariant_t &&var) noexcept;
 		bool SetValue(HSCRIPT scope, const char *name, HSCRIPT object) noexcept;

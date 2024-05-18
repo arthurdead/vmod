@@ -42,21 +42,21 @@ namespace vmod::bindings::ent
 	private:
 		static vscript::singleton_class_desc<singleton> desc;
 
-		static vscript::handle_ref script_from_ptr(gsdk::CBaseEntity *ptr) noexcept;
-		static void *script_to_ptr(vscript::handle_wrapper obj) noexcept;
+		static vscript::instance_handle_ref script_from_ptr(gsdk::CBaseEntity *ptr) noexcept;
+		static void *script_to_ptr(vscript::instance_handle_wrapper obj) noexcept;
 
-		vscript::handle_ref script_lookup_sendprop(std::string_view path) noexcept;
-		vscript::handle_ref script_lookup_sendtable(std::string_view path) noexcept;
+		vscript::instance_handle_ref script_lookup_sendprop(std::string_view path) noexcept;
+		vscript::instance_handle_ref script_lookup_sendtable(std::string_view path) noexcept;
 
-		vscript::handle_ref script_lookup_dataprop(std::string_view path) noexcept;
-		vscript::handle_ref script_lookup_datatable(std::string_view path) noexcept;
+		vscript::instance_handle_ref script_lookup_dataprop(std::string_view path) noexcept;
+		vscript::instance_handle_ref script_lookup_datatable(std::string_view path) noexcept;
 
-		vscript::handle_ref script_lookup_serverclass(std::string_view path) noexcept;
+		vscript::instance_handle_ref script_lookup_serverclass(std::string_view path) noexcept;
 
-		vscript::handle_ref script_find_factory(std::string &&name) noexcept;
-		static vscript::handle_ref script_create_factory(std::variant<vscript::handle_wrapper, std::string_view> names, vscript::handle_wrapper func, std::optional<vscript::handle_wrapper> size_func) noexcept;
+		vscript::instance_handle_ref script_find_factory(std::string &&name) noexcept;
+		static vscript::instance_handle_ref script_create_factory(std::variant<vscript::array_handle_wrapper, std::string_view> names, vscript::func_handle_wrapper func, std::optional<vscript::func_handle_wrapper> size_func) noexcept;
 
-		vscript::handle_ref script_create_datatable(vscript::handle_wrapper datadesc) noexcept;
+		vscript::instance_handle_ref script_create_datatable(vscript::table_handle_wrapper datadesc) noexcept;
 
 		enum class prop_result_type : unsigned char
 		{

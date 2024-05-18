@@ -21,6 +21,15 @@
 
 namespace vmod
 {
+	enum class environment : unsigned char
+	{
+		unknown,
+		client,
+		dedicated_server,
+	};
+
+	extern environment environment;
+
 	extern gsdk::IDedicatedExports *dedicated;
 	extern gsdk::IVEngineServer *sv_engine;
 	extern gsdk::IServer *sv;
@@ -41,7 +50,6 @@ namespace vmod
 #ifndef GSDK_NO_SYMBOLS
 	extern bool symbols_available;
 #endif
-	extern bool srcds_executable;
 	extern gsdk::ConVar *developer;
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 	extern gsdk::CLoggingSystem *(*GetGlobalLoggingSystem)();

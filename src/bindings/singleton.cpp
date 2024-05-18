@@ -59,7 +59,7 @@ namespace vmod::bindings
 			}
 		}
 
-		vscript::handle_ref target_scope{root ? nullptr : *main::instance().scope};
+		vscript::scope_handle_ref target_scope{root ? nullptr : *main::instance().scope};
 
 		if(!vm->SetValue(*target_scope, name.data(), *scope)) {
 			error("vmod: failed to set '%s' scope value\n"sv, name.data());
@@ -75,7 +75,7 @@ namespace vmod::bindings
 
 		gsdk::IScriptVM *vm{vscript::vm()};
 
-		vscript::handle_ref target_scope{root ? nullptr : *main::instance().scope};
+		vscript::scope_handle_ref target_scope{root ? nullptr : *main::instance().scope};
 
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 		get_impl = vm->MakeSquirrelMetamethod_Get(*target_scope, name.data(), this, false);
@@ -91,7 +91,7 @@ namespace vmod::bindings
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
-		vscript::handle_ref target_scope{root ? nullptr : *main::instance().scope};
+		vscript::scope_handle_ref target_scope{root ? nullptr : *main::instance().scope};
 
 		if(target_scope) {
 			if(vm->ValueExists(*target_scope, name.data())) {

@@ -16,6 +16,13 @@
 #else
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#pragma GCC diagnostic ignored "-Wreorder"
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#pragma GCC diagnostic ignored "-Wnoexcept"
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#pragma GCC diagnostic ignored "-Wcast-qual"
+#pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
+#pragma GCC diagnostic ignored "-Wshadow"
 #endif
 #include <sqmodules.h>
 #ifdef __clang__
@@ -78,8 +85,8 @@ namespace vmod::vm
 		bool GenerateUniqueKey(const char *, char *, int) override;
 		bool ValueExists(gsdk::HSCRIPT, const char *) override;
 		bool SetValue(gsdk::HSCRIPT, const char *, const char *) override;
-		bool SetValue_impl(gsdk::HSCRIPT, const char *, const gsdk::ScriptVariant_t &) override;
-		bool SetValue_impl(gsdk::HSCRIPT, int, const gsdk::ScriptVariant_t &) __VMOD_CUSTOM_VM_L4D2_OVERRIDE;
+		bool SetValue_impl(gsdk::HSCRIPT, const char *, gsdk::ScriptVariant_t &) override;
+		bool SetValue_impl(gsdk::HSCRIPT, int, gsdk::ScriptVariant_t &) __VMOD_CUSTOM_VM_L4D2_OVERRIDE;
 		void CreateTable_impl(gsdk::ScriptVariant_t &) override;
 		bool IsTable(gsdk::HSCRIPT) __VMOD_CUSTOM_VM_L4D2_OVERRIDE;
 		int GetNumTableEntries(gsdk::HSCRIPT) const override;
@@ -112,7 +119,7 @@ namespace vmod::vm
 		bool RegisterClass_nonvirtual(gsdk::ScriptClassDesc_t *) noexcept;
 		gsdk::HSCRIPT RegisterInstance_impl_nonvirtual(gsdk::ScriptClassDesc_t *, void *) noexcept;
 		bool SetValue_nonvirtual(gsdk::HSCRIPT, const char *, const char *) noexcept;
-		bool SetValue_impl_nonvirtual(gsdk::HSCRIPT, const char *, const gsdk::ScriptVariant_t &) noexcept;
+		bool SetValue_impl_nonvirtual(gsdk::HSCRIPT, const char *, gsdk::ScriptVariant_t &) noexcept;
 		void CreateArray_impl_nonvirtual(gsdk::ScriptVariant_t &) noexcept;
 		int GetArrayCount_nonvirtual(gsdk::HSCRIPT) noexcept;
 		bool IsArray_nonvirtual(gsdk::HSCRIPT) noexcept;
@@ -128,6 +135,10 @@ namespace vmod::vm
 		static void error_func(HSQUIRRELVM vm, const SQChar *fmt, ...) __attribute__((__format__(__printf__, 2, 3)));
 		static char print_buff[gsdk::MAXPRINTMSG];
 		static void print_func(HSQUIRRELVM vm, const SQChar *fmt, ...) __attribute__((__format__(__printf__, 2, 3)));
+	#ifdef __VMOD_USING_QUIRREL
+		static void compile_err_func(HSQUIRRELVM vm, const SQChar *desc, const SQChar *src, SQInteger line, SQInteger column, const SQChar *extra);
+		static void compile_msg_func(HSQUIRRELVM vm, const SQCompilerMessage *msg);
+	#endif
 
 		static SQInteger static_func_call(HSQUIRRELVM vm);
 		static SQInteger member_func_call(HSQUIRRELVM vm);

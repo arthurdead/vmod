@@ -74,11 +74,11 @@ namespace vmod::bindings::cvar
 
 		concommand(gsdk::ConCommand *cmd_) = delete;
 
-		concommand(gsdk::ConCommand *cmd_, vscript::handle_wrapper &&callback_) noexcept;
+		concommand(gsdk::ConCommand *cmd_, vscript::func_handle_wrapper &&callback_) noexcept;
 
 		~concommand() noexcept override;
 
-		inline vscript::handle_ref func_ref() noexcept
+		inline vscript::func_handle_ref func_ref() noexcept
 		{ return callback; }
 
 	protected:
@@ -88,6 +88,6 @@ namespace vmod::bindings::cvar
 		{ return register_instance(&desc, this); }
 
 	private:
-		vscript::handle_wrapper callback;
+		vscript::func_handle_wrapper callback;
 	};
 }

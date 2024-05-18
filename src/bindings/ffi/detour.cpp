@@ -35,7 +35,7 @@ namespace vmod::bindings::ffi
 		
 	}
 
-	vscript::handle_ref detour::script_hook(vscript::handle_wrapper callback, bool post) noexcept
+	vscript::instance_handle_ref detour::script_hook(vscript::func_handle_ref callback, bool post) noexcept
 	{
 		gsdk::IScriptVM *vm{main::instance().vm()};
 
@@ -44,13 +44,13 @@ namespace vmod::bindings::ffi
 			return nullptr;
 		}
 
-		callback = vm->ReferenceFunction(*callback);
-		if(!callback) {
+		vscript::func_handle_wrapper callback_copy{vm->ReferenceFunction(*callback)};
+		if(!callback_copy) {
 			vm->RaiseException("vmod: failed to get callback reference");
 			return nullptr;
 		}
 
-		detour::callback_instance *clbk_instance{new detour::callback_instance{this, std::move(callback), post}};
+		detour::callback_instance *clbk_instance{new detour::callback_instance{this, std::move(callback_copy), post}};
 		if(!clbk_instance->initialize()) {
 			delete clbk_instance;
 			return nullptr;
@@ -59,7 +59,7 @@ namespace vmod::bindings::ffi
 		return clbk_instance->instance_;
 	}
 
-	detour::callback_instance::callback_instance(detour *owner_, vscript::handle_wrapper &&callback_, bool post_) noexcept
+	detour::callback_instance::callback_instance(detour *owner_, vscript::func_handle_wrapper &&callback_, bool post_) noexcept
 		: plugin::callback_instance{owner_, std::move(callback_), post_}, owner{owner_}
 	{
 	}

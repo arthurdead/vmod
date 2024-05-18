@@ -116,7 +116,7 @@ namespace vmod::bindings::syms
 		
 	}
 
-	vscript::handle_ref singleton::script_lookup_qual(qual_cache_t &qual_cache, symbol_cache::const_iterator qual_it) noexcept
+	vscript::instance_handle_ref singleton::script_lookup_qual(qual_cache_t &qual_cache, symbol_cache::const_iterator qual_it) noexcept
 	{
 		auto it{qual_cache.find(qual_it)};
 		if(it == qual_cache.end()) {
@@ -132,7 +132,7 @@ namespace vmod::bindings::syms
 		}
 	}
 
-	vscript::handle_ref singleton::script_lookup_name(name_cache_t &name_cache, symbol_cache::qualification_info::const_iterator it_name) noexcept
+	vscript::instance_handle_ref singleton::script_lookup_name(name_cache_t &name_cache, symbol_cache::qualification_info::const_iterator it_name) noexcept
 	{
 		auto it{name_cache.find(it_name)};
 		if(it == name_cache.end()) {
@@ -148,7 +148,7 @@ namespace vmod::bindings::syms
 		}
 	}
 
-	vscript::handle_ref singleton::qualification_it::script_lookup(std::string_view symname) noexcept
+	vscript::instance_handle_ref singleton::qualification_it::script_lookup(std::string_view symname) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -166,7 +166,7 @@ namespace vmod::bindings::syms
 		return script_lookup_name(qualification_it::name_cache, tmp_it);
 	}
 
-	vscript::handle_ref singleton::name_it::script_lookup(std::string_view symname) noexcept
+	vscript::instance_handle_ref singleton::name_it::script_lookup(std::string_view symname) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -184,7 +184,7 @@ namespace vmod::bindings::syms
 		return script_lookup_name(name_it::name_cache, tmp_it);
 	}
 
-	vscript::handle_ref singleton::script_lookup(std::string_view symname) noexcept
+	vscript::instance_handle_ref singleton::script_lookup(std::string_view symname) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -206,7 +206,7 @@ namespace vmod::bindings::syms
 		return script_lookup_qual(glob_qual_cache, it);
 	}
 
-	vscript::handle_ref singleton::script_lookup_global(std::string_view symname) noexcept
+	vscript::instance_handle_ref singleton::script_lookup_global(std::string_view symname) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 

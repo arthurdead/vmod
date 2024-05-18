@@ -45,7 +45,7 @@ namespace gsdk
 #if GSDK_ENGINE == GSDK_ENGINE_TF2 || GSDK_ENGINE == GSDK_ENGINE_L4D2
 	ScriptHandleWrapper_t IScriptVM::CreateArray() noexcept
 	{
-		ScriptVariant_t var;
+		ScriptVariant_t var{};
 	#if GSDK_ENGINE == GSDK_ENGINE_TF2
 		gsdk::ScriptLanguage_t lang{GetLanguage()};
 		switch(lang) {
@@ -195,7 +195,7 @@ namespace gsdk
 
 	bool IScriptVM::GetScalarValue(HSCRIPT object, ScriptVariant_t *var) noexcept
 	{
-		std::memset(var->m_data, 0, sizeof(gsdk::ScriptVariant_t::m_data));
+		var->reset();
 
 		gsdk::ScriptLanguage_t lang{GetLanguage()};
 		switch(lang) {
@@ -261,7 +261,7 @@ namespace gsdk
 		}
 	#endif
 
-		ScriptHandleWrapper_t tmp;
+		ScriptHandleWrapper_t tmp{};
 		tmp.should_free_ = true;
 		tmp.object = ret;
 		tmp.type = HANDLETYPE_UNKNOWN;
@@ -277,7 +277,7 @@ namespace gsdk
 		}
 	#endif
 
-		ScriptHandleWrapper_t tmp;
+		ScriptHandleWrapper_t tmp{};
 		tmp.should_free = false;
 		tmp.object = object;
 		tmp.type = HANDLETYPE_UNKNOWN;
@@ -297,7 +297,7 @@ namespace gsdk
 	{
 	#ifndef __VMOD_USING_CUSTOM_VM
 		if(scope == INVALID_HSCRIPT) {
-			ScriptHandleWrapper_t tmp;
+			ScriptHandleWrapper_t tmp{};
 			tmp.type = HANDLETYPE_FUNCTION;
 			return tmp;
 		}
@@ -310,7 +310,7 @@ namespace gsdk
 		}
 	#endif
 
-		ScriptHandleWrapper_t tmp;
+		ScriptHandleWrapper_t tmp{};
 		tmp.should_free_ = true;
 		tmp.object = ret;
 		tmp.type = HANDLETYPE_FUNCTION;
@@ -327,7 +327,7 @@ namespace gsdk
 		}
 	#endif
 
-		ScriptHandleWrapper_t tmp;
+		ScriptHandleWrapper_t tmp{};
 		tmp.should_free_ = true;
 		tmp.object = ret;
 		tmp.type = HANDLETYPE_INSTANCE;
@@ -366,15 +366,20 @@ namespace gsdk
 		if(scope == INVALID_HSCRIPT) {
 			return false;
 		}
-
-		ScriptVariant_t temp;
-		temp.m_type = fixup_var_field(var.m_type);
-		temp.m_flags = var.m_flags & ~SV_FREE;
-		std::memcpy(temp.m_data, var.m_data, sizeof(ScriptVariant_t::m_data));
-		return SetValue_impl(scope, name, temp);
-	#else
-		return SetValue_impl(scope, name, var);
 	#endif
+
+		return SetValue_impl(scope, name, const_cast<ScriptVariant_t &>(var));
+	}
+
+	bool IScriptVM::SetValue(HSCRIPT scope, const char *name, ScriptVariant_t &var) noexcept
+	{
+	#ifndef __VMOD_USING_CUSTOM_VM
+		if(scope == INVALID_HSCRIPT) {
+			return false;
+		}
+	#endif
+
+		return SetValue_impl(scope, name, var);
 	}
 
 	bool IScriptVM::SetValue(HSCRIPT scope, const char *name, ScriptVariant_t &&var) noexcept
@@ -385,9 +390,7 @@ namespace gsdk
 		}
 	#endif
 
-		bool ret{SetValue(scope, name, static_cast<const ScriptVariant_t &>(var))};
-		var.free();
-		return ret;
+		return SetValue_impl(scope, name, static_cast<ScriptVariant_t &>(var));
 	}
 
 	bool IScriptVM::SetValue(HSCRIPT scope, const char *name, HSCRIPT object) noexcept
@@ -402,7 +405,7 @@ namespace gsdk
 		}
 	#endif
 
-		ScriptVariant_t var;
+		ScriptVariant_t var{};
 		var.m_type = FIELD_HSCRIPT;
 		var.m_flags = SV_NOFLAGS;
 		var.m_object = object;
@@ -411,7 +414,7 @@ namespace gsdk
 
 	ScriptHandleWrapper_t IScriptVM::CreateTable() noexcept
 	{
-		ScriptVariant_t var;
+		ScriptVariant_t var{};
 		CreateTable_impl(var);
 		ScriptHandleWrapper_t tmp{std::move(var)};
 		tmp.type = HANDLETYPE_TABLE;
@@ -443,7 +446,7 @@ namespace gsdk
 		}
 	#endif
 
-		ScriptHandleWrapper_t tmp;
+		ScriptHandleWrapper_t tmp{};
 		tmp.should_free_ = true;
 		tmp.object = ret;
 		tmp.type = HANDLETYPE_SCOPE;
@@ -459,7 +462,7 @@ namespace gsdk
 		}
 	#endif
 
-		ScriptVariant_t tmp;
+		ScriptVariant_t tmp{};
 		return GetKeyValue(array, it, &tmp, value);
 	}
 
@@ -485,7 +488,7 @@ namespace gsdk
 			return;
 		}
 
-		ScriptVariant_t var;
+		ScriptVariant_t var{};
 		var.m_type = FIELD_HSCRIPT;
 		var.m_flags = SV_NOFLAGS;
 		var.m_object = object;
@@ -556,7 +559,7 @@ namespace gsdk
 	{
 		HSCRIPT ret{CompileScript_impl(src, name)};
 
-		ScriptHandleWrapper_t tmp;
+		ScriptHandleWrapper_t tmp{};
 		tmp.should_free_ = true;
 		tmp.object = ret;
 		tmp.type = HANDLETYPE_SCRIPT;
@@ -568,7 +571,7 @@ namespace gsdk
 	{
 		HSCRIPT ret{ReferenceScope_impl(obj)};
 
-		ScriptHandleWrapper_t tmp;
+		ScriptHandleWrapper_t tmp{};
 		tmp.should_free_ = true;
 		tmp.object = ret;
 		tmp.type = HANDLETYPE_SCOPE;

@@ -44,7 +44,11 @@ namespace gsdk
 
 	inline void SinCos(float x, float *sine, float *cosine) noexcept
 	{
+	#ifdef __clang__
+		::sincosf(x, sine, cosine);
+	#else
 		__builtin_sincosf(x, sine, cosine);
+	#endif
 	}
 
 	inline float FastSqrt(float x) noexcept

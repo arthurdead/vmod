@@ -16,7 +16,7 @@ namespace vmod::bindings
 		instance_base(instance_base &&other) noexcept = default;
 		instance_base &operator=(instance_base &&other) noexcept = default;
 
-		inline vscript::handle_ref instance() noexcept
+		inline vscript::instance_handle_ref instance() noexcept
 		{ return instance_; }
 
 	protected:
@@ -24,7 +24,7 @@ namespace vmod::bindings
 		bool register_instance(gsdk::ScriptClassDesc_t *) = delete;
 
 	public:
-		vscript::handle_wrapper instance_{};
+		vscript::instance_handle_wrapper instance_{};
 
 	private:
 		instance_base(const instance_base &) = delete;

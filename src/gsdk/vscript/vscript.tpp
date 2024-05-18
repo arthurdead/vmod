@@ -19,8 +19,7 @@ namespace gsdk
 	template <typename T>
 	HSCRIPT CVariantBase<T>::release_object() noexcept
 	{
-		if(m_type != FIELD_HSCRIPT_NEW_INSTANCE &&
-			m_type != FIELD_HSCRIPT) {
+		if(!is_object()) {
 			return INVALID_HSCRIPT;
 		}
 
@@ -66,6 +65,9 @@ namespace gsdk
 				break;
 				case FIELD_HSCRIPT_NEW_INSTANCE:
 				case FIELD_HSCRIPT:
+				case FIELD_CUSTOM:
+				case FIELD_FUNCTION:
+				case FIELD_EMBEDDED:
 				g_pScriptVM->ReleaseObject(m_object);
 				break;
 				default:

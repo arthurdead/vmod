@@ -53,18 +53,18 @@ namespace vmod::bindings::mem
 			inline const std::string &name() const noexcept
 			{ return name_; }
 
-			inline vscript::handle_ref table() noexcept
+			inline vscript::table_handle_ref table() noexcept
 			{ return table_; }
 
 		private:
-			inline type(std::string_view name__, ffi_type *type_, vscript::handle_wrapper &&table__) noexcept
+			inline type(std::string_view name__, ffi_type *type_, vscript::table_handle_wrapper &&table__) noexcept
 				: ptr{type_}, name_{name__}, table_{std::move(table__)}
 			{
 			}
 
 			ffi_type *ptr;
 			std::string name_;
-			vscript::handle_wrapper table_{};
+			vscript::table_handle_wrapper table_{};
 
 		private:
 			type() noexcept = delete;
@@ -74,19 +74,19 @@ namespace vmod::bindings::mem
 
 		type *find_type(ffi_type *ptr) noexcept;
 
-		static ffi_type *read_type(vscript::handle_ref type_table) noexcept;
+		static ffi_type *read_type(vscript::table_handle_ref type_table) noexcept;
 
 	private:
 		static vscript::singleton_class_desc<singleton> desc;
 
-		static vscript::handle_ref script_allocate(std::size_t size) noexcept;
-		static vscript::handle_ref script_allocate_ent(std::size_t size) noexcept;
-		static vscript::handle_ref script_allocate_aligned(std::align_val_t align, std::size_t size) noexcept;
-		static vscript::handle_ref script_allocate_type(vscript::handle_wrapper type) noexcept;
-		static vscript::handle_ref script_allocate_zero(std::size_t num, std::size_t size) noexcept;
+		static vscript::instance_handle_ref script_allocate(std::size_t size) noexcept;
+		static vscript::instance_handle_ref script_allocate_ent(std::size_t size) noexcept;
+		static vscript::instance_handle_ref script_allocate_aligned(std::align_val_t align, std::size_t size) noexcept;
+		static vscript::instance_handle_ref script_allocate_type(vscript::table_handle_ref type) noexcept;
+		static vscript::instance_handle_ref script_allocate_zero(std::size_t num, std::size_t size) noexcept;
 
-		static vscript::variant script_read(unsigned char *ptr, vscript::handle_wrapper type_table) noexcept;
-		static void script_write(unsigned char *ptr, vscript::handle_wrapper type_table, const vscript::variant &var) noexcept;
+		static vscript::variant script_read(unsigned char *ptr, vscript::table_handle_ref type_table) noexcept;
+		static void script_write(unsigned char *ptr, vscript::table_handle_ref type_table, const vscript::variant &var) noexcept;
 
 		static unsigned char *script_add(unsigned char *ptr, std::ptrdiff_t off) noexcept;
 		static unsigned char *script_sub(unsigned char *ptr, std::ptrdiff_t off) noexcept;
@@ -97,7 +97,7 @@ namespace vmod::bindings::mem
 		bool register_type(ffi_type *ptr, std::string_view type_name) noexcept;
 
 		std::vector<std::unique_ptr<type>> types;
-		vscript::handle_wrapper types_table{};
+		vscript::table_handle_wrapper types_table{};
 
 	private:
 		singleton(const singleton &) = delete;

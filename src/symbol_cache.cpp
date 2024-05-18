@@ -58,6 +58,9 @@ namespace vmod
 
 		std::filesystem::path ext{path.extension()};
 
+		pure_virt_it = global_qual.names.end();
+		delt_virt_it = global_qual.names.end();
+
 		if(ext == ".so"sv) {
 		#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 			#ifndef GSDK_NO_SYMBOLS
@@ -263,17 +266,43 @@ namespace vmod
 				continue;
 			}
 
-			info->vtable_.funcs_.resize(vtable_size, {qualifications.end(),info->names.end()});
+			info->vtable_.entries_.resize(vtable_size, ventry_t{});
 
 			generic_vtable_t vtable{vtable_from_prefix(info->vtable_.prefix)};
 			for(std::size_t i{0}; i < vtable_size; ++i) {
 				generic_plain_mfp_t func{vtable[i]};
-				std::uint64_t off{elf ? (reinterpret_cast<std::uint64_t>(func) - reinterpret_cast<std::uint64_t>(base)) : reinterpret_cast<std::uint64_t>(func)};
-				auto map_it{offset_map.find(off)};
-				if(map_it != offset_map.end()) {
-					map_it->second.func->second->vindex = i;
-					info->vtable_.funcs_[i] = map_it->second;
+				if(func) {
+					std::uint64_t off{elf ? (reinterpret_cast<std::uint64_t>(func) - reinterpret_cast<std::uint64_t>(base)) : reinterpret_cast<std::uint64_t>(func)};
+					auto map_it{offset_map.find(off)};
+					if(map_it != offset_map.end() && !map_it->second.empty()) {
+						for(auto &fnc : map_it->second) {
+							if(fnc.type_ == info_t::type::qualified) {
+								fnc.qualified.second->second->vindex = i;
+							}
+						}
+
+						info->vtable_.entries_[i] = map_it->second;
+						continue;
+					}
 				}
+
+				if(!func || func == reinterpret_cast<generic_plain_mfp_t>(::__cxxabiv1::__cxa_pure_virtual)) {
+					if(pure_virt_it != global_qual.names.end()) {
+						info->vtable_.entries_[i] = pure_virt_it;
+					}
+				} else if(func == reinterpret_cast<generic_plain_mfp_t>(::__cxxabiv1::__cxa_deleted_virtual)) {
+					if(delt_virt_it != global_qual.names.end()) {
+						info->vtable_.entries_[i] = delt_virt_it;
+					}
+				#pragma GCC diagnostic push
+				#pragma GCC diagnostic ignored "-Wconditionally-supported"
+				} else if(reinterpret_cast<__cxxabiv1::__class_type_info *>(vtable[i+1]) == info->vtable_.prefix->whole_type) {
+					info->vtable_.entries_[i] = static_cast<std::uintptr_t>(-reinterpret_cast<std::intptr_t>(vtable[i]));
+					++i;
+					info->vtable_.entries_[i] = reinterpret_cast<__cxxabiv1::__class_type_info *>(vtable[i+1]);
+					continue;
+				}
+				#pragma GCC diagnostic pop
 			}
 		}
 
@@ -350,7 +379,7 @@ namespace vmod
 
 			qualifications_t::iterator tmp_qual_it;
 			qualification_info::names_t::iterator tmp_name_it;
-			handle_component(name_mangled_str, component, tmp_qual_it, tmp_name_it, std::move(basic_sym), base, false);
+			handle_component(name_mangled_str, nullptr, component, tmp_qual_it, tmp_name_it, std::move(basic_sym), base, false);
 
 			++it;
 		}
@@ -555,7 +584,19 @@ namespace vmod
 						info->resolve_from_base(base);
 					#endif
 						auto name_it{global_qual.names.emplace(name_mangled, std::move(info)).first};
-						offset_map.emplace(offset, pair_t{qualifications.end(),name_it});
+						if(name_mangled == "__cxa_pure_virtual"sv) {
+							pure_virt_it = name_it;
+						} else if(name_mangled == "__cxa_deleted_virtual"sv) {
+							delt_virt_it = name_it;
+						}
+						auto map_it{offset_map.find(offset)};
+						if(map_it == offset_map.end()) {
+							std::vector<info_t> mapvec{};
+							mapvec.emplace_back(info_t{name_it});
+							offset_map.emplace(offset, std::move(mapvec));
+						} else {
+							map_it->second.emplace_back(info_t{name_it});
+						}
 					}
 					continue;
 				}
@@ -578,7 +619,7 @@ namespace vmod
 
 				qualifications_t::iterator tmp_qual_it;
 				qualification_info::names_t::iterator tmp_name_it;
-				handle_component(name_mangled, component, tmp_qual_it, tmp_name_it, std::move(basic_sym), base, true);
+				handle_component(name_mangled, nullptr, component, tmp_qual_it, tmp_name_it, std::move(basic_sym), base, true);
 			}
 
 			break;
@@ -1099,7 +1140,7 @@ namespace vmod
 #endif
 
 #ifndef GSDK_NO_SYMBOLS
-	bool symbol_cache::handle_component([[maybe_unused]] std::string_view name_mangled, demangle_component *component, qualifications_t::iterator &qual_it, qualification_info::names_t::iterator &name_it, basic_sym_t &&sym, unsigned char *base, [[maybe_unused]] bool elf) noexcept
+	bool symbol_cache::handle_component([[maybe_unused]] std::string_view name_mangled, demangle_component *old_component, demangle_component *component, qualifications_t::iterator &qual_it, qualification_info::names_t::iterator &name_it, basic_sym_t &&sym, unsigned char *base, [[maybe_unused]] bool elf) noexcept
 	{
 		using namespace std::literals::string_view_literals;
 
@@ -1124,6 +1165,17 @@ namespace vmod
 		}
 
 		switch(component->type) {
+			case DEMANGLE_COMPONENT_CONSTRUCTION_VTABLE:
+			return (
+				handle_component(name_mangled, component, component->u.s_binary.left, qual_it, name_it, std::move(sym), base, elf) &&
+				handle_component(name_mangled, component, component->u.s_binary.right, qual_it, name_it, std::move(sym), base, elf)
+			);
+			case DEMANGLE_COMPONENT_THUNK:
+			case DEMANGLE_COMPONENT_VIRTUAL_THUNK:
+			case DEMANGLE_COMPONENT_COVARIANT_THUNK:
+			return handle_component(name_mangled, component, component->u.s_binary.left, qual_it, name_it, std::move(sym), base, elf);
+			case DEMANGLE_COMPONENT_VTT:
+			return handle_component(name_mangled, component, component->u.s_binary.left, qual_it, name_it, std::move(sym), base, elf);
 			case DEMANGLE_COMPONENT_VTABLE:
 			case DEMANGLE_COMPONENT_QUAL_NAME:
 			case DEMANGLE_COMPONENT_TYPED_NAME:
@@ -1181,6 +1233,8 @@ namespace vmod
 
 		switch(component->type) {
 			case DEMANGLE_COMPONENT_VTABLE: {
+				std::string qual_name;
+
 				unmangled_buffer = cplus_demangle_print(demangle_flags, component->u.s_binary.left, guessed_name_length, &allocated);
 				if(!unmangled_buffer) {
 					name_it = global_qual.names.end();
@@ -1188,7 +1242,7 @@ namespace vmod
 					return false;
 				}
 
-				std::string qual_name{unmangled_buffer};
+				qual_name += unmangled_buffer;
 				std::free(unmangled_buffer);
 
 				if(ignored_qual(qual_name)) {
@@ -1227,7 +1281,7 @@ namespace vmod
 						case DEMANGLE_COMPONENT_TYPED_NAME: {
 							qualifications_t::iterator tmp_qual_it;
 							qualification_info::names_t::iterator tmp_name_it;
-							if(handle_component(name_mangled, component->u.s_binary.left, tmp_qual_it, tmp_name_it, basic_sym_t{}, base, elf) &&
+							if(handle_component(name_mangled, component, component->u.s_binary.left, tmp_qual_it, tmp_name_it, basic_sym_t{}, base, elf) &&
 								tmp_name_it != global_qual.names.end()) {
 								unmangled_buffer = cplus_demangle_print(demangle_flags, component->u.s_binary.right, guessed_name_length, &allocated);
 								if(!unmangled_buffer) {
@@ -1351,7 +1405,14 @@ namespace vmod
 								name_it = this_qual_it->second->names.insert_or_assign(std::move(name), std::move(info)).first;
 								qual_it = this_qual_it;
 
-								offset_map.emplace(offset, pair_t{qual_it,name_it});
+								auto map_it{offset_map.find(offset)};
+								if(map_it == offset_map.end()) {
+									std::vector<info_t> mapvec{};
+									mapvec.emplace_back(info_t{qual_it,name_it});
+									offset_map.emplace(offset, std::move(mapvec));
+								} else {
+									map_it->second.emplace_back(info_t{qual_it,name_it});
+								}
 
 								return true;
 							}
@@ -1394,6 +1455,23 @@ namespace vmod
 									return false;
 								}
 
+								std::string func_name;
+
+								if(old_component && old_component != component) {
+									switch(old_component->type) {
+									case DEMANGLE_COMPONENT_THUNK:
+									func_name = "`thunk` "sv;
+									break;
+									case DEMANGLE_COMPONENT_VIRTUAL_THUNK:
+									func_name = "`virtual-thunk` "sv;
+									break;
+									case DEMANGLE_COMPONENT_COVARIANT_THUNK:
+									func_name = "`covariant-thunk` "sv;
+									break;
+									default: break;
+									}
+								}
+
 								unmangled_buffer = cplus_demangle_print(demangle_flags, component->u.s_binary.left->u.s_binary.left->u.s_binary.right, guessed_name_length, &allocated);
 								if(!unmangled_buffer) {
 									name_it = global_qual.names.end();
@@ -1401,7 +1479,7 @@ namespace vmod
 									return false;
 								}
 
-								std::string func_name{unmangled_buffer};
+								func_name += unmangled_buffer;
 								std::free(unmangled_buffer);
 
 								unmangled_buffer = cplus_demangle_print(demangle_flags, component->u.s_binary.right, guessed_name_length, &allocated);
@@ -1452,7 +1530,14 @@ namespace vmod
 								name_it = this_qual_it->second->names.insert_or_assign(std::move(func_name), std::move(info)).first;
 								qual_it = this_qual_it;
 
-								offset_map.emplace(offset, pair_t{qual_it,name_it});
+								auto map_it{offset_map.find(offset)};
+								if(map_it == offset_map.end()) {
+									std::vector<info_t> mapvec{};
+									mapvec.emplace_back(info_t{qual_it,name_it});
+									offset_map.emplace(offset, std::move(mapvec));
+								} else {
+									map_it->second.emplace_back(info_t{qual_it,name_it});
+								}
 
 								return true;
 							}
@@ -1473,6 +1558,23 @@ namespace vmod
 									return false;
 								}
 
+								std::string func_name;
+
+								if(old_component && old_component != component) {
+									switch(old_component->type) {
+									case DEMANGLE_COMPONENT_THUNK:
+									func_name = "`thunk` "sv;
+									break;
+									case DEMANGLE_COMPONENT_VIRTUAL_THUNK:
+									func_name = "`virtual-thunk` "sv;
+									break;
+									case DEMANGLE_COMPONENT_COVARIANT_THUNK:
+									func_name = "`covariant-thunk` "sv;
+									break;
+									default: break;
+									}
+								}
+
 								unmangled_buffer = cplus_demangle_print(demangle_flags, component->u.s_binary.left->u.s_binary.right, guessed_name_length, &allocated);
 								if(!unmangled_buffer) {
 									name_it = global_qual.names.end();
@@ -1480,7 +1582,7 @@ namespace vmod
 									return false;
 								}
 
-								std::string func_name{unmangled_buffer};
+								func_name += unmangled_buffer;
 								std::free(unmangled_buffer);
 
 								unmangled_buffer = cplus_demangle_print(demangle_flags, component->u.s_binary.right, guessed_name_length, &allocated);
@@ -1591,29 +1693,26 @@ namespace vmod
 								if(dynamic_cast<class_info::ctor_info *>(info.get()) == nullptr)
 							#endif
 								{
-									offset_map.emplace(offset, pair_t{qual_it,name_it});
+									auto map_it{offset_map.find(offset)};
+									if(map_it == offset_map.end()) {
+										std::vector<info_t> mapvec{};
+										mapvec.emplace_back(info_t{qual_it,name_it});
+										offset_map.emplace(offset, std::move(mapvec));
+									} else {
+										map_it->second.emplace_back(info_t{qual_it,name_it});
+									}
 								}
 
 								return true;
 							}
 						#ifndef __VMOD_COMPILING_SYMBOL_TOOL
-							case DEMANGLE_COMPONENT_TEMPLATE: {
-								if(elf) {
-									switch(component->u.s_binary.left->u.s_binary.left->type) {
-										case DEMANGLE_COMPONENT_NAME: break;
-										default: {
-											name_it = global_qual.names.end();
-											qual_it = qualifications.end();
-											return false;
-										}
-									}
-									[[fallthrough]];
-								} else {
-									name_it = global_qual.names.end();
-									qual_it = qualifications.end();
-									return false;
-								}
+							case DEMANGLE_COMPONENT_TEMPLATE:
+							if(!elf || component->u.s_binary.left->u.s_binary.left->type != DEMANGLE_COMPONENT_NAME) {
+								name_it = global_qual.names.end();
+								qual_it = qualifications.end();
+								return false;
 							}
+							[[fallthrough]];
 							case DEMANGLE_COMPONENT_NAME: {
 								if(elf) {
 									unmangled_buffer = cplus_demangle_print(demangle_flags, component, guessed_name_length, &allocated);

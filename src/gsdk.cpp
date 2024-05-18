@@ -4,6 +4,8 @@
 
 namespace vmod
 {
+	enum environment environment{environment::unknown};
+
 	gsdk::IDedicatedExports *dedicated{nullptr};
 	gsdk::IVEngineServer *sv_engine{nullptr};
 	gsdk::IServer *sv{nullptr};
@@ -24,7 +26,6 @@ namespace vmod
 #ifndef GSDK_NO_SYMBOLS
 	bool symbols_available{false};
 #endif
-	bool srcds_executable{false};
 	gsdk::ConVar *developer{nullptr};
 #if GSDK_CHECK_BRANCH_VER(GSDK_ENGINE_BRANCH_2010, >=, GSDK_ENGINE_BRANCH_2010_V0)
 	gsdk::CLoggingSystem *(*GetGlobalLoggingSystem)() {nullptr};
@@ -54,7 +55,7 @@ namespace vmod
 		}
 
 	#ifndef GSDK_NO_SYMBOLS
-		if(srcds_executable) {
+		if(environment == environment::dedicated_server) {
 			std::uint64_t offset{symbol_cache::uncached_find_mangled_func(path, "_Z22GetGlobalLoggingSystemv"sv)};
 			if(offset == 0) {
 				warning("vmod: missing GetGlobalLoggingSystem func\n"sv);

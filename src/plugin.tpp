@@ -8,6 +8,7 @@ namespace vmod
 				execute_internal();
 			} else {
 				std::vector<vscript::variant> args_var;
+				args_var.reserve(sizeof...(Args));
 				(args_var.emplace_back(std::forward<Args>(args)), ...);
 				execute_internal(args_var.data(), args_var.size());
 			}
@@ -18,6 +19,7 @@ namespace vmod
 				return to_value<R>(ret_var);
 			} else {
 				std::vector<vscript::variant> args_var;
+				args_var.reserve(sizeof...(Args));
 				(args_var.emplace_back(std::forward<Args>(args)), ...);
 				gsdk::ScriptVariant_t ret_var;
 				execute_internal(ret_var, args_var.data(), args_var.size());

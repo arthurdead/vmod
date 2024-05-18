@@ -327,10 +327,193 @@ namespace vmod
 		using vtable_sizes_t = std::unordered_map<std::string, std::size_t>;
 
 	public:
-		struct pair_t
+		struct info_t
 		{
-			qualifications_t::const_iterator qual;
-			qualification_info::names_t::const_iterator func;
+			info_t() = delete;
+
+			enum class type : unsigned char
+			{
+				qualified,
+				global,
+			};
+
+			info_t(qualifications_t::const_iterator qual_, qualification_info::names_t::const_iterator name_) noexcept
+				: qualified(qual_, name_), type_(type::qualified)
+			{
+			}
+
+			info_t(qualification_info::names_t::const_iterator name_) noexcept
+				: global(name_), type_(type::global)
+			{
+			}
+
+			constexpr info_t(const info_t &) noexcept = default;
+			constexpr info_t(info_t &&) noexcept = default;
+			constexpr info_t &operator=(info_t &&) noexcept = default;
+			constexpr info_t &operator=(const info_t &) noexcept = default;
+			constexpr ~info_t() noexcept = default;
+
+			struct dumb_pair_t
+			{
+				qualifications_t::const_iterator first;
+				qualification_info::names_t::const_iterator second;
+			};
+
+			union {
+				dumb_pair_t qualified;
+				qualification_info::names_t::const_iterator global;
+			};
+			type type_;
+		};
+
+		struct ventry_t
+		{
+			enum class type : unsigned char
+			{
+				info,
+				offset,
+				type_info,
+				invalid
+			};
+
+			ventry_t() noexcept
+				: type_(type::invalid)
+			{
+			}
+
+			ventry_t(const ventry_t &other) noexcept
+				: type_(other.type_)
+			{
+				if(type_ == type::info) {
+					using T = decltype(info);
+					new (&info) T{other.info};
+				} else {
+					type_info = other.type_info;
+				}
+			}
+			ventry_t(ventry_t &&other) noexcept
+				: type_(other.type_)
+			{
+				if(type_ == type::info) {
+					using T = decltype(info);
+					new (&info) T{std::move(other.info)};
+				} else {
+					type_info = other.type_info;
+				}
+				other.type_ = type::offset;
+			}
+			ventry_t &operator=(ventry_t &&other) noexcept
+			{
+				if(other.type_ == type::info) {
+					if(type_ == type::info) {
+						info = std::move(other.info);
+					} else {
+						using T = decltype(info);
+						new (&info) T{std::move(other.info)};
+					}
+				} else {
+					if(type_ == type::info) {
+						using T = decltype(info);
+						info.~T();
+					}
+					type_info = other.type_info;
+				}
+				type_ = other.type_;
+				other.type_ = type::offset;
+				return *this;
+			}
+			ventry_t &operator=(const ventry_t &other) noexcept
+			{
+				if(other.type_ == type::info) {
+					if(type_ == type::info) {
+						info = other.info;
+					} else {
+						using T = decltype(info);
+						new (&info) T{other.info};
+					}
+				} else {
+					if(type_ == type::info) {
+						using T = decltype(info);
+						info.~T();
+					}
+					type_info = other.type_info;
+				}
+				type_ = other.type_;
+				return *this;
+			}
+			~ventry_t() noexcept
+			{
+				if(type_ == type::info) {
+					using T = decltype(info);
+					info.~T();
+				}
+			}
+
+			ventry_t &operator=(std::uintptr_t off_) noexcept
+			{
+				if(type_ == type::info) {
+					using T = decltype(info);
+					info.~T();
+				}
+				off = off_;
+				type_ = type::offset;
+				return *this;
+			}
+
+			ventry_t &operator=(const __cxxabiv1::__class_type_info *type_info_) noexcept
+			{
+				if(type_ == type::info) {
+					using T = decltype(info);
+					info.~T();
+				}
+				type_info = type_info_;
+				type_ = type::type_info;
+				return *this;
+			}
+
+			ventry_t &operator=(std::vector<info_t> &&info_) noexcept
+			{
+				if(type_ == type::info) {
+					info = std::move(info_);
+				} else {
+					using T = decltype(info);
+					new (&info) T{std::move(info_)};
+				}
+				type_ = type::info;
+				return *this;
+			}
+
+			ventry_t &operator=(const std::vector<info_t> &info_) noexcept
+			{
+				if(type_ == type::info) {
+					info = info_;
+				} else {
+					using T = decltype(info);
+					new (&info) T{info_};
+				}
+				type_ = type::info;
+				return *this;
+			}
+
+			ventry_t &operator=(qualification_info::names_t::const_iterator info_) noexcept
+			{
+				if(type_ == type::info) {
+					info.clear();
+					info.emplace_back(info_);
+				} else {
+					using T = decltype(info);
+					new (&info) T{info_};
+				}
+				type_ = type::info;
+				return *this;
+			}
+
+			union {
+				std::vector<info_t> info;
+				std::uintptr_t off;
+				const __cxxabiv1::__class_type_info *type_info;
+			};
+			type type_;
 		};
 
 		struct class_info final : qualification_info
@@ -345,29 +528,29 @@ namespace vmod
 				friend class symbol_cache;
 
 			private:
-				using funcs_t = std::vector<pair_t>;
+				using entries_t = std::vector<ventry_t>;
 
 			public:
-				using const_iterator = funcs_t::const_iterator;
+				using const_iterator = entries_t::const_iterator;
 
 				inline const_iterator begin() const noexcept
-				{ return funcs_.cbegin(); }
+				{ return entries_.cbegin(); }
 				inline const_iterator end() const noexcept
-				{ return funcs_.cend(); }
+				{ return entries_.cend(); }
 
 				inline const_iterator cbegin() const noexcept
-				{ return funcs_.cbegin(); }
+				{ return entries_.cbegin(); }
 				inline const_iterator cend() const noexcept
-				{ return funcs_.cend(); }
+				{ return entries_.cend(); }
 
 				inline std::size_t size() const noexcept
 				{ return size_; }
 
-				inline funcs_t::value_type operator[](std::size_t i) const noexcept
-				{ return funcs_[i]; }
+				inline entries_t::value_type operator[](std::size_t i) const noexcept
+				{ return entries_[i]; }
 
-				inline const funcs_t &funcs() const noexcept
-				{ return funcs_; }
+				inline const entries_t &entries() const noexcept
+				{ return entries_; }
 
 			private:
 			#ifndef GSDK_NO_SYMBOLS
@@ -381,7 +564,7 @@ namespace vmod
 			#endif
 				std::size_t size_{0};
 				__cxxabiv1::vtable_prefix *prefix{nullptr};
-				funcs_t funcs_;
+				entries_t entries_;
 
 			private:
 				vtable_info(const vtable_info &) = delete;
@@ -468,10 +651,8 @@ namespace vmod
 		inline const_iterator cend() const noexcept
 		{ return qualifications.cend(); }
 
-	#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 		inline const qualification_info &global() const noexcept
 		{ return global_qual; }
-	#endif
 
 		std::size_t vtable_size(const std::string &name) const noexcept;
 
@@ -516,17 +697,20 @@ namespace vmod
 			std::uint64_t size;
 		};
 
-		bool handle_component(std::string_view name_mangled, demangle_component *component, qualifications_t::iterator &qual_it, qualification_info::names_t::iterator &name_it, basic_sym_t &&sym, unsigned char *base, bool elf) noexcept;
+		bool handle_component(std::string_view name_mangled, demangle_component *old_component, demangle_component *component, qualifications_t::iterator &qual_it, qualification_info::names_t::iterator &name_it, basic_sym_t &&sym, unsigned char *base, bool elf) noexcept;
 
 		void resolve_vtables(unsigned char *base, bool elf) noexcept;
 
-		std::unordered_map<std::uint64_t, pair_t> offset_map;
+		std::unordered_map<std::uint64_t, std::vector<info_t>> offset_map;
 	#endif
 
 		qualifications_t qualifications;
 		vtable_sizes_t vtable_sizes;
 
 		qualification_info global_qual;
+
+		qualification_info::names_t::iterator pure_virt_it;
+		qualification_info::names_t::iterator delt_virt_it;
 
 	#ifndef __VMOD_COMPILING_SYMBOL_TOOL
 		std::uint64_t memory_size{0};

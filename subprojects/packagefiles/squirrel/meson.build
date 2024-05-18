@@ -37,6 +37,8 @@ else
 	cpp_internal_args = ['-DSQ_VAR_TRACE_ENABLED=0']
 endif
 
+cpp_internal_args += ['-DSQMODULES_HAVE_SQRAT=1']
+
 is_quirrel = false
 complete_squirrel = true
 
@@ -66,7 +68,10 @@ if is_quirrel
 			'squirrel/sqast.cpp',
 			'squirrel/sqastparser.cpp',
 			'squirrel/sqastcodegen.cpp',
-			'squirrel/optimizations/closureHoisting.cpp'
+			'squirrel/optimizations/closureHoisting.cpp',
+			'squirrel/sqbinaryast.cpp',
+			'squirrel/static_analyzer/analyzer.cpp',
+			'squirrel/sqcompilationcontext.cpp'
 		)
 	]
 
@@ -102,7 +107,8 @@ if complete_squirrel
 	if is_quirrel
 		sources += [
 			files(
-				'sqstdlib/sqstddatetime.cpp'
+				'sqstdlib/sqstddatetime.cpp',
+				'sqstdlib/sqstddebug.cpp'
 			)
 		]
 	endif
@@ -120,7 +126,7 @@ endif
 lib_incdirs = [include_directories('include')]
 
 if is_quirrel
-	lib_incdirs += [include_directories('internal')]
+	lib_incdirs += [include_directories('internal'),include_directories('sqrat/include'),include_directories('helpers')]
 endif
 
 squirrel_lib = static_library('squirrel',
@@ -133,7 +139,7 @@ squirrel_lib = static_library('squirrel',
 dep_incdirs = [include_directories('include')]
 
 if is_quirrel
-	dep_incdirs += [include_directories('sqmodules')]
+	dep_incdirs += [include_directories('sqmodules'),include_directories('sqrat/include')]
 endif
 
 squirrel_dep = declare_dependency(

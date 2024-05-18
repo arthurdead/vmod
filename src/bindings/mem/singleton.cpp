@@ -67,6 +67,11 @@ namespace vmod::bindings::mem
 				return false;
 			}
 
+			if(!register_type(&ffi_type_nullptr, "nullptr"sv)) {
+				error("vmod: failed to register mem void type\n"sv);
+				return false;
+			}
+
 			if(!register_type(&ffi_type_sint, "int"sv)) {
 				error("vmod: failed to register mem int type\n"sv);
 				return false;
@@ -268,17 +273,12 @@ namespace vmod::bindings::mem
 		return nullptr;
 	}
 
-	ffi_type *singleton::read_type(vscript::handle_ref type_table) noexcept
+	ffi_type *singleton::read_type(vscript::table_handle_ref type_table) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
-		if(!type_table || type_table == gsdk::INVALID_HSCRIPT) {
+		if(!type_table) {
 			vm->RaiseException("vmod: invalid type");
-			return nullptr;
-		}
-
-		if(!vm->IsTable(*type_table)) {
-			vm->RaiseException("vmod: type is not a table");
 			return nullptr;
 		}
 
@@ -303,7 +303,7 @@ namespace vmod::bindings::mem
 
 		gsdk::IScriptVM *vm{vscript::vm()};
 
-		vscript::handle_wrapper table{vm->CreateTable()};
+		vscript::table_handle_wrapper table{vm->CreateTable()};
 		if(!table) {
 			error("vmod: failed to create type '%s' table\n", type_name.data());
 			return false;
@@ -336,7 +336,7 @@ namespace vmod::bindings::mem
 		return true;
 	}
 
-	vscript::handle_ref singleton::script_allocate(std::size_t size) noexcept
+	vscript::instance_handle_ref singleton::script_allocate(std::size_t size) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -355,7 +355,7 @@ namespace vmod::bindings::mem
 		return block->instance_;
 	}
 
-	vscript::handle_ref singleton::script_allocate_ent(std::size_t size) noexcept
+	vscript::instance_handle_ref singleton::script_allocate_ent(std::size_t size) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -374,7 +374,7 @@ namespace vmod::bindings::mem
 		return block->instance_;
 	}
 
-	vscript::handle_ref singleton::script_allocate_aligned(std::align_val_t align, std::size_t size) noexcept
+	vscript::instance_handle_ref singleton::script_allocate_aligned(std::align_val_t align, std::size_t size) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -403,7 +403,7 @@ namespace vmod::bindings::mem
 		return block->instance_;
 	}
 
-	vscript::handle_ref singleton::script_allocate_type(vscript::handle_wrapper type_table) noexcept
+	vscript::instance_handle_ref singleton::script_allocate_type(vscript::table_handle_ref type_table) noexcept
 	{
 		ffi_type *type{read_type(type_table)};
 		if(!type) {
@@ -419,7 +419,7 @@ namespace vmod::bindings::mem
 		return block->instance_;
 	}
 
-	vscript::handle_ref singleton::script_allocate_zero(std::size_t num, std::size_t size) noexcept
+	vscript::instance_handle_ref singleton::script_allocate_zero(std::size_t num, std::size_t size) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -442,7 +442,7 @@ namespace vmod::bindings::mem
 		return block->instance_;
 	}
 
-	vscript::variant singleton::script_read(unsigned char *ptr, vscript::handle_wrapper type_table) noexcept
+	vscript::variant singleton::script_read(unsigned char *ptr, vscript::table_handle_ref type_table) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -461,7 +461,7 @@ namespace vmod::bindings::mem
 		return ret;
 	}
 
-	void singleton::script_write(unsigned char *ptr, vscript::handle_wrapper type_table, const vscript::variant &var) noexcept
+	void singleton::script_write(unsigned char *ptr, vscript::table_handle_ref type_table, const vscript::variant &var) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 

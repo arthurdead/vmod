@@ -82,14 +82,17 @@ namespace vmod::vscript
 			case gsdk::FIELD_BOOLEAN:
 			return var.m_bool;
 			case gsdk::FIELD_HSCRIPT_NEW_INSTANCE:
+			case gsdk::FIELD_CUSTOM:
+			case gsdk::FIELD_EMBEDDED:
+			case gsdk::FIELD_FUNCTION:
 			case gsdk::FIELD_HSCRIPT:
-			return detail::to_bool(var.m_object);
+			return var.m_object && var.m_object != gsdk::INVALID_HSCRIPT;
 			default:
 			return {};
 		}
 	}
 
-	void initialize_impl(gsdk::ScriptVariant_t &var, std::string &&value) noexcept
+	void initialize_data_impl(gsdk::ScriptVariant_t &var, std::string &&value) noexcept
 	{
 		if(!value.empty()) {
 			std::size_t len{value.length()};
@@ -102,7 +105,7 @@ namespace vmod::vscript
 		}
 	}
 
-	void initialize_impl(gsdk::ScriptVariant_t &var, std::filesystem::path &&value) noexcept
+	void initialize_data_impl(gsdk::ScriptVariant_t &var, std::filesystem::path &&value) noexcept
 	{
 		if(!value.empty()) {
 			std::size_t len{value.native().length()};

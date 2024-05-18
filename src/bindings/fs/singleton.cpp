@@ -57,7 +57,7 @@ namespace vmod::bindings::fs
 		return 0;
 	}
 
-	vscript::handle_wrapper singleton::script_glob(const std::filesystem::path &pattern) noexcept
+	vscript::array_handle_wrapper singleton::script_glob(const std::filesystem::path &pattern) noexcept
 	{
 		gsdk::IScriptVM *vm{vscript::vm()};
 
@@ -72,7 +72,7 @@ namespace vmod::bindings::fs
 			return nullptr;
 		}
 
-		vscript::handle_wrapper arr{vm->CreateArray()};
+		vscript::array_handle_wrapper arr{vm->CreateArray()};
 		if(!arr) {
 			vm->RaiseException("vmod: failed to create array");
 			return nullptr;

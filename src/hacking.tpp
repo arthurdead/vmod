@@ -44,6 +44,9 @@ namespace vmod
 		#pragma GCC diagnostic pop
 	#endif
 
+		page_info func_page{bytes, sizeof(old_bytes)};
+		func_page.protect(PROT_READ|PROT_WRITE|PROT_EXEC);
+
 	#ifdef __x86_64__
 		bytes[0] = 0x49;
 		bytes[1] = 0xBA;

@@ -104,7 +104,7 @@ namespace vmod
 	#endif
 
 	#ifndef GSDK_NO_SYMBOLS
-		inline vscript::handle_ref symbols_table() noexcept
+		inline vscript::table_handle_ref symbols_table() noexcept
 		{ return symbols_table_; }
 
 		inline const symbol_cache &sv_syms() const noexcept
@@ -156,7 +156,7 @@ namespace vmod
 
 		static vscript::singleton_class_desc<main> desc;
 
-		static vscript::variant call_to_func(vscript::handle_ref func, vscript::handle_ref value) noexcept;
+		static vscript::variant call_to_func(vscript::func_handle_ref func, vscript::handle_ref value) noexcept;
 
 		void script_print(const vscript::variant &var) noexcept;
 		void script_success(const vscript::variant &var) noexcept;
@@ -172,7 +172,7 @@ namespace vmod
 		void script_infol(const vscript::variant &var) noexcept;
 		void script_remarkl(const vscript::variant &var) noexcept;
 
-		vscript::handle_ref script_find_mod(std::string_view mdname) noexcept;
+		vscript::instance_handle_ref script_find_mod(std::string_view mdname) noexcept;
 		bool script_is_map_loaded() const noexcept;
 		bool script_is_map_active() const noexcept;
 		bool script_are_stringtables_created() const noexcept;
@@ -363,27 +363,31 @@ namespace vmod
 
 		IScriptVM *vm_{nullptr};
 
-		vscript::handle_wrapper return_flags_table{};
+		vscript::table_handle_wrapper return_flags_table{};
 
-		vscript::handle_wrapper stringtable_table{};
+		vscript::table_handle_wrapper stringtable_table{};
 		std::unordered_map<std::string, std::unique_ptr<bindings::strtables::string_table>> script_stringtables;
 
 	#ifndef GSDK_NO_SYMBOLS
-		vscript::handle_wrapper symbols_table_{};
+		vscript::table_handle_wrapper symbols_table_{};
 	#endif
 
-		vscript::handle_wrapper server_init_script{};
-		vscript::handle_wrapper server_init_late_script{};
+		std::filesystem::path base_scripts_dir_;
 
-		vscript::handle_wrapper base_script_scope{};
-		vscript::handle_wrapper base_script{};
+		vscript::script_handle_wrapper server_init_script{};
+		vscript::script_handle_wrapper server_init_late_script{};
 
-		vscript::handle_wrapper to_string_func{};
-		vscript::handle_wrapper to_int_func{};
-		vscript::handle_wrapper to_float_func{};
-		vscript::handle_wrapper to_bool_func{};
-		vscript::handle_wrapper typeof_func{};
-		vscript::handle_wrapper funcisg_func{};
+		vscript::scope_handle_wrapper base_script_scope{};
+		vscript::script_handle_wrapper base_script{};
+
+		vscript::script_handle_wrapper vmod_init_late_script{};
+
+		vscript::func_handle_wrapper to_string_func{};
+		vscript::func_handle_wrapper to_int_func{};
+		vscript::func_handle_wrapper to_float_func{};
+		vscript::func_handle_wrapper to_bool_func{};
+		vscript::func_handle_wrapper typeof_func{};
+		vscript::func_handle_wrapper funcisg_func{};
 
 	#ifdef __VMOD_USING_PREPROCESSOR
 		squirrel_preprocessor pp;
@@ -418,9 +422,6 @@ namespace vmod
 		ConVar vmod_auto_dump_entity_classes;
 
 	#ifndef GSDK_NO_SYMBOLS
-		ConCommand vmod_dump_entity_vtables;
-		ConVar vmod_auto_dump_entity_vtables;
-
 		ConCommand vmod_dump_entity_funcs;
 		ConVar vmod_auto_dump_entity_funcs;
 	#endif

@@ -24,10 +24,10 @@ namespace vmod::bindings
 		bool Get(const gsdk::CUtlConstString &name, gsdk::ScriptVariant_t &value) override final;
 
 	protected:
-		vscript::handle_wrapper scope{};
+		vscript::scope_handle_wrapper scope{};
 
 	private:
-		vscript::handle_wrapper instance{};
+		vscript::instance_handle_wrapper instance{};
 		gsdk::CSquirrelMetamethodDelegateImpl *get_impl{nullptr};
 
 		std::string_view name;
